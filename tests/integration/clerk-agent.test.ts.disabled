@@ -1,0 +1,254 @@
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import path from 'node:path'
+import { Clerk, inferProvider } from '../../src/clerk/clerk.ts'
+import { cwdToProjectDirName } from '../../src/clerk/preprocessor.ts'
+import { resolveKey, shouldSkipLlm, llmTimeout } from '../helpers/llm-test-utils.ts'
+
+const CLERK_MODEL = process.env.CLERK_MODEL
+const PP_MODEL = process.env.PROCESSOR_MODEL
+const CLERK_KEY = resolveKey(CLERK_MODEL, 'CLERK')
+const PP_KEY = resolveKey(PP_MODEL, 'PROCESSOR')
+const skip = await shouldSkipLlm({ models: [CLERK_MODEL, PP_MODEL], keys: [CLERK_KEY, PP_KEY] })
+
+// --- Test fixtures: synthetic project with realistic sessions ---
+
+const tempDir = `/tmp/merlin-clerk-agent-test-${Date.now()}`
+const projectCwd = `${tempDir}/fake-project`
+const claudeProjectsDir = path.join(tempDir, 'claude-projects')
+const clerkDir = path.join(tempDir, 'clerk')
+const projectDirName = cwdToProjectDirName(projectCwd)
+const projectDir = path.join(claudeProjectsDir, projectDirName)
+
+function makeSessionJsonl(sessionId: string, title: string, turns: Array<{ role: 'user' | 'assistant'; text: string; date: string }>) {
+  const lines: string[] = []
+  lines.push(JSON.stringify({ type: 'custom-title', customTitle: title, sessionId }))
+  for (let i = 0; i < turns.length; i++) {
+    const turn = turns[i]
+    const timestamp = `${turn.date}T${String(10 + i).padStart(2, '0')}:00:00Z`
+    if (turn.role === 'user') {
+      lines.push(JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: turn.text }] },
+        timestamp,
+        sessionId,
+        cwd: projectCwd,
+      }))
+    } else {
+      lines.push(JSON.stringify({
+        type: 'assistant',
+        message: { id: `msg_${sessionId}_${i}`, role: 'assistant', content: [{ type: 'text', text: turn.text }] },
+        timestamp,
+        sessionId,
+      }))
+    }
+  }
+  return lines.join('\n')
+}
+
+let clerk: Clerk
+
+beforeAll(() => {
+  if (skip) return
+
+  mkdirSync(projectDir, { recursive: true })
+  mkdirSync(projectCwd, { recursive: true })
+
+  // Write a simple file in the "project" so read_file has something to find
+  writeFileSync(path.join(projectCwd, 'README.md'), '# Fake Project\nThis is a test project for Clerk agent tests.')
+
+  // Session 1: Relay architecture
+  writeFileSync(
+    path.join(projectDir, 'session-relay.jsonl'),
+    makeSessionJsonl('session-relay', 'relay-architecture', [
+      { role: 'user', text: 'Create a WebSocket relay server. It should use token-based authentication where each token maps to a room. Each room has exactly one daemon and one client — no broadcasting to multiple clients.', date: '2026-03-08' },
+      { role: 'assistant', text: 'I\'ve created the relay server with token-based rooms. The Room class has a daemon and a single client slot. When a new client connects with the same token, it replaces the previous one. Messages from the daemon go to the client and vice versa.', date: '2026-03-08' },
+      { role: 'user', text: 'Add error handling: invalid tokens should get a 4001 close code, and connections without a token header should get 4000.', date: '2026-03-08' },
+      { role: 'assistant', text: 'Added token validation in the upgrade handler. Invalid tokens receive close code 4001 with reason "invalid token". Missing token header gets 4000 with "missing token". Both are logged at debug level.', date: '2026-03-08' },
+    ]),
+  )
+
+  // Session 2: Encryption — spans two days
+  writeFileSync(
+    path.join(projectDir, 'session-crypto.jsonl'),
+    makeSessionJsonl('session-crypto', 'encryption-layer', [
+      { role: 'user', text: 'Implement E2E encryption between daemon and client. Use P-256 ECDH for key agreement and AES-256-GCM for symmetric encryption. The relay should never see plaintext.', date: '2026-03-09' },
+      { role: 'assistant', text: 'Implemented the crypto layer with P-256 ECDH key agreement during pairing. The shared secret is derived using HKDF. All messages are encrypted with AES-256-GCM before being sent through the relay. The relay only sees ciphertext in the envelope format.', date: '2026-03-09' },
+      { role: 'user', text: 'The envelope format should include iv, encrypted payload, and a timestamp. Add the TypeScript types.', date: '2026-03-09' },
+      { role: 'assistant', text: 'Added the RelayEnvelope type with fields: sessionToken, side (daemon|client), encrypted (base64), iv (base64), and ts (unix timestamp). Both daemon and client serialize to this format before sending through the WebSocket.', date: '2026-03-09' },
+      { role: 'user', text: 'Now add the iOS side — use CryptoKit for P-256 and AES-GCM. The SPKI DER encoding must match what the daemon produces.', date: '2026-03-10' },
+      { role: 'assistant', text: 'Created CryptoManager.swift using CryptoKit P256.KeyAgreement and AES.GCM. The public key is exported in SPKI DER format matching the daemon\'s encoding. Verified interoperability by comparing the key bytes.', date: '2026-03-10' },
+    ]),
+  )
+
+  // Session 3: Pairing
+  writeFileSync(
+    path.join(projectDir, 'session-pairing.jsonl'),
+    makeSessionJsonl('session-pairing', 'pairing-flow', [
+      { role: 'user', text: 'Implement the pairing flow. The daemon generates a 6-character code, registers it with the relay, and waits. The client sends the code to join. During this exchange they perform ECDH key agreement.', date: '2026-03-10' },
+      { role: 'assistant', text: 'Implemented the full pairing flow. The daemon calls POST /pair/initiate to get a temporary code (10-min TTL). The client calls POST /pair/join/{code} with its public key. The daemon receives the client\'s public key, both sides derive the shared secret. Pairing data is stored in pairings-{name}.json.', date: '2026-03-10' },
+      { role: 'user', text: 'Add QR code display in the terminal using qrcode-terminal. The QR should encode a merlin://pair?code=...&relay=... URL so the iPhone camera can initiate pairing.', date: '2026-03-10' },
+      { role: 'assistant', text: 'Added qrcode-terminal dependency and integrated it into the pairing initiation flow. After generating the code, the terminal displays a QR code encoding the merlin:// deep link URL. The iOS app handles this via .onOpenURL.', date: '2026-03-10' },
+    ]),
+  )
+
+  clerk = new Clerk({
+    clerkApiKey: CLERK_KEY!,
+    clerkModel: CLERK_MODEL!,
+    preprocessorApiKey: PP_KEY!,
+    preprocessorModel: PP_MODEL!,
+    clerkDir,
+  })
+})
+
+afterAll(() => {
+  if (skip) return
+  rmSync(tempDir, { recursive: true, force: true })
+})
+
+describe('@llm Clerk agent — user journeys', () => {
+  // Phase 0: preprocess the test sessions
+  test.skipIf(skip)('@llm preprocesses test sessions', async () => {
+    // Point the preprocessor at our fake claude projects dir
+    const preprocessor = new (await import('../../src/clerk/preprocessor.ts')).Preprocessor({
+      provider: inferProvider(PP_MODEL!),
+      apiKey: PP_KEY!,
+      model: PP_MODEL!,
+      clerkDir,
+      claudeProjectsDir,
+    })
+    const result = await preprocessor.processProject(projectCwd)
+    expect(result.processed).toBe(3)
+    expect(result.errors).toBe(0)
+  }, llmTimeout(60_000))
+
+  // Journey 1: "What decisions did we make about encryption?"
+  test.skipIf(skip)('@llm recall: finds encryption decisions across sessions', async () => {
+    const { response, conversationId } = await clerk.handleMessage(
+      projectCwd,
+      'What decisions did we make about encryption?',
+    )
+
+    expect(response).toBeTruthy()
+    const lower = response.toLowerCase()
+    // Should mention P-256 or ECDH or AES
+    expect(lower).toMatch(/p-?256|ecdh|aes|encryption/)
+    // Should mention relay not seeing plaintext (a key decision)
+    expect(lower).toMatch(/relay|plaintext|e2e|end.to.end|ciphertext/)
+  }, llmTimeout(60_000))
+
+  // Journey 2: "List all sessions"
+  test.skipIf(skip)('@llm recall: lists sessions with topics', async () => {
+    const { response } = await clerk.handleMessage(
+      projectCwd,
+      'List all sessions and what they covered.',
+    )
+
+    expect(response).toBeTruthy()
+    const lower = response.toLowerCase()
+    // Should mention all three session topics
+    expect(lower).toMatch(/relay/)
+    expect(lower).toMatch(/encrypt|crypto/)
+    expect(lower).toMatch(/pair/)
+  }, llmTimeout(60_000))
+
+  // Journey 3: "What was the pairing flow?"
+  test.skipIf(skip)('@llm recall: retrieves pairing flow details', async () => {
+    const { response } = await clerk.handleMessage(
+      projectCwd,
+      'How does the pairing flow work? What are the steps?',
+    )
+
+    expect(response).toBeTruthy()
+    const lower = response.toLowerCase()
+    // Should mention the 6-char code and ECDH
+    expect(lower).toMatch(/code|6.char/)
+    expect(lower).toMatch(/ecdh|key|public/)
+  }, llmTimeout(60_000))
+
+  // Journey 4: Conversation continuity
+  test.skipIf(skip)('@llm maintains conversation context across messages', async () => {
+    const { conversationId, response: r1 } = await clerk.handleMessage(
+      projectCwd,
+      'What error codes does the relay use?',
+    )
+
+    expect(r1.toLowerCase()).toMatch(/4001|4000|invalid|missing/)
+
+    // Follow-up in same conversation — should understand "those" refers to error codes
+    const { response: r2 } = await clerk.handleMessage(
+      projectCwd,
+      'Are there any other error cases we should handle?',
+      conversationId,
+    )
+
+    expect(r2).toBeTruthy()
+    expect(r2.length).toBeGreaterThan(20)
+  }, llmTimeout(90_000))
+
+  // Journey 5: Codebase tool — read a file
+  test.skipIf(skip)('@llm reads files from the project', async () => {
+    const { response } = await clerk.handleMessage(
+      projectCwd,
+      'Read the README.md file and tell me what it says.',
+    )
+
+    expect(response).toBeTruthy()
+    expect(response.toLowerCase()).toMatch(/fake project|test project/)
+  }, llmTimeout(60_000))
+
+  // Journey 6: Cross-session synthesis
+  test.skipIf(skip)('@llm synthesizes information across sessions', async () => {
+    const { response } = await clerk.handleMessage(
+      projectCwd,
+      'How do the relay, encryption, and pairing work together? Give me the full picture.',
+    )
+
+    expect(response).toBeTruthy()
+    const lower = response.toLowerCase()
+    // Should tie together: relay (transport) + crypto (E2E) + pairing (key exchange)
+    expect(lower).toMatch(/relay/)
+    expect(lower).toMatch(/encrypt|aes|e2e/)
+    expect(lower).toMatch(/pair|code|ecdh/)
+    // Response should be substantive (not just listing topics)
+    expect(response.length).toBeGreaterThan(200)
+  }, llmTimeout(60_000))
+
+  // Journey 7: Draft a prompt
+  test.skipIf(skip)('@llm drafts a prompt incorporating past context', async () => {
+    const { response } = await clerk.handleMessage(
+      projectCwd,
+      'Draft a prompt for adding key rotation to the encryption layer. Include relevant context from our past decisions.',
+    )
+
+    expect(response).toBeTruthy()
+    const lower = response.toLowerCase()
+    // Should reference existing encryption choices
+    expect(lower).toMatch(/p-?256|aes|gcm/)
+    // Should be a prompt-like artifact (instruction-style text)
+    expect(response.length).toBeGreaterThan(100)
+  }, llmTimeout(60_000))
+
+  // Journey 8: Tool activity callbacks
+  test.skipIf(skip)('@llm fires tool activity callbacks', async () => {
+    const toolActivities: Array<{ tool: string; description: string }> = []
+    const textChunks: string[] = []
+
+    await clerk.handleMessage(
+      projectCwd,
+      'What sessions do we have?',
+      undefined,
+      {
+        onToolActivity: (tool, description) => toolActivities.push({ tool, description }),
+        onTextChunk: (text) => textChunks.push(text),
+        onDone: () => {},
+      },
+    )
+
+    // Should have used at least one tool
+    expect(toolActivities.length).toBeGreaterThan(0)
+    // Should have produced text
+    expect(textChunks.length).toBeGreaterThan(0)
+    expect(textChunks.join('')).toBeTruthy()
+  }, llmTimeout(60_000))
+})

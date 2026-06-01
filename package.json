@@ -1,0 +1,51 @@
+{
+  "name": "merlin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:unit": "bun test tests/unit/*.test.ts",
+    "test:integration": "bun test tests/integration/*.test.ts",
+    "test:clerk": "bun test tests/unit/clerk-parser.test.ts tests/integration/clerk-*.test.ts",
+    "test:no-llm": "bun test --grep '^(?!.*@llm)' tests/unit/*.test.ts tests/integration/*.test.ts",
+    "test:llm": "bun test --grep '@llm' tests/integration/*.test.ts",
+    "test:linux": "bun test tests/linux/*.test.ts",
+    "schema": "bun src/types/export-schema.ts",
+    "daemon": "bun src/cli/start-daemon.ts",
+    "organizer:inspect": "bun scripts/organizer-input.ts",
+    "organizer:detailed": "bun scripts/organizer-detailed.ts",
+    "tui": "bun src/cli/tui.ts",
+    "web:dev": "cd src/web/client && bun run dev",
+    "web:build": "(cd src/web/client && bun run build) && bun scripts/gen-web-assets.ts",
+    "build:bin": "bun scripts/build-bin.ts",
+    "bridge": "bun src/web/start-bridge.ts",
+    "web": "bun src/web/dev.ts",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "check": "biome check --write ."
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google/genai": "^1.45.0",
+    "@merlin/cc": "workspace:*",
+    "@merlin/ignore": "workspace:*",
+    "@merlin/llm": "workspace:*",
+    "@merlin/processor": "workspace:*",
+    "@merlin/protocol": "workspace:*",
+    "@merlin/relay": "workspace:*",
+    "@merlin/sync": "workspace:*",
+    "dotenv": "^17.4.2",
+    "fast-json-patch": "^3.1.1",
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
+    "@types/bun": "latest"
+  }
+}

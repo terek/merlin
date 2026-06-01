@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "instanceName": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "connectedClients": {
+          "type": "number"
+        }
+      },
+      "required": ["name", "instanceName", "version", "connectedClients"],
+      "additionalProperties": false
+    },
+    "projects": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "cwd": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "lastTimestamp": {
+            "type": "number"
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                },
+                "slug": {
+                  "type": "string"
+                },
+                "customTitle": {
+                  "type": "string"
+                },
+                "lastTimestamp": {
+                  "type": "number"
+                },
+                "sizeBytes": {
+                  "type": "number"
+                },
+                "userTurnCount": {
+                  "type": "number"
+                },
+                "subagentCount": {
+                  "type": "number"
+                }
+              },
+              "required": ["sessionId", "lastTimestamp", "sizeBytes", "userTurnCount", "subagentCount"],
+              "additionalProperties": false
+            }
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "available"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "external"
+                  },
+                  "pids": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                },
+                "required": ["type", "pids"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "daemon"
+                  },
+                  "instanceName": {
+                    "type": "string"
+                  }
+                },
+                "required": ["type", "instanceName"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "activeSessionId": {
+            "type": "string"
+          }
+        },
+        "required": ["cwd", "displayName", "lastTimestamp", "sessions", "owner"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["host", "projects"],
+  "additionalProperties": false
+}

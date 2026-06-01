@@ -1,0 +1,14 @@
+{
+  "name": "@merlin/sync",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "fast-json-patch": "^3.1.1"
+  }
+}

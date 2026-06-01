@@ -1,0 +1,12 @@
+node_modules
+.DS_Store
+.env
+.env.local
+.env.test
+dist/
+tmp/
+bin/
+src/web/client-assets.gen.ts
+
+# Wrangler local dev state and temp bundles
+.wrangler/

@@ -1,0 +1,276 @@
+import { describe, test, expect } from 'bun:test'
+import { Summarizer, type SummarizerProvider } from '../../src/clerk/summarizer.ts'
+import { segmentByDay } from '../../src/clerk/segmenter.ts'
+import { parseSessionJsonl } from '../../src/clerk/jsonl-parser.ts'
+import { Preprocessor, cwdToProjectDirName } from '../../src/clerk/preprocessor.ts'
+import { SegmentStore } from '../../src/clerk/segment-store.ts'
+import { inferProvider } from '../../src/clerk/clerk.ts'
+import { resolveKey, shouldSkipLlm, llmTimeout } from '../helpers/llm-test-utils.ts'
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import path from 'node:path'
+import type { ParsedTurn } from '../../src/clerk/types.ts'
+
+const MODEL = process.env.PROCESSOR_MODEL
+const PROVIDER: SummarizerProvider | undefined = MODEL ? inferProvider(MODEL) : undefined
+const API_KEY = resolveKey(MODEL, 'PROCESSOR')
+const skip = await shouldSkipLlm({ models: [MODEL], keys: [API_KEY] })
+
+function makeSummarizer() {
+  return new Summarizer({ provider: PROVIDER!, apiKey: API_KEY!, model: MODEL! })
+}
+
+describe('@llm Summarizer — LLM integration', () => {
+  test.skipIf(skip)('@llm summarizes a simple segment', async () => {
+    const summarizer = makeSummarizer()
+
+    const segment = {
+      date: '2026-03-10',
+      turns: [
+        { index: 0, role: 'user' as const, text: 'Refactor the relay server to use 1:1 rooms instead of N-client broadcast. Each room should have exactly one daemon and one client.', timestamp: '2026-03-10T10:00:00Z' },
+        { index: 1, role: 'assistant' as const, text: 'I\'ve refactored the relay server. The Room class now has a single `client` field instead of a `clients` Set. When a new client connects, it replaces the old one. The `broadcastToClients` method has been renamed to `sendToClient`. All tests have been updated.', timestamp: '2026-03-10T10:05:00Z' },
+        { index: 2, role: 'user' as const, text: 'Good. Now remove all the N-client broadcast tests too.', timestamp: '2026-03-10T10:06:00Z' },
+        { index: 3, role: 'assistant' as const, text: 'Removed the "daemon broadcasts to multiple clients" test and replaced it with "new client replaces old client" test. Also removed the multi-client metadata test from direct-mode tests.', timestamp: '2026-03-10T10:08:00Z' },
+      ] as ParsedTurn[],
+      turnRange: [0, 4] as [number, number],
+    }
+
+    const result = await summarizer.summarize(segment)
+
+    expect(result.topic).toBeTruthy()
+    expect(result.summary).toBeTruthy()
+    expect(result.summary.length).toBeGreaterThan(20)
+    // Should mention relay or 1:1 or rooms
+    const combined = (result.topic + ' ' + result.summary).toLowerCase()
+    expect(combined).toMatch(/relay|1:1|room|broadcast/)
+  }, llmTimeout())
+
+  test.skipIf(skip)('@llm summarizes a multi-topic segment', async () => {
+    const summarizer = makeSummarizer()
+
+    const segment = {
+      date: '2026-03-11',
+      turns: [
+        { index: 0, role: 'user' as const, text: 'Add QR code support to the daemon pairing flow. Use qrcode-terminal to display a merlin:// URL in the terminal.', timestamp: '2026-03-11T09:00:00Z' },
+        { index: 1, role: 'assistant' as const, text: 'Added qrcode-terminal dependency and integrated it into the pairing initiation flow. The terminal now displays a QR code with merlin://pair?code=...&relay=... URL.', timestamp: '2026-03-11T09:10:00Z' },
+        { index: 2, role: 'user' as const, text: 'Now change session lockfiles to use PID-based naming instead of session-ID-based naming', timestamp: '2026-03-11T14:00:00Z' },
+        { index: 3, role: 'assistant' as const, text: 'Changed the lockfile naming to use PID as the filename. The file now contains {sessionId, cwd, startedAt}. Liveness checks happen before reading file content which is more efficient.', timestamp: '2026-03-11T14:15:00Z' },
+      ] as ParsedTurn[],
+      turnRange: [0, 4] as [number, number],
+    }
+
+    const result = await summarizer.summarize(segment)
+
+    expect(result.summary).toBeTruthy()
+    // Should mention both topics
+    const summary = result.summary.toLowerCase()
+    expect(summary).toMatch(/qr|pairing/)
+    expect(summary).toMatch(/lockfile|pid/)
+  }, llmTimeout())
+
+  test.skipIf(skip)('@llm summarizes subagent session', async () => {
+    const summarizer = makeSummarizer()
+
+    const input = [
+      '[Turn 0] USER: Search all test files for references to broadcastToClients and list them',
+      '[Turn 1] ASSISTANT: Found 3 references: relay.test.ts line 45, direct-mode.test.ts line 82, security.test.ts line 31',
+    ].join('\n\n')
+
+    const result = await summarizer.summarizeSubagent(input)
+
+    expect(result).toBeTruthy()
+    expect(result.length).toBeGreaterThan(10)
+    expect(result.length).toBeLessThan(500)
+  }, llmTimeout())
+
+  test.skipIf(skip)('@llm returns valid JSON even for very short segments', async () => {
+    const summarizer = makeSummarizer()
+
+    const segment = {
+      date: '2026-03-10',
+      turns: [
+        { index: 0, role: 'user' as const, text: 'hi', timestamp: '2026-03-10T10:00:00Z' },
+        { index: 1, role: 'assistant' as const, text: 'Hello! How can I help?', timestamp: '2026-03-10T10:00:01Z' },
+      ] as ParsedTurn[],
+      turnRange: [0, 2] as [number, number],
+    }
+
+    const result = await summarizer.summarize(segment)
+    expect(result.topic).toBeTruthy()
+    expect(typeof result.summary).toBe('string')
+  }, llmTimeout())
+})
+
+describe('@llm Preprocessor — Gemini end-to-end', () => {
+  const tempDir = `/tmp/merlin-clerk-test-${Date.now()}`
+  const projectCwd = '/tmp/fake-project'
+  const projectDirName = cwdToProjectDirName(projectCwd)
+
+  test.skipIf(skip)('@llm processes a synthetic session JSONL', async () => {
+    // Set up fake claude projects dir and clerk dir
+    const claudeProjectsDir = path.join(tempDir, 'claude-projects')
+    const clerkDir = path.join(tempDir, 'clerk')
+    const projectDir = path.join(claudeProjectsDir, projectDirName)
+    mkdirSync(projectDir, { recursive: true })
+
+    // Write a synthetic JSONL file
+    const sessionId = 'test-session-001'
+    const lines = [
+      { type: 'custom-title', customTitle: 'test-session', sessionId },
+      {
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Create a WebSocket relay server that accepts token-based authentication. Each token maps to a room with exactly one daemon and one client.' }] },
+        timestamp: '2026-03-10T10:00:00Z',
+        sessionId,
+        cwd: projectCwd,
+      },
+      {
+        type: 'assistant',
+        message: {
+          id: 'msg_001', role: 'assistant',
+          content: [{ type: 'text', text: 'I\'ll create the relay server with token-based rooms. Each room supports one daemon connection and one client connection. The server validates tokens on connection and assigns WebSockets to the correct room.' }],
+        },
+        timestamp: '2026-03-10T10:05:00Z',
+        sessionId,
+      },
+      {
+        type: 'assistant',
+        message: {
+          id: 'msg_001', role: 'assistant',
+          content: [{ type: 'tool_use', id: 't1', name: 'Write', input: { file_path: 'src/relay/server.ts', content: '...' } }],
+        },
+        timestamp: '2026-03-10T10:05:01Z',
+        sessionId,
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: 'Good. Add error handling for invalid tokens.' },
+        timestamp: '2026-03-10T10:10:00Z',
+        sessionId,
+        cwd: projectCwd,
+      },
+      {
+        type: 'assistant',
+        message: {
+          id: 'msg_002', role: 'assistant',
+          content: [{ type: 'text', text: 'Added token validation. Connections with invalid tokens now receive a 4001 close code with "invalid token" reason.' }],
+        },
+        timestamp: '2026-03-10T10:12:00Z',
+        sessionId,
+      },
+    ]
+
+    writeFileSync(
+      path.join(projectDir, `${sessionId}.jsonl`),
+      lines.map(l => JSON.stringify(l)).join('\n'),
+    )
+
+    // Run preprocessor
+    const preprocessor = new Preprocessor({
+      provider: PROVIDER!,
+      apiKey: API_KEY!,
+      model: MODEL!,
+      clerkDir,
+      claudeProjectsDir,
+    })
+
+    const result = await preprocessor.processProject(projectCwd)
+    expect(result.processed).toBe(1)
+    expect(result.errors).toBe(0)
+
+    // Verify stored data
+    const store = new SegmentStore(clerkDir, projectDirName)
+    const session = await store.readSession(sessionId)
+    expect(session).not.toBeNull()
+    expect(session!.title).toBe('test-session')
+    expect(session!.turnCount).toBe(4) // 2 user + 2 assistant (tool-only dropped)
+    expect(session!.segments).toHaveLength(1) // single day
+    expect(session!.segments[0].date).toBe('2026-03-10')
+    expect(session!.segments[0].userPrompts).toHaveLength(2)
+    expect(session!.segments[0].userPrompts[0]).toContain('WebSocket relay server')
+    expect(session!.segments[0].topic).toBeTruthy()
+    expect(session!.segments[0].summary.length).toBeGreaterThan(20)
+
+    // Verify index
+    const index = await store.readIndex()
+    expect(index).not.toBeNull()
+    expect(index!.sessions).toHaveLength(1)
+    expect(index!.sessions[0].status).toBe('processed')
+
+    // Re-run should skip (already processed, file unchanged)
+    const result2 = await preprocessor.processProject(projectCwd)
+    expect(result2.processed).toBe(0)
+    expect(result2.skipped).toBe(1)
+
+    // Cleanup
+    rmSync(tempDir, { recursive: true, force: true })
+  }, llmTimeout(30_000))
+
+  test.skipIf(skip)('@llm handles multi-day session with two segments', async () => {
+    const claudeProjectsDir = path.join(tempDir, '2', 'claude-projects')
+    const clerkDir = path.join(tempDir, '2', 'clerk')
+    const projectDir = path.join(claudeProjectsDir, projectDirName)
+    mkdirSync(projectDir, { recursive: true })
+
+    const sessionId = 'multi-day-session'
+    const lines = [
+      {
+        type: 'user',
+        message: { role: 'user', content: 'Day 1: set up the project structure with src/ and tests/' },
+        timestamp: '2026-03-10T10:00:00Z',
+        sessionId,
+        cwd: projectCwd,
+      },
+      {
+        type: 'assistant',
+        message: { id: 'msg_d1', role: 'assistant', content: [{ type: 'text', text: 'Created the directory structure with src/ for source and tests/ for test files.' }] },
+        timestamp: '2026-03-10T10:05:00Z',
+        sessionId,
+      },
+      {
+        type: 'user',
+        message: { role: 'user', content: 'Day 2: add the authentication middleware with JWT validation' },
+        timestamp: '2026-03-11T09:00:00Z',
+        sessionId,
+        cwd: projectCwd,
+      },
+      {
+        type: 'assistant',
+        message: { id: 'msg_d2', role: 'assistant', content: [{ type: 'text', text: 'Implemented JWT-based authentication middleware that validates tokens on every request and attaches the decoded user to the request context.' }] },
+        timestamp: '2026-03-11T09:10:00Z',
+        sessionId,
+      },
+    ]
+
+    writeFileSync(
+      path.join(projectDir, `${sessionId}.jsonl`),
+      lines.map(l => JSON.stringify(l)).join('\n'),
+    )
+
+    const preprocessor = new Preprocessor({
+      provider: PROVIDER!,
+      apiKey: API_KEY!,
+      model: MODEL!,
+      clerkDir,
+      claudeProjectsDir,
+    })
+
+    const result = await preprocessor.processProject(projectCwd)
+    expect(result.processed).toBe(1)
+
+    const store = new SegmentStore(clerkDir, projectDirName)
+    const session = await store.readSession(sessionId)
+    expect(session!.segments).toHaveLength(2)
+    expect(session!.segments[0].date).toBe('2026-03-10')
+    expect(session!.segments[1].date).toBe('2026-03-11')
+    expect(session!.segments[0].userPrompts[0]).toContain('project structure')
+    expect(session!.segments[1].userPrompts[0]).toContain('authentication')
+
+    // Both segments should have topics and summaries
+    for (const seg of session!.segments) {
+      expect(seg.topic).toBeTruthy()
+      expect(seg.summary).toBeTruthy()
+    }
+
+    rmSync(path.join(tempDir, '2'), { recursive: true, force: true })
+  }, llmTimeout(30_000))
+})

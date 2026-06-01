@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "snapshot"
+        },
+        "scope": {
+          "type": "string",
+          "const": "metadata"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "instanceName": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "connectedClients": {
+                  "type": "number"
+                }
+              },
+              "required": ["name", "instanceName", "version", "connectedClients"],
+              "additionalProperties": false
+            },
+            "projects": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "cwd": {
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "lastTimestamp": {
+                    "type": "number"
+                  },
+                  "sessions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "slug": {
+                          "type": "string"
+                        },
+                        "customTitle": {
+                          "type": "string"
+                        },
+                        "lastTimestamp": {
+                          "type": "number"
+                        },
+                        "sizeBytes": {
+                          "type": "number"
+                        },
+                        "userTurnCount": {
+                          "type": "number"
+                        },
+                        "subagentCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["sessionId", "lastTimestamp", "sizeBytes", "userTurnCount", "subagentCount"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "owner": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "const": "available"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "external"
+                          },
+                          "pids": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "required": ["type", "pids"],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "daemon"
+                          },
+                          "instanceName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["type", "instanceName"],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "activeSessionId": {
+                    "type": "string"
+                  }
+                },
+                "required": ["cwd", "displayName", "lastTimestamp", "sessions", "owner"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["host", "projects"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["type", "scope", "data"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "snapshot"
+        },
+        "scope": {
+          "type": "string",
+          "const": "session"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "ccSessionId": {
+              "type": "string"
+            },
+            "projectCwd": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "enum": ["starting", "idle", "busy", "waitingForInput", "offeringChoices", "exited"]
+            },
+            "contextLines": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "pendingApproval": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "toolName": {
+                      "type": "string"
+                    },
+                    "toolInput": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["key", "label"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["toolName", "toolInput", "options"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "pendingQuestion": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "questions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "question": {
+                            "type": "string"
+                          },
+                          "header": {
+                            "type": "string"
+                          },
+                          "multiSelect": {
+                            "type": "boolean"
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string"
+                                },
+                                "description": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": ["label", "description"],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": ["question", "header", "multiSelect", "options"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["questions"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "connectedAt": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "projectCwd",
+            "state",
+            "contextLines",
+            "pendingApproval",
+            "pendingQuestion",
+            "connectedAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": ["type", "scope", "sessionId", "data"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "patch"
+        },
+        "scope": {
+          "type": "string",
+          "const": "metadata"
+        },
+        "ops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": ["add", "remove", "replace", "move", "copy", "test"]
+              },
+              "path": {
+                "type": "string"
+              },
+              "value": {},
+              "from": {
+                "type": "string"
+              }
+            },
+            "required": ["op", "path"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["type", "scope", "ops"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "patch"
+        },
+        "scope": {
+          "type": "string",
+          "const": "session"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "ops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": ["add", "remove", "replace", "move", "copy", "test"]
+              },
+              "path": {
+                "type": "string"
+              },
+              "value": {},
+              "from": {
+                "type": "string"
+              }
+            },
+            "required": ["op", "path"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["type", "scope", "sessionId", "ops"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "error"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "message"],
+      "additionalProperties": false
+    }
+  ]
+}

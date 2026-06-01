@@ -1,0 +1,213 @@
+import { describe, test, expect } from 'bun:test'
+import { parseSessionJsonl } from '../../src/clerk/jsonl-parser.ts'
+import { segmentByDay } from '../../src/clerk/segmenter.ts'
+import { cwdToProjectDirName } from '../../src/clerk/preprocessor.ts'
+
+describe('parseSessionJsonl', () => {
+  test('extracts user prompt verbatim (string content)', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'hello world' }, timestamp: '2026-03-10T10:00:00Z', sessionId: 's1' }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    expect(result.sessionId).toBe('s1')
+    expect(result.turns).toHaveLength(1)
+    expect(result.turns[0].role).toBe('user')
+    expect(result.turns[0].text).toBe('hello world')
+  })
+
+  test('extracts user prompt verbatim (array content)', () => {
+    const jsonl = [
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'implement the relay' }] },
+        timestamp: '2026-03-10T10:00:00Z',
+        sessionId: 's1',
+      }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    expect(result.turns[0].text).toBe('implement the relay')
+  })
+
+  test('merges assistant content blocks by message ID', () => {
+    const jsonl = [
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_1', role: 'assistant', content: [{ type: 'thinking', thinking: 'hmm' }] },
+        timestamp: '2026-03-10T10:01:00Z',
+        sessionId: 's1',
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_1', role: 'assistant', content: [{ type: 'text', text: 'Here is the plan.' }] },
+        timestamp: '2026-03-10T10:01:01Z',
+        sessionId: 's1',
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_1', role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: {} }] },
+        timestamp: '2026-03-10T10:01:02Z',
+        sessionId: 's1',
+      }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    // Only one turn (merged), and only the text block survives
+    expect(result.turns).toHaveLength(1)
+    expect(result.turns[0].role).toBe('assistant')
+    expect(result.turns[0].text).toBe('Here is the plan.')
+    expect(result.turns[0].messageId).toBe('msg_1')
+  })
+
+  test('drops tool_use and thinking from assistant turns', () => {
+    const jsonl = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          id: 'msg_1', role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'internal thought' },
+            { type: 'text', text: 'visible response' },
+            { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } },
+          ],
+        },
+        timestamp: '2026-03-10T10:01:00Z',
+        sessionId: 's1',
+      }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    expect(result.turns[0].text).toBe('visible response')
+    expect(result.turns[0].text).not.toContain('internal thought')
+    expect(result.turns[0].text).not.toContain('Bash')
+  })
+
+  test('skips progress, queue-operation, file-history-snapshot events', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'progress', data: {}, timestamp: '2026-03-10T10:00:00Z' }),
+      JSON.stringify({ type: 'queue-operation', operation: 'enqueue', timestamp: '2026-03-10T10:00:00Z' }),
+      JSON.stringify({ type: 'file-history-snapshot' }),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'real prompt' }, timestamp: '2026-03-10T10:01:00Z', sessionId: 's1' }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    expect(result.turns).toHaveLength(1)
+    expect(result.turns[0].text).toBe('real prompt')
+  })
+
+  test('extracts custom title', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'custom-title', customTitle: 'relay-refactor', sessionId: 's1' }),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' }, timestamp: '2026-03-10T10:00:00Z', sessionId: 's1' }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    expect(result.title).toBe('relay-refactor')
+  })
+
+  test('preserves turn order: user → assistant → user', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'first' }, timestamp: '2026-03-10T10:00:00Z', sessionId: 's1' }),
+      JSON.stringify({ type: 'assistant', message: { id: 'msg_1', role: 'assistant', content: [{ type: 'text', text: 'response' }] }, timestamp: '2026-03-10T10:01:00Z', sessionId: 's1' }),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'second' }, timestamp: '2026-03-10T10:02:00Z', sessionId: 's1' }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    expect(result.turns).toHaveLength(3)
+    expect(result.turns[0].text).toBe('first')
+    expect(result.turns[1].text).toBe('response')
+    expect(result.turns[2].text).toBe('second')
+  })
+
+  test('handles assistant with no text blocks (tool-only turn)', () => {
+    const jsonl = [
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'do it' }, timestamp: '2026-03-10T10:00:00Z', sessionId: 's1' }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_1', role: 'assistant', content: [{ type: 'tool_use', id: 't1', name: 'Read', input: {} }] },
+        timestamp: '2026-03-10T10:01:00Z',
+        sessionId: 's1',
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_1', role: 'assistant', content: [{ type: 'tool_use', id: 't2', name: 'Edit', input: {} }] },
+        timestamp: '2026-03-10T10:01:01Z',
+        sessionId: 's1',
+      }),
+      JSON.stringify({ type: 'user', message: { role: 'user', content: 'next' }, timestamp: '2026-03-10T10:02:00Z', sessionId: 's1' }),
+    ].join('\n')
+
+    const result = parseSessionJsonl(jsonl, 'fallback')
+    // Tool-only assistant turn should be dropped (no text)
+    expect(result.turns).toHaveLength(2)
+    expect(result.turns[0].text).toBe('do it')
+    expect(result.turns[1].text).toBe('next')
+  })
+
+  test('uses fallback session ID when none in JSONL', () => {
+    const jsonl = JSON.stringify({ type: 'user', message: { role: 'user', content: 'hi' }, timestamp: '2026-03-10T10:00:00Z' })
+    const result = parseSessionJsonl(jsonl, 'my-fallback')
+    expect(result.sessionId).toBe('my-fallback')
+  })
+})
+
+describe('segmentByDay', () => {
+  test('groups turns by calendar day', () => {
+    const turns = [
+      { index: 0, role: 'user' as const, text: 'day1', timestamp: '2026-03-10T10:00:00Z' },
+      { index: 1, role: 'assistant' as const, text: 'reply1', timestamp: '2026-03-10T11:00:00Z' },
+      { index: 2, role: 'user' as const, text: 'day2', timestamp: '2026-03-11T09:00:00Z' },
+      { index: 3, role: 'assistant' as const, text: 'reply2', timestamp: '2026-03-11T10:00:00Z' },
+    ]
+
+    const segments = segmentByDay(turns)
+    expect(segments).toHaveLength(2)
+    expect(segments[0].date).toBe('2026-03-10')
+    expect(segments[0].turns).toHaveLength(2)
+    expect(segments[0].turnRange).toEqual([0, 2])
+    expect(segments[1].date).toBe('2026-03-11')
+    expect(segments[1].turns).toHaveLength(2)
+    expect(segments[1].turnRange).toEqual([2, 4])
+  })
+
+  test('single day produces one segment', () => {
+    const turns = [
+      { index: 0, role: 'user' as const, text: 'a', timestamp: '2026-03-10T10:00:00Z' },
+      { index: 1, role: 'assistant' as const, text: 'b', timestamp: '2026-03-10T23:59:00Z' },
+    ]
+
+    const segments = segmentByDay(turns)
+    expect(segments).toHaveLength(1)
+    expect(segments[0].turnRange).toEqual([0, 2])
+  })
+
+  test('empty turns returns empty', () => {
+    expect(segmentByDay([])).toEqual([])
+  })
+
+  test('three days produces three segments', () => {
+    const turns = [
+      { index: 0, role: 'user' as const, text: 'a', timestamp: '2026-03-08T10:00:00Z' },
+      { index: 1, role: 'user' as const, text: 'b', timestamp: '2026-03-09T10:00:00Z' },
+      { index: 2, role: 'user' as const, text: 'c', timestamp: '2026-03-10T10:00:00Z' },
+    ]
+
+    const segments = segmentByDay(turns)
+    expect(segments).toHaveLength(3)
+    expect(segments[0].date).toBe('2026-03-08')
+    expect(segments[1].date).toBe('2026-03-09')
+    expect(segments[2].date).toBe('2026-03-10')
+  })
+})
+
+describe('cwdToProjectDirName', () => {
+  test('converts path to CC-style dir name', () => {
+    expect(cwdToProjectDirName('/Users/alice/work/myapp'))
+      .toBe('-Users-alice-work-myapp')
+  })
+
+  test('handles root path', () => {
+    expect(cwdToProjectDirName('/')).toBe('-')
+  })
+})

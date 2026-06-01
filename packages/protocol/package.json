@@ -1,0 +1,16 @@
+{
+  "name": "@merlin/protocol",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@merlin/cc": "workspace:*",
+    "@merlin/processor": "workspace:*",
+    "zod": "^4.3.6"
+  }
+}

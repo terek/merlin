@@ -1,0 +1,198 @@
+name: Release
+
+# Ships single-file `merlin` binaries to a GitHub Release.
+#
+# Triggers:
+#   - push a tag like `v0.2.0`  → release that version (the normal path)
+#   - "Run workflow" button     → build an arbitrary version on demand
+#
+# Why two build jobs: an arm64 macOS binary must be built *and* signed on macOS
+# (the OS kills unsigned arm64 Mach-O on launch), so darwin builds run on a macOS
+# runner with Developer ID signing + notarization. Everything else cross-compiles
+# fine from Linux.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   APPLE_CERT_P12        base64 of the exported "Developer ID Application" cert (.p12)
+#   APPLE_CERT_PASSWORD   password used when exporting that .p12
+#   APPLE_SIGN_IDENTITY   e.g. "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID              Apple ID email used for notarization
+#   APPLE_TEAM_ID         10-char Apple Developer Team ID
+#   APPLE_APP_PASSWORD    app-specific password for that Apple ID (notarytool)
+#   KEYCHAIN_PASSWORD     any string — password for the ephemeral CI keychain
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 0.2.0 — a leading v is optional)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  BUN_VERSION: '1.3.5'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            raw="${{ inputs.version }}"
+          else
+            raw="${{ github.ref_name }}"
+          fi
+          version="${raw#v}"          # strip a leading v if present
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version"     >> "$GITHUB_OUTPUT"
+          echo "Building v$version"
+
+  build-macos:
+    needs: prepare
+    runs-on: macos-14            # arm64 runner — required to sign arm64 binaries
+    env:
+      MERLIN_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd src/web/client && bun install --frozen-lockfile)
+
+      - name: Build darwin binaries
+        run: bun run build:bin darwin-arm64 darwin-x64
+
+      - name: Import signing certificate
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$APPLE_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # Put our keychain first in the search list so codesign finds the identity.
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+      - name: Sign and notarize
+        env:
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for bin in bin/merlin-darwin-arm64 bin/merlin-darwin-x64; do
+            echo "▶ signing $bin"
+            codesign --force --options runtime --timestamp \
+              --sign "$APPLE_SIGN_IDENTITY" "$bin"
+            codesign --verify --strict --verbose=2 "$bin"
+
+            echo "▶ notarizing $bin"
+            ditto -c -k "$bin" "$bin.zip"
+            xcrun notarytool submit "$bin.zip" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --wait
+            rm -f "$bin.zip"
+            # Note: a bare Mach-O executable cannot be stapled (stapling targets
+            # .app/.dmg/.pkg). Gatekeeper does an online notarization check on
+            # first launch instead, which is sufficient for our distribution.
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-darwin
+          path: |
+            bin/merlin-darwin-arm64
+            bin/merlin-darwin-x64
+          if-no-files-found: error
+
+  build-linux:
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      MERLIN_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          bun install --frozen-lockfile
+          (cd src/web/client && bun install --frozen-lockfile)
+
+      - name: Build linux + windows binaries
+        run: >
+          bun run build:bin
+          linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl windows-x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-linux
+          path: |
+            bin/merlin-linux-x64
+            bin/merlin-linux-arm64
+            bin/merlin-linux-x64-musl
+            bin/merlin-linux-arm64-musl
+            bin/merlin-windows-x64.exe
+          if-no-files-found: error
+
+  release:
+    needs: [prepare, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download built binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage release assets
+        run: |
+          mkdir -p dist
+          find artifacts -type f -name 'merlin-*' -exec cp {} dist/ \;
+          cp install.sh dist/install.sh
+          cd dist
+          # Checksums over the binaries only (not install.sh — it's verified by host).
+          shasum -a 256 merlin-* > SHA256SUMS
+          ls -l
+          cat SHA256SUMS
+
+      - name: Create / update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes \
+              dist/*
+          fi

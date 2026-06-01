@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "ccSessionId": {
+      "type": "string"
+    },
+    "projectCwd": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string",
+      "enum": ["starting", "idle", "busy", "waitingForInput", "offeringChoices", "exited"]
+    },
+    "contextLines": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pendingApproval": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "toolName": {
+              "type": "string"
+            },
+            "toolInput": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": ["key", "label"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["toolName", "toolInput", "options"],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pendingQuestion": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "questions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "header": {
+                    "type": "string"
+                  },
+                  "multiSelect": {
+                    "type": "boolean"
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["label", "description"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["question", "header", "multiSelect", "options"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["questions"],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "connectedAt": {
+      "type": "number"
+    }
+  },
+  "required": ["id", "projectCwd", "state", "contextLines", "pendingApproval", "pendingQuestion", "connectedAt"],
+  "additionalProperties": false
+}

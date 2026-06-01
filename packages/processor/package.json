@@ -1,0 +1,24 @@
+{
+  "name": "@merlin/processor",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "process": "bun run src/cli.ts",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@merlin/cc": "workspace:*",
+    "@merlin/ignore": "workspace:*",
+    "@merlin/llm": "workspace:*",
+    "zod": "^4.3.6"
+  }
+}

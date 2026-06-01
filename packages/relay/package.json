@@ -1,0 +1,11 @@
+{
+  "name": "@merlin/relay",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,174 @@
+/**
+ * Tests the async preprocessing journey:
+ * 1. A CC session exists (JSONL on disk), but Clerk doesn't know about it yet
+ * 2. Project becomes active → preprocessing kicks off in background
+ * 3. Clerk is asked immediately → no results (not yet processed)
+ * 4. Wait for preprocessing to complete
+ * 5. Clerk is asked again → finds the session
+ */
+
+import { describe, test, expect, afterAll } from 'bun:test'
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import path from 'node:path'
+import { Clerk, inferProvider } from '../../src/clerk/clerk.ts'
+import { cwdToProjectDirName } from '../../src/clerk/preprocessor.ts'
+import { resolveKey, shouldSkipLlm, llmTimeout } from '../helpers/llm-test-utils.ts'
+
+const CLERK_MODEL = process.env.CLERK_MODEL
+const PP_MODEL = process.env.PROCESSOR_MODEL
+const CLERK_KEY = resolveKey(CLERK_MODEL, 'CLERK')
+const PP_KEY = resolveKey(PP_MODEL, 'PROCESSOR')
+const skip = await shouldSkipLlm({ models: [CLERK_MODEL, PP_MODEL], keys: [CLERK_KEY, PP_KEY] })
+
+const tempDir = `/tmp/merlin-clerk-async-test-${Date.now()}`
+const projectCwd = `${tempDir}/my-project`
+const claudeProjectsDir = path.join(tempDir, 'claude-projects')
+const clerkDir = path.join(tempDir, 'clerk')
+const projectDirName = cwdToProjectDirName(projectCwd)
+const projectDir = path.join(claudeProjectsDir, projectDirName)
+
+afterAll(() => {
+  rmSync(tempDir, { recursive: true, force: true })
+})
+
+describe('@llm Clerk — async preprocessing journey', () => {
+  test.skipIf(skip)('@llm session data becomes available only after preprocessing completes', async () => {
+    // --- Step 1: An independent CC session exists on disk ---
+    mkdirSync(projectDir, { recursive: true })
+    mkdirSync(projectCwd, { recursive: true })
+
+    const sessionId = 'independent-session'
+    const lines = [
+      JSON.stringify({ type: 'custom-title', customTitle: 'database-migration', sessionId }),
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Create a PostgreSQL migration system. It should support up/down migrations with version tracking in a migrations table.' }] },
+        timestamp: '2026-03-12T10:00:00Z',
+        sessionId,
+        cwd: projectCwd,
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_ind_1', role: 'assistant', content: [{ type: 'text', text: 'Created the migration system with a migrations table that tracks version, name, and applied_at. Each migration is a TypeScript file exporting up() and down() functions. The runner applies pending migrations in order and records them.' }] },
+        timestamp: '2026-03-12T10:15:00Z',
+        sessionId,
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Add a dry-run mode that shows which migrations would run without actually executing them.' }] },
+        timestamp: '2026-03-12T11:00:00Z',
+        sessionId,
+        cwd: projectCwd,
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_ind_2', role: 'assistant', content: [{ type: 'text', text: 'Added --dry-run flag. When enabled, it lists pending migrations with their version and name but skips execution. Also shows what SQL would run for each migration.' }] },
+        timestamp: '2026-03-12T11:10:00Z',
+        sessionId,
+      }),
+    ]
+    writeFileSync(path.join(projectDir, `${sessionId}.jsonl`), lines.join('\n'))
+
+    // --- Step 2: Create Clerk (no preprocessing done yet) ---
+    const clerk = new Clerk({
+      clerkApiKey: CLERK_KEY!,
+      clerkModel: CLERK_MODEL!,
+      preprocessorApiKey: PP_KEY!,
+      preprocessorModel: PP_MODEL!,
+      clerkDir,
+      claudeProjectsDir,
+    })
+
+    // --- Step 3: Ask immediately — preprocessing hasn't happened ---
+    const { response: beforeResponse } = await clerk.handleMessage(
+      projectCwd,
+      'What do we have about database migrations?',
+    )
+
+    // The Clerk should NOT find any migration-related content since nothing is processed.
+    // It may say "I don't have any information" or "no sessions found" or similar.
+    // The key assertion: it should NOT contain specific details from the session.
+    const beforeLower = beforeResponse.toLowerCase()
+    const hasSpecificDetails = beforeLower.includes('dry-run') || beforeLower.includes('dry run')
+      || beforeLower.includes('migrations table')
+      || beforeLower.includes('version tracking')
+    expect(hasSpecificDetails).toBe(false)
+
+    // --- Step 4: Project becomes active → preprocess ---
+    const preprocessResult = await clerk.preprocessProject(projectCwd)
+    expect(preprocessResult.processed).toBe(1)
+    expect(preprocessResult.errors).toBe(0)
+
+    // --- Step 5: Ask again — now the data should be available ---
+    const { response: afterResponse } = await clerk.handleMessage(
+      projectCwd,
+      'What do we have about database migrations?',
+    )
+
+    const afterLower = afterResponse.toLowerCase()
+    // Now it should find and report on the migration session
+    expect(afterLower).toMatch(/migrat/)
+    // Should mention specifics from the session
+    const hasPostDetails = afterLower.includes('dry') || afterLower.includes('postgresql')
+      || afterLower.includes('up') || afterLower.includes('version')
+    expect(hasPostDetails).toBe(true)
+  }, llmTimeout(120_000))
+
+  test.skipIf(skip)('@llm new session added after initial preprocessing gets picked up on re-preprocess', async () => {
+    // This continues from the previous test's state — the migration session is already processed.
+
+    // --- Step 1: A new session appears (developer started another CC session) ---
+    const newSessionId = 'late-session'
+    const lines = [
+      JSON.stringify({ type: 'custom-title', customTitle: 'auth-middleware', sessionId: newSessionId }),
+      JSON.stringify({
+        type: 'user',
+        message: { role: 'user', content: [{ type: 'text', text: 'Add JWT authentication middleware. It should validate tokens on every request and reject expired tokens with 401.' }] },
+        timestamp: '2026-03-13T09:00:00Z',
+        sessionId: newSessionId,
+        cwd: projectCwd,
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { id: 'msg_late_1', role: 'assistant', content: [{ type: 'text', text: 'Created the auth middleware using jsonwebtoken. It extracts the Bearer token from the Authorization header, validates it against the JWT_SECRET env var, and attaches the decoded payload to req.user. Expired tokens return 401 with a clear error message.' }] },
+        timestamp: '2026-03-13T09:15:00Z',
+        sessionId: newSessionId,
+      }),
+    ]
+    writeFileSync(path.join(projectDir, `${newSessionId}.jsonl`), lines.join('\n'))
+
+    const clerk = new Clerk({
+      clerkApiKey: CLERK_KEY!,
+      clerkModel: CLERK_MODEL!,
+      preprocessorApiKey: PP_KEY!,
+      preprocessorModel: PP_MODEL!,
+      clerkDir,
+      claudeProjectsDir,
+    })
+
+    // --- Step 2: Ask about auth — not processed yet ---
+    const { response: beforeAuth } = await clerk.handleMessage(
+      projectCwd,
+      'What do we have about authentication?',
+    )
+    // Might find nothing specific about JWT, or might find general "no auth sessions"
+    const beforeLower = beforeAuth.toLowerCase()
+    const hasJwtDetails = beforeLower.includes('jwt') || beforeLower.includes('bearer')
+      || beforeLower.includes('jsonwebtoken')
+    // The new session isn't processed, so these specifics shouldn't appear
+    expect(hasJwtDetails).toBe(false)
+
+    // --- Step 3: Re-preprocess — should pick up the new session, skip the old one ---
+    const result = await clerk.preprocessProject(projectCwd)
+    expect(result.processed).toBe(1)   // only the new session
+    expect(result.skipped).toBe(1)     // the migration session was already done
+
+    // --- Step 4: Now the auth session is available ---
+    const { response: afterAuth } = await clerk.handleMessage(
+      projectCwd,
+      'What do we have about authentication?',
+    )
+    const afterLower = afterAuth.toLowerCase()
+    expect(afterLower).toMatch(/jwt|auth|token|middleware/)
+  }, llmTimeout(120_000))
+})
