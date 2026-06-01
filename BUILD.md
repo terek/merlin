@@ -48,6 +48,7 @@ the release tag, and a local `build:bin` falls back to the `version` in
 | Cut a release | Push a tag: `git tag v0.2.0 && git push origin v0.2.0`. The `Release` workflow builds, signs, notarizes, and publishes a GitHub Release with all binaries + `SHA256SUMS` + `install.sh`. |
 | Ad-hoc build | The same workflow has a **Run workflow** button (`workflow_dispatch`) taking a version string — for builds without tagging. |
 | User install | `curl -fsSL https://merlin.dev/install.sh \| bash` — detects OS/arch, downloads the matching binary from the latest release, verifies its SHA-256, installs it as `merlin`, and runs `merlin setup`. |
+| User upgrade | `merlin upgrade` self-updates in place: checks the latest release, and if newer, downloads + checksum-verifies the matching binary (via `curl`) and atomically swaps it over the running executable. `merlin upgrade --check` just reports availability. Needs write access to the install dir (`sudo` if installed to `/usr/local/bin`). |
 | Host install.sh | `install.sh` lives at the repo root and ships as a release asset. Serve it from Cloudflare at `merlin.dev/install.sh` (point the route at the raw repo file or the release asset). |
 
 `merlin setup` (run automatically by the installer; safe to re-run) lays down the
@@ -76,6 +77,17 @@ variables → Actions):
 A bare Mach-O executable can't be *stapled* (stapling targets `.app`/`.dmg`/`.pkg`),
 so Gatekeeper does an online notarization check on first launch instead — which is
 why notarizing still matters even though we ship a plain binary.
+
+**The JIT-entitlements trap:** notarization forces the *hardened runtime*
+(`codesign --options runtime`), which blocks JIT and unsigned executable memory by
+default. Bun's binary is a JavaScriptCore runtime that needs both, so a hardened
+binary signed *without* entitlements crashes instantly at launch with
+`Ran out of executable memory while allocating N bytes` — even though Gatekeeper
+reports it as a valid, notarized binary. The macOS job signs with
+`--entitlements build/entitlements.mac.plist` (`allow-jit` +
+`allow-unsigned-executable-memory` + `disable-library-validation`) to re-permit it.
+Locally-built *unsigned* binaries don't hit this — only hardened/notarized ones do,
+which is why it only surfaces in released artifacts.
 
 ## Test & quality
 

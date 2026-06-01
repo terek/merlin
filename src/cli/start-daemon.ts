@@ -29,6 +29,7 @@ import { Daemon, type RelayPairing } from '../daemon.ts'
 import { DaemonTUI } from '../tui/daemon-tui.ts'
 import { createBridge } from '../web/bridge.ts'
 import { runSetup } from './setup.ts'
+import { runUpgrade } from './upgrade.ts'
 
 // Version is injected at compile time via `--define` (see scripts/build-bin.ts).
 // Running from source it's undefined → "dev".
@@ -45,6 +46,15 @@ const MERLIN_VERSION = process.env.MERLIN_VERSION ?? 'dev'
   if (verb === 'setup') {
     await runSetup()
     process.exit(0)
+  }
+  if (verb === 'upgrade' || verb === 'update') {
+    try {
+      await runUpgrade({ checkOnly: process.argv.includes('--check') })
+      process.exit(0)
+    } catch (err) {
+      console.error(`✗ ${(err as Error).message}`)
+      process.exit(1)
+    }
   }
 }
 

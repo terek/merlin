@@ -61,7 +61,7 @@ jobs:
     env:
       MERLIN_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -103,6 +103,7 @@ jobs:
           for bin in bin/merlin-darwin-arm64 bin/merlin-darwin-x64; do
             echo "▶ signing $bin"
             codesign --force --options runtime --timestamp \
+              --entitlements build/entitlements.mac.plist \
               --sign "$APPLE_SIGN_IDENTITY" "$bin"
             codesign --verify --strict --verbose=2 "$bin"
 
@@ -119,7 +120,7 @@ jobs:
             # first launch instead, which is sufficient for our distribution.
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bin-darwin
           path: |
@@ -133,7 +134,7 @@ jobs:
     env:
       MERLIN_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -149,7 +150,7 @@ jobs:
           bun run build:bin
           linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl windows-x64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bin-linux
           path: |
@@ -164,10 +165,10 @@ jobs:
     needs: [prepare, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download built binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
