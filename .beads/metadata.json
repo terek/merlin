@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "merlin",
+  "project_id": "d00114f0-f6f1-4b2c-9761-02a404bafe9e"
+}
