@@ -11,7 +11,7 @@ counted and shown only in aggregate; storage and code are split per harness
 
 ## 1. What it is
 
-One binary, `explorer`. You start it; it keeps a summary ("digest") of every Claude Code
+One binary, `merlin`. You start it; it keeps a summary ("digest") of every Claude Code
 session under `~/.merlin/claude/projects`, follows running sessions, and serves the result on a
 local port.
 
