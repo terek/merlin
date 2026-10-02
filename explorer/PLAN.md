@@ -435,3 +435,45 @@ Read for ideas; do not port.
 - `packages/cc/src/session-lockfiles.ts`, `scripts/session-start.sh` — the hook/lockfile approach being replaced
 - `src/cli/setup.ts` — the existing hook installer
 - `specs/PROCESSING.md` — the old pipeline, including the parts being dropped
+
+## 12. Releasing
+
+A release is a git tag. `.github/workflows/release.yml` does the rest; `checks.yml` runs the
+same checks on every push and pull request.
+
+**Cut a release.** On `main`, with `make test`, `make vet` and `make web-check` green:
+
+```
+git tag v0.3.0 && git push origin v0.3.0
+```
+
+The tag name is the version: `merlin version` prints `merlin 0.3.0`. The workflow runs the
+checks, builds the web UI once, cross-compiles with `scripts/release-build.sh` (CGO off,
+`-tags embedui`, version stamped through `-X main.version`), signs and notarizes the two
+macOS binaries, smoke-tests what can run natively (`scripts/release-smoke.sh`: version,
+`GET /` serves the UI, `GET /api/sessions` is JSON), checks the asset list, and uploads it.
+
+**Test release.** Actions -> Release -> Run workflow, version `0.2.0-rc1`. A version with a
+dash is published as a pre-release, which GitHub does not serve as "latest", so
+`merlin.dev/install.sh` (a Cloudflare Worker proxying
+`releases/latest/download/install.sh`) keeps installing the previous real release. Test it with
+`MERLIN_VERSION=0.2.0-rc1 MERLIN_INSTALL_DIR=$(mktemp -d) bash install.sh`, then delete the
+release and tag.
+
+**Assets.** `merlin-darwin-arm64`, `merlin-darwin-x64`, `merlin-linux-arm64`, `merlin-linux-x64`,
+`SHA256SUMS` (over the binaries) and `install.sh`; the install script must stay an asset.
+`merlin-linux-{x64,arm64}-musl` are copies of the static binaries, published only so the
+earlier Merlin's `merlin upgrade` (which asks for them on Alpine) keeps working; drop them from
+the workflow when nobody runs that binary any more. There is no Windows build (the daemon uses
+flock).
+
+**Secrets** (repository settings, Actions): `APPLE_CERT_P12` (base64 Developer ID Application
+certificate), `APPLE_CERT_PASSWORD`, `APPLE_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
+`APPLE_APP_PASSWORD` (app-specific password), `KEYCHAIN_PASSWORD` (any string). Binaries are
+signed with the hardened runtime and no entitlements. A bare binary cannot be stapled;
+Gatekeeper checks the notarization online on first launch.
+
+**Locally.** `OUT_DIR=/some/dir scripts/release-build.sh 0.2.0 darwin-arm64 linux-x64`, then
+`scripts/release-smoke.sh /some/dir/merlin-darwin-arm64 0.2.0`. `install.sh` honours
+`MERLIN_BASE_URL` (a directory laid out like a release, served over HTTP) for testing without
+GitHub.

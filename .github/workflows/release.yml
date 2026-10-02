@@ -1,24 +1,29 @@
 name: Release
 
-# Ships single-file `merlin` binaries to a GitHub Release.
+# Ships the `merlin` binaries (Go, web UI embedded) to a GitHub Release.
 #
 # Triggers:
-#   - push a tag like `v0.2.0`  → release that version (the normal path)
-#   - "Run workflow" button     → build an arbitrary version on demand
+#   - push a tag like `v0.2.0`  -> release that version (the normal path)
+#   - "Run workflow" button     -> build an arbitrary version on demand. A version with a
+#                                  dash (0.2.0-rc1) is published as a pre-release, which
+#                                  GitHub does not serve as "latest", so merlin.dev/install.sh
+#                                  keeps pointing at the previous real release.
 #
-# Why two build jobs: an arm64 macOS binary must be built *and* signed on macOS
-# (the OS kills unsigned arm64 Mach-O on launch), so darwin builds run on a macOS
-# runner with Developer ID signing + notarization. Everything else cross-compiles
-# fine from Linux.
+# Jobs: checks (tests, vet, web checks) -> web (UI built once, reused by every binary)
+# -> build-macos (cross-builds, signs, notarizes both darwin binaries) and build-linux
+# -> release (assembles SHA256SUMS, verifies the asset list, uploads).
 #
-# Required repository secrets (Settings → Secrets and variables → Actions):
+# The build itself is explorer/scripts/release-build.sh and the smoke test is
+# explorer/scripts/release-smoke.sh; both run the same way on a developer machine.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   APPLE_CERT_P12        base64 of the exported "Developer ID Application" cert (.p12)
 #   APPLE_CERT_PASSWORD   password used when exporting that .p12
 #   APPLE_SIGN_IDENTITY   e.g. "Developer ID Application: Your Name (TEAMID)"
 #   APPLE_ID              Apple ID email used for notarization
 #   APPLE_TEAM_ID         10-char Apple Developer Team ID
 #   APPLE_APP_PASSWORD    app-specific password for that Apple ID (notarytool)
-#   KEYCHAIN_PASSWORD     any string — password for the ephemeral CI keychain
+#   KEYCHAIN_PASSWORD     any string - password for the ephemeral CI keychain
 
 on:
   push:
@@ -26,12 +31,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to build (e.g. 0.2.0 — a leading v is optional)'
+        description: 'Version to build (e.g. 0.2.0, or 0.2.0-rc1 for a pre-release; a leading v is optional)'
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   BUN_VERSION: '1.3.5'
@@ -42,24 +47,57 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       tag: ${{ steps.v.outputs.tag }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            raw="${{ inputs.version }}"
-          else
-            raw="${{ github.ref_name }}"
-          fi
+          if [ "$EVENT" = "workflow_dispatch" ]; then raw="$INPUT_VERSION"; else raw="$REF_NAME"; fi
           version="${raw#v}"          # strip a leading v if present
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=v$version"     >> "$GITHUB_OUTPUT"
-          echo "Building v$version"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "not a version: $raw" >&2
+            exit 1
+          fi
+          prerelease=false
+          case "$version" in *-*) prerelease=true ;; esac
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building v$version (prerelease: $prerelease)"
 
-  build-macos:
-    needs: prepare
-    runs-on: macos-14            # arm64 runner — required to sign arm64 binaries
-    env:
-      MERLIN_VERSION: ${{ needs.prepare.outputs.version }}
+  # A release must not be cut from a tree that fails these.
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: explorer
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: explorer/go.mod
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install web dependencies
+        run: cd web && bun install --frozen-lockfile
+
+      - run: make test
+      - run: make vet
+      - run: make web-check
+
+  # The UI does not depend on the platform: build it once, embed it everywhere.
+  web:
+    needs: checks
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -67,13 +105,39 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install dependencies
-        run: |
-          bun install --frozen-lockfile
-          (cd src/web/client && bun install --frozen-lockfile)
+      - name: Build the web UI
+        working-directory: explorer
+        run: make web
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: explorer/internal/webui/dist
+          if-no-files-found: error
+
+  build-macos:
+    needs: [prepare, web]
+    runs-on: macos-14            # arm64 runner; builds and signs both darwin binaries
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: explorer/go.mod
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: explorer/internal/webui/dist
 
       - name: Build darwin binaries
-        run: bun run build:bin darwin-arm64 darwin-x64
+        working-directory: explorer
+        env:
+          MERLIN_SKIP_WEB: '1'
+          OUT_DIR: ${{ github.workspace }}/bin
+        run: scripts/release-build.sh "$VERSION" darwin-arm64 darwin-x64
 
       - name: Import signing certificate
         env:
@@ -92,7 +156,10 @@ jobs:
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           # Put our keychain first in the search list so codesign finds the identity.
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
 
+      # Hardened runtime, no entitlements: a Go binary needs none (the old
+      # entitlements file was for Bun's JIT).
       - name: Sign and notarize
         env:
           APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
@@ -101,13 +168,12 @@ jobs:
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           for bin in bin/merlin-darwin-arm64 bin/merlin-darwin-x64; do
-            echo "▶ signing $bin"
+            echo "signing $bin"
             codesign --force --options runtime --timestamp \
-              --entitlements build/entitlements.mac.plist \
               --sign "$APPLE_SIGN_IDENTITY" "$bin"
             codesign --verify --strict --verbose=2 "$bin"
 
-            echo "▶ notarizing $bin"
+            echo "notarizing $bin"
             ditto -c -k "$bin" "$bin.zip"
             xcrun notarytool submit "$bin.zip" \
               --apple-id "$APPLE_ID" \
@@ -120,6 +186,19 @@ jobs:
             # first launch instead, which is sufficient for our distribution.
           done
 
+      # The signed arm64 binary must still run and serve the UI. The x64 binary
+      # cannot run natively on this runner; it is only checked to be a signed x86_64 Mach-O.
+      - name: Smoke test the signed binaries
+        run: |
+          explorer/scripts/release-smoke.sh bin/merlin-darwin-arm64 "$VERSION"
+          codesign -dv bin/merlin-darwin-arm64 2>&1 | grep -q 'flags=.*runtime'
+          file bin/merlin-darwin-x64 | grep -q x86_64
+          codesign -dv bin/merlin-darwin-x64 2>&1 | grep -q 'flags=.*runtime'
+
+      - name: Remove the signing keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+
       - uses: actions/upload-artifact@v7
         with:
           name: bin-darwin
@@ -129,26 +208,31 @@ jobs:
           if-no-files-found: error
 
   build-linux:
-    needs: prepare
+    needs: [prepare, web]
     runs-on: ubuntu-latest
     env:
-      MERLIN_VERSION: ${{ needs.prepare.outputs.version }}
+      VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v6
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-go@v6
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          go-version-file: explorer/go.mod
 
-      - name: Install dependencies
-        run: |
-          bun install --frozen-lockfile
-          (cd src/web/client && bun install --frozen-lockfile)
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: explorer/internal/webui/dist
 
-      - name: Build linux + windows binaries
-        run: >
-          bun run build:bin
-          linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl windows-x64
+      - name: Build linux binaries
+        working-directory: explorer
+        env:
+          MERLIN_SKIP_WEB: '1'
+          OUT_DIR: ${{ github.workspace }}/bin
+        run: scripts/release-build.sh "$VERSION" linux-x64 linux-arm64
+
+      - name: Smoke test linux-x64
+        run: explorer/scripts/release-smoke.sh bin/merlin-linux-x64 "$VERSION"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -156,14 +240,32 @@ jobs:
           path: |
             bin/merlin-linux-x64
             bin/merlin-linux-arm64
-            bin/merlin-linux-x64-musl
-            bin/merlin-linux-arm64-musl
-            bin/merlin-windows-x64.exe
           if-no-files-found: error
 
+  # linux-arm64 runs natively on GitHub's arm64 runner.
+  smoke-linux-arm64:
+    needs: [prepare, build-linux]
+    runs-on: ubuntu-24.04-arm
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: bin-linux
+          path: bin
+
+      - name: Smoke test linux-arm64
+        run: |
+          chmod +x bin/merlin-linux-arm64
+          explorer/scripts/release-smoke.sh bin/merlin-linux-arm64 "$VERSION"
+
   release:
-    needs: [prepare, build-macos, build-linux]
+    needs: [prepare, build-macos, build-linux, smoke-linux-arm64]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -171,29 +273,62 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: bin-*
 
       - name: Stage release assets
         run: |
           mkdir -p dist
           find artifacts -type f -name 'merlin-*' -exec cp {} dist/ \;
+          # The earlier (TypeScript) Merlin's `merlin upgrade` asks for the -musl asset
+          # on Alpine and other musl systems, and Go binaries are static, so for this
+          # release the same files are published under those names. They can go once
+          # nobody runs the old binary any more.
+          cp dist/merlin-linux-x64 dist/merlin-linux-x64-musl
+          cp dist/merlin-linux-arm64 dist/merlin-linux-arm64-musl
           cp install.sh dist/install.sh
           cd dist
-          # Checksums over the binaries only (not install.sh — it's verified by host).
-          shasum -a 256 merlin-* > SHA256SUMS
+          # Checksums over the binaries only (not install.sh: that one is fetched from the release).
+          sha256sum merlin-* > SHA256SUMS
           ls -l
           cat SHA256SUMS
+
+      - name: Verify the asset list
+        run: |
+          expected="SHA256SUMS
+          install.sh
+          merlin-darwin-arm64
+          merlin-darwin-x64
+          merlin-linux-arm64
+          merlin-linux-arm64-musl
+          merlin-linux-x64
+          merlin-linux-x64-musl"
+          actual="$(cd dist && printf '%s\n' * | LC_ALL=C sort)"
+          if [ "$actual" != "$(printf '%s\n' "$expected" | LC_ALL=C sort)" ]; then
+            echo "unexpected asset list:" >&2
+            echo "$actual" >&2
+            exit 1
+          fi
+          # Every binary must be listed in SHA256SUMS and be a Mach-O or ELF file.
+          [ "$(wc -l < dist/SHA256SUMS)" -eq 6 ]
+          for f in dist/merlin-*; do
+            file "$f" | grep -Eq 'Mach-O|ELF' || { echo "$f is not a Mach-O or ELF binary" >&2; exit 1; }
+          done
 
       - name: Create / update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
             gh release create "$TAG" \
               --target "$GITHUB_SHA" \
               --title "$TAG" \
               --generate-notes \
+              "${flags[@]}" \
               dist/*
           fi
