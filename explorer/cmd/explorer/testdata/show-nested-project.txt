@@ -1,0 +1,26 @@
+inner session in a nested project directory
+  id         22222222-0000-4000-8000-000000000002
+  state      clean
+  project    /home/dev/acme/nest/inner   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 22 06:00 → Sep 22 06:00  (14s)
+  turns      1 turn · 3 assistant messages · 1 tool call · 1 agent
+
+Cost    ≈$0.014   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.014   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.014
+
+Agents  (1 agent; own cost is attributed from tokens)
+  AGENT                              KIND      MODEL   STATUS         OWN  WITH SUBTREE
+  └─ general-purpose · Inner helper  subagent  sonnet  completed  $0.0022
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 22 06:00  human                 $0.014  5s  [+1 agent]
+     > inner session in a nested project directory
+     < Inner done
+
+Resume
+  cd /home/dev/acme/nest/inner && claude --resume 22222222-0000-4000-8000-000000000002

@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-subnest/08080808-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subnest/08080808-0000-4000-8000-000000000001/subagents/agent-a08e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subnest/08080808-0000-4000-8000-000000000001/subagents/agent-a08e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subnest/08080808-0000-4000-8000-000000000001/subagents/agent-a08e0c0de0000002.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subnest/08080808-0000-4000-8000-000000000001/subagents/agent-a08e0c0de0000002.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "08080808-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-subnest",
+  "project": "/home/dev/acme/subnest",
+  "cwd": "/home/dev/acme/subnest",
+  "cwds": [
+    "/home/dev/acme/subnest"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "survey the repo with helpers",
+  "startedAt": "2026-09-08T10:00:00Z",
+  "lastActivityAt": "2026-09-08T10:00:28Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 6,
+    "toolCalls": 3,
+    "toolsByName": {
+      "Agent": 2,
+      "Glob": 1
+    }
+  },
+  "cost": {
+    "usd": 0.02622,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 4600,
+        "output": 280,
+        "cacheRead": 6600,
+        "cacheWrite5m": 1800,
+        "cacheWrite1h": 2100,
+        "usd": 0.02622
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "08010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-08T10:00:00Z",
+      "endedAt": "2026-09-08T10:00:28Z",
+      "durationMs": 30000,
+      "origin": "human",
+      "userText": "survey the repo with helpers",
+      "finalText": "The repo has 4 test files.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.01212,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 110,
+            "cacheRead": 2100,
+            "cacheWrite1h": 2100,
+            "usd": 0.01212
+          }
+        }
+      },
+      "costWithAgents": 0.02622,
+      "spawned": [
+        "a08e0c0de0000001"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "a08e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Survey",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_nest_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-08T10:00:05Z",
+      "endedAt": "2026-09-08T10:00:21Z",
+      "status": "completed",
+      "prompt": "Survey the repo; delegate the test survey.",
+      "finalText": "Repo surveyed: 4 test files.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "cost": {
+        "usd": 0.0092,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 2300,
+            "output": 100,
+            "cacheRead": 3000,
+            "cacheWrite5m": 1200,
+            "usd": 0.0092
+          }
+        }
+      },
+      "subtreeUSD": 0.0141
+    },
+    {
+      "id": "a08e0c0de0000002",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Survey tests",
+      "model": "sonnet",
+      "parentAgentId": "a08e0c0de0000001",
+      "spawnToolUseId": "toolu_nest_02",
+      "spawnTurn": 0,
+      "depth": 2,
+      "linkage": "meta",
+      "startedAt": "2026-09-08T10:00:10Z",
+      "endedAt": "2026-09-08T10:00:16Z",
+      "status": "completed",
+      "prompt": "Count the test files.",
+      "finalText": "There are 4 test files.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Glob": 1
+      },
+      "cost": {
+        "usd": 0.0049,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1200,
+            "output": 70,
+            "cacheRead": 1500,
+            "cacheWrite5m": 600,
+            "usd": 0.0049
+          }
+        }
+      },
+      "subtreeUSD": 0.0049
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_nest_01",
+      "at": "2026-09-08T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_nest_a1",
+      "at": "2026-09-08T10:00:07Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a08e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0071,
+      "input": 2000,
+      "output": 60,
+      "cacheWrite5m": 1000
+    },
+    {
+      "id": "msg_nest_b1",
+      "at": "2026-09-08T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a08e0c0de0000002",
+      "turn": 0,
+      "usd": 0.00365,
+      "input": 1000,
+      "output": 40,
+      "cacheWrite5m": 500
+    },
+    {
+      "id": "msg_nest_b2",
+      "at": "2026-09-08T10:00:16Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a08e0c0de0000002",
+      "turn": 0,
+      "usd": 0.00125,
+      "input": 200,
+      "output": 30,
+      "cacheRead": 1500,
+      "cacheWrite5m": 100
+    },
+    {
+      "id": "msg_nest_a2",
+      "at": "2026-09-08T10:00:21Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a08e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0021,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 3000,
+      "cacheWrite5m": 200
+    },
+    {
+      "id": "msg_nest_02",
+      "at": "2026-09-08T10:00:26Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00132,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2100,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

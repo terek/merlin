@@ -1,0 +1,289 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001/subagents/agent-a10e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001/subagents/agent-a10e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001/subagents/agent-a10e0c0de0000002.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001/subagents/agent-a10e0c0de0000002.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001/subagents/agent-a10e0c0de0000003.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001/subagents/agent-a10e0c0de0000003.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "10101010-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-fork",
+  "project": "/home/dev/acme/fork",
+  "cwd": "/home/dev/acme/fork",
+  "cwds": [
+    "/home/dev/acme/fork"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "compare the storage options",
+  "startedAt": "2026-09-10T10:00:00Z",
+  "lastActivityAt": "2026-09-10T10:00:26Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 6,
+    "toolCalls": 3,
+    "toolsByName": {
+      "Agent": 3
+    }
+  },
+  "cost": {
+    "usd": 0.02101,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 2500,
+        "output": 260,
+        "cacheRead": 6800,
+        "cacheWrite5m": 1300,
+        "cacheWrite1h": 2200,
+        "usd": 0.02101
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "10010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-10T10:00:00Z",
+      "endedAt": "2026-09-10T10:00:26Z",
+      "durationMs": 20000,
+      "origin": "human",
+      "userText": "compare the storage options",
+      "finalText": "sqlite fits best for now.",
+      "assistantMessages": 2,
+      "toolCalls": 3,
+      "toolsByName": {
+        "Agent": 3
+      },
+      "contextTokens": 2600,
+      "cost": {
+        "usd": 0.012660000000000001,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 120,
+            "cacheRead": 2300,
+            "cacheWrite1h": 2200,
+            "usd": 0.012660000000000001
+          }
+        }
+      },
+      "costWithAgents": 0.02101,
+      "spawned": [
+        "a10e0c0de0000001",
+        "a10e0c0de0000002",
+        "a10e0c0de0000003"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "a10e0c0de0000001",
+      "kind": "fork",
+      "agentType": "fork",
+      "description": "Evaluate sqlite",
+      "model": "inherit",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_fork_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-10T10:00:09Z",
+      "endedAt": "2026-09-10T10:00:15Z",
+      "status": "completed",
+      "prompt": "Evaluate sqlite.",
+      "finalText": "sqlite is simple and embedded.",
+      "assistantMessages": 2,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.00525,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 800,
+            "output": 60,
+            "cacheRead": 1500,
+            "cacheWrite5m": 1100,
+            "usd": 0.00525
+          }
+        }
+      },
+      "subtreeUSD": 0.00525
+    },
+    {
+      "id": "a10e0c0de0000002",
+      "kind": "fork",
+      "agentType": "fork",
+      "description": "Evaluate postgres",
+      "model": "inherit",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_fork_02",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-10T10:00:09Z",
+      "endedAt": "2026-09-10T10:00:15Z",
+      "status": "completed",
+      "prompt": "Evaluate postgres.",
+      "finalText": "postgres scales and is heavier.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.00155,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 300,
+            "output": 40,
+            "cacheRead": 1500,
+            "cacheWrite5m": 100,
+            "usd": 0.00155
+          }
+        }
+      },
+      "subtreeUSD": 0.00155
+    },
+    {
+      "id": "a10e0c0de0000003",
+      "kind": "fork",
+      "agentType": "fork",
+      "description": "Evaluate mysql",
+      "model": "inherit",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_fork_03",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-10T10:00:13Z",
+      "endedAt": "2026-09-10T10:00:15Z",
+      "status": "completed",
+      "prompt": "Evaluate mysql.",
+      "finalText": "mysql is a middle ground.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.00155,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 300,
+            "output": 40,
+            "cacheRead": 1500,
+            "cacheWrite5m": 100,
+            "usd": 0.00155
+          }
+        }
+      },
+      "subtreeUSD": 0.00155
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_fork_01",
+      "at": "2026-09-10T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_fork_ctx_01",
+      "at": "2026-09-10T10:00:11Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a10e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0037,
+      "input": 500,
+      "output": 20,
+      "cacheWrite5m": 1000
+    },
+    {
+      "id": "msg_fork_f1_01",
+      "at": "2026-09-10T10:00:15Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a10e0c0de0000001",
+      "turn": 0,
+      "usd": 0.00155,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 1500,
+      "cacheWrite5m": 100
+    },
+    {
+      "id": "msg_fork_f2_01",
+      "at": "2026-09-10T10:00:15Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a10e0c0de0000002",
+      "turn": 0,
+      "usd": 0.00155,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 1500,
+      "cacheWrite5m": 100
+    },
+    {
+      "id": "msg_fork_f3_01",
+      "at": "2026-09-10T10:00:15Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a10e0c0de0000003",
+      "turn": 0,
+      "usd": 0.00155,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 1500,
+      "cacheWrite5m": 100
+    },
+    {
+      "id": "msg_fork_02",
+      "at": "2026-09-10T10:00:24Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00186,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2300,
+      "cacheWrite1h": 200
+    }
+  ],
+  "diagnostics": {}
+}

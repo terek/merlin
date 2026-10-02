@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "05050505-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-s05-compaction",
+  "project": "/home/dev/acme/s05-compaction",
+  "cwd": "/home/dev/acme/s05-compaction",
+  "cwds": [
+    "/home/dev/acme/s05-compaction"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "set up the database layer",
+  "startedAt": "2026-09-05T10:00:00Z",
+  "lastActivityAt": "2026-09-05T10:00:36Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 4,
+    "turns": 4,
+    "assistantMessages": 5,
+    "toolCalls": 1,
+    "toolsByName": {
+      "Write": 1
+    }
+  },
+  "cost": {
+    "usd": 0.01796,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1400,
+        "output": 240,
+        "cacheRead": 7800,
+        "cacheWrite1h": 2800,
+        "usd": 0.01796
+      }
+    }
+  },
+  "compactions": [
+    {
+      "at": "2026-09-05T10:00:16Z",
+      "turn": 1,
+      "trigger": "auto",
+      "preTokens": 150000,
+      "postTokens": 12000,
+      "durationMs": 8000,
+      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nThe database layer and migrations exist."
+    },
+    {
+      "at": "2026-09-05T10:00:26Z",
+      "turn": 2,
+      "trigger": "manual",
+      "preTokens": 90000,
+      "durationMs": 5000,
+      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nSeed data was added after the first compaction."
+    }
+  ],
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "05010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "endedAt": "2026-09-05T10:00:08Z",
+      "durationMs": 6000,
+      "origin": "human",
+      "userText": "set up the database layer",
+      "finalText": "Database layer created",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Write": 1
+      },
+      "filesTouched": [
+        "/home/dev/acme/s05-compaction/db.ts"
+      ],
+      "contextTokens": 2600,
+      "cost": {
+        "usd": 0.013999999999999999,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 140,
+            "cacheRead": 2000,
+            "cacheWrite1h": 2500,
+            "usd": 0.013999999999999999
+          }
+        }
+      },
+      "costWithAgents": 0.013999999999999999
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "05010000-0000-4000-9000-000000000006",
+      "startedAt": "2026-09-05T10:00:10Z",
+      "endedAt": "2026-09-05T10:00:18Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "add migrations",
+      "finalText": "Migrations added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2700,
+      "cost": {
+        "usd": 0.0015,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2500,
+            "cacheWrite1h": 100,
+            "usd": 0.0015
+          }
+        }
+      },
+      "costWithAgents": 0.0015
+    },
+    {
+      "index": 2,
+      "epoch": 1,
+      "uuid": "05010000-0000-4000-9000-000000000011",
+      "startedAt": "2026-09-05T10:00:20Z",
+      "endedAt": "2026-09-05T10:00:30Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add seed data",
+      "finalText": "Seed data added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 1700,
+      "cost": {
+        "usd": 0.0012,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 30,
+            "cacheRead": 1500,
+            "cacheWrite1h": 100,
+            "usd": 0.0012
+          }
+        }
+      },
+      "costWithAgents": 0.0012
+    },
+    {
+      "index": 3,
+      "epoch": 2,
+      "uuid": "05010000-0000-4000-9000-000000000017",
+      "startedAt": "2026-09-05T10:00:32Z",
+      "endedAt": "2026-09-05T10:00:36Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add an index on email",
+      "finalText": "Index added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2000,
+      "cost": {
+        "usd": 0.00126,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 30,
+            "cacheRead": 1800,
+            "cacheWrite1h": 100,
+            "usd": 0.00126
+          }
+        }
+      },
+      "costWithAgents": 0.00126
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_cmpa_01",
+      "at": "2026-09-05T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.011,
+      "input": 1000,
+      "output": 100,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_cmpa_02",
+      "at": "2026-09-05T10:00:06Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.003,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2000,
+      "cacheWrite1h": 500
+    },
+    {
+      "id": "msg_cmpa_03",
+      "at": "2026-09-05T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0015,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2500,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_cmpa_04",
+      "at": "2026-09-05T10:00:22Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.0012,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 1500,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_cmpa_05",
+      "at": "2026-09-05T10:00:34Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 3,
+      "usd": 0.00126,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 1800,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

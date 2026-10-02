@@ -1,0 +1,6 @@
+{
+  "agentType": "general-purpose",
+  "description": "Find entry point",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

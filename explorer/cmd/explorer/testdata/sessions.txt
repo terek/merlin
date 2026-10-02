@@ -1,0 +1,42 @@
+ID                                    WHEN             PROJECT             TITLE                                        TURNS  AGENTS      COST  STATE           LINEAGE
+22222222-0000-4000-8000-000000000002  today 06:00      inner               inner session in a nested project directory      1       1   ≈$0.014  clean
+22222222-0000-4000-8000-000000000001  today 06:00      nest                outer session in the nest project                1       0   ≈$0.011  clean
+21212121                              yesterday 06:00  misc                write the changelog                              1       0   ≈$0.011  clean
+20202020                              Sep 20 06:00     pricing             estimate the build cost                          1       0   ≈$0.027  clean
+19191919                              Sep 19 00:05     daybound            add a footer                                     3       0   ≈$0.017  clean
+18181818                              Sep 18 06:00     cwdchange           start the feature                                3       0   ≈$0.014  clean
+17171717                              Sep 17 06:00     hostile             add input validation                             3       0   ≈$0.014  clean
+16161616                              Sep 16 07:00     coststate           plan the billing module                          3       1    $0.117  clean
+14141414                              Sep 14 06:00     rewind              scaffold the app                                 6       0   ≈$0.020  clean
+13131313-0000-4000-8000-000000000004  Sep 13 06:10     s13b-fork-unmarked  add a search box                                 3       0  ≈$0.0016  clean           ↳ fork of 13131313-0000-4000-8000-000000000003
+13131313-0000-4000-8000-000000000006  Sep 13 06:10     s13c-fork-marked    add a search box                                 3       0  ≈$0.0016  clean           ↳ fork of 13131313-0000-4000-8000-000000000005
+13131313-0000-4000-8000-000000000008  Sep 13 06:05     s13d-partial-copy   add a reset button                               2       0  ≈$0.0016  clean           ↳ continues 13131313-0000-4000-8000-000000000007
+13131313-0000-4000-8000-000000000003  Sep 13 06:05     s13b-fork-unmarked  add a search box                                 3       0   ≈$0.017  clean           → forked to 13131313-0000-4000-8000-000000000004
+13131313-0000-4000-8000-000000000005  Sep 13 06:05     s13c-fork-marked    add a search box                                 3       0   ≈$0.017  clean           → forked to 13131313-0000-4000-8000-000000000006
+13131313-0000-4000-8000-000000000002  Sep 13 06:02     s13a-continuation   add a search box                                 3       0  ≈$0.0015  clean           ↳ continues 13131313-0000-4000-8000-000000000001
+13131313-0000-4000-8000-00000000001   Sep 13 06:02     s13e-sdk-pickup     add a search box                                 3       0  ≈$0.0015  clean           ↳ continues 13131313-0000-4000-8000-000000000009
+13131313-0000-4000-8000-000000000007  Sep 13 06:00     s13d-partial-copy   add a search box                                 3       0   ≈$0.017  clean           → continued in 13131313-0000-4000-8000-000000000008
+13131313-0000-4000-8000-000000000001  Sep 13 06:00     s13a-continuation   add a search box                                 2       0   ≈$0.016  clean           → continued in 13131313-0000-4000-8000-000000000002
+13131313-0000-4000-8000-000000000009  Sep 13 06:00     s13e-sdk-pickup     add a search box                                 2       0   ≈$0.016  clean           → continued in 13131313-0000-4000-8000-00000000001
+12121212                              Sep 12 06:02     orphan              Scan the repo for TODO comments.                 0       2   ≈$0.013  -
+11111111                              Sep 11 06:00     linkage             check three things in parallel                   1       3   ≈$0.026  clean
+10101010                              Sep 10 06:00     fork                compare the storage options                      1       3   ≈$0.021  clean
+09090909                              Sep 9 06:02      team                ask the reviewer to check the diff               2       1   ≈$0.026  clean
+08080808                              Sep 8 06:00      subnest             survey the repo with helpers                     1       2   ≈$0.026  clean
+07070707                              Sep 7 06:02      subbg               run the slow audit in the background             3       1   ≈$0.024  clean
+06060606                              Sep 6 06:00      subsync             find where logins are validated                  1       1   ≈$0.021  clean
+05050505-0000-4000-8000-000000000001  Sep 5 06:00      s05-compaction      set up the database layer                        4       0   ≈$0.018  clean
+05050505-0000-4000-8000-000000000004  Sep 5 06:00      s05-compaction      audit every module                               1       1   ≈$0.022  clean
+05050505-0000-4000-8000-000000000003  Sep 5 06:00      s05-compaction      add a cache layer                                2       0   ≈$0.012  clean
+05050505-0000-4000-8000-000000000002  Sep 5 06:00      s05-compaction      continue with the repository layer               1       0  ≈$0.0056  clean
+04040404                              Sep 4 06:00      interrupt           refactor the router                              8       0   ≈$0.021  clean
+03030303                              Sep 3 06:00      slash               My logout work                                   4       0   ≈$0.013  running (idle)
+02020202                              Sep 2 06:00      multi-line          list the exported functions in utils.ts          1       0   ≈$0.013  clean
+01010101                              Sep 1 06:00      plain               Add login page                                   2       0   ≈$0.021  running (busy)
+
+Scripted runs (summed per project and day, never listed individually)
+DAY         PROJECT  RUNS              COST
+2026-09-15  sdk      1 scripted run  $0.014
+
+34 of 34 sessions
+cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)

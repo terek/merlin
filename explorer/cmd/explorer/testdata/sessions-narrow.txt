@@ -1,0 +1,20 @@
+ID                                    WHEN             PROJECT             TITLE         TURNS  AGENTS      COST  STATE  LINEAGE
+22222222-0000-4000-8000-000000000002  today 06:00      inner               inner sessi…      1       1   ≈$0.014  clean
+22222222-0000-4000-8000-000000000001  today 06:00      nest                outer sessi…      1       0   ≈$0.011  clean
+21212121                              yesterday 06:00  misc                write the c…      1       0   ≈$0.011  clean
+20202020                              Sep 20 06:00     pricing             estimate th…      1       0   ≈$0.027  clean
+19191919                              Sep 19 00:05     daybound            add a footer      3       0   ≈$0.017  clean
+18181818                              Sep 18 06:00     cwdchange           start the f…      3       0   ≈$0.014  clean
+17171717                              Sep 17 06:00     hostile             add input v…      3       0   ≈$0.014  clean
+16161616                              Sep 16 07:00     coststate           plan the bi…      3       1    $0.117  clean
+14141414                              Sep 14 06:00     rewind              scaffold th…      6       0   ≈$0.020  clean
+13131313-0000-4000-8000-000000000004  Sep 13 06:10     s13b-fork-unmarked  add a searc…      3       0  ≈$0.0016  clean  ↳ fork of 1…
+13131313-0000-4000-8000-000000000006  Sep 13 06:10     s13c-fork-marked    add a searc…      3       0  ≈$0.0016  clean  ↳ fork of 1…
+13131313-0000-4000-8000-000000000008  Sep 13 06:05     s13d-partial-copy   add a reset…      2       0  ≈$0.0016  clean  ↳ continues…
+
+Scripted runs (summed per project and day, never listed individually)
+DAY         PROJECT  RUNS              COST
+2026-09-15  sdk      1 scripted run  $0.014
+
+12 of 34 sessions (--limit 0 for all)
+cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)

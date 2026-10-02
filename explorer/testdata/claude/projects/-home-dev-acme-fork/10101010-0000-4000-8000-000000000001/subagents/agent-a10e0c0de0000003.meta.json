@@ -1,0 +1,8 @@
+{
+  "agentType": "fork",
+  "isFork": true,
+  "description": "Evaluate mysql",
+  "toolUseId": "toolu_fork_03",
+  "spawnDepth": 1,
+  "model": "inherit"
+}

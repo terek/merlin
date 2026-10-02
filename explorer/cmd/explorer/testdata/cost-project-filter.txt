@@ -1,0 +1,11 @@
+Cost by model  (all time, project coststate)
+MODEL                                 SESSIONS     COST  REPORTED  ATTRIBUTED
+claude-opus-5-5                              1   $0.052    $0.052          $0
+claude-fable-5-1                             1   $0.051    $0.051          $0
+claude-sonnet-5-5                            1  $0.0081   $0.0081          $0
+claude-haiku-4-5-20251001                    1  $0.0047   $0.0047          $0
+overhead: reported, in no transcript         1  $0.0015   $0.0015          $0
+TOTAL                                        1   $0.117    $0.117          $0
+
+Of $0.117: $0.117 (100%) is Claude Code's own reported figure; $0 (0%) is recomputed from tokens where it reported nothing.
+Sessions: 1 exact, 0 partial, 0 estimated  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

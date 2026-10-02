@@ -1,0 +1,28 @@
+add a footer
+  id         19191919-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/daybound   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 18 23:50 → Sep 19 00:05  (15m22s)
+  turns      3 turns · 4 assistant messages · 1 tool call
+
+Cost    ≈$0.017   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.017   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.017
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 18 23:50  human                 $0.011  12s
+     > add a footer
+     < Footer added
+  #1   Sep 18 23:59  human                $0.0041  1m02s
+     > add a header
+     < Header added
+  #2   Sep 19 00:05  human                $0.0016  22s
+     > add a sidebar
+     < Sidebar added
+
+Resume
+  cd /home/dev/acme/daybound && claude --resume 19191919-0000-4000-8000-000000000001

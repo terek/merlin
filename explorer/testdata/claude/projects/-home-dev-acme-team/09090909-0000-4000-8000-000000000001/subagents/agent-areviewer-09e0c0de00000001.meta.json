@@ -1,0 +1,10 @@
+{
+  "agentType": "reviewer",
+  "name": "reviewer",
+  "teamName": "acme-team",
+  "taskKind": "in_process_teammate",
+  "color": "blue",
+  "description": "Review the diff",
+  "spawnDepth": 0,
+  "model": "sonnet"
+}

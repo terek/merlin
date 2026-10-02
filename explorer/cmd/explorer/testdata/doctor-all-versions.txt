@@ -1,0 +1,36 @@
+Explorer doctor  ($EXPLORER_HOME)
+
+Index
+  35 sessions indexed: 34 interactive, 0 background, 1 scripted
+  error stubs: none
+  missing sources: none
+  catalog: 124 distinct messages (13 shared between sessions), 5 lineage links
+
+Format drift  (by Claude Code version that wrote the files; a session spanning versions counts under each)
+  VERSION  SESSIONS  BAD LINES  UNKNOWN RECORD TYPES
+  2.1.71          1          0  -
+  2.1.150         1          0  -
+  2.1.200        31          1  hologram-state×1
+  2.1.280         2          0  -
+
+Pricing
+  unpriced models (their messages cost $0 until a price is added to config.json):
+    claude-nova-9-9  in 1 session
+
+Agents
+  unresolved agents: 4 in 2 sessions (11111111, 12121212); attached to the session root
+
+Cost: reported vs recomputed from the transcripts
+  2 sessions carry Claude Code's reported cost: $0.131 reported, $0.128 of it explained by transcript messages (covered)
+  covered / reported = 0.977 overall; the rest ($0.0030) is calls that are in no transcript
+  per session: min 0.892   p10 0.892   median 0.892   p90 0.987   max 0.987
+  outside the windows: $0 recomputed in 0 sessions that have windows; 33 sessions have none at all ($0.500, all recomputed)
+
+  Largest gaps, reported above the transcripts (calls missing from them):
+    ID        PROJECT    TITLE                    REPORTED  COVERED      GAP  RATIO
+    16161616  coststate  plan the billing module    $0.117   $0.116  $0.0015  0.987
+    15151515  sdk        summarize README.md        $0.014   $0.012  $0.0015  0.892
+
+  Largest gaps, transcripts above reported (should be none: a wrong price or a bug): none
+
+  Spend outside every reported window: none

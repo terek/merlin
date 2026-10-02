@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-orphan/12121212-0000-4000-8000-000000000001/subagents/agent-a12e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-orphan/12121212-0000-4000-8000-000000000001/subagents/agent-a12e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-orphan/12121212-0000-4000-8000-000000000001/subagents/agent-a1b2c3d.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-orphan/12121212-0000-4000-8000-000000000001/subagents/agent-acompact-12e0c0de.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "12121212-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-orphan",
+  "project": "/home/dev/acme/orphan",
+  "cwd": "/home/dev/acme/orphan",
+  "cwds": [
+    "/home/dev/acme/orphan"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.71"
+  ],
+  "kind": "interactive",
+  "title": "Scan the repo for TODO comments.",
+  "startedAt": "2026-09-12T10:00:00Z",
+  "lastActivityAt": "2026-09-12T10:02:02Z",
+  "endState": "unknown",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 0,
+    "turns": 0,
+    "assistantMessages": 3,
+    "toolCalls": 0
+  },
+  "cost": {
+    "usd": 0.0131,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 4000,
+        "output": 110,
+        "cacheWrite5m": 1600,
+        "usd": 0.0131
+      }
+    }
+  },
+  "agents": [
+    {
+      "id": "a12e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Scan TODOs",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "depth": 1,
+      "linkage": "unresolved",
+      "startedAt": "2026-09-12T10:00:00Z",
+      "endedAt": "2026-09-12T10:00:02Z",
+      "status": "completed",
+      "prompt": "Scan the repo for TODO comments.",
+      "finalText": "Found 3 TODO comments.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0043,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 30,
+            "cacheWrite5m": 800,
+            "usd": 0.0043
+          }
+        }
+      },
+      "subtreeUSD": 0.0043
+    },
+    {
+      "id": "a1b2c3d",
+      "kind": "subagent",
+      "model": "claude-sonnet-5-5",
+      "parentAgentId": null,
+      "depth": 1,
+      "linkage": "unresolved",
+      "startedAt": "2026-09-12T10:01:00Z",
+      "endedAt": "2026-09-12T10:01:02Z",
+      "status": "completed",
+      "prompt": "Count the markdown files.",
+      "finalText": "There are 5 markdown files.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0042,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 20,
+            "cacheWrite5m": 800,
+            "usd": 0.0042
+          }
+        }
+      },
+      "subtreeUSD": 0.0042
+    },
+    {
+      "id": "acompact-12e0c0de",
+      "kind": "compact",
+      "model": "claude-sonnet-5-5",
+      "parentAgentId": null,
+      "depth": 1,
+      "linkage": "unresolved",
+      "startedAt": "2026-09-12T10:02:00Z",
+      "endedAt": "2026-09-12T10:02:02Z",
+      "status": "completed",
+      "prompt": "Summarise the conversation so far.",
+      "finalText": "Summary: scanning and counting were done.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0046,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 2000,
+            "output": 60,
+            "usd": 0.0046
+          }
+        }
+      },
+      "subtreeUSD": 0.0046
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_orph_a1",
+      "at": "2026-09-12T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a12e0c0de0000001",
+      "usd": 0.0043,
+      "input": 1000,
+      "output": 30,
+      "cacheWrite5m": 800
+    },
+    {
+      "id": "msg_orph_a2",
+      "at": "2026-09-12T10:01:02Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a1b2c3d",
+      "usd": 0.0042,
+      "input": 1000,
+      "output": 20,
+      "cacheWrite5m": 800
+    },
+    {
+      "id": "msg_orph_a3",
+      "at": "2026-09-12T10:02:02Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "acompact-12e0c0de",
+      "usd": 0.0046,
+      "input": 2000,
+      "output": 60
+    }
+  ],
+  "diagnostics": {
+    "unresolvedAgents": 3
+  }
+}

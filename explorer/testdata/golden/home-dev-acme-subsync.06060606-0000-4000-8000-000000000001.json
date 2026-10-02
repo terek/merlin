@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-subsync/06060606-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subsync/06060606-0000-4000-8000-000000000001/subagents/agent-a06e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subsync/06060606-0000-4000-8000-000000000001/subagents/agent-a06e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "06060606-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-subsync",
+  "project": "/home/dev/acme/subsync",
+  "cwd": "/home/dev/acme/subsync",
+  "cwds": [
+    "/home/dev/acme/subsync"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "find where logins are validated",
+  "startedAt": "2026-09-06T10:00:00Z",
+  "lastActivityAt": "2026-09-06T10:00:18Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 4,
+    "toolCalls": 2,
+    "toolsByName": {
+      "Agent": 1,
+      "Grep": 1
+    }
+  },
+  "cost": {
+    "usd": 0.02132,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 3400,
+        "output": 210,
+        "cacheRead": 5100,
+        "cacheWrite5m": 1200,
+        "cacheWrite1h": 2100,
+        "usd": 0.02132
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "06010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-06T10:00:00Z",
+      "endedAt": "2026-09-06T10:00:18Z",
+      "durationMs": 15000,
+      "origin": "human",
+      "userText": "find where logins are validated",
+      "finalText": "Login validation is in src/auth.ts.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.01212,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 110,
+            "cacheRead": 2100,
+            "cacheWrite1h": 2100,
+            "usd": 0.01212
+          }
+        }
+      },
+      "costWithAgents": 0.02132,
+      "spawned": [
+        "a06e0c0de0000001"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "a06e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "Explore",
+      "description": "Find login validation",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_sync_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-06T10:00:05Z",
+      "endedAt": "2026-09-06T10:00:11Z",
+      "status": "completed",
+      "prompt": "Search the repo for login validation and report the file.",
+      "finalText": "Login validation lives in src/auth.ts.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Grep": 1
+      },
+      "cost": {
+        "usd": 0.0092,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 2300,
+            "output": 100,
+            "cacheRead": 3000,
+            "cacheWrite5m": 1200,
+            "usd": 0.0092
+          }
+        }
+      },
+      "subtreeUSD": 0.0092
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_sync_01",
+      "at": "2026-09-06T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_sync_a1",
+      "at": "2026-09-06T10:00:07Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a06e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0071,
+      "input": 2000,
+      "output": 60,
+      "cacheWrite5m": 1000
+    },
+    {
+      "id": "msg_sync_a2",
+      "at": "2026-09-06T10:00:11Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a06e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0021,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 3000,
+      "cacheWrite5m": 200
+    },
+    {
+      "id": "msg_sync_02",
+      "at": "2026-09-06T10:00:16Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00132,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2100,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-s13b-fork-unmarked/13131313-0000-4000-8000-000000000003.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "13131313-0000-4000-8000-000000000003",
+  "projectKey": "-home-dev-acme-s13b-fork-unmarked",
+  "project": "/home/dev/acme/s13b-fork-unmarked",
+  "cwd": "/home/dev/acme/s13b-fork-unmarked",
+  "cwds": [
+    "/home/dev/acme/s13b-fork-unmarked"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "add a search box",
+  "startedAt": "2026-09-13T10:00:00Z",
+  "lastActivityAt": "2026-09-13T10:05:20Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 3,
+    "turns": 3,
+    "assistantMessages": 4,
+    "toolCalls": 1,
+    "toolsByName": {
+      "Edit": 1
+    }
+  },
+  "cost": {
+    "usd": 0.01712,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1300,
+        "output": 230,
+        "cacheRead": 7100,
+        "cacheWrite1h": 2700,
+        "usd": 0.01712
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "13030000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "endedAt": "2026-09-13T10:00:08Z",
+      "durationMs": 9000,
+      "origin": "human",
+      "userText": "add a search box",
+      "finalText": "Search box added",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Edit": 1
+      },
+      "filesTouched": [
+        "/home/dev/acme/search.tsx"
+      ],
+      "contextTokens": 2600,
+      "cost": {
+        "usd": 0.0141,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 150,
+            "cacheRead": 2000,
+            "cacheWrite1h": 2500,
+            "usd": 0.0141
+          }
+        }
+      },
+      "costWithAgents": 0.0141
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "13030000-0000-4000-9000-000000000006",
+      "startedAt": "2026-09-13T10:00:10Z",
+      "endedAt": "2026-09-13T10:00:14Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "style the search box",
+      "finalText": "Styled",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2700,
+      "cost": {
+        "usd": 0.0015,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2500,
+            "cacheWrite1h": 100,
+            "usd": 0.0015
+          }
+        }
+      },
+      "costWithAgents": 0.0015
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "13030000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-13T10:05:16Z",
+      "endedAt": "2026-09-13T10:05:20Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add search history",
+      "finalText": "Search history added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2800,
+      "cost": {
+        "usd": 0.00152,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2600,
+            "cacheWrite1h": 100,
+            "usd": 0.00152
+          }
+        }
+      },
+      "costWithAgents": 0.00152
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_cpb_01",
+      "at": "2026-09-13T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.011,
+      "input": 1000,
+      "output": 100,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_cpb_02",
+      "at": "2026-09-13T10:00:06Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0031,
+      "input": 100,
+      "output": 50,
+      "cacheRead": 2000,
+      "cacheWrite1h": 500
+    },
+    {
+      "id": "msg_cpb_03",
+      "at": "2026-09-13T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0015,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2500,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_cpb_a1",
+      "at": "2026-09-13T10:05:18Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.00152,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2600,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

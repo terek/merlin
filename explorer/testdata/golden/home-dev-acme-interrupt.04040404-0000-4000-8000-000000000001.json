@@ -1,0 +1,368 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-interrupt/04040404-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "04040404-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-interrupt",
+  "project": "/home/dev/acme/interrupt",
+  "cwd": "/home/dev/acme/interrupt",
+  "cwds": [
+    "/home/dev/acme/interrupt"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "refactor the router",
+  "startedAt": "2026-09-04T10:00:00Z",
+  "lastActivityAt": "2026-09-04T10:00:48Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 8,
+    "turns": 8,
+    "assistantMessages": 9,
+    "toolCalls": 2,
+    "toolsByName": {
+      "Bash": 2
+    }
+  },
+  "cost": {
+    "usd": 0.020880000000000003,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1800,
+        "output": 340,
+        "cacheRead": 21400,
+        "cacheWrite1h": 2400,
+        "usd": 0.020880000000000003
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-04T10:00:00Z",
+      "endedAt": "2026-09-04T10:00:04Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "refactor the router",
+      "finalText": "Starting the refactor of router.ts.",
+      "interrupted": true,
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.0104,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 40,
+            "cacheWrite1h": 2000,
+            "usd": 0.0104
+          }
+        }
+      },
+      "costWithAgents": 0.0104
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000004",
+      "startedAt": "2026-09-04T10:00:06Z",
+      "endedAt": "2026-09-04T10:00:14Z",
+      "durationMs": 6000,
+      "origin": "human",
+      "userText": "actually, rename router.ts to routes.ts",
+      "finalText": "Renamed router.ts to routes.ts",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Bash": 1
+      },
+      "contextTokens": 2500,
+      "cost": {
+        "usd": 0.00358,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 200,
+            "output": 110,
+            "cacheRead": 4400,
+            "cacheWrite1h": 300,
+            "usd": 0.00358
+          }
+        }
+      },
+      "costWithAgents": 0.00358
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-04T10:00:16Z",
+      "endedAt": "2026-09-04T10:00:22Z",
+      "durationMs": 6000,
+      "origin": "human",
+      "userText": "add tests for routes.ts",
+      "interrupted": true,
+      "assistantMessages": 1,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Bash": 1
+      },
+      "contextTokens": 2700,
+      "cost": {
+        "usd": 0.0017,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 60,
+            "cacheRead": 2500,
+            "cacheWrite1h": 100,
+            "usd": 0.0017
+          }
+        }
+      },
+      "costWithAgents": 0.0017
+    },
+    {
+      "index": 3,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000013",
+      "startedAt": "2026-09-04T10:00:24Z",
+      "endedAt": "2026-09-04T10:00:28Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "use the built-in runner instead",
+      "finalText": "Added routes.test.ts using the built-in runner",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2800,
+      "cost": {
+        "usd": 0.00124,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 50,
+            "cacheRead": 2700,
+            "usd": 0.00124
+          }
+        }
+      },
+      "costWithAgents": 0.00124
+    },
+    {
+      "index": 4,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000016",
+      "startedAt": "2026-09-04T10:00:30Z",
+      "endedAt": "2026-09-04T10:00:32Z",
+      "durationMs": 2000,
+      "origin": "human",
+      "userText": "rename routes.ts to paths.ts",
+      "finalText": "Renaming now",
+      "interrupted": true,
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2900,
+      "cost": {
+        "usd": 0.00096,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 20,
+            "cacheRead": 2800,
+            "usd": 0.00096
+          }
+        }
+      },
+      "costWithAgents": 0.00096
+    },
+    {
+      "index": 5,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000018",
+      "startedAt": "2026-09-04T10:00:34Z",
+      "endedAt": "2026-09-04T10:00:38Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "stop, keep the old name",
+      "finalText": "Okay, keeping routes.ts",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.00098,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 20,
+            "cacheRead": 2900,
+            "usd": 0.00098
+          }
+        }
+      },
+      "costWithAgents": 0.00098
+    },
+    {
+      "index": 6,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000021",
+      "startedAt": "2026-09-04T10:00:40Z",
+      "endedAt": "2026-09-04T10:00:42Z",
+      "durationMs": 2000,
+      "origin": "human",
+      "userText": "add a changelog entry",
+      "finalText": "Drafting the entry",
+      "interrupted": true,
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3100,
+      "cost": {
+        "usd": 0.001,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 20,
+            "cacheRead": 3000,
+            "usd": 0.001
+          }
+        }
+      },
+      "costWithAgents": 0.001
+    },
+    {
+      "index": 7,
+      "epoch": 0,
+      "uuid": "04010000-0000-4000-9000-000000000023",
+      "startedAt": "2026-09-04T10:00:44Z",
+      "endedAt": "2026-09-04T10:00:48Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "use tabs not spaces",
+      "finalText": "Switched to tabs",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3200,
+      "cost": {
+        "usd": 0.00102,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 20,
+            "cacheRead": 3100,
+            "usd": 0.00102
+          }
+        }
+      },
+      "costWithAgents": 0.00102
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_int_01",
+      "at": "2026-09-04T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0104,
+      "input": 1000,
+      "output": 40,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_int_02",
+      "at": "2026-09-04T10:00:08Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0026,
+      "input": 100,
+      "output": 80,
+      "cacheRead": 2000,
+      "cacheWrite1h": 300
+    },
+    {
+      "id": "msg_int_03",
+      "at": "2026-09-04T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00098,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2400
+    },
+    {
+      "id": "msg_int_04",
+      "at": "2026-09-04T10:00:18Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.0017,
+      "input": 100,
+      "output": 60,
+      "cacheRead": 2500,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_int_05",
+      "at": "2026-09-04T10:00:26Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 3,
+      "usd": 0.00124,
+      "input": 100,
+      "output": 50,
+      "cacheRead": 2700
+    },
+    {
+      "id": "msg_int_06",
+      "at": "2026-09-04T10:00:32Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 4,
+      "usd": 0.00096,
+      "input": 100,
+      "output": 20,
+      "cacheRead": 2800
+    },
+    {
+      "id": "msg_int_07",
+      "at": "2026-09-04T10:00:36Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 5,
+      "usd": 0.00098,
+      "input": 100,
+      "output": 20,
+      "cacheRead": 2900
+    },
+    {
+      "id": "msg_int_08",
+      "at": "2026-09-04T10:00:42Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 6,
+      "usd": 0.001,
+      "input": 100,
+      "output": 20,
+      "cacheRead": 3000
+    },
+    {
+      "id": "msg_int_09",
+      "at": "2026-09-04T10:00:46Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 7,
+      "usd": 0.00102,
+      "input": 100,
+      "output": 20,
+      "cacheRead": 3100
+    }
+  ],
+  "diagnostics": {}
+}

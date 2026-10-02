@@ -1,0 +1,62 @@
+{
+  "query": "search box",
+  "total": 20,
+  "hits": [
+    {
+      "session": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000004"
+      },
+      "title": "add a search box",
+      "project": "/home/dev/acme/s13b-fork-unmarked",
+      "at": "2026-09-13T10:10:20Z",
+      "field": "title",
+      "turn": -1,
+      "snippet": "add a search box",
+      "id": "13131313-0000-4000-8000-000000000004",
+      "resume": "cd /home/dev/acme/s13b-fork-unmarked && claude --resume 13131313-0000-4000-8000-000000000004"
+    },
+    {
+      "session": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000006"
+      },
+      "title": "add a search box",
+      "project": "/home/dev/acme/s13c-fork-marked",
+      "at": "2026-09-13T10:10:20Z",
+      "field": "title",
+      "turn": -1,
+      "snippet": "add a search box",
+      "id": "13131313-0000-4000-8000-000000000006",
+      "resume": "cd /home/dev/acme/s13c-fork-marked && claude --resume 13131313-0000-4000-8000-000000000006"
+    },
+    {
+      "session": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000002"
+      },
+      "title": "add a search box",
+      "project": "/home/dev/acme/s13a-continuation",
+      "at": "2026-09-13T10:02:20Z",
+      "field": "title",
+      "turn": -1,
+      "snippet": "add a search box",
+      "id": "13131313-0000-4000-8000-000000000002",
+      "resume": "cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000002"
+    },
+    {
+      "session": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000010"
+      },
+      "title": "add a search box",
+      "project": "/home/dev/acme/s13e-sdk-pickup",
+      "at": "2026-09-13T10:02:20Z",
+      "field": "title",
+      "turn": -1,
+      "snippet": "add a search box",
+      "id": "13131313-0000-4000-8000-000000000010",
+      "resume": "cd /home/dev/acme/s13e-sdk-pickup && claude --resume 13131313-0000-4000-8000-000000000010"
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-rewind/14141414-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "14141414-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-rewind",
+  "project": "/home/dev/acme/rewind",
+  "cwd": "/home/dev/acme/rewind",
+  "cwds": [
+    "/home/dev/acme/rewind"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "scaffold the app",
+  "startedAt": "2026-09-14T10:00:00Z",
+  "lastActivityAt": "2026-09-14T10:00:48Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 4,
+    "turns": 6,
+    "assistantMessages": 6,
+    "toolCalls": 2,
+    "toolsByName": {
+      "Bash": 2
+    }
+  },
+  "cost": {
+    "usd": 0.01976,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1500,
+        "output": 310,
+        "cacheRead": 12300,
+        "cacheWrite1h": 2800,
+        "usd": 0.01976
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "14010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-14T10:00:00Z",
+      "endedAt": "2026-09-14T10:00:06Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "scaffold the app",
+      "finalText": "Scaffolded",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.0106,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 60,
+            "cacheWrite1h": 2000,
+            "usd": 0.0106
+          }
+        }
+      },
+      "costWithAgents": 0.0106
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "14010000-0000-4000-9000-000000000005",
+      "abandoned": true,
+      "startedAt": "2026-09-14T10:00:08Z",
+      "endedAt": "2026-09-14T10:00:14Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "add a settings page",
+      "finalText": "Settings page added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.0018,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2000,
+            "cacheWrite1h": 200,
+            "usd": 0.0018
+          }
+        }
+      },
+      "costWithAgents": 0.0018
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "14010000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-14T10:00:16Z",
+      "endedAt": "2026-09-14T10:00:22Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "add a profile page instead",
+      "finalText": "Profile page added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2500,
+      "cost": {
+        "usd": 0.00184,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2200,
+            "cacheWrite1h": 200,
+            "usd": 0.00184
+          }
+        }
+      },
+      "costWithAgents": 0.00184
+    },
+    {
+      "index": 3,
+      "epoch": 0,
+      "uuid": "14010000-0000-4000-9000-000000000013",
+      "abandoned": true,
+      "startedAt": "2026-09-14T10:00:24Z",
+      "endedAt": "2026-09-14T10:00:24Z",
+      "origin": "human",
+      "userText": "add dark mode",
+      "assistantMessages": 0,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0
+      },
+      "costWithAgents": 0
+    },
+    {
+      "index": 4,
+      "epoch": 0,
+      "uuid": "14010000-0000-4000-9000-000000000014",
+      "startedAt": "2026-09-14T10:00:26Z",
+      "endedAt": "2026-09-14T10:00:32Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "add light mode",
+      "finalText": "Light mode added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2800,
+      "cost": {
+        "usd": 0.0019,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2500,
+            "cacheWrite1h": 200,
+            "usd": 0.0019
+          }
+        }
+      },
+      "costWithAgents": 0.0019
+    },
+    {
+      "index": 5,
+      "epoch": 0,
+      "uuid": "14010000-0000-4000-9000-000000000018",
+      "startedAt": "2026-09-14T10:00:34Z",
+      "endedAt": "2026-09-14T10:00:48Z",
+      "durationMs": 6000,
+      "origin": "human",
+      "userText": "rename both config files",
+      "finalText": "Both config files renamed",
+      "assistantMessages": 2,
+      "toolCalls": 2,
+      "toolsByName": {
+        "Bash": 2
+      },
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.00362,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 200,
+            "output": 130,
+            "cacheRead": 5600,
+            "cacheWrite1h": 200,
+            "usd": 0.00362
+          }
+        }
+      },
+      "costWithAgents": 0.00362
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_rw_01",
+      "at": "2026-09-14T10:00:04Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0106,
+      "input": 1000,
+      "output": 60,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_rw_02",
+      "at": "2026-09-14T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0018,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2000,
+      "cacheWrite1h": 200
+    },
+    {
+      "id": "msg_rw_03",
+      "at": "2026-09-14T10:00:20Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.00184,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2200,
+      "cacheWrite1h": 200
+    },
+    {
+      "id": "msg_rw_04",
+      "at": "2026-09-14T10:00:30Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 4,
+      "usd": 0.0019,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2500,
+      "cacheWrite1h": 200
+    },
+    {
+      "id": "msg_rw_05",
+      "at": "2026-09-14T10:00:38Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 5,
+      "usd": 0.00244,
+      "input": 100,
+      "output": 90,
+      "cacheRead": 2700,
+      "cacheWrite1h": 200
+    },
+    {
+      "id": "msg_rw_06",
+      "at": "2026-09-14T10:00:46Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 5,
+      "usd": 0.00118,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2900
+    }
+  ],
+  "diagnostics": {}
+}

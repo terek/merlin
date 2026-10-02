@@ -1,0 +1,25 @@
+Add login page
+  id         01010101-0000-4000-8000-000000000001
+  state      running (busy)
+  project    /home/dev/acme/plain   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 1 06:00 → Sep 1 06:00  (24s)
+  turns      2 turns · 5 assistant messages · 3 tool calls
+
+Cost    ≈$0.021   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.021   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.021
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 1 06:00   human                 $0.017  12s
+     > add a login page
+     < Done, 3 files changed
+  #1   Sep 1 06:00   human                $0.0044  8s
+     > now add a logout button
+     < Logout button added
+
+Resume
+  cd /home/dev/acme/plain && claude --resume 01010101-0000-4000-8000-000000000001

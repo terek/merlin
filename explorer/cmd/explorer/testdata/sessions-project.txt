@@ -1,0 +1,5 @@
+ID                                    WHEN         PROJECT  TITLE                              TURNS  AGENTS     COST  STATE  LINEAGE
+22222222-0000-4000-8000-000000000001  today 06:00  nest     outer session in the nest project      1       0  ≈$0.011  clean
+
+1 of 1 sessions
+cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)

@@ -1,0 +1,233 @@
+{
+  "by": "project",
+  "rows": [
+    {
+      "key": "/home/dev/acme/coststate",
+      "label": "coststate",
+      "sessions": 1,
+      "totalUSD": 0.1172,
+      "reportedUSD": 0.1172,
+      "attributedUSD": 0
+    },
+    {
+      "key": "/home/dev/acme/s05-compaction",
+      "label": "s05-compaction",
+      "sessions": 4,
+      "totalUSD": 0.05766,
+      "reportedUSD": 0,
+      "attributedUSD": 0.05766
+    },
+    {
+      "key": "/home/dev/acme/pricing",
+      "label": "pricing",
+      "sessions": 1,
+      "totalUSD": 0.0267,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0267
+    },
+    {
+      "key": "/home/dev/acme/team",
+      "label": "team",
+      "sessions": 1,
+      "totalUSD": 0.026250000000000002,
+      "reportedUSD": 0,
+      "attributedUSD": 0.026250000000000002
+    },
+    {
+      "key": "/home/dev/acme/subnest",
+      "label": "subnest",
+      "sessions": 1,
+      "totalUSD": 0.02622,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02622
+    },
+    {
+      "key": "/home/dev/acme/linkage",
+      "label": "linkage",
+      "sessions": 1,
+      "totalUSD": 0.02556,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02556
+    },
+    {
+      "key": "/home/dev/acme/subbg",
+      "label": "subbg",
+      "sessions": 1,
+      "totalUSD": 0.02408,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02408
+    },
+    {
+      "key": "/home/dev/acme/subsync",
+      "label": "subsync",
+      "sessions": 1,
+      "totalUSD": 0.02132,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02132
+    },
+    {
+      "key": "/home/dev/acme/plain",
+      "label": "plain",
+      "sessions": 1,
+      "totalUSD": 0.02124,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02124
+    },
+    {
+      "key": "/home/dev/acme/fork",
+      "label": "fork",
+      "sessions": 1,
+      "totalUSD": 0.02101,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02101
+    },
+    {
+      "key": "/home/dev/acme/interrupt",
+      "label": "interrupt",
+      "sessions": 1,
+      "totalUSD": 0.020880000000000003,
+      "reportedUSD": 0,
+      "attributedUSD": 0.020880000000000003
+    },
+    {
+      "key": "/home/dev/acme/rewind",
+      "label": "rewind",
+      "sessions": 1,
+      "totalUSD": 0.01976,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01976
+    },
+    {
+      "key": "/home/dev/acme/s13b-fork-unmarked",
+      "label": "s13b-fork-unmarked",
+      "sessions": 2,
+      "totalUSD": 0.01874,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01874
+    },
+    {
+      "key": "/home/dev/acme/s13c-fork-marked",
+      "label": "s13c-fork-marked",
+      "sessions": 2,
+      "totalUSD": 0.01874,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01874
+    },
+    {
+      "key": "/home/dev/acme/s13d-partial-copy",
+      "label": "s13d-partial-copy",
+      "sessions": 2,
+      "totalUSD": 0.018699999999999998,
+      "reportedUSD": 0,
+      "attributedUSD": 0.018699999999999998
+    },
+    {
+      "key": "/home/dev/acme/s13a-continuation",
+      "label": "s13a-continuation",
+      "sessions": 2,
+      "totalUSD": 0.01712,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01712
+    },
+    {
+      "key": "/home/dev/acme/s13e-sdk-pickup",
+      "label": "s13e-sdk-pickup",
+      "sessions": 2,
+      "totalUSD": 0.01712,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01712
+    },
+    {
+      "key": "/home/dev/acme/daybound",
+      "label": "daybound",
+      "sessions": 1,
+      "totalUSD": 0.01668,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01668
+    },
+    {
+      "key": "/home/dev/acme/nest/inner",
+      "label": "inner",
+      "sessions": 1,
+      "totalUSD": 0.014100000000000001,
+      "reportedUSD": 0,
+      "attributedUSD": 0.014100000000000001
+    },
+    {
+      "key": "/home/dev/acme/hostile",
+      "label": "hostile",
+      "sessions": 1,
+      "totalUSD": 0.01394,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01394
+    },
+    {
+      "key": "/home/dev/acme/sdk",
+      "label": "sdk",
+      "sessions": 1,
+      "totalUSD": 0.0139,
+      "reportedUSD": 0.0139,
+      "attributedUSD": 0
+    },
+    {
+      "key": "/home/dev/acme/cwdchange",
+      "label": "cwdchange",
+      "sessions": 1,
+      "totalUSD": 0.01364,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01364
+    },
+    {
+      "key": "/home/dev/acme/slash",
+      "label": "slash",
+      "sessions": 1,
+      "totalUSD": 0.0132,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0132
+    },
+    {
+      "key": "/home/dev/acme/orphan",
+      "label": "orphan",
+      "sessions": 1,
+      "totalUSD": 0.0131,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0131
+    },
+    {
+      "key": "/home/dev/acme/multi-line",
+      "label": "multi-line",
+      "sessions": 1,
+      "totalUSD": 0.01285,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01285
+    },
+    {
+      "key": "/home/dev/acme/misc",
+      "label": "misc",
+      "sessions": 1,
+      "totalUSD": 0.0105,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0105
+    },
+    {
+      "key": "/home/dev/acme/nest",
+      "label": "nest",
+      "sessions": 1,
+      "totalUSD": 0.0105,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0105
+    }
+  ],
+  "total": {
+    "totalUSD": 0.6307099999999998,
+    "reportedUSD": 0.1311,
+    "attributedUSD": 0.49961000000000017
+  },
+  "sessions": 35,
+  "backing": {
+    "exact": 1,
+    "partial": 0,
+    "estimated": 33,
+    "scriptedRuns": 1
+  }
+}

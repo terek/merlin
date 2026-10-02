@@ -1,0 +1,1558 @@
+{
+  "sessions": [
+    {
+      "key": {
+        "harness": "claude",
+        "id": "22222222-0000-4000-8000-000000000002"
+      },
+      "project": "/home/dev/acme/nest/inner",
+      "projectKey": "-home-dev-acme-nest",
+      "cwd": "/home/dev/acme/nest/inner",
+      "branch": "main",
+      "title": "inner session in a nested project directory",
+      "kind": "interactive",
+      "startedAt": "2026-09-22T10:00:00Z",
+      "lastActivityAt": "2026-09-22T10:00:14Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.014100000000000001,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.014100000000000001,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.014100000000000001,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 3,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "22222222-0000-4000-8000-000000000002"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "22222222-0000-4000-8000-000000000002",
+      "agents": 1,
+      "resume": "cd /home/dev/acme/nest/inner && claude --resume 22222222-0000-4000-8000-000000000002"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "22222222-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/nest",
+      "projectKey": "-home-dev-acme-nest",
+      "cwd": "/home/dev/acme/nest",
+      "branch": "main",
+      "title": "outer session in the nest project",
+      "kind": "interactive",
+      "startedAt": "2026-09-22T10:00:00Z",
+      "lastActivityAt": "2026-09-22T10:00:04Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.0105,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0105,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0105,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 1,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "22222222-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "22222222-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/nest && claude --resume 22222222-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "21212121-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/misc",
+      "projectKey": "-home-dev-acme-misc",
+      "cwd": "/home/dev/acme/misc",
+      "branch": "main",
+      "title": "write the changelog",
+      "kind": "interactive",
+      "startedAt": "2026-09-21T10:00:00Z",
+      "lastActivityAt": "2026-09-21T10:00:04Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.0105,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0105,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0105,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 1,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "21212121-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "21212121-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/misc && claude --resume 21212121-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "20202020-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/pricing",
+      "projectKey": "-home-dev-acme-pricing",
+      "cwd": "/home/dev/acme/pricing",
+      "branch": "main",
+      "title": "estimate the build cost",
+      "kind": "interactive",
+      "startedAt": "2026-09-20T10:00:00Z",
+      "lastActivityAt": "2026-09-20T10:00:10Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.0267,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0267,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0267,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 4,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "20202020-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "20202020-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/pricing && claude --resume 20202020-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "19191919-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/daybound",
+      "projectKey": "-home-dev-acme-daybound",
+      "cwd": "/home/dev/acme/daybound",
+      "branch": "main",
+      "title": "add a footer",
+      "kind": "interactive",
+      "startedAt": "2026-09-19T03:50:00Z",
+      "lastActivityAt": "2026-09-19T04:05:22Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.01668,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01668,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01668,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 4,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "19191919-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "19191919-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/daybound && claude --resume 19191919-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "18181818-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/cwdchange",
+      "projectKey": "-home-dev-acme-cwdchange",
+      "cwd": "/home/dev/acme/cwdchange-moved",
+      "branch": "worktree-login",
+      "title": "start the feature",
+      "kind": "interactive",
+      "startedAt": "2026-09-18T10:00:00Z",
+      "lastActivityAt": "2026-09-18T10:00:16Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.01364,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01364,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01364,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 3,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "18181818-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "18181818-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/cwdchange && claude --resume 18181818-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "17171717-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/hostile",
+      "projectKey": "-home-dev-acme-hostile",
+      "cwd": "/home/dev/acme/hostile",
+      "branch": "main",
+      "title": "add input validation",
+      "kind": "interactive",
+      "startedAt": "2026-09-17T10:00:00Z",
+      "lastActivityAt": "2026-09-17T10:00:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.01394,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01394,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01394,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 3,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "17171717-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "17171717-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/hostile && claude --resume 17171717-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "16161616-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/coststate",
+      "projectKey": "-home-dev-acme-coststate",
+      "cwd": "/home/dev/acme/coststate",
+      "branch": "main",
+      "title": "plan the billing module",
+      "kind": "interactive",
+      "startedAt": "2026-09-16T10:00:00Z",
+      "lastActivityAt": "2026-09-16T11:00:30Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.1172,
+        "flag": "exact",
+        "reportedUSD": 0.1172,
+        "windows": [
+          {
+            "from": "2026-09-16T10:00:00Z",
+            "to": "2026-09-16T11:00:30Z",
+            "totalUSD": 0.1172,
+            "byModel": {
+              "claude-fable-5-1": {
+                "inputTokens": 1000,
+                "outputTokens": 400,
+                "cacheReadTokens": 5000,
+                "cacheCreationTokens": 1000,
+                "usd": 0.05125
+              },
+              "claude-haiku-4-5-20251001": {
+                "inputTokens": 4000,
+                "outputTokens": 200,
+                "cacheCreationTokens": 1000,
+                "usd": 0.00625
+              },
+              "claude-opus-5-5": {
+                "inputTokens": 1200,
+                "outputTokens": 500,
+                "cacheReadTokens": 4000,
+                "cacheCreationTokens": 4500,
+                "usd": 0.0516
+              },
+              "claude-sonnet-5-5": {
+                "inputTokens": 600,
+                "outputTokens": 180,
+                "cacheReadTokens": 1500,
+                "cacheCreationTokens": 1200,
+                "usd": 0.0081
+              }
+            }
+          }
+        ],
+        "ownUSD": 0.1157,
+        "coveredUSD": 0.1157,
+        "uncoveredUSD": 0,
+        "overheadUSD": 0.0015000000000000013,
+        "inheritedUSD": 0,
+        "ownMessages": 6,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "16161616-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "16161616-0000-4000-8000-000000000001",
+      "agents": 1,
+      "resume": "cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "14141414-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/rewind",
+      "projectKey": "-home-dev-acme-rewind",
+      "cwd": "/home/dev/acme/rewind",
+      "branch": "main",
+      "title": "scaffold the app",
+      "kind": "interactive",
+      "startedAt": "2026-09-14T10:00:00Z",
+      "lastActivityAt": "2026-09-14T10:00:48Z",
+      "endState": "clean",
+      "turns": 6,
+      "cost": {
+        "bestUSD": 0.01976,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01976,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01976,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 6,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "14141414-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "14141414-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/rewind && claude --resume 14141414-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000004"
+      },
+      "project": "/home/dev/acme/s13b-fork-unmarked",
+      "projectKey": "-home-dev-acme-s13b-fork-unmarked",
+      "cwd": "/home/dev/acme/s13b-fork-unmarked",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:10:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.00162,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.00162,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.00162,
+        "overheadUSD": 0,
+        "inheritedUSD": 0.0156,
+        "inheritedFrom": [
+          {
+            "from": {
+              "harness": "claude",
+              "id": "13131313-0000-4000-8000-000000000003"
+            },
+            "usd": 0.0156,
+            "messages": 3
+          }
+        ],
+        "ownMessages": 1,
+        "inheritedMessages": 3
+      },
+      "inheritedTurns": [0, 1],
+      "firstOwnTurn": 2,
+      "parent": {
+        "parent": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000003"
+        },
+        "child": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000004"
+        },
+        "sharedMessages": 3,
+        "sharedTurns": 2,
+        "atTurn": 1,
+        "explicit": false,
+        "kind": "fork"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000003"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000004",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13b-fork-unmarked && claude --resume 13131313-0000-4000-8000-000000000004"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000006"
+      },
+      "project": "/home/dev/acme/s13c-fork-marked",
+      "projectKey": "-home-dev-acme-s13c-fork-marked",
+      "cwd": "/home/dev/acme/s13c-fork-marked",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:10:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.00162,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.00162,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.00162,
+        "overheadUSD": 0,
+        "inheritedUSD": 0.0156,
+        "inheritedFrom": [
+          {
+            "from": {
+              "harness": "claude",
+              "id": "13131313-0000-4000-8000-000000000005"
+            },
+            "usd": 0.0156,
+            "messages": 3
+          }
+        ],
+        "ownMessages": 1,
+        "inheritedMessages": 3
+      },
+      "inheritedTurns": [0, 1],
+      "firstOwnTurn": 2,
+      "parent": {
+        "parent": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000005"
+        },
+        "child": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000006"
+        },
+        "sharedMessages": 3,
+        "sharedTurns": 2,
+        "atTurn": 1,
+        "explicit": true,
+        "kind": "fork"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000005"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000006",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13c-fork-marked && claude --resume 13131313-0000-4000-8000-000000000006"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000008"
+      },
+      "project": "/home/dev/acme/s13d-partial-copy",
+      "projectKey": "-home-dev-acme-s13d-partial-copy",
+      "cwd": "/home/dev/acme/s13d-partial-copy",
+      "branch": "main",
+      "title": "add a reset button",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:13Z",
+      "lastActivityAt": "2026-09-13T10:05:26Z",
+      "endState": "clean",
+      "turns": 2,
+      "cost": {
+        "bestUSD": 0.00156,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.00156,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.00156,
+        "overheadUSD": 0,
+        "inheritedUSD": 0.00154,
+        "inheritedFrom": [
+          {
+            "from": {
+              "harness": "claude",
+              "id": "13131313-0000-4000-8000-000000000007"
+            },
+            "usd": 0.00154,
+            "messages": 1
+          }
+        ],
+        "ownMessages": 1,
+        "inheritedMessages": 1
+      },
+      "inheritedTurns": [0],
+      "firstOwnTurn": 1,
+      "parent": {
+        "parent": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000007"
+        },
+        "child": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000008"
+        },
+        "sharedMessages": 1,
+        "sharedTurns": 1,
+        "atTurn": 2,
+        "explicit": true,
+        "kind": "continuation"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000007"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000008",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13d-partial-copy && claude --resume 13131313-0000-4000-8000-000000000008"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000003"
+      },
+      "project": "/home/dev/acme/s13b-fork-unmarked",
+      "projectKey": "-home-dev-acme-s13b-fork-unmarked",
+      "cwd": "/home/dev/acme/s13b-fork-unmarked",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:05:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.01712,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01712,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01712,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 4,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "children": [
+        {
+          "parent": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000003"
+          },
+          "child": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000004"
+          },
+          "sharedMessages": 3,
+          "sharedTurns": 2,
+          "atTurn": 1,
+          "explicit": false,
+          "kind": "fork"
+        }
+      ],
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000003"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000003",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13b-fork-unmarked && claude --resume 13131313-0000-4000-8000-000000000003"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000005"
+      },
+      "project": "/home/dev/acme/s13c-fork-marked",
+      "projectKey": "-home-dev-acme-s13c-fork-marked",
+      "cwd": "/home/dev/acme/s13c-fork-marked",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:05:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.01712,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01712,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01712,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 4,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "children": [
+        {
+          "parent": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000005"
+          },
+          "child": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000006"
+          },
+          "sharedMessages": 3,
+          "sharedTurns": 2,
+          "atTurn": 1,
+          "explicit": true,
+          "kind": "fork"
+        }
+      ],
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000005"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000005",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13c-fork-marked && claude --resume 13131313-0000-4000-8000-000000000005"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000002"
+      },
+      "project": "/home/dev/acme/s13a-continuation",
+      "projectKey": "-home-dev-acme-s13a-continuation",
+      "cwd": "/home/dev/acme/s13a-continuation",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:02:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.00152,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.00152,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.00152,
+        "overheadUSD": 0,
+        "inheritedUSD": 0.0156,
+        "inheritedFrom": [
+          {
+            "from": {
+              "harness": "claude",
+              "id": "13131313-0000-4000-8000-000000000001"
+            },
+            "usd": 0.0156,
+            "messages": 3
+          }
+        ],
+        "ownMessages": 1,
+        "inheritedMessages": 3
+      },
+      "inheritedTurns": [0, 1],
+      "firstOwnTurn": 2,
+      "parent": {
+        "parent": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000001"
+        },
+        "child": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000002"
+        },
+        "sharedMessages": 3,
+        "sharedTurns": 2,
+        "atTurn": 1,
+        "explicit": false,
+        "kind": "continuation"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000002",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000002"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000010"
+      },
+      "project": "/home/dev/acme/s13e-sdk-pickup",
+      "projectKey": "-home-dev-acme-s13e-sdk-pickup",
+      "cwd": "/home/dev/acme/s13e-sdk-pickup",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:02:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.00152,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.00152,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.00152,
+        "overheadUSD": 0,
+        "inheritedUSD": 0.0156,
+        "inheritedFrom": [
+          {
+            "from": {
+              "harness": "claude",
+              "id": "13131313-0000-4000-8000-000000000009"
+            },
+            "usd": 0.0156,
+            "messages": 3
+          }
+        ],
+        "ownMessages": 1,
+        "inheritedMessages": 3
+      },
+      "inheritedTurns": [0, 1],
+      "firstOwnTurn": 2,
+      "parent": {
+        "parent": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000009"
+        },
+        "child": {
+          "harness": "claude",
+          "id": "13131313-0000-4000-8000-000000000010"
+        },
+        "sharedMessages": 3,
+        "sharedTurns": 2,
+        "atTurn": 1,
+        "explicit": false,
+        "kind": "continuation"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000009"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000010",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13e-sdk-pickup && claude --resume 13131313-0000-4000-8000-000000000010"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000007"
+      },
+      "project": "/home/dev/acme/s13d-partial-copy",
+      "projectKey": "-home-dev-acme-s13d-partial-copy",
+      "cwd": "/home/dev/acme/s13d-partial-copy",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:00:20Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.01714,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01714,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01714,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 4,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "children": [
+        {
+          "parent": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000007"
+          },
+          "child": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000008"
+          },
+          "sharedMessages": 1,
+          "sharedTurns": 1,
+          "atTurn": 2,
+          "explicit": true,
+          "kind": "continuation"
+        }
+      ],
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000007"
+      },
+      "leaf": false,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000007",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13d-partial-copy && claude --resume 13131313-0000-4000-8000-000000000007"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/s13a-continuation",
+      "projectKey": "-home-dev-acme-s13a-continuation",
+      "cwd": "/home/dev/acme/s13a-continuation",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:00:14Z",
+      "endState": "clean",
+      "turns": 2,
+      "cost": {
+        "bestUSD": 0.0156,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0156,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0156,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 3,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "children": [
+        {
+          "parent": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000001"
+          },
+          "child": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000002"
+          },
+          "sharedMessages": 3,
+          "sharedTurns": 2,
+          "atTurn": 1,
+          "explicit": false,
+          "kind": "continuation"
+        }
+      ],
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000001"
+      },
+      "leaf": false,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000009"
+      },
+      "project": "/home/dev/acme/s13e-sdk-pickup",
+      "projectKey": "-home-dev-acme-s13e-sdk-pickup",
+      "cwd": "/home/dev/acme/s13e-sdk-pickup",
+      "branch": "main",
+      "title": "add a search box",
+      "kind": "interactive",
+      "startedAt": "2026-09-13T10:00:00Z",
+      "lastActivityAt": "2026-09-13T10:00:14Z",
+      "endState": "clean",
+      "turns": 2,
+      "cost": {
+        "bestUSD": 0.0156,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0156,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0156,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 3,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "children": [
+        {
+          "parent": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000009"
+          },
+          "child": {
+            "harness": "claude",
+            "id": "13131313-0000-4000-8000-000000000010"
+          },
+          "sharedMessages": 3,
+          "sharedTurns": 2,
+          "atTurn": 1,
+          "explicit": false,
+          "kind": "continuation"
+        }
+      ],
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000009"
+      },
+      "leaf": false,
+      "state": "ended",
+      "id": "13131313-0000-4000-8000-000000000009",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s13e-sdk-pickup && claude --resume 13131313-0000-4000-8000-000000000009"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "12121212-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/orphan",
+      "projectKey": "-home-dev-acme-orphan",
+      "cwd": "/home/dev/acme/orphan",
+      "branch": "main",
+      "title": "Scan the repo for TODO comments.",
+      "kind": "interactive",
+      "startedAt": "2026-09-12T10:00:00Z",
+      "lastActivityAt": "2026-09-12T10:02:02Z",
+      "endState": "unknown",
+      "turns": 0,
+      "cost": {
+        "bestUSD": 0.0131,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0131,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0131,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 3,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": -1,
+      "root": {
+        "harness": "claude",
+        "id": "12121212-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "12121212-0000-4000-8000-000000000001",
+      "agents": 2,
+      "resume": "cd /home/dev/acme/orphan && claude --resume 12121212-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "11111111-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/linkage",
+      "projectKey": "-home-dev-acme-linkage",
+      "cwd": "/home/dev/acme/linkage",
+      "branch": "main",
+      "title": "check three things in parallel",
+      "kind": "interactive",
+      "startedAt": "2026-09-11T10:00:00Z",
+      "lastActivityAt": "2026-09-11T10:00:18Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.02556,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.02556,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.02556,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 5,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "11111111-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "11111111-0000-4000-8000-000000000001",
+      "agents": 3,
+      "resume": "cd /home/dev/acme/linkage && claude --resume 11111111-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "10101010-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/fork",
+      "projectKey": "-home-dev-acme-fork",
+      "cwd": "/home/dev/acme/fork",
+      "branch": "main",
+      "title": "compare the storage options",
+      "kind": "interactive",
+      "startedAt": "2026-09-10T10:00:00Z",
+      "lastActivityAt": "2026-09-10T10:00:26Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.02101,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.02101,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.02101,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 6,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "10101010-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "10101010-0000-4000-8000-000000000001",
+      "agents": 3,
+      "resume": "cd /home/dev/acme/fork && claude --resume 10101010-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "09090909-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/team",
+      "projectKey": "-home-dev-acme-team",
+      "cwd": "/home/dev/acme/team",
+      "branch": "main",
+      "title": "ask the reviewer to check the diff",
+      "kind": "interactive",
+      "startedAt": "2026-09-09T10:00:00Z",
+      "lastActivityAt": "2026-09-09T10:02:17Z",
+      "endState": "clean",
+      "turns": 2,
+      "cost": {
+        "bestUSD": 0.026250000000000002,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.026250000000000002,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.026250000000000002,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 7,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "09090909-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "09090909-0000-4000-8000-000000000001",
+      "agents": 1,
+      "resume": "cd /home/dev/acme/team && claude --resume 09090909-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "08080808-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/subnest",
+      "projectKey": "-home-dev-acme-subnest",
+      "cwd": "/home/dev/acme/subnest",
+      "branch": "main",
+      "title": "survey the repo with helpers",
+      "kind": "interactive",
+      "startedAt": "2026-09-08T10:00:00Z",
+      "lastActivityAt": "2026-09-08T10:00:28Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.02622,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.02622,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.02622,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 6,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "08080808-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "08080808-0000-4000-8000-000000000001",
+      "agents": 2,
+      "resume": "cd /home/dev/acme/subnest && claude --resume 08080808-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "07070707-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/subbg",
+      "projectKey": "-home-dev-acme-subbg",
+      "cwd": "/home/dev/acme/subbg",
+      "branch": "main",
+      "title": "run the slow audit in the background",
+      "kind": "interactive",
+      "startedAt": "2026-09-07T10:00:00Z",
+      "lastActivityAt": "2026-09-07T10:02:10Z",
+      "endState": "clean",
+      "turns": 3,
+      "cost": {
+        "bestUSD": 0.02408,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.02408,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.02408,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 6,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "07070707-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "07070707-0000-4000-8000-000000000001",
+      "agents": 1,
+      "resume": "cd /home/dev/acme/subbg && claude --resume 07070707-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "06060606-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/subsync",
+      "projectKey": "-home-dev-acme-subsync",
+      "cwd": "/home/dev/acme/subsync",
+      "branch": "main",
+      "title": "find where logins are validated",
+      "kind": "interactive",
+      "startedAt": "2026-09-06T10:00:00Z",
+      "lastActivityAt": "2026-09-06T10:00:18Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.02132,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.02132,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.02132,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 4,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "06060606-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "06060606-0000-4000-8000-000000000001",
+      "agents": 1,
+      "resume": "cd /home/dev/acme/subsync && claude --resume 06060606-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/s05-compaction",
+      "projectKey": "-home-dev-acme-s05-compaction",
+      "cwd": "/home/dev/acme/s05-compaction",
+      "branch": "main",
+      "title": "set up the database layer",
+      "kind": "interactive",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "lastActivityAt": "2026-09-05T10:00:36Z",
+      "endState": "clean",
+      "turns": 4,
+      "cost": {
+        "bestUSD": 0.01796,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01796,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01796,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 5,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "05050505-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000004"
+      },
+      "project": "/home/dev/acme/s05-compaction",
+      "projectKey": "-home-dev-acme-s05-compaction",
+      "cwd": "/home/dev/acme/s05-compaction",
+      "branch": "main",
+      "title": "audit every module",
+      "kind": "interactive",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "lastActivityAt": "2026-09-05T10:00:24Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.0222,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0222,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0222,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 5,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000004"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "05050505-0000-4000-8000-000000000004",
+      "agents": 1,
+      "resume": "cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000004"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000003"
+      },
+      "project": "/home/dev/acme/s05-compaction",
+      "projectKey": "-home-dev-acme-s05-compaction",
+      "cwd": "/home/dev/acme/s05-compaction",
+      "branch": "main",
+      "title": "add a cache layer",
+      "kind": "interactive",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "lastActivityAt": "2026-09-05T10:00:10Z",
+      "endState": "clean",
+      "turns": 2,
+      "cost": {
+        "bestUSD": 0.0119,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0119,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0119,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 2,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000003"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "05050505-0000-4000-8000-000000000003",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000003"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000002"
+      },
+      "project": "/home/dev/acme/s05-compaction",
+      "projectKey": "-home-dev-acme-s05-compaction",
+      "cwd": "/home/dev/acme/s05-compaction",
+      "branch": "main",
+      "title": "continue with the repository layer",
+      "kind": "interactive",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "lastActivityAt": "2026-09-05T10:00:08Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.0056,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0056,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0056,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 1,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "05050505-0000-4000-8000-000000000002"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "05050505-0000-4000-8000-000000000002",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000002"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "04040404-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/interrupt",
+      "projectKey": "-home-dev-acme-interrupt",
+      "cwd": "/home/dev/acme/interrupt",
+      "branch": "main",
+      "title": "refactor the router",
+      "kind": "interactive",
+      "startedAt": "2026-09-04T10:00:00Z",
+      "lastActivityAt": "2026-09-04T10:00:48Z",
+      "endState": "clean",
+      "turns": 8,
+      "cost": {
+        "bestUSD": 0.020880000000000003,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.020880000000000003,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.020880000000000003,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 9,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "04040404-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "04040404-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/interrupt && claude --resume 04040404-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "03030303-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/slash",
+      "projectKey": "-home-dev-acme-slash",
+      "cwd": "/home/dev/acme/slash",
+      "branch": "main",
+      "title": "My logout work",
+      "kind": "interactive",
+      "startedAt": "2026-09-03T10:00:00Z",
+      "lastActivityAt": "2026-09-03T10:00:20Z",
+      "endState": "clean",
+      "turns": 4,
+      "cost": {
+        "bestUSD": 0.0132,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.0132,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.0132,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 2,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "03030303-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "idle",
+      "id": "03030303-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/slash && claude --resume 03030303-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "02020202-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/multi-line",
+      "projectKey": "-home-dev-acme-multi-line",
+      "cwd": "/home/dev/acme/multi-line",
+      "branch": "main",
+      "title": "list the exported functions in utils.ts",
+      "kind": "interactive",
+      "startedAt": "2026-09-02T10:00:00Z",
+      "lastActivityAt": "2026-09-02T10:00:14Z",
+      "endState": "clean",
+      "turns": 1,
+      "cost": {
+        "bestUSD": 0.01285,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.01285,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.01285,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 2,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "02020202-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "ended",
+      "id": "02020202-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/multi-line && claude --resume 02020202-0000-4000-8000-000000000001"
+    },
+    {
+      "key": {
+        "harness": "claude",
+        "id": "01010101-0000-4000-8000-000000000001"
+      },
+      "project": "/home/dev/acme/plain",
+      "projectKey": "-home-dev-acme-plain",
+      "cwd": "/home/dev/acme/plain",
+      "branch": "main",
+      "title": "Add login page",
+      "kind": "interactive",
+      "startedAt": "2026-09-01T10:00:00Z",
+      "lastActivityAt": "2026-09-01T10:00:24Z",
+      "endState": "clean",
+      "turns": 2,
+      "cost": {
+        "bestUSD": 0.02124,
+        "flag": "estimated",
+        "reportedUSD": 0,
+        "ownUSD": 0.02124,
+        "coveredUSD": 0,
+        "uncoveredUSD": 0.02124,
+        "overheadUSD": 0,
+        "inheritedUSD": 0,
+        "ownMessages": 5,
+        "inheritedMessages": 0
+      },
+      "firstOwnTurn": 0,
+      "root": {
+        "harness": "claude",
+        "id": "01010101-0000-4000-8000-000000000001"
+      },
+      "leaf": true,
+      "state": "busy",
+      "id": "01010101-0000-4000-8000-000000000001",
+      "agents": 0,
+      "resume": "cd /home/dev/acme/plain && claude --resume 01010101-0000-4000-8000-000000000001"
+    }
+  ],
+  "total": 34,
+  "scripted": [
+    {
+      "project": "/home/dev/acme/sdk",
+      "day": "2026-09-15",
+      "count": 1,
+      "totalUSD": 0.0139,
+      "reportedUSD": 0.0139,
+      "attributedUSD": 0
+    }
+  ]
+}

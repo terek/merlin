@@ -1,0 +1,363 @@
+{
+  "session": {
+    "key": {
+      "harness": "claude",
+      "id": "16161616-0000-4000-8000-000000000001"
+    },
+    "project": "/home/dev/acme/coststate",
+    "projectKey": "-home-dev-acme-coststate",
+    "cwd": "/home/dev/acme/coststate",
+    "branch": "main",
+    "title": "plan the billing module",
+    "kind": "interactive",
+    "startedAt": "2026-09-16T10:00:00Z",
+    "lastActivityAt": "2026-09-16T11:00:30Z",
+    "endState": "clean",
+    "turns": 3,
+    "cost": {
+      "bestUSD": 0.1172,
+      "flag": "exact",
+      "reportedUSD": 0.1172,
+      "windows": [
+        {
+          "from": "2026-09-16T10:00:00Z",
+          "to": "2026-09-16T11:00:30Z",
+          "totalUSD": 0.1172,
+          "byModel": {
+            "claude-fable-5-1": {
+              "inputTokens": 1000,
+              "outputTokens": 400,
+              "cacheReadTokens": 5000,
+              "cacheCreationTokens": 1000,
+              "usd": 0.05125
+            },
+            "claude-haiku-4-5-20251001": {
+              "inputTokens": 4000,
+              "outputTokens": 200,
+              "cacheCreationTokens": 1000,
+              "usd": 0.00625
+            },
+            "claude-opus-5-5": {
+              "inputTokens": 1200,
+              "outputTokens": 500,
+              "cacheReadTokens": 4000,
+              "cacheCreationTokens": 4500,
+              "usd": 0.0516
+            },
+            "claude-sonnet-5-5": {
+              "inputTokens": 600,
+              "outputTokens": 180,
+              "cacheReadTokens": 1500,
+              "cacheCreationTokens": 1200,
+              "usd": 0.0081
+            }
+          }
+        }
+      ],
+      "ownUSD": 0.1157,
+      "coveredUSD": 0.1157,
+      "uncoveredUSD": 0,
+      "overheadUSD": 0.0015000000000000013,
+      "inheritedUSD": 0,
+      "ownMessages": 6,
+      "inheritedMessages": 0
+    },
+    "firstOwnTurn": 0,
+    "root": {
+      "harness": "claude",
+      "id": "16161616-0000-4000-8000-000000000001"
+    },
+    "leaf": true,
+    "state": "ended"
+  },
+  "family": {
+    "root": {
+      "harness": "claude",
+      "id": "16161616-0000-4000-8000-000000000001"
+    },
+    "members": [
+      {
+        "harness": "claude",
+        "id": "16161616-0000-4000-8000-000000000001"
+      }
+    ],
+    "leaves": [
+      {
+        "harness": "claude",
+        "id": "16161616-0000-4000-8000-000000000001"
+      }
+    ]
+  },
+  "resume": "cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001",
+  "digest": {
+    "schemaVersion": 1,
+    "parserVersion": 2,
+    "source": [
+      {
+        "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001.jsonl",
+        "size": 9141,
+        "mtimeNs": 1790035200000000000
+      },
+      {
+        "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001/subagents/agent-a16e0c0de0000001.jsonl",
+        "size": 1250,
+        "mtimeNs": 1790035200000000000
+      },
+      {
+        "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001/subagents/agent-a16e0c0de0000001.meta.json",
+        "size": 142,
+        "mtimeNs": 1790035200000000000
+      }
+    ],
+    "harness": "claude",
+    "id": "16161616-0000-4000-8000-000000000001",
+    "projectKey": "-home-dev-acme-coststate",
+    "project": "/home/dev/acme/coststate",
+    "cwd": "/home/dev/acme/coststate",
+    "cwds": ["/home/dev/acme/coststate"],
+    "gitBranches": ["main"],
+    "harnessVersions": ["2.1.280"],
+    "kind": "interactive",
+    "title": "plan the billing module",
+    "startedAt": "2026-09-16T10:00:00Z",
+    "lastActivityAt": "2026-09-16T11:00:30Z",
+    "endState": "clean",
+    "lineage": {},
+    "stats": {
+      "humanTurns": 3,
+      "turns": 3,
+      "assistantMessages": 6,
+      "toolCalls": 2,
+      "toolsByName": {
+        "Agent": 1,
+        "Read": 1
+      },
+      "linesAdded": 10,
+      "linesRemoved": 2
+    },
+    "cost": {
+      "usd": 0.1157,
+      "byModel": {
+        "claude-fable-5-1": {
+          "input": 1000,
+          "output": 400,
+          "cacheRead": 5000,
+          "cacheWrite1h": 1000,
+          "usd": 0.05125
+        },
+        "claude-haiku-4-5-20251001": {
+          "input": 3000,
+          "output": 100,
+          "cacheWrite5m": 1000,
+          "usd": 0.00475
+        },
+        "claude-opus-5-5": {
+          "input": 1200,
+          "output": 500,
+          "cacheRead": 4000,
+          "cacheWrite1h": 4500,
+          "usd": 0.0516
+        },
+        "claude-sonnet-5-5": {
+          "input": 600,
+          "output": 180,
+          "cacheRead": 1500,
+          "cacheWrite1h": 1200,
+          "usd": 0.0081
+        }
+      }
+    },
+    "reported": {
+      "totalUSD": 0.1172,
+      "byModel": {
+        "claude-fable-5-1": {
+          "inputTokens": 1000,
+          "outputTokens": 400,
+          "cacheReadTokens": 5000,
+          "cacheCreationTokens": 1000,
+          "usd": 0.05125
+        },
+        "claude-haiku-4-5-20251001": {
+          "inputTokens": 4000,
+          "outputTokens": 200,
+          "cacheCreationTokens": 1000,
+          "usd": 0.00625
+        },
+        "claude-opus-5-5": {
+          "inputTokens": 1200,
+          "outputTokens": 500,
+          "cacheReadTokens": 4000,
+          "cacheCreationTokens": 4500,
+          "usd": 0.0516
+        },
+        "claude-sonnet-5-5": {
+          "inputTokens": 600,
+          "outputTokens": 180,
+          "cacheReadTokens": 1500,
+          "cacheCreationTokens": 1200,
+          "usd": 0.0081
+        }
+      },
+      "windows": [
+        {
+          "from": "2026-09-16T10:00:00Z",
+          "to": "2026-09-16T11:00:30Z",
+          "totalUSD": 0.1172,
+          "byModel": {
+            "claude-fable-5-1": {
+              "inputTokens": 1000,
+              "outputTokens": 400,
+              "cacheReadTokens": 5000,
+              "cacheCreationTokens": 1000,
+              "usd": 0.05125
+            },
+            "claude-haiku-4-5-20251001": {
+              "inputTokens": 4000,
+              "outputTokens": 200,
+              "cacheCreationTokens": 1000,
+              "usd": 0.00625
+            },
+            "claude-opus-5-5": {
+              "inputTokens": 1200,
+              "outputTokens": 500,
+              "cacheReadTokens": 4000,
+              "cacheCreationTokens": 4500,
+              "usd": 0.0516
+            },
+            "claude-sonnet-5-5": {
+              "inputTokens": 600,
+              "outputTokens": 180,
+              "cacheReadTokens": 1500,
+              "cacheCreationTokens": 1200,
+              "usd": 0.0081
+            }
+          }
+        }
+      ]
+    },
+    "turns": [
+      {
+        "index": 0,
+        "epoch": 0,
+        "uuid": "16010000-0000-4000-9000-000000000001",
+        "startedAt": "2026-09-16T10:00:00Z",
+        "endedAt": "2026-09-16T10:00:08Z",
+        "durationMs": 9000,
+        "origin": "human",
+        "userText": "plan the billing module",
+        "finalText": "Plan: invoices, totals, tax.",
+        "assistantMessages": 2,
+        "toolCalls": 1,
+        "toolsByName": {
+          "Read": 1
+        },
+        "contextTokens": 4700,
+        "cost": {
+          "usd": 0.0516,
+          "byModel": {
+            "claude-opus-5-5": {
+              "input": 1200,
+              "output": 500,
+              "cacheRead": 4000,
+              "cacheWrite1h": 4500,
+              "usd": 0.0516
+            }
+          }
+        },
+        "costWithAgents": 0.0516
+      },
+      {
+        "index": 1,
+        "epoch": 0,
+        "uuid": "16010000-0000-4000-9000-000000000006",
+        "startedAt": "2026-09-16T11:00:10Z",
+        "endedAt": "2026-09-16T11:00:24Z",
+        "durationMs": 12000,
+        "origin": "human",
+        "userText": "implement the invoice totals",
+        "finalText": "Invoice totals implemented",
+        "assistantMessages": 2,
+        "toolCalls": 1,
+        "toolsByName": {
+          "Agent": 1
+        },
+        "contextTokens": 1800,
+        "cost": {
+          "usd": 0.0081,
+          "byModel": {
+            "claude-sonnet-5-5": {
+              "input": 600,
+              "output": 180,
+              "cacheRead": 1500,
+              "cacheWrite1h": 1200,
+              "usd": 0.0081
+            }
+          }
+        },
+        "costWithAgents": 0.01285,
+        "spawned": ["a16e0c0de0000001"]
+      },
+      {
+        "index": 2,
+        "epoch": 0,
+        "uuid": "16010000-0000-4000-9000-000000000011",
+        "startedAt": "2026-09-16T11:00:26Z",
+        "endedAt": "2026-09-16T11:00:30Z",
+        "durationMs": 7000,
+        "origin": "human",
+        "userText": "review the invoice totals",
+        "finalText": "Review: totals look correct.",
+        "assistantMessages": 1,
+        "toolCalls": 0,
+        "contextTokens": 7000,
+        "cost": {
+          "usd": 0.05125,
+          "byModel": {
+            "claude-fable-5-1": {
+              "input": 1000,
+              "output": 400,
+              "cacheRead": 5000,
+              "cacheWrite1h": 1000,
+              "usd": 0.05125
+            }
+          }
+        },
+        "costWithAgents": 0.05125
+      }
+    ],
+    "agents": [
+      {
+        "id": "a16e0c0de0000001",
+        "kind": "subagent",
+        "agentType": "general-purpose",
+        "description": "Check tax rules",
+        "model": "haiku",
+        "parentAgentId": null,
+        "spawnToolUseId": "toolu_cs_02",
+        "spawnTurn": 1,
+        "depth": 1,
+        "linkage": "meta",
+        "startedAt": "2026-09-16T11:00:15Z",
+        "endedAt": "2026-09-16T11:00:17Z",
+        "status": "completed",
+        "prompt": "List the tax rules in billing.ts.",
+        "finalText": "Tax rules: flat 10 percent.",
+        "assistantMessages": 1,
+        "toolCalls": 0,
+        "cost": {
+          "usd": 0.00475,
+          "byModel": {
+            "claude-haiku-4-5-20251001": {
+              "input": 3000,
+              "output": 100,
+              "cacheWrite5m": 1000,
+              "usd": 0.00475
+            }
+          }
+        },
+        "subtreeUSD": 0.00475
+      }
+    ],
+    "diagnostics": {}
+  }
+}

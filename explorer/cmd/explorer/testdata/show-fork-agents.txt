@@ -1,0 +1,28 @@
+compare the storage options
+  id         10101010-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/fork   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 10 06:00 → Sep 10 06:00  (26s)
+  turns      1 turn · 6 assistant messages · 3 tool calls · 3 agents
+
+Cost    ≈$0.021   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.021   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.021
+
+Agents  (3 agents; own cost is attributed from tokens)
+  AGENT                        KIND  MODEL    STATUS         OWN  WITH SUBTREE
+  ├─ fork · Evaluate sqlite    fork  inherit  completed  $0.0053
+  ├─ fork · Evaluate postgres  fork  inherit  completed  $0.0015
+  └─ fork · Evaluate mysql     fork  inherit  completed  $0.0015
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 10 06:00  human                 $0.021  20s  [+3 agents]
+     > compare the storage options
+     < sqlite fits best for now.
+
+Resume
+  cd /home/dev/acme/fork && claude --resume 10101010-0000-4000-8000-000000000001

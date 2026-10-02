@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-nest/22222222-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "22222222-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-nest",
+  "project": "/home/dev/acme/nest",
+  "cwd": "/home/dev/acme/nest",
+  "cwds": [
+    "/home/dev/acme/nest"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "outer session in the nest project",
+  "startedAt": "2026-09-22T10:00:00Z",
+  "lastActivityAt": "2026-09-22T10:00:04Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 1,
+    "toolCalls": 0
+  },
+  "cost": {
+    "usd": 0.0105,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1000,
+        "output": 50,
+        "cacheWrite1h": 2000,
+        "usd": 0.0105
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "22010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-22T10:00:00Z",
+      "endedAt": "2026-09-22T10:00:04Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "outer session in the nest project",
+      "finalText": "Outer done",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.0105,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 50,
+            "cacheWrite1h": 2000,
+            "usd": 0.0105
+          }
+        }
+      },
+      "costWithAgents": 0.0105
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_nest22_01",
+      "at": "2026-09-22T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0105,
+      "input": 1000,
+      "output": 50,
+      "cacheWrite1h": 2000
+    }
+  ],
+  "diagnostics": {}
+}

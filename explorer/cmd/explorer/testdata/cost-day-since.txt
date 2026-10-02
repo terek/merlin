@@ -1,0 +1,14 @@
+Cost by day  (since Sep 15)
+DAY         SESSIONS     COST  REPORTED  ATTRIBUTED
+2026-09-22         2   $0.025        $0      $0.025
+2026-09-21         1   $0.011        $0      $0.011
+2026-09-20         1   $0.027        $0      $0.027
+2026-09-19         1  $0.0031        $0     $0.0031
+2026-09-18         2   $0.027        $0      $0.027
+2026-09-17         1   $0.014        $0      $0.014
+2026-09-16         1   $0.117    $0.117          $0
+2026-09-15         1   $0.014    $0.014          $0
+TOTAL              9   $0.237    $0.131      $0.106
+
+Of $0.237: $0.131 (55%) is Claude Code's own reported figure; $0.106 (45%) is recomputed from tokens where it reported nothing.
+Sessions: 1 exact, 0 partial, 7 estimated; plus 1 scripted run  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

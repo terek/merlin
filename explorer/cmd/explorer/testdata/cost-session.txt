@@ -1,0 +1,13 @@
+Cost by session  (all time)
+ID        WHEN          PROJECT    TITLE                                    COST  REPORTED  ATTRIBUTED
+16161616  Sep 16 07:00  coststate  plan the billing module                $0.117    $0.117          $0
+20202020  Sep 20 06:00  pricing    estimate the build cost               ≈$0.027        $0      $0.027
+09090909  Sep 9 06:02   team       ask the reviewer to check the diff    ≈$0.026        $0      $0.026
+08080808  Sep 8 06:00   subnest    survey the repo with helpers          ≈$0.026        $0      $0.026
+11111111  Sep 11 06:00  linkage    check three things in parallel        ≈$0.026        $0      $0.026
+07070707  Sep 7 06:02   subbg      run the slow audit in the background  ≈$0.024        $0      $0.024
+                                   … 29 more rows                         $0.385    $0.014      $0.371
+TOTAL                              35 sessions                            $0.631    $0.131      $0.500
+
+Of $0.631: $0.131 (21%) is Claude Code's own reported figure; $0.500 (79%) is recomputed from tokens where it reported nothing.
+Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

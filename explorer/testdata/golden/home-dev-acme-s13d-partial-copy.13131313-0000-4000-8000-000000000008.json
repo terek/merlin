@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-s13d-partial-copy/13131313-0000-4000-8000-000000000008.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "13131313-0000-4000-8000-000000000008",
+  "projectKey": "-home-dev-acme-s13d-partial-copy",
+  "project": "/home/dev/acme/s13d-partial-copy",
+  "cwd": "/home/dev/acme/s13d-partial-copy",
+  "cwds": [
+    "/home/dev/acme/s13d-partial-copy"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "add a reset button",
+  "startedAt": "2026-09-13T10:00:13Z",
+  "lastActivityAt": "2026-09-13T10:05:26Z",
+  "endState": "clean",
+  "lineage": {
+    "inheritedFrom": [
+      "13131313-0000-4000-8000-000000000007"
+    ]
+  },
+  "stats": {
+    "humanTurns": 2,
+    "turns": 2,
+    "assistantMessages": 2,
+    "toolCalls": 0
+  },
+  "cost": {
+    "usd": 0.0031,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 200,
+        "output": 80,
+        "cacheRead": 5500,
+        "cacheWrite1h": 200,
+        "usd": 0.0031
+      }
+    }
+  },
+  "compactions": [
+    {
+      "at": "2026-09-13T10:00:13Z",
+      "turn": -1,
+      "trigger": "auto",
+      "preTokens": 120000,
+      "postTokens": 8000,
+      "durationMs": 6000,
+      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nThe search box was added and styled in session A."
+    }
+  ],
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 1,
+      "uuid": "13070000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-13T10:00:16Z",
+      "endedAt": "2026-09-13T10:00:20Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add a reset button",
+      "finalText": "Reset button added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2900,
+      "cost": {
+        "usd": 0.00154,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2700,
+            "cacheWrite1h": 100,
+            "usd": 0.00154
+          }
+        }
+      },
+      "costWithAgents": 0.00154
+    },
+    {
+      "index": 1,
+      "epoch": 1,
+      "uuid": "13080000-0000-4000-9000-000000000003",
+      "startedAt": "2026-09-13T10:05:22Z",
+      "endedAt": "2026-09-13T10:05:26Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add a disabled state",
+      "finalText": "Disabled state added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.00156,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2800,
+            "cacheWrite1h": 100,
+            "usd": 0.00156
+          }
+        }
+      },
+      "costWithAgents": 0.00156
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_cpd_04",
+      "at": "2026-09-13T10:00:18Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00154,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2700,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_cpd_b1",
+      "at": "2026-09-13T10:05:24Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00156,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2800,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

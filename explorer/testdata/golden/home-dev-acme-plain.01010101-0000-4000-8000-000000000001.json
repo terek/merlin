@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-plain/01010101-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "01010101-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-plain",
+  "project": "/home/dev/acme/plain",
+  "cwd": "/home/dev/acme/plain",
+  "cwds": [
+    "/home/dev/acme/plain"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "Add login page",
+  "startedAt": "2026-09-01T10:00:00Z",
+  "lastActivityAt": "2026-09-01T10:00:24Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 2,
+    "turns": 2,
+    "assistantMessages": 5,
+    "toolCalls": 3,
+    "toolsByName": {
+      "Edit": 2,
+      "Read": 1
+    }
+  },
+  "cost": {
+    "usd": 0.02124,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1400,
+        "output": 550,
+        "cacheRead": 10700,
+        "cacheWrite1h": 2700,
+        "usd": 0.02124
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "01010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-01T10:00:00Z",
+      "endedAt": "2026-09-01T10:00:14Z",
+      "durationMs": 12000,
+      "origin": "human",
+      "userText": "add a login page",
+      "finalText": "Done, 3 files changed",
+      "assistantMessages": 3,
+      "toolCalls": 2,
+      "toolsByName": {
+        "Edit": 1,
+        "Read": 1
+      },
+      "filesTouched": [
+        "/home/dev/acme/plain/login.tsx"
+      ],
+      "contextTokens": 2600,
+      "cost": {
+        "usd": 0.0168,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1200,
+            "output": 350,
+            "cacheRead": 4500,
+            "cacheWrite1h": 2500,
+            "usd": 0.0168
+          }
+        }
+      },
+      "costWithAgents": 0.0168
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "01010000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-01T10:00:16Z",
+      "endedAt": "2026-09-01T10:00:24Z",
+      "durationMs": 8000,
+      "origin": "human",
+      "userText": "now add a logout button",
+      "finalText": "Logout button added",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Edit": 1
+      },
+      "filesTouched": [
+        "/home/dev/acme/plain/logout.tsx"
+      ],
+      "contextTokens": 3300,
+      "cost": {
+        "usd": 0.0044399999999999995,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 200,
+            "output": 200,
+            "cacheRead": 6200,
+            "cacheWrite1h": 200,
+            "usd": 0.0044399999999999995
+          }
+        }
+      },
+      "costWithAgents": 0.0044399999999999995
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_plain_01",
+      "at": "2026-09-01T10:00:04Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.011,
+      "input": 1000,
+      "output": 100,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_plain_02",
+      "at": "2026-09-01T10:00:08Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0046,
+      "input": 100,
+      "output": 200,
+      "cacheRead": 2000,
+      "cacheWrite1h": 500
+    },
+    {
+      "id": "msg_plain_03",
+      "at": "2026-09-01T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0012,
+      "input": 100,
+      "output": 50,
+      "cacheRead": 2500
+    },
+    {
+      "id": "msg_plain_04",
+      "at": "2026-09-01T10:00:18Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0031,
+      "input": 100,
+      "output": 150,
+      "cacheRead": 3000,
+      "cacheWrite1h": 200
+    },
+    {
+      "id": "msg_plain_05",
+      "at": "2026-09-01T10:00:22Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00134,
+      "input": 100,
+      "output": 50,
+      "cacheRead": 3200
+    }
+  ],
+  "diagnostics": {}
+}

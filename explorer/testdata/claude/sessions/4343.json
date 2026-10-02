@@ -1,0 +1,11 @@
+{
+  "pid": 4343,
+  "sessionId": "03030303-0000-4000-8000-000000000001",
+  "cwd": "/home/dev/acme/slash",
+  "startedAt": 1788429600000,
+  "kind": "interactive",
+  "entrypoint": "cli",
+  "name": "slash",
+  "status": "idle",
+  "updatedAt": 1788429660000
+}

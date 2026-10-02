@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000003.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "05050505-0000-4000-8000-000000000003",
+  "projectKey": "-home-dev-acme-s05-compaction",
+  "project": "/home/dev/acme/s05-compaction",
+  "cwd": "/home/dev/acme/s05-compaction",
+  "cwds": [
+    "/home/dev/acme/s05-compaction"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "add a cache layer",
+  "startedAt": "2026-09-05T10:00:00Z",
+  "lastActivityAt": "2026-09-05T10:00:10Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 2,
+    "turns": 2,
+    "assistantMessages": 2,
+    "toolCalls": 0
+  },
+  "cost": {
+    "usd": 0.0119,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1100,
+        "output": 90,
+        "cacheRead": 2000,
+        "cacheWrite1h": 2100,
+        "usd": 0.0119
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "05030000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "endedAt": "2026-09-05T10:00:04Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add a cache layer",
+      "finalText": "Cache layer added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.0105,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 50,
+            "cacheWrite1h": 2000,
+            "usd": 0.0105
+          }
+        }
+      },
+      "costWithAgents": 0.0105
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "05030000-0000-4000-9000-000000000004",
+      "startedAt": "2026-09-05T10:00:06Z",
+      "endedAt": "2026-09-05T10:00:10Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "add cache expiry",
+      "finalText": "Expiry added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2200,
+      "cost": {
+        "usd": 0.0014,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2000,
+            "cacheWrite1h": 100,
+            "usd": 0.0014
+          }
+        }
+      },
+      "costWithAgents": 0.0014
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_cmpc_01",
+      "at": "2026-09-05T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0105,
+      "input": 1000,
+      "output": 50,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_cmpc_02",
+      "at": "2026-09-05T10:00:08Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0014,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2000,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

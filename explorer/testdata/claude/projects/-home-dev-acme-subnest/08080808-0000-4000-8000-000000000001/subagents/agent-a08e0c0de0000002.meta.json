@@ -1,0 +1,8 @@
+{
+  "agentType": "general-purpose",
+  "description": "Survey tests",
+  "toolUseId": "toolu_nest_02",
+  "parentAgentId": "a08e0c0de0000001",
+  "spawnDepth": 2,
+  "model": "sonnet"
+}

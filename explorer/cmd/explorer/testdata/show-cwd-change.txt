@@ -1,0 +1,29 @@
+start the feature
+  id         18181818-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/cwdchange   branch main, worktree-login
+  cwd        /home/dev/acme/cwdchange-moved   (where it ended up)
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 18 06:00 → Sep 18 06:00  (16s)
+  turns      3 turns · 3 assistant messages · 0 tool calls
+
+Cost    ≈$0.014   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.014   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.014
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 18 06:00  human                 $0.011  3s
+     > start the feature
+     < Feature started
+  #1   Sep 18 06:00  human                $0.0018  3s
+     > continue in the worktree
+     < Continuing in the worktree
+  #2   Sep 18 06:00  human                $0.0013  3s
+     > wrap up
+     < Wrapped up
+
+Resume
+  cd /home/dev/acme/cwdchange && claude --resume 18181818-0000-4000-8000-000000000001

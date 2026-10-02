@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-hostile/17171717-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "17171717-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-hostile",
+  "project": "/home/dev/acme/hostile",
+  "cwd": "/home/dev/acme/hostile",
+  "cwds": [
+    "/home/dev/acme/hostile"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "add input validation",
+  "startedAt": "2026-09-17T10:00:00Z",
+  "lastActivityAt": "2026-09-17T10:00:20Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 3,
+    "turns": 3,
+    "assistantMessages": 3,
+    "toolCalls": 1,
+    "toolsByName": {
+      "Read": 1
+    }
+  },
+  "cost": {
+    "usd": 0.01394,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1200,
+        "output": 190,
+        "cacheRead": 4200,
+        "cacheWrite1h": 2200,
+        "usd": 0.01394
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "17010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-17T10:00:00Z",
+      "endedAt": "2026-09-17T10:00:10Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "add input validation",
+      "finalText": "Validation added",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Read": 1
+      },
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.0129,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 150,
+            "cacheRead": 2000,
+            "cacheWrite1h": 2200,
+            "usd": 0.0129
+          }
+        }
+      },
+      "costWithAgents": 0.0129
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "17010000-0000-4000-9000-000000000007",
+      "startedAt": "2026-09-17T10:00:12Z",
+      "endedAt": "2026-09-17T10:00:14Z",
+      "durationMs": 2000,
+      "origin": "human",
+      "userText": "now handle empty strings",
+      "assistantMessages": 0,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0
+      },
+      "costWithAgents": 0
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "17010000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-17T10:00:16Z",
+      "endedAt": "2026-09-17T10:00:20Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "try again",
+      "finalText": "Empty strings handled",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.00104,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 40,
+            "cacheRead": 2200,
+            "usd": 0.00104
+          }
+        }
+      },
+      "costWithAgents": 0.00104
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_host_01",
+      "at": "2026-09-17T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.011,
+      "input": 1000,
+      "output": 100,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_host_02",
+      "at": "2026-09-17T10:00:08Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0019,
+      "input": 100,
+      "output": 50,
+      "cacheRead": 2000,
+      "cacheWrite1h": 200
+    },
+    {
+      "id": "msg_host_03",
+      "at": "2026-09-17T10:00:18Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.00104,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2200
+    }
+  ],
+  "diagnostics": {
+    "unknownTypes": {
+      "hologram-state": 1
+    },
+    "badLines": 1
+  }
+}

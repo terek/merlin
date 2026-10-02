@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001/subagents/agent-a07e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001/subagents/agent-a07e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "07070707-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-subbg",
+  "project": "/home/dev/acme/subbg",
+  "cwd": "/home/dev/acme/subbg",
+  "cwds": [
+    "/home/dev/acme/subbg"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "run the slow audit in the background",
+  "startedAt": "2026-09-07T10:00:00Z",
+  "lastActivityAt": "2026-09-07T10:02:10Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 2,
+    "turns": 3,
+    "assistantMessages": 6,
+    "toolCalls": 2,
+    "toolsByName": {
+      "Agent": 1,
+      "Bash": 1
+    }
+  },
+  "cost": {
+    "usd": 0.02408,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 3600,
+        "output": 270,
+        "cacheRead": 9900,
+        "cacheWrite5m": 1200,
+        "cacheWrite1h": 2300,
+        "usd": 0.02408
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "07010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-07T10:00:00Z",
+      "endedAt": "2026-09-07T10:00:08Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "run the slow audit in the background",
+      "finalText": "The audit is running in the background.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.01212,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 110,
+            "cacheRead": 2100,
+            "cacheWrite1h": 2100,
+            "usd": 0.01212
+          }
+        }
+      },
+      "costWithAgents": 0.02132,
+      "spawned": [
+        "a07e0c0de0000001"
+      ]
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "07010000-0000-4000-9000-000000000006",
+      "startedAt": "2026-09-07T10:02:00Z",
+      "endedAt": "2026-09-07T10:02:04Z",
+      "durationMs": 4000,
+      "origin": "task-notification",
+      "userText": "\u003ctask-notification\u003e\n\u003ctask-id\u003ea07e0c0de0000001\u003c/task-id\u003e\n\u003cstatus\u003ecompleted\u003c/status\u003e\n\u003csummary\u003eAgent \"Run audit\" completed\u003c/summary\u003e\n\u003cresult\u003eAudit complete: 2 issues.\u003c/result\u003e\n\u003c/task-notification\u003e",
+      "finalText": "The audit found 2 issues.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2500,
+      "cost": {
+        "usd": 0.00136,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 30,
+            "cacheRead": 2300,
+            "cacheWrite1h": 100,
+            "usd": 0.00136
+          }
+        }
+      },
+      "costWithAgents": 0.00136
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "07010000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-07T10:02:06Z",
+      "endedAt": "2026-09-07T10:02:10Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "fix the first issue",
+      "finalText": "Fixed the first issue",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2700,
+      "cost": {
+        "usd": 0.0014,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 30,
+            "cacheRead": 2500,
+            "cacheWrite1h": 100,
+            "usd": 0.0014
+          }
+        }
+      },
+      "costWithAgents": 0.0014
+    }
+  ],
+  "agents": [
+    {
+      "id": "a07e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Run audit",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_bg_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "background": true,
+      "linkage": "meta",
+      "startedAt": "2026-09-07T10:00:20Z",
+      "endedAt": "2026-09-07T10:00:26Z",
+      "status": "completed",
+      "prompt": "Run the audit and report issues.",
+      "finalText": "Audit complete: 2 issues.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Bash": 1
+      },
+      "cost": {
+        "usd": 0.0092,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 2300,
+            "output": 100,
+            "cacheRead": 3000,
+            "cacheWrite5m": 1200,
+            "usd": 0.0092
+          }
+        }
+      },
+      "subtreeUSD": 0.0092
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_bg_01",
+      "at": "2026-09-07T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_bg_02",
+      "at": "2026-09-07T10:00:06Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00132,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2100,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_bg_a1",
+      "at": "2026-09-07T10:00:22Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a07e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0071,
+      "input": 2000,
+      "output": 60,
+      "cacheWrite5m": 1000
+    },
+    {
+      "id": "msg_bg_a2",
+      "at": "2026-09-07T10:00:26Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a07e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0021,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 3000,
+      "cacheWrite5m": 200
+    },
+    {
+      "id": "msg_bg_03",
+      "at": "2026-09-07T10:02:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00136,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2300,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_bg_04",
+      "at": "2026-09-07T10:02:08Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.0014,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2500,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

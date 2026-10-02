@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000004.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000004/subagents/agent-a05e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000004/subagents/agent-a05e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "05050505-0000-4000-8000-000000000004",
+  "projectKey": "-home-dev-acme-s05-compaction",
+  "project": "/home/dev/acme/s05-compaction",
+  "cwd": "/home/dev/acme/s05-compaction",
+  "cwds": [
+    "/home/dev/acme/s05-compaction"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "audit every module",
+  "startedAt": "2026-09-05T10:00:00Z",
+  "lastActivityAt": "2026-09-05T10:00:24Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 5,
+    "toolCalls": 2,
+    "toolsByName": {
+      "Agent": 1,
+      "Read": 1
+    }
+  },
+  "cost": {
+    "usd": 0.0222,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 2400,
+        "output": 240,
+        "cacheRead": 3000,
+        "cacheWrite5m": 2400,
+        "cacheWrite1h": 2100,
+        "usd": 0.0222
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "05040000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-05T10:00:00Z",
+      "endedAt": "2026-09-05T10:00:24Z",
+      "durationMs": 20000,
+      "origin": "human",
+      "userText": "audit every module",
+      "finalText": "Audit complete",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "contextTokens": 2200,
+      "cost": {
+        "usd": 0.0121,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 110,
+            "cacheRead": 2000,
+            "cacheWrite1h": 2100,
+            "usd": 0.0121
+          }
+        }
+      },
+      "costWithAgents": 0.0222,
+      "spawned": [
+        "a05e0c0de0000001"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "a05e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Audit modules",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_cmpd_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-05T10:00:05Z",
+      "endedAt": "2026-09-05T10:00:17Z",
+      "status": "completed",
+      "prompt": "Audit every module and summarise.",
+      "finalText": "Read the first module\n\nAll modules audited",
+      "assistantMessages": 3,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Read": 1
+      },
+      "compactions": [
+        {
+          "at": "2026-09-05T10:00:13Z",
+          "turn": 0,
+          "trigger": "manual",
+          "preTokens": 80000,
+          "postTokens": 9000,
+          "durationMs": 4000,
+          "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nThe agent audited the first module."
+        }
+      ],
+      "cost": {
+        "usd": 0.010100000000000001,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1300,
+            "output": 130,
+            "cacheRead": 1000,
+            "cacheWrite5m": 2400,
+            "usd": 0.010100000000000001
+          }
+        }
+      },
+      "subtreeUSD": 0.010100000000000001
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_cmpd_01",
+      "at": "2026-09-05T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_cmpd_a1",
+      "at": "2026-09-05T10:00:07Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a05e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0051,
+      "input": 1000,
+      "output": 60,
+      "cacheWrite5m": 1000
+    },
+    {
+      "id": "msg_cmpd_a2",
+      "at": "2026-09-05T10:00:11Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a05e0c0de0000001",
+      "turn": 0,
+      "usd": 0.00195,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 1000,
+      "cacheWrite5m": 500
+    },
+    {
+      "id": "msg_cmpd_a3",
+      "at": "2026-09-05T10:00:17Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a05e0c0de0000001",
+      "turn": 0,
+      "usd": 0.00305,
+      "input": 200,
+      "output": 40,
+      "cacheWrite5m": 900
+    },
+    {
+      "id": "msg_cmpd_02",
+      "at": "2026-09-05T10:00:22Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0013,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2000,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

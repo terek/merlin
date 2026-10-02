@@ -1,0 +1,28 @@
+check three things in parallel
+  id         11111111-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/linkage   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 11 06:00 → Sep 11 06:00  (18s)
+  turns      1 turn · 5 assistant messages · 2 tool calls · 3 agents
+
+Cost    ≈$0.026   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.026   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.026
+
+Agents  (3 agents; own cost is attributed from tokens)
+  AGENT                                   KIND      MODEL       STATUS         OWN  WITH SUBTREE
+  ├─ general-purpose · Find entry point   subagent  sonnet      completed  $0.0043
+  ├─ general-purpose · List config files  subagent  sonnet      completed  $0.0044
+  └─ a11e0c0de0000003                     subagent  sonnet-5-5  completed  $0.0042
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 11 06:00  human                 $0.021  15s  [+2 agents]
+     > check three things in parallel
+     < Entry point is main.ts; two config files.
+
+Resume
+  cd /home/dev/acme/linkage && claude --resume 11111111-0000-4000-8000-000000000001

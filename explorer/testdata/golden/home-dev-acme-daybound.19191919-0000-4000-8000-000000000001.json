@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-daybound/19191919-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "19191919-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-daybound",
+  "project": "/home/dev/acme/daybound",
+  "cwd": "/home/dev/acme/daybound",
+  "cwds": [
+    "/home/dev/acme/daybound"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "add a footer",
+  "startedAt": "2026-09-19T03:50:00Z",
+  "lastActivityAt": "2026-09-19T04:05:22Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 3,
+    "turns": 3,
+    "assistantMessages": 4,
+    "toolCalls": 1,
+    "toolsByName": {
+      "Edit": 1
+    }
+  },
+  "cost": {
+    "usd": 0.01668,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1300,
+        "output": 270,
+        "cacheRead": 6900,
+        "cacheWrite1h": 2500,
+        "usd": 0.01668
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "19010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-19T03:50:00Z",
+      "endedAt": "2026-09-19T03:50:12Z",
+      "durationMs": 12000,
+      "origin": "human",
+      "userText": "add a footer",
+      "finalText": "Footer added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.011,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 100,
+            "cacheWrite1h": 2000,
+            "usd": 0.011
+          }
+        }
+      },
+      "costWithAgents": 0.011
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "19010000-0000-4000-9000-000000000004",
+      "startedAt": "2026-09-19T03:59:30Z",
+      "endedAt": "2026-09-19T04:00:32Z",
+      "durationMs": 62000,
+      "origin": "human",
+      "userText": "add a header",
+      "finalText": "Header added",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Edit": 1
+      },
+      "filesTouched": [
+        "/home/dev/acme/header.tsx"
+      ],
+      "contextTokens": 2600,
+      "cost": {
+        "usd": 0.00408,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 200,
+            "output": 120,
+            "cacheRead": 4400,
+            "cacheWrite1h": 400,
+            "usd": 0.00408
+          }
+        }
+      },
+      "costWithAgents": 0.00408
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "19010000-0000-4000-9000-000000000009",
+      "startedAt": "2026-09-19T04:05:00Z",
+      "endedAt": "2026-09-19T04:05:22Z",
+      "durationMs": 22000,
+      "origin": "human",
+      "userText": "add a sidebar",
+      "finalText": "Sidebar added",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2700,
+      "cost": {
+        "usd": 0.0016,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 50,
+            "cacheRead": 2500,
+            "cacheWrite1h": 100,
+            "usd": 0.0016
+          }
+        }
+      },
+      "costWithAgents": 0.0016
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_day_01",
+      "at": "2026-09-19T03:50:10Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.011,
+      "input": 1000,
+      "output": 100,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_day_02",
+      "at": "2026-09-19T03:59:50Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0026,
+      "input": 100,
+      "output": 80,
+      "cacheRead": 2000,
+      "cacheWrite1h": 300
+    },
+    {
+      "id": "msg_day_03",
+      "at": "2026-09-19T04:00:30Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00148,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2400,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_day_04",
+      "at": "2026-09-19T04:05:20Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.0016,
+      "input": 100,
+      "output": 50,
+      "cacheRead": 2500,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

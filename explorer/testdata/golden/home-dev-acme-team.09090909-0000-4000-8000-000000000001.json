@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001/subagents/agent-areviewer-09e0c0de00000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001/subagents/agent-areviewer-09e0c0de00000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "09090909-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-team",
+  "project": "/home/dev/acme/team",
+  "cwd": "/home/dev/acme/team",
+  "cwds": [
+    "/home/dev/acme/team"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "ask the reviewer to check the diff",
+  "startedAt": "2026-09-09T10:00:00Z",
+  "lastActivityAt": "2026-09-09T10:02:17Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 2,
+    "turns": 2,
+    "assistantMessages": 7,
+    "toolCalls": 3,
+    "toolsByName": {
+      "Agent": 1,
+      "Bash": 1,
+      "SendMessage": 1
+    }
+  },
+  "cost": {
+    "usd": 0.026250000000000002,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 3900,
+        "output": 330,
+        "cacheRead": 13500,
+        "cacheWrite5m": 1300,
+        "cacheWrite1h": 2300,
+        "usd": 0.026250000000000002
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "09010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-09T10:00:00Z",
+      "endedAt": "2026-09-09T10:00:08Z",
+      "durationMs": 4000,
+      "origin": "human",
+      "userText": "ask the reviewer to check the diff",
+      "finalText": "The reviewer is on it.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.01212,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 110,
+            "cacheRead": 2100,
+            "cacheWrite1h": 2100,
+            "usd": 0.01212
+          }
+        }
+      },
+      "costWithAgents": 0.023170000000000003,
+      "spawned": [
+        "areviewer-09e0c0de00000001"
+      ]
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "09010000-0000-4000-9000-000000000006",
+      "startedAt": "2026-09-09T10:02:00Z",
+      "endedAt": "2026-09-09T10:02:17Z",
+      "durationMs": 20000,
+      "origin": "human",
+      "userText": "tell the reviewer to also check the tests",
+      "finalText": "The reviewer will also check the tests.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "SendMessage": 1
+      },
+      "contextTokens": 2800,
+      "cost": {
+        "usd": 0.0030800000000000003,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 200,
+            "output": 90,
+            "cacheRead": 4900,
+            "cacheWrite1h": 200,
+            "usd": 0.0030800000000000003
+          }
+        }
+      },
+      "costWithAgents": 0.0030800000000000003
+    }
+  ],
+  "agents": [
+    {
+      "id": "areviewer-09e0c0de00000001",
+      "kind": "teammate",
+      "name": "reviewer",
+      "agentType": "reviewer",
+      "description": "Review the diff",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_team_01",
+      "spawnTurn": 0,
+      "depth": 0,
+      "linkage": "name",
+      "startedAt": "2026-09-09T10:00:12Z",
+      "endedAt": "2026-09-09T10:02:07Z",
+      "status": "completed",
+      "prompt": "Review the diff in the login branch.",
+      "finalText": "Tests look fine.",
+      "inbox": [
+        {
+          "at": "2026-09-09T10:02:05Z",
+          "from": "team-lead",
+          "text": "Please also check the tests."
+        }
+      ],
+      "assistantMessages": 3,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Bash": 1
+      },
+      "cost": {
+        "usd": 0.01105,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 2600,
+            "output": 130,
+            "cacheRead": 6500,
+            "cacheWrite5m": 1300,
+            "usd": 0.01105
+          }
+        }
+      },
+      "subtreeUSD": 0.01105
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_team_01",
+      "at": "2026-09-09T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_team_02",
+      "at": "2026-09-09T10:00:06Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00132,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2100,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_team_a1",
+      "at": "2026-09-09T10:00:14Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "areviewer-09e0c0de00000001",
+      "turn": 0,
+      "usd": 0.0071,
+      "input": 2000,
+      "output": 60,
+      "cacheWrite5m": 1000
+    },
+    {
+      "id": "msg_team_a2",
+      "at": "2026-09-09T10:00:18Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "areviewer-09e0c0de00000001",
+      "turn": 0,
+      "usd": 0.0021,
+      "input": 300,
+      "output": 40,
+      "cacheRead": 3000,
+      "cacheWrite5m": 200
+    },
+    {
+      "id": "msg_team_03",
+      "at": "2026-09-09T10:02:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00166,
+      "input": 100,
+      "output": 60,
+      "cacheRead": 2300,
+      "cacheWrite1h": 100
+    },
+    {
+      "id": "msg_team_a3",
+      "at": "2026-09-09T10:02:07Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "areviewer-09e0c0de00000001",
+      "turn": 0,
+      "usd": 0.00185,
+      "input": 300,
+      "output": 30,
+      "cacheRead": 3500,
+      "cacheWrite5m": 100
+    },
+    {
+      "id": "msg_team_04",
+      "at": "2026-09-09T10:02:15Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.00142,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2600,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

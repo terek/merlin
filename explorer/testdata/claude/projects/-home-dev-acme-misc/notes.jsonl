@@ -1,0 +1,2 @@
+{"type":"user","uuid":"21990000-0000-4000-9000-000000000001","parentUuid":null,"timestamp":"2026-09-21T10:30:00Z","sessionId":"not-a-session","message":{"role":"user","content":"this file is not a transcript (basename is not a uuid)"}}
+{"note":"scratch","n":2}

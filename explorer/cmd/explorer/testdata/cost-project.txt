@@ -1,0 +1,33 @@
+Cost by project  (all time)
+PROJECT             SESSIONS    COST  REPORTED  ATTRIBUTED
+coststate                  1  $0.117    $0.117          $0
+s05-compaction             4  $0.058        $0      $0.058
+pricing                    1  $0.027        $0      $0.027
+team                       1  $0.026        $0      $0.026
+subnest                    1  $0.026        $0      $0.026
+linkage                    1  $0.026        $0      $0.026
+subbg                      1  $0.024        $0      $0.024
+subsync                    1  $0.021        $0      $0.021
+plain                      1  $0.021        $0      $0.021
+fork                       1  $0.021        $0      $0.021
+interrupt                  1  $0.021        $0      $0.021
+rewind                     1  $0.020        $0      $0.020
+s13b-fork-unmarked         2  $0.019        $0      $0.019
+s13c-fork-marked           2  $0.019        $0      $0.019
+s13d-partial-copy          2  $0.019        $0      $0.019
+s13a-continuation          2  $0.017        $0      $0.017
+s13e-sdk-pickup            2  $0.017        $0      $0.017
+daybound                   1  $0.017        $0      $0.017
+inner                      1  $0.014        $0      $0.014
+hostile                    1  $0.014        $0      $0.014
+sdk                        1  $0.014    $0.014          $0
+cwdchange                  1  $0.014        $0      $0.014
+slash                      1  $0.013        $0      $0.013
+orphan                     1  $0.013        $0      $0.013
+multi-line                 1  $0.013        $0      $0.013
+misc                       1  $0.011        $0      $0.011
+nest                       1  $0.011        $0      $0.011
+TOTAL                     35  $0.631    $0.131      $0.500
+
+Of $0.631: $0.131 (21%) is Claude Code's own reported figure; $0.500 (79%) is recomputed from tokens where it reported nothing.
+Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

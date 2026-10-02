@@ -1,0 +1,26 @@
+Scan the repo for TODO comments.
+  id         12121212-0000-4000-8000-000000000001
+  state      -
+  project    /home/dev/acme/orphan   branch main
+  kind       interactive · Claude Code 2.1.71
+  when       Sep 12 06:00 → Sep 12 06:02  (2m02s)
+  turns      0 turns · 3 assistant messages · 0 tool calls · 2 agents
+
+Cost    ≈$0.013   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.013   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.013
+
+Agents  (3 agents; own cost is attributed from tokens)
+  AGENT                            KIND      MODEL       STATUS         OWN  WITH SUBTREE
+  ├─ general-purpose · Scan TODOs  subagent  sonnet      completed  $0.0043
+  ├─ a1b2c3d                       subagent  sonnet-5-5  completed  $0.0042
+  └─ acompact-12e0c0de             compact   sonnet-5-5  completed  $0.0046
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  (no turns)
+
+Resume
+  cd /home/dev/acme/orphan && claude --resume 12121212-0000-4000-8000-000000000001

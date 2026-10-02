@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-sdk/15151515-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "15151515-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-sdk",
+  "project": "/home/dev/acme/sdk",
+  "cwd": "/home/dev/acme/sdk",
+  "cwds": [
+    "/home/dev/acme/sdk"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.280"
+  ],
+  "kind": "sdk",
+  "title": "summarize README.md",
+  "startedAt": "2026-09-15T10:00:00Z",
+  "lastActivityAt": "2026-09-15T10:00:08Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 0,
+    "turns": 1,
+    "assistantMessages": 2,
+    "toolCalls": 1,
+    "toolsByName": {
+      "Read": 1
+    },
+    "linesAdded": 10,
+    "linesRemoved": 2
+  },
+  "cost": {
+    "usd": 0.0124,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1100,
+        "output": 100,
+        "cacheRead": 2000,
+        "cacheWrite1h": 2200,
+        "usd": 0.0124
+      }
+    }
+  },
+  "reported": {
+    "totalUSD": 0.0139,
+    "byModel": {
+      "claude-haiku-4-5-20251001": {
+        "inputTokens": 1000,
+        "outputTokens": 100,
+        "usd": 0.0015
+      },
+      "claude-sonnet-5-5": {
+        "inputTokens": 1100,
+        "outputTokens": 100,
+        "cacheReadTokens": 2000,
+        "cacheCreationTokens": 2200,
+        "usd": 0.0124
+      }
+    },
+    "windows": [
+      {
+        "from": "2026-09-15T10:00:00Z",
+        "to": "2026-09-15T10:00:08Z",
+        "totalUSD": 0.0139,
+        "byModel": {
+          "claude-haiku-4-5-20251001": {
+            "inputTokens": 1000,
+            "outputTokens": 100,
+            "usd": 0.0015
+          },
+          "claude-sonnet-5-5": {
+            "inputTokens": 1100,
+            "outputTokens": 100,
+            "cacheReadTokens": 2000,
+            "cacheCreationTokens": 2200,
+            "usd": 0.0124
+          }
+        }
+      }
+    ]
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "15010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-15T10:00:00Z",
+      "endedAt": "2026-09-15T10:00:08Z",
+      "durationMs": 5000,
+      "origin": "sdk",
+      "userText": "summarize README.md",
+      "finalText": "README.md describes the Acme project.",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Read": 1
+      },
+      "contextTokens": 2300,
+      "cost": {
+        "usd": 0.0124,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 100,
+            "cacheRead": 2000,
+            "cacheWrite1h": 2200,
+            "usd": 0.0124
+          }
+        }
+      },
+      "costWithAgents": 0.0124
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_sdk_01",
+      "at": "2026-09-15T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0106,
+      "input": 1000,
+      "output": 60,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_sdk_02",
+      "at": "2026-09-15T10:00:06Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0018,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2000,
+      "cacheWrite1h": 200
+    }
+  ],
+  "diagnostics": {}
+}

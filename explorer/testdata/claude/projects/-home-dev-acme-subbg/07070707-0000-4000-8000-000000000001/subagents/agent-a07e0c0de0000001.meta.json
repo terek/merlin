@@ -1,0 +1,7 @@
+{
+  "agentType": "general-purpose",
+  "description": "Run audit",
+  "toolUseId": "toolu_bg_01",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

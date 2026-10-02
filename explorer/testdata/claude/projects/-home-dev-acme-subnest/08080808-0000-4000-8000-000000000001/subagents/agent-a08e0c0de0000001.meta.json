@@ -1,0 +1,7 @@
+{
+  "agentType": "general-purpose",
+  "description": "Survey",
+  "toolUseId": "toolu_nest_01",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

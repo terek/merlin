@@ -1,0 +1,69 @@
+{
+  "unit": "USD per million tokens",
+  "cacheWrite5mMultiplier": 1.25,
+  "cacheWrite1hMultiplier": 2,
+  "fastMultiplier": 2,
+  "fastModels": ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"],
+  "fastStatus": "assumed",
+  "models": {
+    "claude-fable-5-1": {
+      "input": 10,
+      "output": 50,
+      "cacheRead": 0.25,
+      "status": "verified",
+      "note": "verified against cost-state"
+    },
+    "claude-fable-5": {
+      "input": 10,
+      "output": 50,
+      "cacheRead": 1.0,
+      "status": "verified",
+      "note": "verified against cost-state: five windows reproduce the reported cost to the cent at cache read 1.00 and 1h cache write 20 (docs/validation.md)"
+    },
+    "claude-opus-5-5": { "input": 4, "output": 20, "cacheRead": 0.2, "status": "verified" },
+    "claude-opus-5": { "input": 5, "output": 25, "cacheRead": 0.5, "status": "verified" },
+    "claude-opus-4-8": {
+      "input": 5,
+      "output": 25,
+      "cacheRead": 0.5,
+      "status": "assumed",
+      "note": "cache read assumed"
+    },
+    "claude-opus-4-7": {
+      "input": 5,
+      "output": 25,
+      "cacheRead": 0.5,
+      "status": "assumed",
+      "note": "cache read assumed"
+    },
+    "claude-opus-4-6": {
+      "input": 5,
+      "output": 25,
+      "cacheRead": 0.5,
+      "status": "assumed",
+      "note": "cache read assumed"
+    },
+    "claude-sonnet-5-5": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.2,
+      "status": "assumed",
+      "note": "cache read from docs, not verified against cost-state"
+    },
+    "claude-sonnet-5": { "input": 2, "output": 10, "cacheRead": 0.2, "status": "verified" },
+    "claude-sonnet-4-6": {
+      "input": 3,
+      "output": 15,
+      "cacheRead": 0.3,
+      "status": "assumed",
+      "note": "cache read assumed"
+    },
+    "claude-haiku-4-5-20251001": {
+      "input": 1,
+      "output": 5,
+      "cacheRead": 0.1,
+      "status": "verified",
+      "note": "input/output verified, cache read assumed"
+    }
+  }
+}

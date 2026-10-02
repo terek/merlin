@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-nest/-home-dev-acme-nest-inner/22222222-0000-4000-8000-000000000002.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-nest/-home-dev-acme-nest-inner/22222222-0000-4000-8000-000000000002/subagents/agent-a22e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-nest/-home-dev-acme-nest-inner/22222222-0000-4000-8000-000000000002/subagents/agent-a22e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "22222222-0000-4000-8000-000000000002",
+  "projectKey": "-home-dev-acme-nest",
+  "project": "/home/dev/acme/nest/inner",
+  "cwd": "/home/dev/acme/nest/inner",
+  "cwds": [
+    "/home/dev/acme/nest/inner"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "inner session in a nested project directory",
+  "startedAt": "2026-09-22T10:00:00Z",
+  "lastActivityAt": "2026-09-22T10:00:14Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 3,
+    "toolCalls": 1,
+    "toolsByName": {
+      "Agent": 1
+    }
+  },
+  "cost": {
+    "usd": 0.014100000000000001,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1600,
+        "output": 110,
+        "cacheRead": 2000,
+        "cacheWrite5m": 400,
+        "cacheWrite1h": 2100,
+        "usd": 0.014100000000000001
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "22020000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-22T10:00:00Z",
+      "endedAt": "2026-09-22T10:00:14Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "inner session in a nested project directory",
+      "finalText": "Inner done",
+      "assistantMessages": 2,
+      "toolCalls": 1,
+      "toolsByName": {
+        "Agent": 1
+      },
+      "contextTokens": 2200,
+      "cost": {
+        "usd": 0.0119,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 90,
+            "cacheRead": 2000,
+            "cacheWrite1h": 2100,
+            "usd": 0.0119
+          }
+        }
+      },
+      "costWithAgents": 0.014100000000000001,
+      "spawned": [
+        "a22e0c0de0000001"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "a22e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Inner helper",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_nest22_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "meta",
+      "startedAt": "2026-09-22T10:00:05Z",
+      "endedAt": "2026-09-22T10:00:07Z",
+      "status": "completed",
+      "prompt": "Say hello from the inner project.",
+      "finalText": "Hello from the inner project.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0022,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 500,
+            "output": 20,
+            "cacheWrite5m": 400,
+            "usd": 0.0022
+          }
+        }
+      },
+      "subtreeUSD": 0.0022
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_nest22_02",
+      "at": "2026-09-22T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0106,
+      "input": 1000,
+      "output": 60,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_nest22_a1",
+      "at": "2026-09-22T10:00:07Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a22e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0022,
+      "input": 500,
+      "output": 20,
+      "cacheWrite5m": 400
+    },
+    {
+      "id": "msg_nest22_03",
+      "at": "2026-09-22T10:00:12Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0013,
+      "input": 100,
+      "output": 30,
+      "cacheRead": 2000,
+      "cacheWrite1h": 100
+    }
+  ],
+  "diagnostics": {}
+}

@@ -1,0 +1,7 @@
+{
+  "agentType": "Explore",
+  "description": "Find login validation",
+  "toolUseId": "toolu_sync_01",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

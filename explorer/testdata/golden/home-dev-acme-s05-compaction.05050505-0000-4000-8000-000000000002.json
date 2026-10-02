@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000002.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "05050505-0000-4000-8000-000000000002",
+  "projectKey": "-home-dev-acme-s05-compaction",
+  "project": "/home/dev/acme/s05-compaction",
+  "cwd": "/home/dev/acme/s05-compaction",
+  "cwds": [
+    "/home/dev/acme/s05-compaction"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "continue with the repository layer",
+  "startedAt": "2026-09-05T10:00:00Z",
+  "lastActivityAt": "2026-09-05T10:00:08Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 1,
+    "toolCalls": 0
+  },
+  "cost": {
+    "usd": 0.0056,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 500,
+        "output": 60,
+        "cacheWrite1h": 1000,
+        "usd": 0.0056
+      }
+    }
+  },
+  "compactions": [
+    {
+      "at": "2026-09-05T10:00:00Z",
+      "turn": -1,
+      "trigger": "manual",
+      "preTokens": 70000,
+      "postTokens": 9000,
+      "durationMs": 4000,
+      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nA repository layer was planned in an earlier session."
+    }
+  ],
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 1,
+      "uuid": "05020000-0000-4000-9000-000000000003",
+      "startedAt": "2026-09-05T10:00:04Z",
+      "endedAt": "2026-09-05T10:00:08Z",
+      "durationMs": 3000,
+      "origin": "human",
+      "userText": "continue with the repository layer",
+      "finalText": "Repository layer continued",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 1500,
+      "cost": {
+        "usd": 0.0056,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 500,
+            "output": 60,
+            "cacheWrite1h": 1000,
+            "usd": 0.0056
+          }
+        }
+      },
+      "costWithAgents": 0.0056
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_cmpb_01",
+      "at": "2026-09-05T10:00:06Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0056,
+      "input": 500,
+      "output": 60,
+      "cacheWrite1h": 1000
+    }
+  ],
+  "diagnostics": {}
+}

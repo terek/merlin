@@ -1,0 +1,36 @@
+scaffold the app
+  id         14141414-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/rewind   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 14 06:00 → Sep 14 06:00  (48s)
+  turns      6 turns · 6 assistant messages · 2 tool calls
+
+Cost    ≈$0.020   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.020   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.020
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 14 06:00  human                 $0.011  5s
+     > scaffold the app
+     < Scaffolded
+  #1   Sep 14 06:00  human                $0.0018  4s  [abandoned branch]
+     > add a settings page
+     < Settings page added
+  #2   Sep 14 06:00  human                $0.0018  4s
+     > add a profile page instead
+     < Profile page added
+  #3   Sep 14 06:00  human                     $0  [abandoned branch]
+     > add dark mode
+  #4   Sep 14 06:00  human                $0.0019  4s
+     > add light mode
+     < Light mode added
+  #5   Sep 14 06:00  human                $0.0036  6s
+     > rename both config files
+     < Both config files renamed
+
+Resume
+  cd /home/dev/acme/rewind && claude --resume 14141414-0000-4000-8000-000000000001

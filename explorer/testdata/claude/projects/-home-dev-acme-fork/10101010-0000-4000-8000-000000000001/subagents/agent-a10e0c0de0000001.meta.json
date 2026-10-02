@@ -1,0 +1,8 @@
+{
+  "agentType": "fork",
+  "isFork": true,
+  "description": "Evaluate sqlite",
+  "toolUseId": "toolu_fork_01",
+  "spawnDepth": 1,
+  "model": "inherit"
+}

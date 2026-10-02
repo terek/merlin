@@ -1,0 +1,6 @@
+{
+  "agentType": "general-purpose",
+  "description": "List config files",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

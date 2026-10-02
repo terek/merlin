@@ -1,0 +1,8 @@
+Cost by kind  (all time)
+KIND                 SESSIONS    COST  REPORTED  ATTRIBUTED
+interactive                34  $0.617    $0.117      $0.500
+sdk (scripted runs)         1  $0.014    $0.014          $0
+TOTAL                      35  $0.631    $0.131      $0.500
+
+Of $0.631: $0.131 (21%) is Claude Code's own reported figure; $0.500 (79%) is recomputed from tokens where it reported nothing.
+Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

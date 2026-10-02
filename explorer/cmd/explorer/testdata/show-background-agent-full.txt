@@ -1,0 +1,37 @@
+run the slow audit in the background
+  id         07070707-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/subbg   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 7 06:00 → Sep 7 06:02  (2m10s)
+  turns      3 turns · 6 assistant messages · 2 tool calls · 1 agent
+
+Cost    ≈$0.024   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.024   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.024
+
+Agents  (1 agent; own cost is attributed from tokens)
+  AGENT                           KIND           MODEL   STATUS         OWN  WITH SUBTREE
+  └─ general-purpose · Run audit  subagent (bg)  sonnet  completed  $0.0092
+
+Timeline  (turns numbered from 0; > prompt, < final text)
+  #0   Sep 7 06:00   human                 $0.021  5s  [+1 agent]
+     > run the slow audit in the background
+     < The audit is running in the background.
+  #1   Sep 7 06:02   task-notification    $0.0014  4s
+     > <task-notification>
+       <task-id>a07e0c0de0000001</task-id>
+       <status>completed</status>
+       <summary>Agent "Run audit" completed</summary>
+       <result>Audit complete: 2 issues.</result>
+       </task-notification>
+     < The audit found 2 issues.
+  #2   Sep 7 06:02   human                $0.0014  4s
+     > fix the first issue
+     < Fixed the first issue
+
+Resume
+  cd /home/dev/acme/subbg && claude --resume 07070707-0000-4000-8000-000000000001

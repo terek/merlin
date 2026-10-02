@@ -1,0 +1,11 @@
+{
+  "pid": 4242,
+  "sessionId": "01010101-0000-4000-8000-000000000001",
+  "cwd": "/home/dev/acme/plain",
+  "startedAt": 1788256800000,
+  "kind": "interactive",
+  "entrypoint": "cli",
+  "name": "plain",
+  "status": "busy",
+  "updatedAt": 1788256860000
+}

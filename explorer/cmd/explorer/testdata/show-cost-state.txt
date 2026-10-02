@@ -1,0 +1,40 @@
+plan the billing module
+  id         16161616-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/coststate   branch main
+  kind       interactive · Claude Code 2.1.280
+  when       Sep 16 06:00 → Sep 16 07:00  (1h00m)
+  turns      3 turns · 6 assistant messages · 2 tool calls · 1 agent
+  lines      +10 −2
+
+Cost    $0.117   exact: Claude Code's own figure; nothing lies outside its windows
+  reported        $0.117   Claude Code's own figure, 1 window
+                  $0.117     Sep 16 06:00 → Sep 16 07:00
+  attributed      $0.116   recomputed from tokens, messages this session owns
+  overhead       $0.0015   reported but not in the transcript (inside windows)
+  outside             $0   outside every window, recomputed; added to the total
+
+  by model
+  MODEL               REPORTED  ATTRIBUTED
+  opus-5-5              $0.052      $0.052
+  fable-5-1             $0.051      $0.051
+  sonnet-5-5           $0.0081     $0.0081
+  haiku-4-5-20251001   $0.0063     $0.0047
+
+Agents  (1 agent; own cost is attributed from tokens)
+  AGENT                                 KIND      MODEL  STATUS         OWN  WITH SUBTREE
+  └─ general-purpose · Check tax rules  subagent  haiku  completed  $0.0047
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 16 06:00  human                 $0.052  9s
+     > plan the billing module
+     < Plan: invoices, totals, tax.
+  #1   Sep 16 07:00  human                 $0.013  12s  [+1 agent]
+     > implement the invoice totals
+     < Invoice totals implemented
+  #2   Sep 16 07:00  human                 $0.051  7s
+     > review the invoice totals
+     < Review: totals look correct.
+
+Resume
+  cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001

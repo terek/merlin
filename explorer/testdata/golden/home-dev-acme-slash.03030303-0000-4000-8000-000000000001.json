@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-slash/03030303-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "03030303-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-slash",
+  "project": "/home/dev/acme/slash",
+  "cwd": "/home/dev/acme/slash",
+  "cwds": [
+    "/home/dev/acme/slash"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.150"
+  ],
+  "kind": "interactive",
+  "title": "My logout work",
+  "startedAt": "2026-09-03T10:00:00Z",
+  "lastActivityAt": "2026-09-03T10:00:20Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 4,
+    "turns": 4,
+    "assistantMessages": 2,
+    "toolCalls": 0
+  },
+  "cost": {
+    "usd": 0.0132,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 1100,
+        "output": 140,
+        "cacheRead": 2000,
+        "cacheWrite1h": 2300,
+        "usd": 0.0132
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "03010000-0000-4000-9000-000000000002",
+      "startedAt": "2026-09-03T10:00:02Z",
+      "endedAt": "2026-09-03T10:00:04Z",
+      "durationMs": 2000,
+      "origin": "command",
+      "userText": "/model sonnet",
+      "command": "model",
+      "assistantMessages": 0,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0
+      },
+      "costWithAgents": 0
+    },
+    {
+      "index": 1,
+      "epoch": 0,
+      "uuid": "03010000-0000-4000-9000-000000000004",
+      "startedAt": "2026-09-03T10:00:06Z",
+      "endedAt": "2026-09-03T10:00:10Z",
+      "durationMs": 5000,
+      "origin": "human",
+      "userText": "add a logout button",
+      "finalText": "Added the logout button.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 3000,
+      "cost": {
+        "usd": 0.0108,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 80,
+            "cacheWrite1h": 2000,
+            "usd": 0.0108
+          }
+        }
+      },
+      "costWithAgents": 0.0108
+    },
+    {
+      "index": 2,
+      "epoch": 0,
+      "uuid": "03010000-0000-4000-9000-000000000007",
+      "startedAt": "2026-09-03T10:00:12Z",
+      "endedAt": "2026-09-03T10:00:16Z",
+      "durationMs": 4000,
+      "origin": "command",
+      "userText": "/review the login page",
+      "command": "review",
+      "finalText": "Review: the login page looks fine.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "contextTokens": 2400,
+      "cost": {
+        "usd": 0.0024,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 100,
+            "output": 60,
+            "cacheRead": 2000,
+            "cacheWrite1h": 300,
+            "usd": 0.0024
+          }
+        }
+      },
+      "costWithAgents": 0.0024
+    },
+    {
+      "index": 3,
+      "epoch": 0,
+      "uuid": "03010000-0000-4000-9000-000000000010",
+      "startedAt": "2026-09-03T10:00:18Z",
+      "endedAt": "2026-09-03T10:00:20Z",
+      "durationMs": 2000,
+      "origin": "command",
+      "userText": "!ls src",
+      "command": "!",
+      "assistantMessages": 0,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0
+      },
+      "costWithAgents": 0
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_slash_01",
+      "at": "2026-09-03T10:00:08Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 1,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_slash_02",
+      "at": "2026-09-03T10:00:14Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 2,
+      "usd": 0.0024,
+      "input": 100,
+      "output": 60,
+      "cacheRead": 2000,
+      "cacheWrite1h": 300
+    }
+  ],
+  "diagnostics": {}
+}

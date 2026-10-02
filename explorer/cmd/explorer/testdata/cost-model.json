@@ -1,0 +1,60 @@
+{
+  "by": "model",
+  "rows": [
+    {
+      "key": "claude-sonnet-5-5",
+      "sessions": 35,
+      "totalUSD": 0.4949100000000002,
+      "reportedUSD": 0.020499999999999997,
+      "attributedUSD": 0.47441000000000016
+    },
+    {
+      "key": "claude-opus-5-5",
+      "sessions": 2,
+      "totalUSD": 0.07680000000000001,
+      "reportedUSD": 0.0516,
+      "attributedUSD": 0.0252
+    },
+    {
+      "key": "claude-fable-5-1",
+      "sessions": 1,
+      "totalUSD": 0.05125,
+      "reportedUSD": 0.05125,
+      "attributedUSD": 0
+    },
+    {
+      "key": "claude-haiku-4-5-20251001",
+      "sessions": 1,
+      "totalUSD": 0.00475,
+      "reportedUSD": 0.00475,
+      "attributedUSD": 0
+    },
+    {
+      "key": "(overhead)",
+      "label": "overhead: reported, in no transcript",
+      "sessions": 2,
+      "totalUSD": 0.003000000000000001,
+      "reportedUSD": 0.003000000000000001,
+      "attributedUSD": 0
+    },
+    {
+      "key": "claude-nova-9-9",
+      "sessions": 1,
+      "totalUSD": 0,
+      "reportedUSD": 0,
+      "attributedUSD": 0
+    }
+  ],
+  "total": {
+    "totalUSD": 0.6307099999999998,
+    "reportedUSD": 0.1311,
+    "attributedUSD": 0.49961000000000017
+  },
+  "sessions": 35,
+  "backing": {
+    "exact": 1,
+    "partial": 0,
+    "estimated": 33,
+    "scriptedRuns": 1
+  }
+}

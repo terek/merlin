@@ -1,0 +1,7 @@
+{
+  "agentType": "general-purpose",
+  "description": "Audit modules",
+  "toolUseId": "toolu_cmpd_01",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

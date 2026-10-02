@@ -1,0 +1,33 @@
+add a reset button
+  id         13131313-0000-4000-8000-000000000008
+  state      clean
+  project    /home/dev/acme/s13d-partial-copy   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 13 06:00 → Sep 13 06:05  (5m13s)
+  turns      2 turns (1 inherited, 1 own) · 2 assistant messages · 0 tool calls · 1 compaction
+  lineage    ↳ continues 13131313-0000-4000-8000-000000000007 “add a search box”, after its turn 2 (1 message shared)
+
+Cost    ≈$0.0016   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed     $0.0016   recomputed from tokens, messages this session owns
+  inherited      $0.0015   NOT counted: 1 message paid for by 13131313-0000-4000-8000-000000000007 $0.0015
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5     $0.0016
+
+Family  (2 sessions that share history; leaves are the ones to resume, newest first: 13131313-0000-4000-8000-000000000008)
+  13131313-0000-4000-8000-000000000007  Sep 13 06:00  root  ≈$0.017  add a search box
+    13131313-0000-4000-8000-000000000008  Sep 13 06:05  continuation after turn 2  ≈$0.0016  add a reset button  ◀ this session, leaf, newest
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+   ── compaction 1 · Sep 13 06:00 · auto · 120k → 8k tokens · took 6s ──
+     | This session is being continued from a previous conversation that ran out of context.
+       Summary:
+       The search box was added and styled in session A.
+  turn 0 inherited from 13131313-0000-4000-8000-000000000007 “add a search box”  (1 turn, not counted here; --inherited shows them)
+  #1   Sep 13 06:05  human                $0.0016  3s
+     > add a disabled state
+     < Disabled state added
+
+Resume
+  cd /home/dev/acme/s13d-partial-copy && claude --resume 13131313-0000-4000-8000-000000000008

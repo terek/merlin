@@ -1,0 +1,33 @@
+Usage: explorer sessions [--project P] [--kind interactive|background] [--since D] [--limit N] [--json]
+
+One line per session, newest first: which one to resume.
+
+  ID       shortest unique prefix of the session id (at least 8 characters);
+           'explorer show' accepts it
+  WHEN     last activity, local time (relative when recent)
+  PROJECT  last element of the directory the session was started in
+  TITLE    custom title, else Claude Code's title, else the first prompt
+  TURNS    prompts in the session (turns copied from another session included)
+  AGENTS   subagents and teammates it started
+  COST     what the session cost, subagents included, not counting history
+           that another session already paid for
+             $1.20    exact: Claude Code's own figure for the whole session
+             $1.20*   partial: some spend lies outside the windows Claude Code
+                      reported and is recomputed from tokens
+             ≈$1.20   estimated: Claude Code reported nothing, so the figure is
+                      recomputed from tokens
+  STATE    running (busy|idle), else how the last turn ended:
+           clean, interrupted, mid-turn
+  LINEAGE  ↳ fork of X / ↳ continues X: this session starts with a copy of X
+           → continued in Y / → forked to Y: Y starts with a copy of this one;
+           resume the newest one
+
+Scripted runs (one-shot 'claude -p' calls) never appear individually; they are
+summed per project and day in a section below the list.
+
+Flags:
+  --project P   a project path, or its last element(s): 'app' or 'acme/app'
+  --kind K      interactive or background
+  --since D     last activity within D: 90m, 36h, 7d, 2w, or a date 2026-09-01
+  --limit N     show at most N sessions (default 40; 0 = all)
+  --json        machine-readable output

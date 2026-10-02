@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": 2,
+  "source": [
+    {
+      "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001/subagents/agent-a11e0c0de0000001.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001/subagents/agent-a11e0c0de0000001.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001/subagents/agent-a11e0c0de0000002.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001/subagents/agent-a11e0c0de0000002.meta.json",
+      "size": 0,
+      "mtimeNs": 0
+    },
+    {
+      "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001/subagents/agent-a11e0c0de0000003.jsonl",
+      "size": 0,
+      "mtimeNs": 0
+    }
+  ],
+  "harness": "claude",
+  "id": "11111111-0000-4000-8000-000000000001",
+  "projectKey": "-home-dev-acme-linkage",
+  "project": "/home/dev/acme/linkage",
+  "cwd": "/home/dev/acme/linkage",
+  "cwds": [
+    "/home/dev/acme/linkage"
+  ],
+  "gitBranches": [
+    "main"
+  ],
+  "harnessVersions": [
+    "2.1.200"
+  ],
+  "kind": "interactive",
+  "title": "check three things in parallel",
+  "startedAt": "2026-09-11T10:00:00Z",
+  "lastActivityAt": "2026-09-11T10:00:18Z",
+  "endState": "clean",
+  "lineage": {},
+  "stats": {
+    "humanTurns": 1,
+    "turns": 1,
+    "assistantMessages": 5,
+    "toolCalls": 2,
+    "toolsByName": {
+      "Agent": 2
+    }
+  },
+  "cost": {
+    "usd": 0.025560000000000003,
+    "byModel": {
+      "claude-sonnet-5-5": {
+        "input": 4100,
+        "output": 210,
+        "cacheRead": 2300,
+        "cacheWrite5m": 2400,
+        "cacheWrite1h": 2200,
+        "usd": 0.025560000000000003
+      }
+    }
+  },
+  "turns": [
+    {
+      "index": 0,
+      "epoch": 0,
+      "uuid": "11010000-0000-4000-9000-000000000001",
+      "startedAt": "2026-09-11T10:00:00Z",
+      "endedAt": "2026-09-11T10:00:18Z",
+      "durationMs": 15000,
+      "origin": "human",
+      "userText": "check three things in parallel",
+      "finalText": "Entry point is main.ts; two config files.",
+      "assistantMessages": 2,
+      "toolCalls": 2,
+      "toolsByName": {
+        "Agent": 2
+      },
+      "contextTokens": 2600,
+      "cost": {
+        "usd": 0.012660000000000001,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1100,
+            "output": 120,
+            "cacheRead": 2300,
+            "cacheWrite1h": 2200,
+            "usd": 0.012660000000000001
+          }
+        }
+      },
+      "costWithAgents": 0.021360000000000004,
+      "spawned": [
+        "a11e0c0de0000001",
+        "a11e0c0de0000002"
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "a11e0c0de0000001",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "Find entry point",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_link_01",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "tool-result",
+      "startedAt": "2026-09-11T10:00:07Z",
+      "endedAt": "2026-09-11T10:00:09Z",
+      "status": "completed",
+      "prompt": "Context: the repo is small. Find the entry point.",
+      "finalText": "The entry point is main.ts.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0043,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 30,
+            "cacheWrite5m": 800,
+            "usd": 0.0043
+          }
+        }
+      },
+      "subtreeUSD": 0.0043
+    },
+    {
+      "id": "a11e0c0de0000002",
+      "kind": "subagent",
+      "agentType": "general-purpose",
+      "description": "List config files",
+      "model": "sonnet",
+      "parentAgentId": null,
+      "spawnToolUseId": "toolu_link_02",
+      "spawnTurn": 0,
+      "depth": 1,
+      "linkage": "prompt",
+      "startedAt": "2026-09-11T10:00:07Z",
+      "endedAt": "2026-09-11T10:00:09Z",
+      "status": "completed",
+      "prompt": "List the config files.",
+      "finalText": "Config files: tsconfig.json, package.json.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0044,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 40,
+            "cacheWrite5m": 800,
+            "usd": 0.0044
+          }
+        }
+      },
+      "subtreeUSD": 0.0044
+    },
+    {
+      "id": "a11e0c0de0000003",
+      "kind": "subagent",
+      "model": "claude-sonnet-5-5",
+      "parentAgentId": null,
+      "depth": 1,
+      "linkage": "unresolved",
+      "startedAt": "2026-09-11T10:00:07Z",
+      "endedAt": "2026-09-11T10:00:09Z",
+      "status": "completed",
+      "prompt": "Unrelated housekeeping task nobody asked for.",
+      "finalText": "Housekeeping finished.",
+      "assistantMessages": 1,
+      "toolCalls": 0,
+      "cost": {
+        "usd": 0.0042,
+        "byModel": {
+          "claude-sonnet-5-5": {
+            "input": 1000,
+            "output": 20,
+            "cacheWrite5m": 800,
+            "usd": 0.0042
+          }
+        }
+      },
+      "subtreeUSD": 0.0042
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_link_01",
+      "at": "2026-09-11T10:00:02Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.0108,
+      "input": 1000,
+      "output": 80,
+      "cacheWrite1h": 2000
+    },
+    {
+      "id": "msg_link_a1",
+      "at": "2026-09-11T10:00:09Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a11e0c0de0000001",
+      "turn": 0,
+      "usd": 0.0043,
+      "input": 1000,
+      "output": 30,
+      "cacheWrite5m": 800
+    },
+    {
+      "id": "msg_link_a2",
+      "at": "2026-09-11T10:00:09Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a11e0c0de0000002",
+      "turn": 0,
+      "usd": 0.0044,
+      "input": 1000,
+      "output": 40,
+      "cacheWrite5m": 800
+    },
+    {
+      "id": "msg_link_a3",
+      "at": "2026-09-11T10:00:09Z",
+      "model": "claude-sonnet-5-5",
+      "agentId": "a11e0c0de0000003",
+      "usd": 0.0042,
+      "input": 1000,
+      "output": 20,
+      "cacheWrite5m": 800
+    },
+    {
+      "id": "msg_link_02",
+      "at": "2026-09-11T10:00:16Z",
+      "model": "claude-sonnet-5-5",
+      "turn": 0,
+      "usd": 0.00186,
+      "input": 100,
+      "output": 40,
+      "cacheRead": 2300,
+      "cacheWrite1h": 200
+    }
+  ],
+  "diagnostics": {
+    "unresolvedAgents": 1
+  }
+}

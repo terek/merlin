@@ -1,0 +1,7 @@
+{
+  "agentType": "general-purpose",
+  "description": "Check tax rules",
+  "toolUseId": "toolu_cs_02",
+  "spawnDepth": 1,
+  "model": "haiku"
+}

@@ -1,0 +1,12 @@
+Cost by model  (all time)
+MODEL                                 SESSIONS     COST  REPORTED  ATTRIBUTED
+claude-sonnet-5-5                           35   $0.495    $0.020      $0.474
+claude-opus-5-5                              2   $0.077    $0.052      $0.025
+claude-fable-5-1                             1   $0.051    $0.051          $0
+claude-haiku-4-5-20251001                    1  $0.0047   $0.0047          $0
+overhead: reported, in no transcript         2  $0.0030   $0.0030          $0
+claude-nova-9-9                              1       $0        $0          $0
+TOTAL                                       35   $0.631    $0.131      $0.500
+
+Of $0.631: $0.131 (21%) is Claude Code's own reported figure; $0.500 (79%) is recomputed from tokens where it reported nothing.
+Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

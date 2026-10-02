@@ -1,0 +1,12 @@
+Cost by session  (sessions active since Sep 17 18:00)
+ID                                    WHEN             PROJECT    TITLE                                           COST  REPORTED  ATTRIBUTED
+20202020                              Sep 20 06:00     pricing    estimate the build cost                      ≈$0.027        $0      $0.027
+19191919                              Sep 19 00:05     daybound   add a footer                                 ≈$0.017        $0      $0.017
+22222222-0000-4000-8000-000000000002  today 06:00      inner      inner session in a nested project directory  ≈$0.014        $0      $0.014
+18181818                              Sep 18 06:00     cwdchange  start the feature                            ≈$0.014        $0      $0.014
+21212121                              yesterday 06:00  misc       write the changelog                          ≈$0.011        $0      $0.011
+22222222-0000-4000-8000-000000000001  today 06:00      nest       outer session in the nest project            ≈$0.011        $0      $0.011
+TOTAL                                                             6 sessions                                    $0.092        $0      $0.092
+
+Of $0.092: $0 (0%) is Claude Code's own reported figure; $0.092 (100%) is recomputed from tokens where it reported nothing.
+Sessions: 0 exact, 0 partial, 6 estimated  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

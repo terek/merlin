@@ -1,0 +1,33 @@
+set up the database layer
+  id         05050505-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/s05-compaction   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 5 06:00 → Sep 5 06:00  (36s)
+  turns      4 turns · 5 assistant messages · 1 tool call · 2 compactions
+
+Cost    ≈$0.018   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.018   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.018
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 5 06:00   human                 $0.014  6s
+     > set up the database layer
+     < Database layer created
+  #1   Sep 5 06:00   human                $0.0015  4s
+     > add migrations
+     < Migrations added
+   ── compaction 1 · Sep 5 06:00 · auto · 150k → 12k tokens · took 8s ──
+  #2   Sep 5 06:00   human                $0.0012  3s
+     > add seed data
+     < Seed data added
+   ── compaction 2 · Sep 5 06:00 · manual · 90k tokens · took 5s ──
+  #3   Sep 5 06:00   human                $0.0013  3s
+     > add an index on email
+     < Index added
+
+Resume
+  cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000001

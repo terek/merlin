@@ -1,0 +1,7 @@
+{
+  "agentType": "general-purpose",
+  "description": "Inner helper",
+  "toolUseId": "toolu_nest22_01",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

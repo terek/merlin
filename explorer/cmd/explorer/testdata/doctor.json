@@ -1,0 +1,91 @@
+{
+  "home": "$EXPLORER_HOME",
+  "digests": 35,
+  "sessions": 35,
+  "interactive": 34,
+  "background": 0,
+  "scripted": 1,
+  "sourceMissing": [],
+  "errorStubs": [],
+  "drift": [
+    {
+      "version": "2.1.71",
+      "sessions": 1,
+      "badLines": 0
+    },
+    {
+      "version": "2.1.150",
+      "sessions": 1,
+      "badLines": 0
+    },
+    {
+      "version": "2.1.200",
+      "sessions": 31,
+      "badLines": 1,
+      "unknownTypes": {
+        "hologram-state": 1
+      }
+    },
+    {
+      "version": "2.1.280",
+      "sessions": 2,
+      "badLines": 0
+    }
+  ],
+  "unpricedModels": {
+    "claude-nova-9-9": 1
+  },
+  "unresolvedAgents": 4,
+  "unresolvedAgentsIn": ["11111111-0000-4000-8000-000000000001", "12121212-0000-4000-8000-000000000001"],
+  "catalog": {
+    "Sessions": 35,
+    "Stubs": 0,
+    "Scripted": 1,
+    "Messages": 124,
+    "SharedMessages": 13,
+    "Links": 5,
+    "CycleBreaks": 0,
+    "SharedWindows": 0,
+    "OverheadClamped": 0,
+    "ReportedUSD": 0.1311,
+    "CoveredUSD": 0.1281,
+    "BestUSD": 0.6307100000000001,
+    "SessionsUncover": 0,
+    "SessionsEstimate": 33
+  },
+  "sessionsWithWindows": 2,
+  "reportedUSD": 0.1311,
+  "coveredUSD": 0.1281,
+  "coveredRatio": 0.977116704805492,
+  "ratioDistribution": {
+    "min": 0.8920863309352518,
+    "p10": 0.8920863309352518,
+    "median": 0.8920863309352518,
+    "p90": 0.9872013651877133,
+    "max": 0.9872013651877133
+  },
+  "largestGapsReportedAbove": [
+    {
+      "id": "16161616-0000-4000-8000-000000000001",
+      "title": "plan the billing module",
+      "project": "/home/dev/acme/coststate",
+      "reportedUSD": 0.1172,
+      "coveredUSD": 0.1157,
+      "gapUSD": 0.0015000000000000013,
+      "ratio": 0.9872013651877133
+    },
+    {
+      "id": "15151515-0000-4000-8000-000000000001",
+      "title": "summarize README.md",
+      "project": "/home/dev/acme/sdk",
+      "reportedUSD": 0.0139,
+      "coveredUSD": 0.0124,
+      "gapUSD": 0.0014999999999999996,
+      "ratio": 0.8920863309352518
+    }
+  ],
+  "largestGapsTranscriptAbove": [],
+  "uncoveredUSD": 0,
+  "estimatedUSD": 0.49961000000000017,
+  "largestSpendOutsideWindows": []
+}

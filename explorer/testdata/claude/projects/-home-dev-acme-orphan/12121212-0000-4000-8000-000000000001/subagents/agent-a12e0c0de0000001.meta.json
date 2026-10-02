@@ -1,0 +1,7 @@
+{
+  "agentType": "general-purpose",
+  "description": "Scan TODOs",
+  "toolUseId": "toolu_orph_missing",
+  "spawnDepth": 1,
+  "model": "sonnet"
+}

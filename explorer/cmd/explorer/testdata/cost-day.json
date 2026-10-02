@@ -1,0 +1,171 @@
+{
+  "by": "day",
+  "rows": [
+    {
+      "key": "2026-09-22",
+      "sessions": 2,
+      "totalUSD": 0.024600000000000004,
+      "reportedUSD": 0,
+      "attributedUSD": 0.024600000000000004
+    },
+    {
+      "key": "2026-09-21",
+      "sessions": 1,
+      "totalUSD": 0.0105,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0105
+    },
+    {
+      "key": "2026-09-20",
+      "sessions": 1,
+      "totalUSD": 0.0267,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0267
+    },
+    {
+      "key": "2026-09-19",
+      "sessions": 1,
+      "totalUSD": 0.0030800000000000003,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0030800000000000003
+    },
+    {
+      "key": "2026-09-18",
+      "sessions": 2,
+      "totalUSD": 0.02724,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02724
+    },
+    {
+      "key": "2026-09-17",
+      "sessions": 1,
+      "totalUSD": 0.01394,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01394
+    },
+    {
+      "key": "2026-09-16",
+      "sessions": 1,
+      "totalUSD": 0.1172,
+      "reportedUSD": 0.1172,
+      "attributedUSD": 0
+    },
+    {
+      "key": "2026-09-15",
+      "sessions": 1,
+      "totalUSD": 0.0139,
+      "reportedUSD": 0.0139,
+      "attributedUSD": 0
+    },
+    {
+      "key": "2026-09-14",
+      "sessions": 1,
+      "totalUSD": 0.01976,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01976
+    },
+    {
+      "key": "2026-09-13",
+      "sessions": 10,
+      "totalUSD": 0.09042,
+      "reportedUSD": 0,
+      "attributedUSD": 0.09042
+    },
+    {
+      "key": "2026-09-12",
+      "sessions": 1,
+      "totalUSD": 0.0131,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0131
+    },
+    {
+      "key": "2026-09-11",
+      "sessions": 1,
+      "totalUSD": 0.02556,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02556
+    },
+    {
+      "key": "2026-09-10",
+      "sessions": 1,
+      "totalUSD": 0.02101,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02101
+    },
+    {
+      "key": "2026-09-09",
+      "sessions": 1,
+      "totalUSD": 0.026250000000000002,
+      "reportedUSD": 0,
+      "attributedUSD": 0.026250000000000002
+    },
+    {
+      "key": "2026-09-08",
+      "sessions": 1,
+      "totalUSD": 0.02622,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02622
+    },
+    {
+      "key": "2026-09-07",
+      "sessions": 1,
+      "totalUSD": 0.02408,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02408
+    },
+    {
+      "key": "2026-09-06",
+      "sessions": 1,
+      "totalUSD": 0.02132,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02132
+    },
+    {
+      "key": "2026-09-05",
+      "sessions": 4,
+      "totalUSD": 0.05766,
+      "reportedUSD": 0,
+      "attributedUSD": 0.05766
+    },
+    {
+      "key": "2026-09-04",
+      "sessions": 1,
+      "totalUSD": 0.020880000000000003,
+      "reportedUSD": 0,
+      "attributedUSD": 0.020880000000000003
+    },
+    {
+      "key": "2026-09-03",
+      "sessions": 1,
+      "totalUSD": 0.0132,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0132
+    },
+    {
+      "key": "2026-09-02",
+      "sessions": 1,
+      "totalUSD": 0.01285,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01285
+    },
+    {
+      "key": "2026-09-01",
+      "sessions": 1,
+      "totalUSD": 0.02124,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02124
+    }
+  ],
+  "total": {
+    "totalUSD": 0.6307099999999998,
+    "reportedUSD": 0.1311,
+    "attributedUSD": 0.49961000000000017
+  },
+  "sessions": 35,
+  "backing": {
+    "exact": 1,
+    "partial": 0,
+    "estimated": 33,
+    "scriptedRuns": 1
+  }
+}

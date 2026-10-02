@@ -1,0 +1,31 @@
+add a search box
+  id         13131313-0000-4000-8000-000000000001
+  state      clean
+  project    /home/dev/acme/s13a-continuation   branch main
+  kind       interactive · Claude Code 2.1.200
+  when       Sep 13 06:00 → Sep 13 06:00  (14s)
+  turns      2 turns · 3 assistant messages · 1 tool call
+  lineage    → continued in 13131313-0000-4000-8000-000000000002 “add a search box”, from this session's turn 1
+
+Cost    ≈$0.016   estimated: Claude Code reported no figure; recomputed from tokens
+  attributed      $0.016   recomputed from tokens, messages this session owns
+
+  by model
+  MODEL       ATTRIBUTED
+  sonnet-5-5      $0.016
+
+Family  (2 sessions that share history; leaves are the ones to resume, newest first: 13131313-0000-4000-8000-000000000002)
+  13131313-0000-4000-8000-000000000001  Sep 13 06:00  root  ≈$0.016  add a search box  ◀ this session
+    13131313-0000-4000-8000-000000000002  Sep 13 06:02  continuation after turn 1  ≈$0.0015  add a search box  leaf, newest
+
+Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+  #0   Sep 13 06:00  human                 $0.014  9s
+     > add a search box
+     < Search box added
+  #1   Sep 13 06:00  human                $0.0015  5s
+     > style the search box
+     < Styled
+
+Resume
+  cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000001
+  note: other sessions start with a copy of this one (13131313-0000-4000-8000-000000000002); the newest may be the one you want

@@ -1,0 +1,5 @@
+Sep 22 06:00 · inner · inner session in a nested project directory   [prompt, turn 0]
+    inner session in a nested project directory
+    cd /home/dev/acme/nest/inner && claude --resume 22222222-0000-4000-8000-000000000002
+
+1 of 1 matches

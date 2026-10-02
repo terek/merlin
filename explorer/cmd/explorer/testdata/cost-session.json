@@ -1,0 +1,332 @@
+{
+  "by": "session",
+  "rows": [
+    {
+      "key": "16161616-0000-4000-8000-000000000001",
+      "label": "plan the billing module",
+      "sessions": 1,
+      "totalUSD": 0.1172,
+      "reportedUSD": 0.1172,
+      "attributedUSD": 0,
+      "flag": "exact"
+    },
+    {
+      "key": "20202020-0000-4000-8000-000000000001",
+      "label": "estimate the build cost",
+      "sessions": 1,
+      "totalUSD": 0.0267,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0267,
+      "flag": "estimated"
+    },
+    {
+      "key": "09090909-0000-4000-8000-000000000001",
+      "label": "ask the reviewer to check the diff",
+      "sessions": 1,
+      "totalUSD": 0.026250000000000002,
+      "reportedUSD": 0,
+      "attributedUSD": 0.026250000000000002,
+      "flag": "estimated"
+    },
+    {
+      "key": "08080808-0000-4000-8000-000000000001",
+      "label": "survey the repo with helpers",
+      "sessions": 1,
+      "totalUSD": 0.02622,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02622,
+      "flag": "estimated"
+    },
+    {
+      "key": "11111111-0000-4000-8000-000000000001",
+      "label": "check three things in parallel",
+      "sessions": 1,
+      "totalUSD": 0.02556,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02556,
+      "flag": "estimated"
+    },
+    {
+      "key": "07070707-0000-4000-8000-000000000001",
+      "label": "run the slow audit in the background",
+      "sessions": 1,
+      "totalUSD": 0.02408,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02408,
+      "flag": "estimated"
+    },
+    {
+      "key": "05050505-0000-4000-8000-000000000004",
+      "label": "audit every module",
+      "sessions": 1,
+      "totalUSD": 0.0222,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0222,
+      "flag": "estimated"
+    },
+    {
+      "key": "06060606-0000-4000-8000-000000000001",
+      "label": "find where logins are validated",
+      "sessions": 1,
+      "totalUSD": 0.02132,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02132,
+      "flag": "estimated"
+    },
+    {
+      "key": "01010101-0000-4000-8000-000000000001",
+      "label": "Add login page",
+      "sessions": 1,
+      "totalUSD": 0.02124,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02124,
+      "flag": "estimated"
+    },
+    {
+      "key": "10101010-0000-4000-8000-000000000001",
+      "label": "compare the storage options",
+      "sessions": 1,
+      "totalUSD": 0.02101,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02101,
+      "flag": "estimated"
+    },
+    {
+      "key": "04040404-0000-4000-8000-000000000001",
+      "label": "refactor the router",
+      "sessions": 1,
+      "totalUSD": 0.020880000000000003,
+      "reportedUSD": 0,
+      "attributedUSD": 0.020880000000000003,
+      "flag": "estimated"
+    },
+    {
+      "key": "14141414-0000-4000-8000-000000000001",
+      "label": "scaffold the app",
+      "sessions": 1,
+      "totalUSD": 0.01976,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01976,
+      "flag": "estimated"
+    },
+    {
+      "key": "05050505-0000-4000-8000-000000000001",
+      "label": "set up the database layer",
+      "sessions": 1,
+      "totalUSD": 0.01796,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01796,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000007",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.01714,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01714,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000003",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.01712,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01712,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000005",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.01712,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01712,
+      "flag": "estimated"
+    },
+    {
+      "key": "19191919-0000-4000-8000-000000000001",
+      "label": "add a footer",
+      "sessions": 1,
+      "totalUSD": 0.01668,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01668,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000001",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.0156,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0156,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000009",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.0156,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0156,
+      "flag": "estimated"
+    },
+    {
+      "key": "22222222-0000-4000-8000-000000000002",
+      "label": "inner session in a nested project directory",
+      "sessions": 1,
+      "totalUSD": 0.014100000000000001,
+      "reportedUSD": 0,
+      "attributedUSD": 0.014100000000000001,
+      "flag": "estimated"
+    },
+    {
+      "key": "17171717-0000-4000-8000-000000000001",
+      "label": "add input validation",
+      "sessions": 1,
+      "totalUSD": 0.01394,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01394,
+      "flag": "estimated"
+    },
+    {
+      "key": "scripted:/home/dev/acme/sdk",
+      "label": "scripted runs",
+      "sessions": 1,
+      "totalUSD": 0.0139,
+      "reportedUSD": 0.0139,
+      "attributedUSD": 0,
+      "flag": "exact"
+    },
+    {
+      "key": "18181818-0000-4000-8000-000000000001",
+      "label": "start the feature",
+      "sessions": 1,
+      "totalUSD": 0.01364,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01364,
+      "flag": "estimated"
+    },
+    {
+      "key": "03030303-0000-4000-8000-000000000001",
+      "label": "My logout work",
+      "sessions": 1,
+      "totalUSD": 0.0132,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0132,
+      "flag": "estimated"
+    },
+    {
+      "key": "12121212-0000-4000-8000-000000000001",
+      "label": "Scan the repo for TODO comments.",
+      "sessions": 1,
+      "totalUSD": 0.0131,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0131,
+      "flag": "estimated"
+    },
+    {
+      "key": "02020202-0000-4000-8000-000000000001",
+      "label": "list the exported functions in utils.ts",
+      "sessions": 1,
+      "totalUSD": 0.01285,
+      "reportedUSD": 0,
+      "attributedUSD": 0.01285,
+      "flag": "estimated"
+    },
+    {
+      "key": "05050505-0000-4000-8000-000000000003",
+      "label": "add a cache layer",
+      "sessions": 1,
+      "totalUSD": 0.0119,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0119,
+      "flag": "estimated"
+    },
+    {
+      "key": "21212121-0000-4000-8000-000000000001",
+      "label": "write the changelog",
+      "sessions": 1,
+      "totalUSD": 0.0105,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0105,
+      "flag": "estimated"
+    },
+    {
+      "key": "22222222-0000-4000-8000-000000000001",
+      "label": "outer session in the nest project",
+      "sessions": 1,
+      "totalUSD": 0.0105,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0105,
+      "flag": "estimated"
+    },
+    {
+      "key": "05050505-0000-4000-8000-000000000002",
+      "label": "continue with the repository layer",
+      "sessions": 1,
+      "totalUSD": 0.0056,
+      "reportedUSD": 0,
+      "attributedUSD": 0.0056,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000004",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.00162,
+      "reportedUSD": 0,
+      "attributedUSD": 0.00162,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000006",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.00162,
+      "reportedUSD": 0,
+      "attributedUSD": 0.00162,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000008",
+      "label": "add a reset button",
+      "sessions": 1,
+      "totalUSD": 0.00156,
+      "reportedUSD": 0,
+      "attributedUSD": 0.00156,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000002",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.00152,
+      "reportedUSD": 0,
+      "attributedUSD": 0.00152,
+      "flag": "estimated"
+    },
+    {
+      "key": "13131313-0000-4000-8000-000000000010",
+      "label": "add a search box",
+      "sessions": 1,
+      "totalUSD": 0.00152,
+      "reportedUSD": 0,
+      "attributedUSD": 0.00152,
+      "flag": "estimated"
+    }
+  ],
+  "total": {
+    "totalUSD": 0.6307100000000002,
+    "reportedUSD": 0.1311,
+    "attributedUSD": 0.49960999999999994
+  },
+  "sessions": 35,
+  "backing": {
+    "exact": 1,
+    "partial": 0,
+    "estimated": 33,
+    "scriptedRuns": 1
+  }
+}
