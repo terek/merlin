@@ -80,8 +80,8 @@ export function Banners({ detail }: { detail: SessionDetail }) {
         >
           <TriangleAlert size={16} className="mt-px shrink-0" />
           <span>
-            The transcript files of this session are gone. What you see is the digest Explorer kept; it cannot be
-            resumed from here.
+            The transcript files of this session are gone. What you see is the digest Merlin kept; it cannot be resumed
+            from here.
           </span>
         </div>
       )}

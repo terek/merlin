@@ -202,6 +202,8 @@ export interface SessionCost {
   bestUSD: number
   flag: CostFlag
   reportedUSD: number
+  /** Owned messages cut short in the transcript (their attributed cost is a lower bound). */
+  truncatedMessages?: number
   windows?: ReportedWindow[]
   /** Attributed cost of the messages this session owns, agents included. */
   ownUSD: number
@@ -274,6 +276,8 @@ export interface ModelCost extends Tokens {
 export interface Cost {
   usd: number
   byModel?: Record<string, ModelCost>
+  /** Messages cut short in the transcript: their output tokens are a partial count, so usd is a lower bound. */
+  truncatedMessages?: number
 }
 
 export interface Reported {
@@ -291,6 +295,8 @@ export interface Compaction {
   postTokens?: number
   durationMs?: number
   summary?: string
+  /** Byte ranges of the summary that are the harness's fixed wording (search skips them). */
+  boilerplate?: { from: number; to: number }[]
 }
 
 export interface Turn {
@@ -362,6 +368,8 @@ export interface Message extends Tokens {
   agentId?: string
   turn?: number
   usd: number
+  /** Written down before it finished: output tokens are a partial count. */
+  truncated?: boolean
 }
 
 export interface Diagnostics {

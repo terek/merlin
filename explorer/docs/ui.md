@@ -10,7 +10,7 @@ cost, subagents included** (Session, Cost).
 
 | Concern | Choice |
 |---|---|
-| Build | Vite 8 + TypeScript (strict), package manager and runner **bun** (never npm, npx or node) |
+| Build | Vite 8 + `@vitejs/plugin-react` (fast refresh in dev) + TypeScript (strict), package manager and runner **bun** (never npm, npx or node) |
 | UI | React 19, function components, no class components |
 | Routing | `react-router-dom` 7, browser history (the Go handler falls back to `index.html`) |
 | Server state | `@tanstack/react-query` 5; the SSE stream patches or invalidates its cache |
@@ -330,8 +330,11 @@ Where the built UI differs from the sections above:
 - Cost: the range defaults to 7 days; selecting a bar narrows the figures to that day or week and
   keeps the chart; "Top sessions" lists sessions last active in the range with their whole cost,
   which is not the same sum as the other cuts, and says so.
-- Tooling: no React fast refresh in dev (edits reload the page); `?events=off` stops the event
-  stream, which headless screenshots need.
+- Tooling: React fast refresh in dev (`@vitejs/plugin-react`). `web/dev/shot.sh` is a wrapper over
+  `web/dev/shot.ts`, which drives headless Chrome over the DevTools protocol: it captures scrolled
+  deep links and pages with the event stream on, and takes `--wait-for <css>`, `--eval <js>`,
+  `--delay <ms>`. `?events=off` still stops the event stream, but screenshots no longer need it.
+  `MOCK_DAYS=200 bun run mock` stretches the mock's history (default 90).
 
 ## 12. Quality bar
 

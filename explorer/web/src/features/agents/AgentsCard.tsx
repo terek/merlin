@@ -25,6 +25,7 @@ export interface AgentsCardProps {
 
 export function AgentsCard({ detail, selectedAgentId, onSelectAgent, onSelectTurn, initialExpand }: AgentsCardProps) {
   const digest = detail.digest
+  const cutShort = (digest?.agents ?? []).reduce((n, a) => n + (a.cost?.truncatedMessages ?? 0), 0)
   const agents = digest.agents
   const tree = useMemo(() => buildAgentTree(agents ?? []), [agents])
   const stats = useMemo(() => subtreeStats([...tree.roots, ...tree.unresolved]), [tree])
@@ -216,7 +217,9 @@ export function AgentsCard({ detail, selectedAgentId, onSelectAgent, onSelectTur
       </div>
 
       <p className="border-t border-line px-3 py-1.5 text-meta text-faint">
-        Agent cost is recomputed from token counts and is a lower bound.
+        Agent cost is recomputed from token counts.
+        {cutShort > 0 &&
+          ` ${plural(cutShort, 'agent message was', 'agent messages were')} written down before finishing, so it is a lower bound.`}
       </p>
 
       {selected && (

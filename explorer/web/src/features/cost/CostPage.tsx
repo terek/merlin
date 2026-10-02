@@ -206,7 +206,9 @@ export function CostPage() {
                 <CutTable
                   query={byKind}
                   name="Kind"
-                  label={(r) => <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs)' : r.key}</span>}
+                  label={(r) => (
+                    <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
+                  )}
                 />
               </Card>
             </div>

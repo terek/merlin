@@ -46,7 +46,7 @@ export async function get<T>(path: string, params?: Params, signal?: AbortSignal
     res = await fetch(path + buildQuery(params), { headers: { Accept: 'application/json' }, signal })
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') throw e
-    throw new ApiError(0, 'network', 'Cannot reach the Explorer daemon.')
+    throw new ApiError(0, 'network', 'Cannot reach the Merlin daemon.')
   }
   if (res.ok) return (await res.json()) as T
   let body: Partial<ErrorBody> | undefined

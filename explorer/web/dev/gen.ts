@@ -738,6 +738,9 @@ export function messagesOf(d: SessionDigest): Message[] {
 
 // ---- the data set ---------------------------------------------------------------------
 
+/** Days of history; MOCK_DAYS=200 stretches the same sessions over a longer range (default 90). */
+const SPAN_DAYS = Number(process.env.MOCK_DAYS ?? 90) || 90
+
 export function buildDataset(now: number, seed = 20260915): Dataset {
   const r = makeRng(seed)
   const sessions: Sess[] = []
@@ -750,9 +753,9 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
     return x < 0.82 ? 'clean' : x < 0.9 ? 'interrupted' : x < 0.96 ? 'mid-turn' : 'unknown'
   }
 
-  // 1. independent sessions, spread over 90 days with a bias to recent ones
+  // 1. independent sessions, spread over MOCK_DAYS (90) days with a bias to recent ones
   for (let i = 0; i < 424; i++) {
-    const ageDays = r.next() ** 1.6 * 90
+    const ageDays = r.next() ** 1.6 * SPAN_DAYS
     const start = now - ageDays * DAY - r.int(0, 20 * 60) * MIN - 6 * 3600_000
     const turns = r.chance(0.08) ? r.int(1, 2) : r.chance(0.8) ? r.int(2, 14) : r.int(15, 60)
     const kind: SessionKind = r.chance(0.15) ? 'background' : 'interactive'
@@ -956,7 +959,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
 
   // 4. scripted runs: per project and day, about 3,100 in all
   const scripted: ScriptedLine[] = []
-  for (let d = 0; d < 90; d++) {
+  for (let d = 0; d < SPAN_DAYS; d++) {
     const day = new Date(now - d * DAY)
     const label = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
     for (const p of PROJECTS.filter(() => r.chance(0.3))) {

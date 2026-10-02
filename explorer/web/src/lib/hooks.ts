@@ -94,12 +94,12 @@ export function useOverflows(ref: RefObject<HTMLElement | null>, active: boolean
   return over
 }
 
-/** Sets `document.title` to "<title> · Explorer" while the component is mounted. */
+/** Sets `document.title` to "<title> · Merlin" while the component is mounted. */
 export function useDocumentTitle(title: string | undefined) {
   useEffect(() => {
-    document.title = title ? `${title} · Explorer` : 'Explorer'
+    document.title = title ? `${title} · Merlin` : 'Merlin'
     return () => {
-      document.title = 'Explorer'
+      document.title = 'Merlin'
     }
   }, [title])
 }

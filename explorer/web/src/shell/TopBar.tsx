@@ -74,13 +74,13 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-11 items-center gap-6 border-b border-line bg-surface px-4">
-      <Link to="/" className="flex items-center gap-2 font-semibold text-fg hover:no-underline" aria-label="Explorer">
+      <Link to="/" className="flex items-center gap-2 font-semibold text-fg hover:no-underline" aria-label="Merlin">
         <svg width="16" height="16" viewBox="0 0 16 16">
-          <title>Explorer</title>
+          <title>Merlin</title>
           <circle cx="8" cy="8" r="6" fill="none" stroke="var(--accent)" strokeWidth="2" />
           <circle cx="8" cy="8" r="2" fill="var(--accent)" />
         </svg>
-        Explorer
+        Merlin
       </Link>
       <nav className="flex gap-5" aria-label="Main">
         <NavLink to="/" end className={navClass} title="Sessions (g s)">

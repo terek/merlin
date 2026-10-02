@@ -70,8 +70,15 @@ before touching `web/`.
   `CLAUDE_CONFIG_DIR=$PWD/testdata/claude EXPLORER_HOME=<scratch dir> ./bin/merlin serve --no-hooks --port <port>`.
   Start it as a background command and stop it when you are done.
 - **Look at what you build.** `web/dev/shot.sh <url> <out.png> [width] [height]` screenshots a
-  page with headless Chrome; read the PNG. Check both `?theme=light` and `?theme=dark`. Put
-  screenshots in your scratch directory, never in the repository.
+  page with headless Chrome (a wrapper over `web/dev/shot.ts`, DevTools protocol, no dependency);
+  read the PNG. It waits for the network to go idle (the event stream does not count), so
+  scrolled deep links (`#t300`, `#a<id>`) and pages with the event stream on capture fine. Options:
+  `--wait-for <css>`, `--eval <js>` (click or press a key first; awaited, value printed),
+  `--delay <ms>`, `--port <n>` (Chrome debugging port, default 9333). Check both `?theme=light`
+  and `?theme=dark`. Put screenshots in your scratch directory, never in the repository.
+- **Dev server and mock.** `VITE_PORT=<p> EXPLORER_API=http://127.0.0.1:<mock or daemon> bun run dev`
+  has React fast refresh. `MOCK_PORT=<p> bun run mock`; `MOCK_DAYS=200` stretches the mock's
+  history (default 90).
 - **Checks.** `make web-check` (TypeScript, Biome, `bun test`) and `make build` must pass, as well
   as `make test` and `make vet`. The repository's Stop hook formats changed `.ts`/`.tsx`/`.json`
   files with Biome (root `biome.json`: 2 spaces, single quotes, no semicolons, 120 columns), so

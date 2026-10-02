@@ -112,8 +112,8 @@ func plain(w http.ResponseWriter, status int, msg string) {
 }
 
 const notBuiltPage = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Explorer</title></head>
-<body><h1>Explorer</h1>
+<html lang="en"><head><meta charset="utf-8"><title>Merlin</title></head>
+<body><h1>Merlin</h1>
 <p>The web UI is not built into this binary. Run <code>make build</code> in <code>explorer/</code> (it needs bun), or <code>bun run dev</code> in <code>explorer/web</code> for the development server.</p>
 <p>The JSON API is at <code>/api/</code>.</p></body></html>
 `

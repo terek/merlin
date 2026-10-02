@@ -134,8 +134,8 @@ export function SessionPage() {
     return (
       <div className="p-6">
         <EmptyState icon={<SearchX size={24} />} title="No such session" action={<Link to="/">Back to Sessions</Link>}>
-          Explorer has no session with the id <span className="font-mono">{id}</span>. It may have been deleted before
-          it was indexed, or the id is mistyped.
+          Merlin has no session with the id <span className="font-mono">{id}</span>. It may have been deleted before it
+          was indexed, or the id is mistyped.
         </EmptyState>
       </div>
     )
