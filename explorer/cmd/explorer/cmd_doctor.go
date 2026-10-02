@@ -48,6 +48,22 @@ type driftRow struct {
 	UnknownTypes map[string]int64 `json:"unknownTypes,omitempty"`
 }
 
+// gapNoise is how far below zero a gap must be to count: smaller ones are float noise
+// that prints as -$0.0000.
+const gapNoise = 0.005
+
+// coveredAbove picks the sessions whose transcripts add up to more than was reported:
+// the n most negative gaps (gaps is sorted descending), noise excluded.
+func coveredAbove(gaps []gapRow, n int) []gapRow {
+	out := []gapRow{}
+	for i := len(gaps) - 1; i >= 0 && len(out) < n; i-- {
+		if gaps[i].GapUSD < -gapNoise {
+			out = append(out, gaps[i])
+		}
+	}
+	return out
+}
+
 type gapRow struct {
 	ID         string  `json:"id"`
 	Title      string  `json:"title,omitempty"`
@@ -251,11 +267,7 @@ func buildDoctor(w *world) doctorReport {
 			r.ReportedAbove = append(r.ReportedAbove, g)
 		}
 	}
-	for i := len(gaps) - 1; i >= 0 && len(r.CoveredAbove) < 10; i-- {
-		if gaps[i].GapUSD < 0 {
-			r.CoveredAbove = append(r.CoveredAbove, gaps[i])
-		}
-	}
+	r.CoveredAbove = coveredAbove(gaps, 10)
 	sort.SliceStable(outside, func(i, j int) bool {
 		if outside[i].USD != outside[j].USD {
 			return outside[i].USD > outside[j].USD

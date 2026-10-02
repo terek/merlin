@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/terek/merlin/explorer/internal/catalog"
 	"github.com/terek/merlin/explorer/internal/engine"
 	"github.com/terek/merlin/explorer/internal/model"
 )
@@ -43,6 +44,12 @@ func (s *stream) event(name string, data any) error {
 //	session-updated  a digest was written: key and summary
 //	session-missing  a session's files are gone
 //	scan-progress    indexing is under way (throttled; sent when it changes)
+//	session-state    a listed session changed between busy, idle, recent and ended
+//
+// Liveness is looked at every StateInterval. The first look after the stream opens sends
+// nothing, and neither does a session first seen later (its session-updated announces it).
+// A change in the same tick as a pending session-updated is left to that event, which
+// carries the state.
 //
 // plus a comment line every Heartbeat. Events of one session within Coalesce are sent
 // once, with the state after the last of them. The engine is never held up: the bus drops
@@ -92,6 +99,8 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	queued := map[model.SessionKey]pending{}
 	var order []model.SessionKey
+	// states is the liveness last told to the client, by session-updated or session-state.
+	states := map[model.SessionKey]catalog.State{}
 	flush := func() error {
 		cat := a.o.Catalog()
 		keys := order
@@ -111,6 +120,7 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 				err = s.event(EventSessionMissing, SessionMissingEvent{Key: k})
 			} else {
 				state := a.liveness().StateOf(k, in.LastActivityAt)
+				states[k] = state // the update carries the state: no session-state for it
 				err = s.event(EventSessionUpdated, SessionUpdatedEvent{Key: k, Session: summarize(cat, in, state)})
 			}
 			if err != nil {
@@ -120,13 +130,57 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
+	look := func(first bool) error {
+		cat := a.o.Catalog()
+		if cat == nil {
+			return nil
+		}
+		now := cat.States(a.liveness())
+		for k, st := range now {
+			prev, known := states[k]
+			states[k] = st
+			if first || !known || prev == st {
+				continue
+			}
+			if _, pend := queued[k]; pend {
+				continue
+			}
+			if err := s.event(EventSessionState, SessionStateEvent{Key: k, State: st, Previous: prev}); err != nil {
+				return err
+			}
+		}
+		for k := range states {
+			if _, ok := now[k]; !ok {
+				delete(states, k)
+			}
+		}
+		return nil
+	}
+	if look(true) != nil {
+		return
+	}
+
 	heartbeat := time.NewTicker(a.o.Heartbeat)
 	defer heartbeat.Stop()
 	progress := time.NewTicker(a.o.ProgressInterval)
 	defer progress.Stop()
+	stateTick := time.NewTicker(a.o.StateInterval)
+	defer stateTick.Stop()
 	coalesce := time.NewTimer(time.Hour)
 	coalesce.Stop()
 	armed := false
+
+	enqueue := func(ev engine.Event) {
+		k := model.SessionKey{Harness: ev.Ref.Harness, ID: ev.Ref.SessionID}
+		if _, seen := queued[k]; !seen {
+			order = append(order, k)
+		}
+		queued[k] = pending{missing: ev.Kind == engine.SourceMissing}
+		if !armed {
+			coalesce.Reset(a.o.Coalesce)
+			armed = true
+		}
+	}
 
 	for {
 		select {
@@ -136,15 +190,7 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			k := model.SessionKey{Harness: ev.Ref.Harness, ID: ev.Ref.SessionID}
-			if _, seen := queued[k]; !seen {
-				order = append(order, k)
-			}
-			queued[k] = pending{missing: ev.Kind == engine.SourceMissing}
-			if !armed {
-				coalesce.Reset(a.o.Coalesce)
-				armed = true
-			}
+			enqueue(ev)
 		case <-coalesce.C:
 			armed = false
 			if flush() != nil {
@@ -152,6 +198,23 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-progress.C:
 			if sendProgress(false) != nil {
+				return
+			}
+		case <-stateTick.C:
+			// Take in the writes already published first: a session with an update on
+			// its way is left to that update.
+			for more := true; more; {
+				select {
+				case ev, ok := <-ch:
+					if !ok {
+						return
+					}
+					enqueue(ev)
+				default:
+					more = false
+				}
+			}
+			if look(false) != nil {
 				return
 			}
 		case <-heartbeat.C:

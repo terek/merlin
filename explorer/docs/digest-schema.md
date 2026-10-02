@@ -86,7 +86,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 
 | key | meaning |
 |---|---|
-| `humanTurns` | turns with origin `human` |
+| `humanTurns` | turns a person typed: origin `human` or `command`, abandoned ones excluded |
 | `turns` | all turns |
 | `assistantMessages` | distinct assistant API messages |
 | `toolCalls` | tool calls made |

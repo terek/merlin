@@ -85,7 +85,7 @@
   "resume": "cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000002",
   "digest": {
     "schemaVersion": 1,
-    "parserVersion": 2,
+    "parserVersion": 3,
     "source": [
       {
         "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-s13a-continuation/13131313-0000-4000-8000-000000000002.jsonl",

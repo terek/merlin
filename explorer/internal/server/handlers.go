@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/terek/merlin/explorer/internal/catalog"
 	"github.com/terek/merlin/explorer/internal/model"
@@ -27,6 +28,9 @@ func summarize(cat *catalog.Catalog, in catalog.SessionInfo, state catalog.State
 		s.Lineage.Parent, s.Lineage.ParentKind = &p, in.Parent.Kind
 	}
 	if d, ok := cat.Digest(in.Key); ok {
+		s.HumanTurns = int(d.Stats.HumanTurns)
+		s.LastPrompt = lastPrompt(d)
+		s.Recap = lastRecap(d)
 		for i := range d.Agents {
 			if d.Agents[i].Kind != model.AgentCompact {
 				s.Agents++
@@ -255,6 +259,19 @@ func (a *API) handleSearch(w http.ResponseWriter, r *http.Request) {
 // dayOf is the local date of t.
 func (a *API) dayOf(t time.Time) string { return t.In(a.loc()).Format(dayLayout) }
 
+// rowKey is the value of a rollup row along the named dimension.
+func rowKey(dim string, r catalog.Row) string {
+	switch dim {
+	case "project":
+		return r.Project
+	case "day":
+		return r.Day
+	case "model":
+		return r.Model
+	}
+	return r.Kind
+}
+
 func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	cat := a.cat(w)
 	if cat == nil {
@@ -265,11 +282,28 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	if by == "" {
 		by = "project"
 	}
+	split := q.Get("split")
 	dims := map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel, "kind": catalog.ByKind}
 	dim, isDim := dims[by]
 	if !isDim && by != "session" {
 		a.badParam(w, "by=%q: use project, day, model, kind or session", by)
 		return
+	}
+	var splitDim catalog.Dim
+	if split != "" {
+		sd, ok := dims[split]
+		switch {
+		case !ok || split == "day":
+			a.badParam(w, "split=%q: use project, model or kind", split)
+			return
+		case by == "session":
+			a.badParam(w, "split cannot be combined with by=session")
+			return
+		case split == by:
+			a.badParam(w, "split=%q must differ from by", split)
+			return
+		}
+		splitDim = sd
 	}
 	since, until, err := a.timeRange(q)
 	if err != nil {
@@ -289,7 +323,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	f := catalog.Filter{Project: q.Get("project")}
-	out := CostTable{By: by, Project: f.Project, Rows: []CostRow{}}
+	out := CostTable{By: by, Split: split, Project: f.Project, Rows: []CostRow{}}
 	if !since.IsZero() {
 		out.Since = &since
 	}
@@ -316,6 +350,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		for _, in := range listing.Sessions {
 			c := in.Cost
 			out.Rows = append(out.Rows, CostRow{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: c.Flag,
+				Harness: in.Key.Harness, Project: in.Project, LastActivityAt: in.LastActivityAt,
 				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD}})
 		}
 		perProject := map[string]*CostRow{}
@@ -323,7 +358,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		for _, s := range listing.Scripted {
 			row := perProject[s.Project]
 			if row == nil {
-				row = &CostRow{Key: "scripted:" + s.Project, Label: "scripted runs"}
+				row = &CostRow{Key: "scripted:" + s.Project, Label: "scripted runs", Project: s.Project}
 				perProject[s.Project] = row
 				order = append(order, s.Project)
 			}
@@ -342,8 +377,24 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			out.Sessions += row.Sessions
 		}
 	} else {
+		var parts map[string][]CostPart
+		if split != "" {
+			parts = map[string][]CostPart{}
+			for _, r := range cat.Rollup(f, dim, splitDim) {
+				outer := rowKey(by, r)
+				parts[outer] = append(parts[outer], CostPart{Key: rowKey(split, r), Money: r.Money})
+			}
+			for _, ps := range parts {
+				sort.SliceStable(ps, func(i, j int) bool {
+					if ps[i].TotalUSD != ps[j].TotalUSD {
+						return ps[i].TotalUSD > ps[j].TotalUSD
+					}
+					return ps[i].Key < ps[j].Key
+				})
+			}
+		}
 		for _, r := range cat.Rollup(f, dim) {
-			row := CostRow{Sessions: r.Sessions, Money: r.Money}
+			row := CostRow{Sessions: r.Sessions, Money: r.Money, Split: parts[rowKey(by, r)]}
 			switch by {
 			case "project":
 				row.Key = r.Project
@@ -394,4 +445,55 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		out.Backing.ScriptedRuns += s.Count
 	}
 	a.json(w, http.StatusOK, out)
+}
+
+// previewRunes is the length, in runes, of the texts a summary shows.
+const previewRunes = 300
+
+// Preview collapses runs of whitespace to one space, trims, and cuts the text to 300
+// runes (at a rune boundary). It reports whether it cut.
+func Preview(s string) (string, bool) {
+	s = strings.Join(strings.Fields(s), " ")
+	if utf8.RuneCountInString(s) <= previewRunes {
+		return s, false
+	}
+	n := 0
+	for i := range s {
+		if n == previewRunes {
+			return s[:i], true
+		}
+		n++
+	}
+	return s, false
+}
+
+// lastPrompt picks the last human turn that was not abandoned, else the last human turn.
+func lastPrompt(d *model.SessionDigest) *PromptPreview {
+	best := -1
+	for i := range d.Turns {
+		t := &d.Turns[i]
+		if t.Origin != model.OriginHuman {
+			continue
+		}
+		if !t.Abandoned {
+			best = i
+		} else if best < 0 || d.Turns[best].Abandoned {
+			best = i
+		}
+	}
+	if best < 0 {
+		return nil
+	}
+	t := &d.Turns[best]
+	text, cut := Preview(t.UserText)
+	return &PromptPreview{Turn: t.Index, At: t.StartedAt, Text: text, Truncated: cut}
+}
+
+func lastRecap(d *model.SessionDigest) *RecapPreview {
+	if len(d.Recaps) == 0 {
+		return nil
+	}
+	r := d.Recaps[len(d.Recaps)-1]
+	text, cut := Preview(r.Text)
+	return &RecapPreview{At: r.At, Text: text, Truncated: cut}
 }

@@ -48,3 +48,15 @@ func (c *Catalog) StateOf(key model.SessionKey, lv Liveness) (State, bool) {
 	}
 	return lv.StateOf(key, s.d.LastActivityAt), true
 }
+
+// States returns the liveness of every listable (not scripted) session.
+func (c *Catalog) States(lv Liveness) map[model.SessionKey]State {
+	v := c.view()
+	out := make(map[model.SessionKey]State, len(v.sessions))
+	for _, s := range v.sessions {
+		if s.d.Kind != model.KindSDK {
+			out[s.key] = lv.StateOf(s.key, s.d.LastActivityAt)
+		}
+	}
+	return out
+}

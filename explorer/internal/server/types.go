@@ -83,11 +83,34 @@ type SessionSummary struct {
 	EndState       model.EndState    `json:"endState,omitempty"`
 	SourceMissing  bool              `json:"sourceMissing,omitempty"`
 	// State: busy, idle (running), recent, ended.
-	State   catalog.State `json:"state"`
-	Turns   int           `json:"turns"`
-	Agents  int           `json:"agents"` // sub-agents and teammates, compaction calls excluded
-	Cost    CostBrief     `json:"cost"`
-	Lineage LineageBrief  `json:"lineage"`
+	State catalog.State `json:"state"`
+	Turns int           `json:"turns"`
+	// HumanTurns is the digest's stats.humanTurns: turns a person typed.
+	HumanTurns int `json:"humanTurns"`
+	Agents     int `json:"agents"` // sub-agents and teammates, compaction calls excluded
+	// LastPrompt is the last human turn that was not abandoned (the last human turn when
+	// all are); omitted when the session has no human turn. Recap is the last recap,
+	// omitted when there is none. Both texts are previews (see Preview).
+	LastPrompt *PromptPreview `json:"lastPrompt,omitempty"`
+	Recap      *RecapPreview  `json:"recap,omitempty"`
+	Cost       CostBrief      `json:"cost"`
+	Lineage    LineageBrief   `json:"lineage"`
+}
+
+// PromptPreview is the last human prompt of a session. Text is shortened (see Preview);
+// the whole text is Digest.Turns[Turn].UserText in the detail.
+type PromptPreview struct {
+	Turn      int       `json:"turn"`
+	At        time.Time `json:"at,omitzero"`
+	Text      string    `json:"text"`
+	Truncated bool      `json:"truncated"`
+}
+
+// RecapPreview is the last recap of a session, shortened like PromptPreview.
+type RecapPreview struct {
+	At        time.Time `json:"at,omitzero"`
+	Text      string    `json:"text"`
+	Truncated bool      `json:"truncated"`
 }
 
 // SessionList is the body of GET /api/sessions.
@@ -180,6 +203,20 @@ type CostRow struct {
 	Label    string           `json:"label,omitempty"`
 	Sessions int              `json:"sessions"`
 	Flag     catalog.CostFlag `json:"flag,omitempty"`
+	// Harness, Project and LastActivityAt are set for by=session rows (a scripted row has
+	// only Project), so that a row can be shown and linked without a second request.
+	Harness        string    `json:"harness,omitempty"`
+	Project        string    `json:"project,omitempty"`
+	LastActivityAt time.Time `json:"lastActivityAt,omitzero"`
+	catalog.Money
+	// Split is the row broken down by the split parameter, largest first; its parts add
+	// up to the row. Absent without split.
+	Split []CostPart `json:"split,omitempty"`
+}
+
+// CostPart is one part of a split cost row. Key is a project, model or kind.
+type CostPart struct {
+	Key string `json:"key"`
 	catalog.Money
 }
 
@@ -194,6 +231,7 @@ type CostBacking struct {
 // CostTable is the body of GET /api/cost.
 type CostTable struct {
 	By      string        `json:"by"`
+	Split   string        `json:"split,omitempty"`
 	Project string        `json:"project,omitempty"`
 	Since   *time.Time    `json:"since,omitempty"`
 	Until   *time.Time    `json:"until,omitempty"`
@@ -211,7 +249,16 @@ const (
 	EventSessionUpdated = "session-updated"
 	EventSessionMissing = "session-missing"
 	EventScanProgress   = "scan-progress"
+	EventSessionState   = "session-state"
 )
+
+// SessionStateEvent is the data of a session-state event: a listed session changed
+// between busy, idle, recent and ended.
+type SessionStateEvent struct {
+	Key      model.SessionKey `json:"key"`
+	State    catalog.State    `json:"state"`
+	Previous catalog.State    `json:"previous"`
+}
 
 // SessionUpdatedEvent is the data of a session-updated event.
 type SessionUpdatedEvent struct {

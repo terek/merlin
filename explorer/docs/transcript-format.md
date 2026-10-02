@@ -192,7 +192,7 @@ Measured over all 79 boundaries (46 files; 74 manual, 5 auto):
 | `last-prompt` `{lastPrompt, leafUuid}` | last prompt text and the active leaf |
 | `cost-state` | Claude Code's own running totals (§8) |
 | `worktree-state`, `relocated` `{relocatedCwd}` | cwd moves |
-| `system/away_summary` `{content}` | Claude Code's own recap of where things stand — free "where did I leave off" text |
+| `system/away_summary` `{content}` | Claude Code's own recap of where things stand — free "where did I leave off" text. It can end with the UI hint `(disable recaps in /config)`, which the digest drops |
 | `system/turn_duration` `{durationMs, messageCount}` | end-of-turn marker |
 | `system/agents_killed`, `system/api_error`, `system/model_refusal_fallback` | events |
 | `queue-operation`, `mode`, `permission-mode`, `atis-latch`, `bridge-session`, `file-history-*`, `frame-link`, `artifact-*`, `agent-setting`, `agent-color` | ignore |

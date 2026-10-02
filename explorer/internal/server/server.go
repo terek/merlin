@@ -18,6 +18,7 @@ const (
 	DefaultHeartbeat        = 15 * time.Second
 	DefaultCoalesce         = 250 * time.Millisecond
 	DefaultProgressInterval = time.Second
+	DefaultStateInterval    = 2 * time.Second
 	DefaultWriteTimeout     = 10 * time.Second
 	subscriberBuffer        = 256
 )
@@ -41,6 +42,7 @@ type Options struct {
 	Heartbeat        time.Duration // SSE comment interval; default 15 s
 	Coalesce         time.Duration // SSE: events of one session within this are sent once; default 250 ms
 	ProgressInterval time.Duration // SSE: how often scan progress is looked at; default 1 s
+	StateInterval    time.Duration // SSE: how often session liveness is looked at; default 2 s
 	WriteTimeout     time.Duration // SSE: a write that takes longer ends the stream; default 10 s
 }
 
@@ -60,6 +62,7 @@ func New(o Options) *API {
 	def(&o.Heartbeat, DefaultHeartbeat)
 	def(&o.Coalesce, DefaultCoalesce)
 	def(&o.ProgressInterval, DefaultProgressInterval)
+	def(&o.StateInterval, DefaultStateInterval)
 	def(&o.WriteTimeout, DefaultWriteTimeout)
 	if o.Now == nil {
 		o.Now = time.Now

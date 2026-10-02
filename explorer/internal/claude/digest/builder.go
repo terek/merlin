@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/terek/merlin/explorer/internal/claude/transcript"
 	"github.com/terek/merlin/explorer/internal/model"
@@ -334,7 +335,7 @@ func (b *Builder) system(r *transcript.Record, ts time.Time, pos int) (away bool
 		}
 	case transcript.SubtypeAwaySummary:
 		if text, ok := r.AwaySummary(); ok {
-			b.recaps = append(b.recaps, model.Recap{At: ts, Text: text})
+			b.recaps = append(b.recaps, model.Recap{At: ts, Text: recapText(text)})
 		}
 		return true
 	case transcript.SubtypeAgentsKilled:
@@ -552,4 +553,18 @@ func parseEpochMillis(raw json.RawMessage) time.Time {
 		return time.Time{}
 	}
 	return time.UnixMilli(int64(f)).UTC()
+}
+
+// recapHint is the pointer to its settings that Claude Code appends to a recap. It is
+// chrome of the terminal UI, not part of the recap, and the one piece of text the digest
+// drops.
+const recapHint = "(disable recaps in /config)"
+
+// recapText is a recap without the trailing settings hint.
+func recapText(s string) string {
+	t := strings.TrimRightFunc(s, unicode.IsSpace)
+	if strings.HasSuffix(t, recapHint) {
+		return strings.TrimRightFunc(strings.TrimSuffix(t, recapHint), unicode.IsSpace)
+	}
+	return s
 }

@@ -135,6 +135,13 @@ inherited.
       "endState": "clean",
       "state": "ended",
       "turns": 1,
+      "humanTurns": 1,
+      "lastPrompt": {
+        "turn": 0,
+        "at": "2026-09-22T10:00:00Z",
+        "text": "inner session in a nested project directory",
+        "truncated": false
+      },
       "agents": 1,
       "cost": {
         "bestUSD": 0.014100000000000001,
@@ -168,6 +175,32 @@ inherited.
     }
   ],
   "nextCursor": "MjAyNi0wOS0yMlQxMDowMDoxNFp8Y2xhdWRlfDIyMjIyMjIyLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMg"
+}
+```
+
+### Previews: `humanTurns`, `lastPrompt`, `recap`
+
+Every summary (list row, `session-updated` event, `summary` of the detail) carries three more
+fields so that a list can show what a session is about without loading it:
+
+- `humanTurns` (int): the digest's `stats.humanTurns`, the turns a person typed: prompts and
+  slash or shell commands, abandoned ones excluded. A session can have `humanTurns > 0` and no
+  `lastPrompt`, when everything typed was a command.
+- `lastPrompt` `{turn, at, text, truncated}`: the last turn whose origin is `human` and that is not
+  abandoned; when every human turn is abandoned, the last human turn. `turn` is the turn index
+  (`digest.turns[turn]` in the detail), `at` its start. Omitted when the session has no human turn.
+- `recap` `{at, text, truncated}`: the last recap. Omitted when the session has none.
+
+`text` in both is a **preview**, and this is the one place the API shortens a text: runs of
+whitespace are collapsed to one space, the text is trimmed, and it is cut to 300 runes (at a rune
+boundary, never inside a character); `truncated` says it was cut. The whole text is in the
+detail's `digest` (`turns[].userText`, `recaps[].text`); the stored digests are not touched.
+
+```json
+{
+  "humanTurns": 4,
+  "lastPrompt": {"turn": 5, "at": "2026-09-22T10:41:00Z", "text": "now add the retry to the upload step", "truncated": false},
+  "recap": {"at": "2026-09-22T10:40:12Z", "text": "Goal: ship uploads. The retry is in; the tests for it are next.", "truncated": false}
 }
 ```
 
@@ -205,6 +238,13 @@ indexes of turns copied from the parent; `firstOwnTurn`: index of the first turn
     "endState": "clean",
     "state": "ended",
     "turns": 3,
+    "humanTurns": 3,
+    "lastPrompt": {
+      "turn": 2,
+      "at": "2026-09-16T11:00:26Z",
+      "text": "review the invoice totals",
+      "truncated": false
+    },
     "agents": 1,
     "cost": {
       "bestUSD": 0.1172,
@@ -642,10 +682,14 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 | `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
 | `project` | as for `/api/sessions` |
 | `limit` | cut the rows (1 to 500). Default: none; `by=session` defaults to 100. `total` is not affected; `truncated` says rows were cut |
+| `split` | `project`, `model` or `kind`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
 
 Rows are ordered by cost, largest first; `by=day` is chronological. `by=model` has a row
 `(overhead)` for reported spend no transcript message explains; `by=kind` has the row `sdk` for
 scripted runs; `by=session` lists scripted runs as one `scripted:<project>` row per project.
+A `by=session` row also carries `harness`, `project` and `lastActivityAt` (a scripted row only
+`project`), so it can be shown and linked without a second request; its cost is the session's
+whole best cost, whatever the range.
 `backing` counts the sessions in the table by cost flag. `sessions` counts the sessions behind
 the figure, scripted runs included.
 
@@ -690,6 +734,40 @@ the figure, scripted runs included.
 }
 ```
 
+### Split
+
+With `split`, the response gains `"split": "<dimension>"` and every row carries
+`split: [{key, totalUSD, reportedUSD, attributedUSD}]`: its parts, largest `totalUSD` first, ties
+by key. The parts add up to the row (to within float rounding, 1e-9), the `(overhead)` model is a
+part where it applies, and the row itself is what it is without `split`. `limit` cuts rows, not
+parts. Without `split` nothing changes in the response: no `split` key anywhere.
+
+```json
+{
+  "by": "kind",
+  "split": "model",
+  "rows": [
+    {
+      "key": "sdk",
+      "label": "sdk (scripted runs)",
+      "sessions": 1,
+      "totalUSD": 0.0139,
+      "reportedUSD": 0.0139,
+      "attributedUSD": 0,
+      "split": [
+        {"key": "claude-sonnet-5-5", "totalUSD": 0.0124, "reportedUSD": 0.0124, "attributedUSD": 0},
+        {"key": "(overhead)", "totalUSD": 0.0015, "reportedUSD": 0.0015, "attributedUSD": 0}
+      ]
+    }
+  ],
+  "total": {"totalUSD": 0.6307099999999999, "reportedUSD": 0.1311, "attributedUSD": 0.49961000000000017},
+  "sessions": 35,
+  "backing": {"exact": 1, "partial": 0, "estimated": 33, "scriptedRuns": 1}
+}
+```
+
+(One row shown; the real response has a row per kind.)
+
 ## GET /api/events
 
 A Server-Sent Events stream (`Content-Type: text/event-stream`), for live updates without polling.
@@ -700,6 +778,7 @@ comment, then a `scan-progress` event with the current state.
 |---|---|---|
 | `session-updated` | a session's digest was written (new, or changed) | `{"key": {...}, "session": <session summary>}`: the same shape as a row of `/api/sessions` |
 | `session-missing` | a session's files are gone (the digest is kept, `sourceMissing` is set) | `{"key": {...}}` |
+| `session-state` | a listed session changed between `busy`, `idle`, `recent` and `ended` | `{"key": {...}, "state": "idle", "previous": "busy"}` |
 | `scan-progress` | while indexing is under way, when the counters change, and once more when it ends | `{"pending": 20, "seen": 35, "processed": 15, "unchanged": 0, "failed": 0, "missing": 0}` |
 
 ```
@@ -712,6 +791,9 @@ data: {"pending":0,"seen":35,"processed":0,"unchanged":35,"failed":0,"missing":0
 event: session-updated
 data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"session":{...}}
 
+event: session-state
+data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"state":"ended","previous":"idle"}
+
 : heartbeat
 ```
 
@@ -721,5 +803,11 @@ data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"s
 - The stream never holds up the indexer: if a client cannot keep up, events are dropped for that
   client, and a write that stalls for 10 s ends its stream. After a reconnect (EventSource does
   it by itself) re-read `/api/sessions` to catch up, since events are not replayed.
-- `session-updated` and `session-missing` do not announce a change of liveness (a session
-  starting or stopping); refetch the list now and then, or on a `session-updated`.
+- `session-state` comes from looking at the live-session registry and the clock every 2 s, so a
+  change shows up within about that long. It also fires for the passing of time alone (`recent`
+  to `ended` after 10 minutes of inactivity). Scripted runs never produce it.
+- Nothing is sent for the first look after a stream opens: read the states from `/api/sessions`
+  (or the events you already have) and apply `session-state` on top. A session first seen later
+  is announced by its `session-updated`, not by `session-state`.
+- A `session-updated` for the same session in the same tick replaces the `session-state`: the
+  summary carries `state`. So a change is announced by one event, never both.

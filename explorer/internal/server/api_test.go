@@ -472,11 +472,17 @@ func TestCost(t *testing.T) {
 		if c.Rows[0].TotalUSD < c.Rows[1].TotalUSD || c.Rows[0].Flag == "" {
 			t.Errorf("rows: %+v", c.Rows)
 		}
+		for _, row := range c.Rows {
+			if row.Harness != "claude" || row.Project == "" || row.LastActivityAt.IsZero() {
+				t.Errorf("a session row names its harness, project and last activity: %+v", row)
+			}
+		}
 		if !near(c.Total.TotalUSD, total.TotalUSD) {
 			t.Errorf("a limit must not change the total")
 		}
 		r.get("/api/cost?by=session&limit=500&project="+url.QueryEscape("/home/dev/acme/sdk"), &c)
-		if len(c.Rows) != 1 || !strings.HasPrefix(c.Rows[0].Key, "scripted:") || c.Rows[0].Sessions != 1 {
+		if len(c.Rows) != 1 || !strings.HasPrefix(c.Rows[0].Key, "scripted:") || c.Rows[0].Sessions != 1 ||
+			c.Rows[0].Project != "/home/dev/acme/sdk" || c.Rows[0].Harness != "" {
 			t.Errorf("scripted runs row: %+v", c.Rows)
 		}
 	})
