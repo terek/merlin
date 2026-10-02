@@ -186,7 +186,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		d.logf("cannot open log file: %v (logging to stderr only)", err)
 	}
 	d.start = time.Now()
-	d.logf("explorer serve %s starting (pid %d, home %s)", d.opts.Version, os.Getpid(), home)
+	d.logf("merlin serve %s starting (pid %d, home %s)", d.opts.Version, os.Getpid(), home)
 
 	if n, err := SweepTemp(home, tmpMaxAge, time.Now()); err != nil {
 		d.logf("sweeping temp files: %v", err)

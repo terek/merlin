@@ -1,6 +1,6 @@
 # Explorer web UI
 
-The design the UI beads build from. The UI is a single-page React app served by `explorer serve`
+The design the UI beads build from. The UI is a single-page React app served by `merlin serve`
 on the daemon's own port. It is read-only: everything it shows comes from the JSON API in
 [api.md](api.md). It answers the same two questions as the rest of Explorer, in this order of
 polish: **which session was that, and which do I resume** (Sessions, Session) and **what did it
@@ -63,8 +63,8 @@ saying the UI was not built, so `go build ./...` and `go test ./...` never need 
 
 ```
 make web         # cd web && bun install --frozen-lockfile && bun run build
-make build       # make web, then go build -tags embedui -o bin/explorer ./cmd/explorer
-make build-go    # go build -o bin/explorer ./cmd/explorer   (no UI, no bun)
+make build       # make web, then go build -tags embedui -o bin/merlin ./cmd/explorer
+make build-go    # go build -o bin/merlin ./cmd/explorer   (no UI, no bun)
 make web-check   # cd web && bun run check   (tsc --noEmit, biome check, bun test)
 ```
 
@@ -74,7 +74,7 @@ Run the daemon against the fixtures, never against the real `~/.claude`:
 
 ```
 CLAUDE_CONFIG_DIR=$PWD/testdata/claude EXPLORER_HOME=<a scratch dir> \
-  ./bin/explorer serve --no-hooks --port <your port>
+  ./bin/merlin serve --no-hooks --port <your port>
 ```
 
 ## 3. Routes

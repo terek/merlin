@@ -5,13 +5,17 @@ Go program that indexes Claude Code sessions. Start with [PLAN.md](PLAN.md); rea
 parses transcripts. The rest of this repository is the old Bun/TS Merlin: reference
 only, never edit it.
 
+**Names.** The project is Merlin Explorer and lives in `explorer/`; the command it builds is
+`merlin` (it replaces the old Merlin binary in releases). Its state stays under `~/.explorer`
+(`EXPLORER_HOME`): `~/.merlin` belongs to the old program and must not be touched.
+
 ## Commands
 
 Run from `explorer/`.
 
 ```
-make build      # bin/explorer with the web UI embedded (needs bun)
-make build-go   # bin/explorer without the UI (no bun)
+make build      # bin/merlin with the web UI embedded (needs bun)
+make build-go   # bin/merlin without the UI (no bun)
 make test       # go test ./...
 make vet        # go vet ./...
 make web-check  # web/: tsc, Biome, bun test
@@ -63,7 +67,7 @@ before touching `web/`.
   primitive to suit one view; if it falls short, extend it with a prop.
 - **Never serve the real history.** Run the daemon only against the fixtures, with a scratch
   home, without hooks, on the port your bead gives you:
-  `CLAUDE_CONFIG_DIR=$PWD/testdata/claude EXPLORER_HOME=<scratch dir> ./bin/explorer serve --no-hooks --port <port>`.
+  `CLAUDE_CONFIG_DIR=$PWD/testdata/claude EXPLORER_HOME=<scratch dir> ./bin/merlin serve --no-hooks --port <port>`.
   Start it as a background command and stop it when you are done.
 - **Look at what you build.** `web/dev/shot.sh <url> <out.png> [width] [height]` screenshots a
   page with headless Chrome; read the PNG. Check both `?theme=light` and `?theme=dark`. Put

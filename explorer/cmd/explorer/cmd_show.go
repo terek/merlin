@@ -19,7 +19,7 @@ func init() {
 	})
 }
 
-const showHelp = `Usage: explorer show <session-id-or-prefix> [--inherited] [--summaries] [--full] [--json]
+const showHelp = `Usage: merlin show <session-id-or-prefix> [--inherited] [--summaries] [--full] [--json]
 
 One session in full: header, cost, agent tree, family, timeline, and the command
 to resume it. The id may be any unique prefix; an ambiguous one lists the
@@ -38,7 +38,7 @@ Cost block
               is added to the reported figure to give the best cost
   inherited   history copied from another session that the other session paid
               for; NOT counted here
-  (cost notation as in 'explorer sessions --help': ≈ estimated, * partial)
+  (cost notation as in 'merlin sessions --help': ≈ estimated, * partial)
 
 Timeline
   Turns are numbered from 0, as in the JSON output. Each shows its start, origin

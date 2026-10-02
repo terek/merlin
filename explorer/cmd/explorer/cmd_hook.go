@@ -7,7 +7,7 @@ import (
 	"github.com/terek/merlin/explorer/internal/paths"
 )
 
-// explorer hook is run by Claude Code on each event. It must print nothing and
+// merlin hook is run by Claude Code on each event. It must print nothing and
 // exit 0 whatever happens: SessionStart stdout is injected into the model's
 // context and a failing hook is shown to the user.
 func init() {

@@ -20,7 +20,7 @@ func init() {
 	})
 }
 
-const doctorHelp = `Usage: explorer doctor [--json] [--all-versions]
+const doctorHelp = `Usage: merlin doctor [--json] [--all-versions]
 
 Health of the index, read from the digests and the catalog; nothing is changed.
 

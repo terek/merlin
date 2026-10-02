@@ -77,7 +77,7 @@ func loadWorld(name string) (*world, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.Warn = func(msg string) { fmt.Fprintf(os.Stderr, "explorer %s: %s\n", name, msg) }
+	st.Warn = func(msg string) { fmt.Fprintf(os.Stderr, "merlin %s: %s\n", name, msg) }
 	refs, err := st.List("")
 	if err != nil {
 		return nil, err
@@ -295,7 +295,7 @@ func parseKinds(s string) ([]model.SessionKind, error) {
 	case model.KindInteractive, model.KindBackground:
 		return []model.SessionKind{k}, nil
 	case model.KindSDK:
-		return nil, errors.New("scripted (sdk) sessions are shown only in aggregate; use `explorer cost --by kind`")
+		return nil, errors.New("scripted (sdk) sessions are shown only in aggregate; use `merlin cost --by kind`")
 	}
 	return nil, fmt.Errorf("unknown --kind %q: use interactive or background", s)
 }
@@ -343,10 +343,10 @@ func finish(name string, err error) int {
 	if err == nil {
 		return 0
 	}
-	fmt.Fprintf(os.Stderr, "explorer %s: %v\n", name, err)
+	fmt.Fprintf(os.Stderr, "merlin %s: %v\n", name, err)
 	var ue usageError
 	if errors.As(err, &ue) {
-		fmt.Fprintf(os.Stderr, "try: explorer %s --help\n", name)
+		fmt.Fprintf(os.Stderr, "try: merlin %s --help\n", name)
 		return 2
 	}
 	return 1
@@ -362,7 +362,7 @@ func writeJSON(v any) error {
 // emptyHint says, on stderr, that nothing is indexed yet.
 func (w *world) emptyHint(name string) {
 	if len(w.sessions) == 0 {
-		fmt.Fprintf(os.Stderr, "explorer %s: no sessions indexed; run `explorer scan` first\n", name)
+		fmt.Fprintf(os.Stderr, "merlin %s: no sessions indexed; run `merlin scan` first\n", name)
 	}
 }
 

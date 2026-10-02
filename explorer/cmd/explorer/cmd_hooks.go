@@ -18,7 +18,7 @@ func init() {
 
 func runHooks(args []string) int {
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: explorer hooks install|uninstall|status")
+		fmt.Fprintln(os.Stderr, "usage: merlin hooks install|uninstall|status")
 		return 2
 	}
 	claudeDir, err := paths.ClaudeConfigDir()
@@ -28,13 +28,13 @@ func runHooks(args []string) int {
 			return runHooksIn(args[0], hooks.Config{ClaudeConfigDir: claudeDir, ExplorerHome: home})
 		}
 	}
-	fmt.Fprintln(os.Stderr, "explorer hooks:", err)
+	fmt.Fprintln(os.Stderr, "merlin hooks:", err)
 	return 1
 }
 
 func runHooksIn(action string, cfg hooks.Config) int {
 	fail := func(err error) int {
-		fmt.Fprintln(os.Stderr, "explorer hooks:", err)
+		fmt.Fprintln(os.Stderr, "merlin hooks:", err)
 		return 1
 	}
 	switch action {
@@ -70,7 +70,7 @@ func runHooksIn(action string, cfg hooks.Config) int {
 			}
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "explorer hooks: unknown action %q\n", action)
+		fmt.Fprintf(os.Stderr, "merlin hooks: unknown action %q\n", action)
 		return 2
 	}
 	return 0

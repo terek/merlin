@@ -271,7 +271,7 @@ $1.20. None is large.
 
 - `internal/claude/digest`: `ParserVersion` 1 to 2, so stores written by earlier builds are
   rebuilt.
-- `explorer doctor`: the format-drift table lists only versions with bad lines or unknown
+- `merlin doctor`: the format-drift table lists only versions with bad lines or unknown
   types, followed by "and N other versions with no bad lines and no unknown record types",
   or, when all are clean, one line ("96 versions, no bad lines, no unknown record types").
   `--all-versions` prints every version. JSON output is unchanged. Snapshots updated,

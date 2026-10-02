@@ -4,7 +4,7 @@ Status: M0–M4 built and verified against the real corpus on 2026-10-02 (result
 [docs/validation.md](docs/validation.md)); the web UI (M5, design in
 [docs/ui.md](docs/ui.md)) was built and reviewed against the real corpus on the same day;
 incremental live reads (M6) are open. Tracked in beads (`bd list`, epic `merlin-t8s`). Decided: Go; hooks are
-installed by `explorer serve`; texts are stored whole; scripted runs are counted and
+installed by `merlin serve`; texts are stored whole; scripted runs are counted and
 shown only in aggregate; storage and code are split per harness (`~/.explorer/claude/`,
 `internal/claude/`) so Codex and Pi can be added later.
 Companion: [docs/transcript-format.md](docs/transcript-format.md) — what the transcripts
@@ -59,7 +59,7 @@ Dependencies: standard library plus `tidwall/gjson` + `tidwall/sjson` for editin
 4. **Digests outlive transcripts.** If a transcript disappears, the digest stays and is
    marked `sourceMissing`. Explorer becomes the durable ledger.
 5. **Tolerate format drift, and make it visible.** Unknown record types and unparseable
-   lines are counted per session, never fatal. `explorer doctor` reports them.
+   lines are counted per session, never fatal. `merlin doctor` reports them.
 6. **Two cost numbers, never blended.** *Attributed* = recomputed from token usage, which
    is what gives the per-agent and per-turn breakdown; it misses calls that leave no trace
    in the transcript. *Reported* = Claude Code's own `cost-state` totals; they include
@@ -278,14 +278,14 @@ chain must never mark history as abandoned.
 
 ### Hooks
 
-`explorer serve` installs hooks on start (`--no-hooks` to skip); `explorer hooks
+`merlin serve` installs hooks on start (`--no-hooks` to skip); `merlin hooks
 install | uninstall | status` does it explicitly.
 
 - Events: `SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `SessionEnd`.
-- Command: `~/.explorer/claude/hooks/notify.sh`, which runs `explorer hook` if the binary still
+- Command: `~/.explorer/claude/hooks/notify.sh`, which runs `merlin hook` if the binary still
   exists and otherwise exits 0 silently. It prints nothing (SessionStart output is
   injected into the model's context) and always exits 0.
-- `explorer hook` reads the event from stdin and POSTs it to the daemon with a ~150 ms
+- `merlin hook` reads the event from stdin and POSTs it to the daemon with a ~150 ms
   timeout. Daemon not running → drop it; the next scan catches up.
 - `settings.json` is edited surgically (existing entries, order and formatting kept),
   idempotently, with a timestamped backup. The existing Merlin hooks are left alone.
@@ -332,15 +332,15 @@ Loaded from the digests at start, updated as digests are written.
 ## 8. Commands
 
 ```
-explorer serve [--port 7433] [--no-hooks]   daemon: index, follow, serve
-explorer scan                               index once and exit
-explorer sessions [--project P] [--kind interactive|background] [--since 7d]
-explorer show <session-id>                  turns, agent tree, compactions, cost
-explorer search <terms…>                    matching turns with the resume command
-explorer cost [--by project|day|model|session] [--since …]
-explorer hooks install|uninstall|status
-explorer hook                               called by Claude Code
-explorer doctor                             format drift, unpriced models, attributed vs reported
+merlin serve [--port 7433] [--no-hooks]   daemon: index, follow, serve
+merlin scan                               index once and exit
+merlin sessions [--project P] [--kind interactive|background] [--since 7d]
+merlin show <session-id>                  turns, agent tree, compactions, cost
+merlin search <terms…>                    matching turns with the resume command
+merlin cost [--by project|day|model|session] [--since …]
+merlin hooks install|uninstall|status
+merlin hook                               called by Claude Code
+merlin doctor                             format drift, unpriced models, attributed vs reported
 ```
 
 The read commands work without the daemon (they load the digests), so the tool is useful
@@ -370,7 +370,7 @@ transcripts are never committed.
 | 1.2 | Pricing: embedded table, overrides, `[1m]` and date-suffix normalisation, 5m/1h writes, fast multiplier, unpriced reporting | reproduces the worked examples in format notes §8 |
 | 1.3 | Discovery: recursive walk, UUID filter, orphans, nested project dirs, fingerprints | fixture tree yields the expected sources |
 | 1.4 | Store: layout, atomic write, tolerant read, `EXPLORER_HOME` | concurrent-writer and torn-file tests pass |
-| 1.5 | Hooks: surgical `settings.json` install/uninstall/status, wrapper script, `explorer hook` client. Verify the hook payload fields against the docs first | install twice = one entry; uninstall restores; unrelated hooks untouched byte for byte |
+| 1.5 | Hooks: surgical `settings.json` install/uninstall/status, wrapper script, `merlin hook` client. Verify the hook payload fields against the docs first | install twice = one entry; uninstall restores; unrelated hooks untouched byte for byte |
 
 **M2 — digest (after 1.1, 1.2)**
 
@@ -384,7 +384,7 @@ transcripts are never committed.
 
 | id | task | done when |
 |---|---|---|
-| 3.1 | `internal/harness` interface + Claude adapter; reconciler, queue, worker pool, error stubs; `explorer scan` | kill -9 mid-scan then rescan converges; second scan does no work |
+| 3.1 | `internal/harness` interface + Claude adapter; reconciler, queue, worker pool, error stubs; `merlin scan` | kill -9 mid-scan then rescan converges; second scan does no work |
 | 3.2 | Catalog: load, ownership, lineage and session families, inherited turns, rollups, search | copied-history fixture is not double counted and is linked as fork or continuation; day rollup splits at local midnight |
 | 3.3 | Read commands: `sessions`, `show`, `search`, `cost`, `doctor` | output snapshot tests |
 | 3.4 | `serve`: lock, rescan timer, hook endpoint, live following with debounce, liveness, clean shutdown | appending to a fixture file updates the digest within the debounce window |

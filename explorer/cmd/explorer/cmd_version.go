@@ -10,7 +10,7 @@ func init() {
 		usage:   "version",
 		summary: "print the version",
 		run: func([]string) int {
-			fmt.Println("explorer", version)
+			fmt.Println("merlin", version)
 			return 0
 		},
 	})

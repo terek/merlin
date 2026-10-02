@@ -1,4 +1,4 @@
-// Command explorer indexes Claude Code sessions.
+// Command merlin (Merlin Explorer) indexes Claude Code sessions.
 package main
 
 import (
@@ -20,7 +20,7 @@ var commands = map[string]command{}
 
 func register(name string, c command) {
 	if _, dup := commands[name]; dup {
-		panic("explorer: duplicate command " + name)
+		panic("merlin: duplicate command " + name)
 	}
 	commands[name] = c
 }
@@ -43,7 +43,7 @@ func dispatch(args []string) int {
 	}
 	c, ok := commands[name]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "explorer: unknown command %q\n\n", args[0])
+		fmt.Fprintf(os.Stderr, "merlin: unknown command %q\n\n", args[0])
 		printUsage(os.Stderr)
 		return 2
 	}
@@ -51,7 +51,7 @@ func dispatch(args []string) int {
 }
 
 func printUsage(w *os.File) {
-	fmt.Fprintln(w, "Usage: explorer <command> [arguments]")
+	fmt.Fprintln(w, "Usage: merlin <command> [arguments]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	names := make([]string, 0, len(commands))
@@ -68,7 +68,7 @@ func printUsage(w *os.File) {
 // replaces the stub by editing only its own cmd_<name>.go.
 func notImplemented(name string) func([]string) int {
 	return func([]string) int {
-		fmt.Fprintf(os.Stderr, "explorer %s: not implemented\n", name)
+		fmt.Fprintf(os.Stderr, "merlin %s: not implemented\n", name)
 		return 2
 	}
 }

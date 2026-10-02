@@ -18,7 +18,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the snapshots under testdata/")
 
-// The read commands are tested against a store built by `explorer scan` over a copy of
+// The read commands are tested against a store built by `merlin scan` over a copy of
 // the fixture tree, in New York time (scenario 19 depends on it) with a fixed "now" and
 // with the two fixture registry entries (pids 4242 and 4343) treated as alive.
 const (
@@ -248,7 +248,7 @@ func TestReadCommandErrors(t *testing.T) {
 		{name: "unknown id", args: []string{"show", "ffff"}, code: 1, errHas: []string{`no session matches "ffff"`}},
 		{name: "show without id", args: []string{"show"}, code: 2, errHas: []string{"expected exactly one session id"}},
 		{name: "show two ids", args: []string{"show", "0101", "0202"}, code: 2},
-		{name: "unknown flag", args: []string{"sessions", "--bogus"}, code: 2, errHas: []string{"explorer sessions", "--help"}},
+		{name: "unknown flag", args: []string{"sessions", "--bogus"}, code: 2, errHas: []string{"merlin sessions", "--help"}},
 		{name: "positional on sessions", args: []string{"sessions", "x"}, code: 2},
 		{name: "bad since", args: []string{"sessions", "--since", "yesterday-ish"}, code: 2, errHas: []string{"--since"}},
 		{name: "unknown project", args: []string{"sessions", "--project", "nope"}, code: 1, errHas: []string{`no project matches "nope"`}},
@@ -288,7 +288,7 @@ func TestReadCommandHelp(t *testing.T) {
 	for _, name := range []string{"sessions", "show", "search", "cost", "doctor"} {
 		for _, flagName := range []string{"--help", "-h"} {
 			out, errs, code := e.run(nil, name, flagName)
-			if code != 0 || errs != "" || !strings.HasPrefix(out, "Usage: explorer "+name) {
+			if code != 0 || errs != "" || !strings.HasPrefix(out, "Usage: merlin "+name) {
 				t.Errorf("%s %s: exit %d, stderr %q, stdout %.60q", name, flagName, code, errs, out)
 			}
 			if !strings.Contains(out, "--json") {
@@ -304,7 +304,7 @@ func TestEmptyStore(t *testing.T) {
 	e := &readEnv{t: t, home: t.TempDir(), claud: t.TempDir()}
 	for _, args := range [][]string{{"sessions"}, {"cost"}, {"search", "x"}, {"doctor"}} {
 		out, errs, code := e.run(nil, args...)
-		if code != 0 || !strings.Contains(errs, "explorer scan") {
+		if code != 0 || !strings.Contains(errs, "merlin scan") {
 			t.Errorf("%v: exit %d, stderr %q, stdout %q", args, code, errs, out)
 		}
 	}

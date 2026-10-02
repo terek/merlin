@@ -34,7 +34,7 @@ func binary(t *testing.T) string {
 			buildErr = err
 			return
 		}
-		binPath = filepath.Join(dir, "explorer")
+		binPath = filepath.Join(dir, "merlin")
 		out, err := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", binPath, ".").CombinedOutput()
 		if err != nil {
 			buildErr = fmt.Errorf("go build: %v\n%s", err, out)
@@ -85,7 +85,7 @@ type serveProc struct {
 	port   int
 }
 
-// startServe runs `explorer serve` with temp directories and waits for /healthz.
+// startServe runs `merlin serve` with temp directories and waits for /healthz.
 func startServe(t *testing.T, home, cfg string, extra ...string) *serveProc {
 	t.Helper()
 	port := freePort(t)

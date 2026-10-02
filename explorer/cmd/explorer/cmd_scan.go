@@ -36,42 +36,42 @@ func runScan(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "explorer scan: unexpected arguments")
+		fmt.Fprintln(os.Stderr, "merlin scan: unexpected arguments")
 		return 2
 	}
 
 	home, err := paths.ExplorerHome()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "explorer scan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
 	cfg, err := paths.ClaudeConfigDir()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "explorer scan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
 	pricer, err := pricing.Load(filepath.Join(home, "config.json"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "explorer scan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
 	st, err := store.New(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "explorer scan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
-	st.Warn = func(msg string) { fmt.Fprintln(os.Stderr, "explorer scan: "+msg) }
+	st.Warn = func(msg string) { fmt.Fprintln(os.Stderr, "merlin scan: "+msg) }
 
 	p := &progressPrinter{w: os.Stderr, enabled: !*quiet}
 	eng, err := engine.New(engine.Options{
 		Store:      st,
 		Harnesses:  []harness.Harness{claude.New(cfg, pricer)},
 		Workers:    *workers,
-		Logf:       func(format string, a ...any) { fmt.Fprintf(os.Stderr, "explorer scan: "+format+"\n", a...) },
+		Logf:       func(format string, a ...any) { fmt.Fprintf(os.Stderr, "merlin scan: "+format+"\n", a...) },
 		OnProgress: p.update,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "explorer scan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
 
@@ -80,7 +80,7 @@ func runScan(args []string) int {
 	sum, err := eng.Scan(ctx)
 	p.finish()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "explorer scan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
 	fmt.Printf("seen %d, processed %d, unchanged %d, failed %d, missing %d, elapsed %s\n",
@@ -108,7 +108,7 @@ func (p *progressPrinter) update(pr engine.Progress) {
 		return
 	}
 	p.last, p.printed = time.Now(), true
-	fmt.Fprintf(p.w, "\rexplorer scan: %d/%d sessions, %d failed, %.0f MB, %.1f MB/s   ",
+	fmt.Fprintf(p.w, "\rmerlin scan: %d/%d sessions, %d failed, %.0f MB, %.1f MB/s   ",
 		pr.Done, pr.Queued, pr.Failed, float64(pr.Bytes)/1e6, pr.Rate()/1e6)
 }
 

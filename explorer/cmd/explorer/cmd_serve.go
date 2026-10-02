@@ -40,11 +40,11 @@ func runServe(args []string) int {
 		return 2
 	}
 	if fs.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "explorer serve: unexpected arguments")
+		fmt.Fprintln(os.Stderr, "merlin serve: unexpected arguments")
 		return 2
 	}
 	fail := func(err error) int {
-		fmt.Fprintf(os.Stderr, "explorer serve: %v\n", err)
+		fmt.Fprintf(os.Stderr, "merlin serve: %v\n", err)
 		return 1
 	}
 
@@ -92,9 +92,9 @@ func runServe(args []string) int {
 	d.Handle("/api/", server.New(apiOptions(d, cfg)).Handler())
 	d.Handle("/", webui.Handler())
 	if webui.Built() {
-		fmt.Fprintf(os.Stderr, "explorer: UI at http://127.0.0.1:%d/\n", *port)
+		fmt.Fprintf(os.Stderr, "merlin: UI at http://127.0.0.1:%d/\n", *port)
 	} else {
-		fmt.Fprintf(os.Stderr, "explorer: this binary has no UI (make build includes it); the API is at http://127.0.0.1:%d/api/\n", *port)
+		fmt.Fprintf(os.Stderr, "merlin: this binary has no UI (make build includes it); the API is at http://127.0.0.1:%d/api/\n", *port)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

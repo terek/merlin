@@ -114,9 +114,15 @@
     "projectKey": "-home-dev-acme-coststate",
     "project": "/home/dev/acme/coststate",
     "cwd": "/home/dev/acme/coststate",
-    "cwds": ["/home/dev/acme/coststate"],
-    "gitBranches": ["main"],
-    "harnessVersions": ["2.1.280"],
+    "cwds": [
+      "/home/dev/acme/coststate"
+    ],
+    "gitBranches": [
+      "main"
+    ],
+    "harnessVersions": [
+      "2.1.280"
+    ],
     "kind": "interactive",
     "title": "plan the billing module",
     "startedAt": "2026-09-16T10:00:00Z",
@@ -295,7 +301,9 @@
           }
         },
         "costWithAgents": 0.01285,
-        "spawned": ["a16e0c0de0000001"]
+        "spawned": [
+          "a16e0c0de0000001"
+        ]
       },
       {
         "index": 2,

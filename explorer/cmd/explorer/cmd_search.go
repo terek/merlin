@@ -18,7 +18,7 @@ func init() {
 	})
 }
 
-const searchHelp = `Usage: explorer search <terms...> [--project P] [--since D] [--limit N] [--json]
+const searchHelp = `Usage: merlin search <terms...> [--project P] [--since D] [--limit N] [--json]
 
 Where was the session in which I asked X, and which one do I resume?
 
@@ -28,7 +28,7 @@ Prompts and titles come first, then final texts, then compaction summaries, then
 the rest; newer first within each. Scripted runs are never searched.
 
 Each hit shows when and where it happened, the session title, which field matched
-and in which turn (turns are numbered from 0, as in 'explorer show'), the snippet,
+and in which turn (turns are numbered from 0, as in 'merlin show'), the snippet,
 the sessions that start with a copy of that turn (a copied turn is reported once,
 in the session that owns it), and the command to resume the session.
 

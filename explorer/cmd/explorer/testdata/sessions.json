@@ -415,7 +415,10 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [0, 1],
+      "inheritedTurns": [
+        0,
+        1
+      ],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -479,7 +482,10 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [0, 1],
+      "inheritedTurns": [
+        0,
+        1
+      ],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -543,7 +549,9 @@
         "ownMessages": 1,
         "inheritedMessages": 1
       },
-      "inheritedTurns": [0],
+      "inheritedTurns": [
+        0
+      ],
       "firstOwnTurn": 1,
       "parent": {
         "parent": {
@@ -717,7 +725,10 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [0, 1],
+      "inheritedTurns": [
+        0,
+        1
+      ],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -781,7 +792,10 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [0, 1],
+      "inheritedTurns": [
+        0,
+        1
+      ],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {

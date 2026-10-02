@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// TestMain lets the test binary act as `explorer` when re-executed.
+// TestMain lets the test binary act as `merlin` when re-executed.
 func TestMain(m *testing.M) {
 	if os.Getenv("EXPLORER_TEST_AS_CLI") == "1" {
 		os.Exit(dispatch(os.Args[1:]))

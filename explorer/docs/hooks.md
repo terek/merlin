@@ -41,9 +41,9 @@ subagent by `agent_id` plus `agent_transcript_path`. The daemon must therefore n
 ## Output and exit codes
 
 - Exit 0: success. Plain stdout of SessionStart, UserPromptSubmit and Stop hooks is added
-  to the model's context. Hence `explorer hook` prints nothing.
+  to the model's context. Hence `merlin hook` prints nothing.
 - Exit 2: blocking error (blocks the prompt / prevents stopping). Other non-zero: error shown
-  to the user. Hence `explorer hook` always exits 0.
+  to the user. Hence `merlin hook` always exits 0.
 - SessionEnd hooks share a ~1.5 s budget, so the client's 150 ms cap matters there.
 - Timed-out hooks have their output discarded.
 

@@ -18,7 +18,7 @@ type LockedError struct {
 }
 
 func (e *LockedError) Error() string {
-	who := "another explorer serve is already running"
+	who := "another merlin serve is already running"
 	if e.PID > 0 {
 		who += fmt.Sprintf(" (pid %d)", e.PID)
 	}

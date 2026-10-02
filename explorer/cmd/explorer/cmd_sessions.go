@@ -19,12 +19,12 @@ func init() {
 	})
 }
 
-const sessionsHelp = `Usage: explorer sessions [--project P] [--kind interactive|background] [--since D] [--limit N] [--json]
+const sessionsHelp = `Usage: merlin sessions [--project P] [--kind interactive|background] [--since D] [--limit N] [--json]
 
 One line per session, newest first: which one to resume.
 
   ID       shortest unique prefix of the session id (at least 8 characters);
-           'explorer show' accepts it
+           'merlin show' accepts it
   WHEN     last activity, local time (relative when recent)
   PROJECT  last element of the directory the session was started in
   TITLE    custom title, else Claude Code's title, else the first prompt

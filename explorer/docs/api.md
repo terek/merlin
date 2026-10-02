@@ -1,6 +1,6 @@
 # Explorer HTTP API
 
-Read-only JSON over HTTP, plus one Server-Sent Events stream. It is served by `explorer serve`
+Read-only JSON over HTTP, plus one Server-Sent Events stream. It is served by `merlin serve`
 on the daemon's address (`127.0.0.1:7433` by default) next to `/hook` and `/healthz`, which are
 not part of this API. The response types are Go structs in `internal/server/types.go`; the
 examples below come from the synthetic fixtures (`testdata/`), trimmed.

@@ -77,7 +77,7 @@ func Install(c Config) (Result, error) {
 	if bin == "" {
 		exe, err := os.Executable()
 		if err != nil {
-			return res, fmt.Errorf("locate explorer binary: %w", err)
+			return res, fmt.Errorf("locate the merlin binary: %w", err)
 		}
 		bin = exe
 	}
@@ -442,7 +442,7 @@ const binPrefix = "BIN="
 
 func writeScript(path, bin string) error {
 	body := "#!/bin/sh\n" +
-		"# Written by `explorer hooks install`. Silent, always exits 0.\n" +
+		"# Written by `merlin hooks install`. Silent, always exits 0.\n" +
 		binPrefix + shellQuote(bin) + "\n" +
 		"if [ -x \"$BIN\" ]; then\n" +
 		"  exec \"$BIN\" hook >/dev/null 2>&1\n" +

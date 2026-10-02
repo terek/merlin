@@ -2,10 +2,10 @@
 
 # The UI is embedded, so a build needs bun. build-go, test and vet do not.
 build: web
-	go build -tags embedui -o bin/explorer ./cmd/explorer
+	go build -tags embedui -o bin/merlin ./cmd/explorer
 
 build-go:
-	go build -o bin/explorer ./cmd/explorer
+	go build -o bin/merlin ./cmd/explorer
 
 web:
 	cd web && bun install --frozen-lockfile && bun run build

@@ -20,7 +20,7 @@ func init() {
 	})
 }
 
-const costHelp = `Usage: explorer cost [--by project|day|model|session|kind] [--since D] [--project P] [--limit N] [--json]
+const costHelp = `Usage: merlin cost [--by project|day|model|session|kind] [--since D] [--project P] [--limit N] [--json]
 
 What did my sessions cost, subagents included? One table, grouped by --by
 (default project), with a total row.
