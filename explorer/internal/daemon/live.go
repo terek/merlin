@@ -76,6 +76,7 @@ func (d *Daemon) onHook(ls *liveSet, body []byte) {
 			continue
 		}
 		e := ls.entry(h, ev.Ref)
+		follow(e)
 		e.hookAt = time.Now()
 		d.refresh(e, ev.Final)
 		if ev.Ended {
@@ -94,7 +95,9 @@ func (d *Daemon) poll(ls *liveSet) {
 			continue
 		}
 		for _, ref := range refs {
-			ls.entry(h, ref).regGen = ls.gen
+			e := ls.entry(h, ref)
+			follow(e)
+			e.regGen = ls.gen
 		}
 	}
 	// Sessions the last reconciles saw changing recently. Their fingerprint is taken as
@@ -104,18 +107,46 @@ func (d *Daemon) poll(ls *liveSet) {
 		if _, ok := ls.entries[k]; ok {
 			continue
 		}
-		ls.entries[k] = &liveEntry{
+		e := &liveEntry{
 			h: dc.h, ref: harness.SessionRef{ID: dc.s.Key.ID, ProjectKey: dc.s.ProjectKey},
 			known: true, fp: dc.s.Fingerprint, newest: time.Unix(0, newest(dc.s.Fingerprint)),
 		}
+		follow(e)
+		ls.entries[k] = e
 	}
 	for k, e := range ls.entries {
 		d.refresh(e, false)
 		if !d.isLive(e, ls.gen) {
 			delete(ls.entries, k)
+			d.release(e)
 		}
 	}
 	d.liveCount.Store(int64(len(ls.entries)))
+}
+
+// follow tells a harness that can build incrementally that the session is live.
+func follow(e *liveEntry) {
+	if f, ok := e.h.(harness.Follower); ok {
+		f.Follow(e.ref)
+	}
+}
+
+// release is called when a session leaves the live set. The harness drops what it kept for
+// it, and if the stored digest was built from appended bytes only, the session is built
+// once more from scratch: an in-place edit that kept the file's length cannot be seen
+// while the file grows, and this build is what makes it reach the stored digest. It goes
+// to the priority lane so that it also replaces a build already running from the old state.
+func (d *Daemon) release(e *liveEntry) {
+	f, ok := e.h.(harness.Follower)
+	if !ok || !f.Release(e.ref) {
+		return
+	}
+	s, found, err := e.h.Locate(e.ref)
+	if err != nil || !found {
+		return
+	}
+	d.logf("live: %s left the live set; rebuilding it from scratch", s.Key.ID[:min(8, len(s.Key.ID))])
+	d.eng.Load().Enqueue(e.h, s, true)
 }
 
 func (d *Daemon) isLive(e *liveEntry, gen uint64) bool {
@@ -157,11 +188,9 @@ func (d *Daemon) refresh(e *liveEntry, immediate bool) {
 	}
 }
 
-// enqueue hands a live session to the engine's priority lane.
-//
-// SEAM (merlin-t8s.19): the engine rebuilds the whole session from its files. Incremental
-// reads belong in the harness's Build, which can keep a Builder per live file; nothing in
-// the daemon needs to change for that.
+// enqueue hands a live session to the engine's priority lane. A harness that is a
+// harness.Follower builds followed sessions incrementally behind Build; the daemon only
+// tells it which sessions are followed (follow, release).
 func (d *Daemon) enqueue(e *liveEntry, s harness.Session) {
 	e.fp = s.Fingerprint
 	e.lastEnq = time.Now()

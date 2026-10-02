@@ -40,9 +40,8 @@ type Harness interface {
 	// Build reads the files of one session and returns its digest. An error means a
 	// file could not be read. Safe for concurrent use.
 	//
-	// SEAM (merlin-t8s.19): today every call re-reads the whole session. Incremental
-	// reads for live sessions will keep a Builder per live file inside the adapter and
-	// feed it only the appended bytes; the engine and daemon do not change.
+	// A harness that implements Follower may keep state for followed sessions and read
+	// only what changed; the result must equal a full read.
 	Build(s Session) (*model.SessionDigest, error)
 
 	// Locate re-lists one session: the same result Discover would give for it, without
@@ -73,4 +72,19 @@ type HookEvent struct {
 	Ref   SessionRef // the session it is about
 	Final bool       // the session just reached a rest point: process it now, no debounce
 	Ended bool       // the session is over: it no longer counts as live because of this hook
+}
+
+// Follower is optionally implemented by a harness that can build live sessions
+// incrementally. The daemon calls Follow when a session joins the live set and Release
+// when it leaves; Build keeps state only for followed sessions, so scans pay nothing.
+type Follower interface {
+	// Follow marks the session as live. Idempotent.
+	Follow(ref SessionRef)
+	// Release drops everything kept for the session. rebuild is true when the stored
+	// digest may differ from a full read (it was built from appended bytes): the caller
+	// must then have the session built once more, which Build does from scratch because
+	// the session is no longer followed.
+	Release(ref SessionRef) (rebuild bool)
+	// SetLogf gives the harness a place to report how live builds read their files.
+	SetLogf(logf func(format string, args ...any))
 }

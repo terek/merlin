@@ -24,6 +24,16 @@ const ParserVersion = 5
 // means a file could not be read; the engine then writes an error stub that keeps
 // src.Fingerprint as its source.
 func BuildSession(src discover.Source, pricer Pricer) (*model.SessionDigest, error) {
+	return BuildSessionFrom(src, func(path string) (*FileResult, error) { return readFileResult(path, pricer) })
+}
+
+// FileReducer returns the reduction of one transcript file as it is now. BuildSessionFrom
+// calls it once per file, sequentially; a caller that keeps Builders between calls can
+// answer from them, as long as the result equals a reduction of the whole file.
+type FileReducer func(path string) (*FileResult, error)
+
+// BuildSessionFrom is BuildSession with the per-file reduction supplied by the caller.
+func BuildSessionFrom(src discover.Source, reduce FileReducer) (*model.SessionDigest, error) {
 	d := &model.SessionDigest{
 		SchemaVersion: model.SchemaVersion,
 		ParserVersion: ParserVersion,
@@ -36,7 +46,7 @@ func BuildSession(src discover.Source, pricer Pricer) (*model.SessionDigest, err
 
 	var main *FileResult
 	if src.Main != "" {
-		r, err := readFileResult(src.Main, pricer)
+		r, err := reduce(src.Main)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +56,7 @@ func BuildSession(src discover.Source, pricer Pricer) (*model.SessionDigest, err
 	sort.Slice(agents, func(i, j int) bool { return agents[i].ID < agents[j].ID })
 	files := make([]AgentFile, 0, len(agents))
 	for _, a := range agents {
-		r, err := readFileResult(a.Path, pricer)
+		r, err := reduce(a.Path)
 		if err != nil {
 			return nil, err
 		}

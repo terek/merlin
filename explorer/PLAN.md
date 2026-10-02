@@ -269,10 +269,19 @@ chain must never mark history as abandoned.
 - **Live sessions**: any session whose files changed in the last few minutes, or that a
   hook or `~/.claude/sessions/<pid>.json` names, is polled every second and reprocessed
   with a debounce (at most once per 3 s; immediately on `Stop` / `SessionEnd`).
-- **Incremental reads** (optimisation, after correctness): `Builder` is a reducer over
-  records, so the engine can keep it in memory per live file and feed it only appended
-  bytes. Guarded by a hash of the bytes just before the saved offset; any mismatch or
-  shrink means full reparse. Needed because the largest transcript is 52 MB.
+- **Incremental reads**: `Builder` is a reducer over records, so the Claude harness keeps,
+  for every file of a *followed* session, the Builder plus the reader offset and guard (a hash
+  of the 256 bytes before the offset) and the size and mtime the file had when read, and feeds
+  it only appended bytes (`internal/claude/incremental.go`). The daemon tells the harness
+  which sessions are live (`harness.Follower`: Follow / Release); the engine does not know.
+  A file is read whole when it is new, shrank, changed without growing (mtime moved, size
+  not larger), fails its guard, or the state is from another parser version; an unchanged
+  file is not read. An unterminated last line is never consumed. Because a same-length
+  in-place edit is invisible while a file keeps growing, Release (the session left the live
+  set) drops the state and, if any appended read fed the stored digest, the daemon rebuilds
+  the session once from scratch. Scans and idle rescans keep no state. Kept state is capped
+  at 256 MiB of source bytes, least recently built evicted first (the next build is whole).
+  Needed because the largest transcript is 52 MB.
 - **One instance**: `flock` on `explorer.lock`.
 - **First run**: 1.5 GB, parallel across cores; expected well under a minute.
 

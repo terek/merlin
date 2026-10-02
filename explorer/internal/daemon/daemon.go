@@ -215,6 +215,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.cat.Store(cat)
 	d.logf("catalog loaded: %d sessions", cat.Len())
 
+	for _, h := range d.opts.Harnesses {
+		if f, ok := h.(harness.Follower); ok {
+			f.SetLogf(d.logf)
+		}
+	}
 	eng, err := engine.New(engine.Options{
 		Store:      st,
 		Harnesses:  d.opts.Harnesses,

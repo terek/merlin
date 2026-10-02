@@ -19,9 +19,16 @@ type Harness struct {
 	projectsDir string
 	registryDir string // <config>/sessions: one <pid>.json per running session
 	pricer      digest.Pricer
+
+	inc           *incremental
+	logf          func(format string, args ...any)
+	parserVersion int // tests only: the parser version the kept state is tagged with
 }
 
-var _ harness.Harness = (*Harness)(nil)
+var (
+	_ harness.Harness  = (*Harness)(nil)
+	_ harness.Follower = (*Harness)(nil)
+)
 
 // New returns the Claude Code harness for the given config directory (CLAUDE_CONFIG_DIR,
 // normally ~/.claude). pricer prices API messages; *pricing.Table satisfies it.
@@ -30,6 +37,7 @@ func New(configDir string, pricer digest.Pricer) *Harness {
 		projectsDir: filepath.Join(configDir, "projects"),
 		registryDir: filepath.Join(configDir, "sessions"),
 		pricer:      pricer,
+		inc:         newIncremental(),
 	}
 }
 
@@ -88,6 +96,9 @@ func (h *Harness) Build(s harness.Session) (*model.SessionDigest, error) {
 	src, ok := s.Handle.(discover.Source)
 	if !ok {
 		return nil, fmt.Errorf("claude: session %s has no discovery handle", s.Key)
+	}
+	if st := h.inc.begin(src.ID); st != nil {
+		return h.buildFollowed(src, st)
 	}
 	return digest.BuildSession(src, h.pricer)
 }

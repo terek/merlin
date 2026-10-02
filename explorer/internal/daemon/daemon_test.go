@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/terek/merlin/explorer/internal/claude"
+	"github.com/terek/merlin/explorer/internal/claude/digest"
+	"github.com/terek/merlin/explorer/internal/claude/discover"
 	"github.com/terek/merlin/explorer/internal/daemon"
 	"github.com/terek/merlin/explorer/internal/engine"
 	"github.com/terek/merlin/explorer/internal/fixtures"
@@ -617,4 +619,71 @@ func TestSweepTemp(t *testing.T) {
 			t.Errorf("%s exists = %v, want %v", p, err == nil, want)
 		}
 	}
+}
+
+// A same-length edit of old bytes, made while the file also grows, cannot be seen by the
+// incremental path. When the session leaves the live set the daemon has it rebuilt from
+// scratch, and the stored digest then equals a full read of the files.
+func TestLeavingTheLiveSetRebuildsFromScratch(t *testing.T) {
+	r := newRig(t, "", "", func(o *daemon.Options) {
+		o.PollInterval, o.Debounce, o.LiveWindow = 10*time.Millisecond, 20*time.Millisecond, 600*time.Millisecond
+	})
+	r.start()
+	eventually(t, "initial index", r.indexed)
+
+	// The first live build reads everything and starts the kept state.
+	first := r.appendLine(1)
+	eventually(t, "first live build", func() bool { return r.storedSize() == first })
+
+	data, err := os.ReadFile(r.main())
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := bytes.Index(data, []byte(`"content":"`))
+	if i < 0 || i+12 > len(data)-300 {
+		t.Fatal("fixture has no early content to edit")
+	}
+	edited := bytes.Clone(data)
+	edited[i+11] ^= 0x01 // a letter becomes another letter
+	edited = append(edited, []byte(`{"type":"x-test-line","n":2}`+"\n")...)
+	if err := os.WriteFile(r.main(), edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := int64(len(edited))
+	eventually(t, "digest follows the edit", func() bool { return r.storedSize() == want })
+	if st := r.h.IncrementalStats(); st.AppendFiles == 0 {
+		t.Fatalf("the live build did not read incrementally: %+v", st)
+	}
+	before := r.h.IncrementalStats()
+	if r.fullMatches() {
+		t.Fatal("test bug: the edit should be invisible to the incremental build")
+	}
+
+	// The session goes quiet; after the live window it leaves the set and is rebuilt.
+	eventually(t, "full rebuild after leaving the live set", func() bool {
+		return r.fullMatches()
+	})
+	if after := r.h.IncrementalStats(); after.AppendFiles != before.AppendFiles {
+		t.Errorf("the rebuild went through the incremental path: %+v -> %+v", before, after)
+	}
+}
+
+// fullMatches reports whether the stored digest of the plain session equals a from-scratch
+// build of its files as they are now.
+func (r *rig) fullMatches() bool {
+	s, found, err := r.h.Locate(harness.SessionRef{ID: plainID})
+	if err != nil || !found {
+		return false
+	}
+	stored, ok, _ := r.st.Read(r.ref())
+	if !ok {
+		return false
+	}
+	full, err := digest.BuildSession(s.Handle.(discover.Source), pricing.Default())
+	if err != nil {
+		return false
+	}
+	a, _ := json.Marshal(stored)
+	b, _ := json.Marshal(full)
+	return bytes.Equal(a, b)
 }
