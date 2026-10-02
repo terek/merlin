@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 5,
+  "parserVersion": 6,
   "source": [
     {
       "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001.jsonl",
@@ -148,7 +148,9 @@
       "inbox": [
         {
           "at": "2026-09-09T10:02:05Z",
+          "kind": "message",
           "from": "team-lead",
+          "summary": "also check tests",
           "text": "Please also check the tests."
         }
       ],

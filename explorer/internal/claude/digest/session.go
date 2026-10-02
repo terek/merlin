@@ -15,7 +15,7 @@ import (
 // ParserVersion identifies the output of this package. Bump it whenever a change here, in
 // the Builder, in Assemble or in the transcript package would change a digest built from
 // the same files: the engine rebuilds every digest whose parserVersion differs.
-const ParserVersion = 5
+const ParserVersion = 6
 
 // BuildSession reads the files of one discovered session and returns its complete digest.
 //

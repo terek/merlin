@@ -9,6 +9,7 @@ import type {
   Cost,
   CostFlag,
   EndState,
+  InboxMessage,
   Link,
   Message,
   ModelCost,
@@ -257,13 +258,6 @@ export interface Spec {
   gapMin?: [number, number]
 }
 
-/** A teammate's first prompt arrives as a message from the lead, wrapped like Claude Code wraps it. */
-function wrapPrompt(kind: string, text: string): string {
-  return kind === 'teammate'
-    ? `<teammate-message teammate_id="lead" summary="Your assignment">\n${text}\n</teammate-message>`
-    : text
-}
-
 function makeTurn(r: Rng, i: number, t: number, ctx: number, epoch: number, spec: Spec): Turn {
   const origin: TurnOrigin =
     i === 0 || r.chance(0.82)
@@ -288,29 +282,60 @@ function makeTurn(r: Rng, i: number, t: number, ctx: number, epoch: number, spec
   }
   const nTools = Object.values(tools).reduce((a, b) => a + b, 0)
   const cmd = r.pick(['compact', 'review', 'init', 'cost'] as const)
-  // wrapper shapes of machine-authored prompts; all texts are invented
-  const task = `<task-notification>
-<task-id>b${i}x7</task-id>
-<status>${i % 3 === 0 ? 'failed' : 'completed'}</status>
-<summary>Background command "run the test suite" ${i % 3 === 0 ? 'failed with exit code 1' : 'completed (exit code 0)'}</summary>
-<result>${i % 3 === 0 ? '3 tests failed in sync_test.go' : 'All 214 tests passed in 41 s.'}</result>
-</task-notification>`
-  const peer = [
-    `<teammate-message teammate_id="reviewer" summary="Two issues in the patch">\nThe retry loop never backs off (line 41).\nThe error is swallowed in flush().\n</teammate-message>`,
-    `Another Claude session sent a message:\n<teammate-message teammate_id="docs-session">{"result": "The schema change is merged; rebase before you continue."}</teammate-message>`,
-    `<cross-session-message from="build-watcher">Main is red again: sync_test.go times out.\nNot yet bisected.</cross-session-message>`,
+  // what a machine delivered as the prompt, as the API gives it; all texts are invented
+  const at = iso(t)
+  const task: InboxMessage[] = [
+    {
+      at,
+      kind: 'task',
+      taskId: `b${i}x7`,
+      status: i % 3 === 0 ? 'failed' : 'completed',
+      summary: `Background command "run the test suite" ${i % 3 === 0 ? 'failed with exit code 1' : 'completed (exit code 0)'}`,
+      text: i % 3 === 0 ? '3 tests failed in sync_test.go' : undefined,
+    },
+  ]
+  const peer: InboxMessage[] = [
+    [
+      {
+        at,
+        kind: 'message' as const,
+        from: 'reviewer',
+        summary: 'Two issues in the patch',
+        text: 'The retry loop never backs off (line 41).\nThe error is swallowed in flush().',
+      },
+      { at, kind: 'idle' as const, from: 'reviewer', status: 'available' },
+    ],
+    [
+      {
+        at,
+        kind: 'idle' as const,
+        from: 'docs-writer',
+        status: 'available',
+        text: 'The schema page is rewritten.\n\n- three sections merged\n- the examples now run',
+      },
+    ],
+    [
+      {
+        at,
+        kind: 'idle' as const,
+        from: 'build-watcher',
+        status: 'failed',
+        error: 'API Error: connection closed mid-response.',
+      },
+    ],
   ][i % 3]
+  const inbox = origin === 'task-notification' ? task : origin === 'peer' ? peer : undefined
   let userText =
     origin === 'human'
       ? promptText(r)
       : origin === 'command'
         ? `/${cmd}${cmd === 'review' ? ' the login page and the session store' : cmd === 'compact' ? ' keep the schema decisions' : ''}`
         : origin === 'task-notification'
-          ? task
+          ? ''
           : origin === 'scheduled'
             ? 'Scheduled check: look at the build status.'
             : origin === 'peer'
-              ? peer
+              ? ''
               : 'Continue.'
   if (spec.special === 'huge' && i === 1)
     userText = Array.from({ length: 1300 }, () => `${sentence(r)}\n`)
@@ -329,6 +354,7 @@ function makeTurn(r: Rng, i: number, t: number, ctx: number, epoch: number, spec
     durationMs: dur,
     origin,
     userText,
+    inbox,
     images: origin === 'human' && r.chance(0.04) ? r.int(1, 3) : undefined,
     command: origin === 'command' ? userText.slice(1).split(' ')[0] : undefined,
     finalText: r.chance(0.97)
@@ -396,9 +422,19 @@ function makeAgents(r: Rng, turns: Turn[], n: number, deep: boolean, shape?: (ag
       startedAt: iso(started),
       endedAt: iso(started + dur),
       status,
-      prompt: wrapPrompt(kind, `${r.pick(SPAWN_REASONS)}. ${paragraph(r, 2)}`),
+      prompt: `${r.pick(SPAWN_REASONS)}. ${paragraph(r, 2)}`,
       finalText: status === 'killed' ? undefined : finalText(r),
-      inbox: r.chance(0.1) ? [{ at: iso(started + dur / 2), from: 'main', text: sentence(r) }] : undefined,
+      inbox: r.chance(0.1)
+        ? [
+            {
+              at: iso(started + dur / 2),
+              kind: 'message',
+              from: 'team-lead',
+              summary: 'One more thing',
+              text: sentence(r),
+            },
+          ]
+        : undefined,
       assistantMessages: r.int(1, 12),
       toolCalls: calls,
       toolsByName: calls ? { [r.pick(TOOLS)]: calls } : undefined,

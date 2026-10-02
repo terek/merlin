@@ -160,7 +160,8 @@ Turn
   abandoned                   bool: the turn is on a branch the session later rewound away from
   startedAt, endedAt, durationMs
   origin          human | command | task-notification | peer | scheduled | sdk | continuation
-  userText        the prompt, verbatim and complete
+  userText        the prompt as its author wrote it, complete; for a machine-delivered prompt only what was not recognised
+  inbox[]?        InboxMessage: the messages a machine delivered as this prompt
   images          count of pasted images (the image data is not stored)
   command?        slash command name, when origin is command
   finalText       last assistant text of the turn, complete
@@ -181,13 +182,15 @@ Agent
   status          completed | killed | open     open = no terminal marker in the files; whether it is actually running is the catalog's call
   prompt          first prompt, complete
   finalText       last assistant text, complete
-  inbox[]         {at, from?, text}     later messages it received (teammates)
+  inbox[]         InboxMessage          later messages it received (teammates)
   assistantMessages, toolCalls, toolsByName{}
   compactions[]
   cost            own
   subtreeUSD      own + descendants
 
 Compaction  {at, turn, trigger, preTokens, postTokens?, durationMs?, summary}
+
+InboxMessage  {at, kind: message | idle | task | assignment, from?, agentId?, taskId?, status?, summary?, text?, error?}
 ```
 
 **Texts are never truncated.** Prompts, final texts, agent prompts, inbox messages and

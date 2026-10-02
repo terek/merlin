@@ -159,11 +159,15 @@ type Turn struct {
 	DurationMs int64      `json:"durationMs,omitempty"`
 	Origin     TurnOrigin `json:"origin"`
 
-	UserText    string `json:"userText"`
-	Images      int    `json:"images,omitempty"`
-	Command     string `json:"command,omitempty"`
-	FinalText   string `json:"finalText,omitempty"`
-	Interrupted bool   `json:"interrupted,omitempty"`
+	// UserText is the prompt as its author wrote it. A prompt a machine delivered is taken
+	// apart into Inbox, and UserText keeps only what was not recognised (normally nothing).
+	UserText string `json:"userText"`
+	// Inbox holds the messages a machine delivered as this prompt, in order.
+	Inbox       []InboxMessage `json:"inbox,omitempty"`
+	Images      int            `json:"images,omitempty"`
+	Command     string         `json:"command,omitempty"`
+	FinalText   string         `json:"finalText,omitempty"`
+	Interrupted bool           `json:"interrupted,omitempty"`
 
 	AssistantMessages int64            `json:"assistantMessages"`
 	ToolCalls         int64            `json:"toolCalls"`
@@ -176,11 +180,26 @@ type Turn struct {
 	Spawned        []string `json:"spawned,omitempty"` // agent ids
 }
 
-// InboxMessage is a later message an agent received (teammates).
+// InboxMessage is one message an agent received that nobody typed: a teammate's message, a
+// teammate going idle, a background task reporting, a task being assigned. A turn started by
+// such a delivery lists them in Turn.Inbox; an agent's later ones are in Agent.Inbox.
 type InboxMessage struct {
 	At   time.Time `json:"at"`
-	From string    `json:"from,omitempty"`
-	Text string    `json:"text"`
+	Kind InboxKind `json:"kind"`
+	// From is the sender's name as the harness gives it (a teammate's name, "team-lead").
+	From string `json:"from,omitempty"`
+	// AgentID is the agent of this session that sent the message or that it is about,
+	// when one could be identified.
+	AgentID string `json:"agentId,omitempty"`
+	// TaskID is the harness's id of the task the message is about (kinds task, assignment).
+	TaskID string `json:"taskId,omitempty"`
+	// Status is the state reported: for idle why the teammate stopped (available, failed),
+	// for task how it ended (completed, failed, killed). Empty when none was given.
+	Status  string `json:"status,omitempty"`
+	Summary string `json:"summary,omitempty"`
+	Text    string `json:"text,omitempty"`
+	// Error is the failure the sender reported, when it stopped because of one.
+	Error string `json:"error,omitempty"`
 }
 
 // Agent is a sub-agent of the session. The list is flat; the tree is ParentAgentID.

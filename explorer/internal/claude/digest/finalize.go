@@ -122,7 +122,7 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 		t := model.Turn{
 			Index: i, Epoch: ts.epoch, UUID: ts.uuid,
 			StartedAt: ts.startedAt, EndedAt: ts.endedAt,
-			Origin: ts.origin, UserText: ts.userText, Images: ts.images,
+			Origin: ts.origin, UserText: ts.userText, Inbox: slices.Clone(ts.inbox), Images: ts.images,
 			Command: ts.command, Interrupted: ts.interrupted,
 		}
 		switch {

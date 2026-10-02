@@ -50,6 +50,7 @@ type turnState struct {
 	durationMs  int64 // from a turn_duration record, 0 when absent
 	origin      model.TurnOrigin
 	userText    string
+	inbox       []model.InboxMessage
 	images      int
 	command     string
 	interrupted bool
@@ -407,6 +408,12 @@ func (b *Builder) user(r *transcript.Record, ts time.Time, pos int) {
 		n := parseNotification(text)
 		n.Turn, n.At = len(b.turns), ts
 		b.notes = append(b.notes, n)
+	}
+	if origin == model.OriginPeer || origin == model.OriginTaskNotification {
+		// The harness wraps what was delivered in markup of its own; store the messages.
+		if msgs, rest, ok := delivered(text, ts); ok {
+			t.inbox, t.userText = msgs, rest
+		}
 	}
 	b.startTurn(t)
 }

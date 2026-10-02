@@ -308,7 +308,13 @@ export interface Turn {
   endedAt?: string
   durationMs?: number
   origin: TurnOrigin
+  /**
+   * The prompt as its author wrote it. For a prompt a machine delivered, only what was not
+   * recognised as a message (normally nothing): the messages are in `inbox`.
+   */
   userText: string
+  /** The messages a machine delivered as this prompt. */
+  inbox?: InboxMessage[]
   images?: number
   command?: string
   finalText?: string
@@ -324,10 +330,28 @@ export interface Turn {
   spawned?: string[]
 }
 
+export type InboxKind = 'message' | 'idle' | 'task' | 'assignment'
+
+/**
+ * One message an agent received that nobody typed: a teammate's message, a teammate going idle, a
+ * background task reporting, a task being assigned. The harness's markup is already taken off.
+ */
 export interface InboxMessage {
   at: string
+  /** Absent in digests written before messages were parsed: read as 'message'. */
+  kind?: InboxKind
+  /** Sender's name as the harness gives it. */
   from?: string
-  text: string
+  /** The agent of this session that sent the message, or that a task message is about. */
+  agentId?: string
+  taskId?: string
+  /** idle: why the teammate stopped (available, failed); task: how it ended (completed, failed, killed). */
+  status?: string
+  summary?: string
+  /** The message, whole. idle: the teammate's last answer; task: the result, or the event a monitor saw. */
+  text?: string
+  /** The failure the sender reported, when it stopped because of one. */
+  error?: string
 }
 
 export interface Agent {

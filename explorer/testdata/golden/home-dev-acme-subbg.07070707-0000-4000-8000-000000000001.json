@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 5,
+  "parserVersion": 6,
   "source": [
     {
       "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001.jsonl",
@@ -103,7 +103,18 @@
       "endedAt": "2026-09-07T10:02:04Z",
       "durationMs": 4000,
       "origin": "task-notification",
-      "userText": "\u003ctask-notification\u003e\n\u003ctask-id\u003ea07e0c0de0000001\u003c/task-id\u003e\n\u003cstatus\u003ecompleted\u003c/status\u003e\n\u003csummary\u003eAgent \"Run audit\" completed\u003c/summary\u003e\n\u003cresult\u003eAudit complete: 2 issues.\u003c/result\u003e\n\u003c/task-notification\u003e",
+      "userText": "",
+      "inbox": [
+        {
+          "at": "2026-09-07T10:02:00Z",
+          "kind": "task",
+          "agentId": "a07e0c0de0000001",
+          "taskId": "a07e0c0de0000001",
+          "status": "completed",
+          "summary": "Agent \"Run audit\" completed",
+          "text": "Audit complete: 2 issues."
+        }
+      ],
       "finalText": "The audit found 2 issues.",
       "assistantMessages": 1,
       "toolCalls": 0,

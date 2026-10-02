@@ -30,6 +30,16 @@ const (
 	OriginContinuation     TurnOrigin = "continuation"      // harness-issued "keep going"
 )
 
+// InboxKind says what sort of machine-delivered message an InboxMessage is.
+type InboxKind string
+
+const (
+	InboxMessageKind InboxKind = "message"    // text written by another agent
+	InboxIdle        InboxKind = "idle"       // a teammate stopped and is waiting; Text is its last answer
+	InboxTask        InboxKind = "task"       // a background task (agent, command, monitor) reported
+	InboxAssignment  InboxKind = "assignment" // a task was assigned to the receiver
+)
+
 // AgentKind says what sort of sub-agent an Agent is.
 type AgentKind string
 

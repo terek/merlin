@@ -614,9 +614,56 @@ func (p *printer) timeline(d *model.SessionDigest, in catalog.SessionInfo) {
 		}
 		p.printf("%s\n", head)
 		p.text(">", t.UserText)
+		for _, m := range t.Inbox {
+			p.inbox(m)
+		}
 		p.text("<", t.FinalText)
 		for _, ci := range after[t.Index] {
 			p.compaction(d.Compactions[ci], ci)
 		}
 	}
+}
+
+// inbox prints one message a machine delivered as a turn's prompt: who or what it came
+// from, then its summary, text and error, shortened to one line unless --full.
+func (p *printer) inbox(m model.InboxMessage) {
+	var label string
+	switch m.Kind {
+	case model.InboxIdle:
+		label = firstOf(m.From, "teammate") + " idle"
+		if m.Status != "" && m.Status != "available" {
+			label += " (" + m.Status + ")"
+		}
+	case model.InboxTask:
+		label = "task " + firstOf(m.Status, "event")
+	case model.InboxAssignment:
+		label = "task assigned by " + firstOf(m.From, "?")
+	default:
+		label = "from " + firstOf(m.From, "?")
+	}
+	var parts []string
+	for _, s := range []string{m.Summary, m.Error, m.Text} {
+		if strings.TrimSpace(s) != "" {
+			parts = append(parts, s)
+		}
+	}
+	if !p.opt.full {
+		line := "[" + label + "]"
+		if len(parts) > 0 {
+			line += " " + parts[0]
+		}
+		p.printf("     > %s\n", snip(line, p.textW))
+		return
+	}
+	p.printf("     > [%s]\n", label)
+	for _, s := range parts {
+		p.block(" ", s)
+	}
+}
+
+func firstOf(s, fallback string) string {
+	if s != "" {
+		return s
+	}
+	return fallback
 }

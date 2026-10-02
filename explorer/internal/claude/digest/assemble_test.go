@@ -180,7 +180,8 @@ func TestAssembleTeammate(t *testing.T) { // 09
 	if g.Name != "reviewer" || g.AgentType != "reviewer" {
 		t.Errorf("name/type = %q/%q", g.Name, g.AgentType)
 	}
-	want := []model.InboxMessage{{At: time.Date(2026, 9, 9, 10, 2, 5, 0, time.UTC), From: "team-lead", Text: "Please also check the tests."}}
+	want := []model.InboxMessage{{At: time.Date(2026, 9, 9, 10, 2, 5, 0, time.UTC), Kind: model.InboxMessageKind,
+		From: "team-lead", Summary: "also check tests", Text: "Please also check the tests."}}
 	if !reflect.DeepEqual(g.Inbox, want) {
 		t.Errorf("inbox = %+v, want %+v", g.Inbox, want)
 	}

@@ -49,6 +49,8 @@ const TASK = /^\s*<task-notification(?:\s[^>]*)?>([\s\S]*?)<\/task-notification>
 const TEAMMATE = /<teammate-message((?:\s[^>]*?)?)>([\s\S]*?)<\/teammate-message>/g
 const CROSS = /<cross-session-message((?:\s[^>]*?)?)>([\s\S]*?)<\/cross-session-message>/g
 const PEER_PREFIX = /^\s*Another Claude session sent a message:\s*/
+// the paragraph Claude Code closes a peer prompt with: instructions for the model, not content
+const PEER_TRAILER = /^This came from another Claude session\b[^\n]*(?:\n(?!\n)[^\n]*)*/
 
 export function unwrapMachineText(text: string): Unwrapped {
   const same: Unwrapped = { label: '', body: text, summary: firstLine(text) }
@@ -63,7 +65,8 @@ export function unwrapMachineText(text: string): Unwrapped {
     return { label: status || 'task notification', body, summary: summary || firstLine(body) }
   }
 
-  // Peer messages: the optional prefix line, then one or more wrapped messages and nothing else.
+  // Peer messages: the optional prefix line, one or more wrapped messages, the optional closing
+  // paragraph, and nothing else.
   const rest = text.replace(PEER_PREFIX, '')
   for (const [re, fromAttr] of [
     [TEAMMATE, 'teammate_id'],
@@ -72,7 +75,7 @@ export function unwrapMachineText(text: string): Unwrapped {
     re.lastIndex = 0
     const found = [...rest.matchAll(re)]
     if (found.length === 0) continue
-    if (rest.replace(re, '').trim() !== '') return same
+    if (rest.replace(re, '').trim().replace(PEER_TRAILER, '').trim() !== '') return same
     const bodies = found.map((m) => jsonText(decode(m[2]).trim()))
     const from = attr(found[0][1], fromAttr)
     const summary = attr(found[0][1], 'summary') || firstLine(bodies[0])

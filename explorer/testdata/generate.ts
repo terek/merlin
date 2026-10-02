@@ -807,7 +807,10 @@ const TM = 'areviewer-09e0c0de00000001'
   f.turnEnd(4000, 4)
   const a = sub(f, TM, 2)
   a.t = base(9) + 12_000
-  a.user('Review the diff in the login branch.')
+  // A teammate's prompts arrive wrapped, the body on lines of its own.
+  a.user(
+    '<teammate-message teammate_id="team-lead" summary="Review the diff">\nReview the diff in the login branch.\n</teammate-message>',
+  )
   a.asst('msg_team_a1', [TU('toolu_team_a1', 'Bash', { command: 'git diff' })], u(2000, 60, 0, 1000))
   a.result('toolu_team_a1', '1 file changed', { stdout: '1 file changed', stderr: '' })
   a.asst('msg_team_a2', [T('Reviewed: one nit in login.tsx.')], u(300, 40, 3000, 200))
@@ -827,7 +830,7 @@ const TM = 'areviewer-09e0c0de00000001'
   f.result('toolu_team_02', 'Message sent to reviewer', { success: true, message: 'Message sent to reviewer' })
   a.at(iso(base(9) + 125_000))
   a.user(
-    '<teammate-message teammate_id="team-lead" summary="also check tests">Please also check the tests.</teammate-message>',
+    '<teammate-message teammate_id="team-lead" summary="also check tests">\nPlease also check the tests.\n</teammate-message>',
     { origin: 'peer', src: 'system' },
   )
   a.asst('msg_team_a3', [T('Tests look fine.')], u(300, 30, 3500, 100))

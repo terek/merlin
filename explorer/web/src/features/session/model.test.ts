@@ -204,6 +204,29 @@ describe('machineLine', () => {
       }),
     ).toBe('from x: Done')
   })
+  test('delivered prompts show the first message and how many more there are', () => {
+    const at = '2026-09-30T10:00:00Z'
+    expect(
+      machineLine({
+        origin: 'peer',
+        userText: '',
+        inbox: [
+          { at, kind: 'message', from: 'x', summary: 'Done', text: 'body' },
+          { at, kind: 'idle', from: 'x', status: 'available' },
+        ],
+      }),
+    ).toBe('from x +1: Done')
+    expect(
+      machineLine({
+        origin: 'task-notification',
+        userText: '',
+        inbox: [{ at, kind: 'task', status: 'failed', summary: 'Build broke' }],
+      }),
+    ).toBe('task failed: Build broke')
+    expect(
+      machineLine({ origin: 'peer', userText: '', inbox: [{ at, kind: 'idle', from: 'x', status: 'available' }] }),
+    ).toBe('x idle')
+  })
 })
 
 describe('topTools', () => {

@@ -185,7 +185,8 @@ A stretch of a text, as UTF-8 byte offsets.
 | `endedAt` | time of the turn's last record |
 | `durationMs` | duration of the turn |
 | `origin` | who authored the prompt: `human`, `command`, `task-notification`, `peer`, `scheduled`, `sdk`, `continuation` |
-| `userText` | the prompt, verbatim and complete |
+| `userText` | the prompt as its author wrote it, complete. For a command, what was typed. For a prompt a machine delivered, only what was not recognised as a message or as the harness's own framing (normally nothing): the messages are in `inbox` |
+| `inbox` | the messages a machine delivered as this prompt, as `InboxMessage`, in order; omitted for a typed prompt |
 | `images` | number of pasted images (image data is not stored) |
 | `command` | slash command name, when `origin` is `command` |
 | `finalText` | last assistant text of the turn, complete |
@@ -218,9 +219,9 @@ A stretch of a text, as UTF-8 byte offsets.
 | `startedAt` | time of its first record |
 | `endedAt` | time of its last record |
 | `status` | `completed`, `killed` or `open` (no terminal marker in the files) |
-| `prompt` | its first prompt, complete |
+| `prompt` | its first prompt, complete; when it arrived as a delivered message, that message's text |
 | `finalText` | its last assistant text, complete |
-| `inbox` | later messages it received, as `InboxMessage` |
+| `inbox` | later prompts it received, as `InboxMessage`; a later prompt that is not a delivered message is one entry of kind `message` with no sender |
 | `assistantMessages` | assistant API messages it made |
 | `toolCalls` | tool calls it made |
 | `toolsByName` | tool calls per tool name |
@@ -230,11 +231,21 @@ A stretch of a text, as UTF-8 byte offsets.
 
 ## InboxMessage
 
+One message an agent received that nobody typed. The harness wraps these in markup of its
+own and adds instructions for the model; the digest stores the message and drops the
+wrapping. Texts are whole.
+
 | key | meaning |
 |---|---|
 | `at` | when it arrived |
-| `from` | sender, when known |
-| `text` | the message, whole |
+| `kind` | `message` (text written by another agent), `idle` (a teammate stopped and is waiting), `task` (a background agent, command or monitor reported), `assignment` (a task was assigned to the receiver) |
+| `from` | sender's name as the harness gives it, when known |
+| `agentId` | the agent of this session that sent the message (matched by name) or that a `task` message is about; omitted when none was identified |
+| `taskId` | the harness's id of the task, for `task` and `assignment` |
+| `status` | `idle`: why the teammate stopped (`available`, `failed`); `task`: how it ended (`completed`, `failed`, `killed`); omitted when none was given |
+| `summary` | the sender's or harness's one-line summary |
+| `text` | the message, whole. `idle`: the teammate's last answer; `task`: the task's result or the event a monitor saw; `assignment`: the task's description |
+| `error` | the failure the sender reported, when it stopped because of one |
 
 ## Message
 

@@ -36,10 +36,7 @@
       "ownMessages": 1,
       "inheritedMessages": 3
     },
-    "inheritedTurns": [
-      0,
-      1
-    ],
+    "inheritedTurns": [0, 1],
     "firstOwnTurn": 2,
     "parent": {
       "parent": {
@@ -88,7 +85,7 @@
   "resume": "cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000002",
   "digest": {
     "schemaVersion": 1,
-    "parserVersion": 5,
+    "parserVersion": 6,
     "source": [
       {
         "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-s13a-continuation/13131313-0000-4000-8000-000000000002.jsonl",
@@ -101,15 +98,9 @@
     "projectKey": "-home-dev-acme-s13a-continuation",
     "project": "/home/dev/acme/s13a-continuation",
     "cwd": "/home/dev/acme/s13a-continuation",
-    "cwds": [
-      "/home/dev/acme/s13a-continuation"
-    ],
-    "gitBranches": [
-      "main"
-    ],
-    "harnessVersions": [
-      "2.1.200"
-    ],
+    "cwds": ["/home/dev/acme/s13a-continuation"],
+    "gitBranches": ["main"],
+    "harnessVersions": ["2.1.200"],
     "kind": "interactive",
     "title": "add a search box",
     "startedAt": "2026-09-13T10:00:00Z",
@@ -153,9 +144,7 @@
         "toolsByName": {
           "Edit": 1
         },
-        "filesTouched": [
-          "/home/dev/acme/search.tsx"
-        ],
+        "filesTouched": ["/home/dev/acme/search.tsx"],
         "contextTokens": 2600,
         "cost": {
           "usd": 0.0141,

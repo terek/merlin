@@ -133,7 +133,7 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 					others = v.turnHolders[t.UUID]
 				}
 			}
-			add(FieldPrompt, t.Index, t.StartedAt, t.UserText, t.Abandoned, others)
+			add(FieldPrompt, t.Index, t.StartedAt, promptText(t), t.Abandoned, others)
 			add(FieldFinal, t.Index, t.StartedAt, t.FinalText, t.Abandoned, others)
 		}
 		for k := range d.Compactions {
@@ -200,4 +200,25 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 		hits = hits[:opt.Limit]
 	}
 	return hits
+}
+
+// promptText is what a search of a turn's prompt looks at: the typed text and, for a prompt
+// a machine delivered, the summary, text and error of each message.
+func promptText(t *model.Turn) string {
+	if len(t.Inbox) == 0 {
+		return t.UserText
+	}
+	parts := make([]string, 0, 1+3*len(t.Inbox))
+	if t.UserText != "" {
+		parts = append(parts, t.UserText)
+	}
+	for i := range t.Inbox {
+		m := &t.Inbox[i]
+		for _, s := range []string{m.Summary, m.Text, m.Error} {
+			if s != "" {
+				parts = append(parts, s)
+			}
+		}
+	}
+	return strings.Join(parts, "\n")
 }

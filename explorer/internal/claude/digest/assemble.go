@@ -1,7 +1,6 @@
 package digest
 
 import (
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -127,9 +126,25 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 	fillStatus(agents, ags, links, spawns, results, main)
 	rollUp(agents, parent)
 
+	// Who the delivered messages came from. An agent does not send to itself.
+	for i := range agents {
+		resolveInbox(agents[i].Inbox, agents)
+		for k := range agents[i].Inbox {
+			if agents[i].Inbox[k].AgentID == agents[i].ID {
+				agents[i].Inbox[k].AgentID = ""
+			}
+		}
+	}
+
 	// Main turns.
 	if main != nil {
 		asm.Turns = slices.Clone(main.Turns)
+		for i := range asm.Turns {
+			if len(asm.Turns[i].Inbox) > 0 {
+				asm.Turns[i].Inbox = slices.Clone(asm.Turns[i].Inbox)
+				resolveInbox(asm.Turns[i].Inbox, agents)
+			}
+		}
 		for i, a := range agents {
 			if parent[i] >= 0 || a.SpawnTurn == nil {
 				continue // nested agents are inside their top-level ancestor's subtree
@@ -326,10 +341,10 @@ func linkAgents(ags []agentIn, spawns []spawnRef, byID map[string][]int, results
 			continue
 		}
 		p := firstPrompt(a.res.Turns)
-		if p < 0 || strings.TrimSpace(a.res.Turns[p].UserText) == "" {
+		if p < 0 || strings.TrimSpace(promptText(&a.res.Turns[p])) == "" {
 			continue
 		}
-		want := strings.TrimSpace(a.res.Turns[p].UserText)
+		want := strings.TrimSpace(promptText(&a.res.Turns[p]))
 		for _, s := range spawns {
 			if s.ToolUseID == "" || claimed[s.ToolUseID] || s.owner == i || strings.TrimSpace(s.Prompt) != want {
 				continue
@@ -449,13 +464,20 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 		if ag.Kind == model.AgentFork && sp != nil && sp.Prompt != "" {
 			for j := p; j < len(turns); j++ {
 				if turns[j].Origin != model.OriginContinuation &&
-					strings.TrimSpace(turns[j].UserText) == strings.TrimSpace(sp.Prompt) {
+					strings.TrimSpace(promptText(&turns[j])) == strings.TrimSpace(sp.Prompt) {
 					p = j
 					break
 				}
 			}
 		}
+		// A prompt that was delivered as a message is that message's text; its summary
+		// stands in for a missing description.
 		ag.Prompt = turns[p].UserText
+		if first := turns[p].Inbox; ag.Prompt == "" && len(first) > 0 {
+			ag.Prompt = first[0].Text
+			ag.Description = firstNonEmpty(ag.Description, first[0].Summary)
+			ag.Inbox = append(ag.Inbox, first[1:]...)
+		}
 		for _, t := range turns[p+1:] {
 			if t.Origin == model.OriginContinuation {
 				continue
@@ -512,28 +534,69 @@ func agentKind(a agentIn) model.AgentKind {
 	return model.AgentSubagent
 }
 
-var (
-	reTeammateMsg = regexp.MustCompile(`(?s)<teammate-message\b([^>]*)>(.*?)</teammate-message>`)
-	reTeammateID  = regexp.MustCompile(`\bteammate_id="([^"]*)"`)
-)
-
-// inboxMessages turns a later prompt of an agent into inbox entries. A prompt wrapped in
-// <teammate-message teammate_id="X" ...> yields one entry per wrapper with the sender and
-// the inner text; any other prompt is one entry with no sender.
+// inboxMessages turns a later prompt of an agent into inbox entries: the messages the
+// prompt delivered, and one entry with no sender for any text that is not one of them.
 func inboxMessages(t model.Turn) []model.InboxMessage {
-	ms := reTeammateMsg.FindAllStringSubmatch(t.UserText, -1)
-	if len(ms) == 0 {
-		return []model.InboxMessage{{At: t.StartedAt, Text: t.UserText}}
-	}
-	out := make([]model.InboxMessage, 0, len(ms))
-	for _, m := range ms {
-		var from string
-		if id := reTeammateID.FindStringSubmatch(m[1]); id != nil {
-			from = id[1]
-		}
-		out = append(out, model.InboxMessage{At: t.StartedAt, From: from, Text: strings.TrimSpace(m[2])})
+	out := slices.Clone(t.Inbox)
+	if t.UserText != "" || len(out) == 0 {
+		out = append(out, model.InboxMessage{At: t.StartedAt, Kind: model.InboxMessageKind, Text: t.UserText})
 	}
 	return out
+}
+
+// resolveInbox fills AgentID on delivered messages: the agent a task notification is about
+// (its task id is the agent's id), or the agent that sent a message (by name).
+func resolveInbox(msgs []model.InboxMessage, agents []model.Agent) {
+	for i := range msgs {
+		m := &msgs[i]
+		if m.Kind == model.InboxTask {
+			for j := range agents {
+				if m.TaskID != "" && agents[j].ID == m.TaskID {
+					m.AgentID = agents[j].ID
+					break
+				}
+			}
+			continue
+		}
+		if j := sender(m.From, m.At, agents); j >= 0 {
+			m.AgentID = agents[j].ID
+		}
+	}
+}
+
+// sender is the index of the agent called name that sent a message at the given time, or
+// -1. A name can be used by several agents over a session: the sender is the one started
+// last before the message, else the one started first.
+func sender(name string, at time.Time, agents []model.Agent) int {
+	best := -1
+	if name == "" {
+		return best
+	}
+	for j := range agents {
+		a := &agents[j]
+		if a.Name != name {
+			continue
+		}
+		if best < 0 {
+			best = j
+			continue
+		}
+		b := &agents[best]
+		aBefore, bBefore := !a.StartedAt.After(at), !b.StartedAt.After(at)
+		switch {
+		case aBefore && bBefore:
+			if a.StartedAt.After(b.StartedAt) {
+				best = j
+			}
+		case aBefore:
+			best = j
+		case !bBefore:
+			if a.StartedAt.Before(b.StartedAt) {
+				best = j
+			}
+		}
+	}
+	return best
 }
 
 // fillDepthAndSpawnTurn sets Depth (meta.spawnDepth when present, else the parent chain's)

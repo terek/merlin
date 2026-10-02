@@ -14,9 +14,9 @@ import type {
   Turn,
 } from '../../api/types'
 import { formatMoney } from '../../lib/format'
+import { turnPrompt } from '../../lib/inbox'
 import { firstLine, resumeCommand } from '../../lib/paths'
 import { sameKey } from '../../lib/session'
-import { unwrapMachineText } from '../../lib/wrapper'
 
 // ---- hash addressing --------------------------------------------------------------------
 
@@ -190,14 +190,14 @@ export function compactionIsInherited(detail: SessionDetail, index: number): boo
  * The line a compact machine turn shows: a command (its text already starts with the command as
  * typed), a task notification or peer message by label and summary, else the first line of its text.
  */
-export function machineLine(t: Pick<Turn, 'origin' | 'command' | 'userText'>): string {
+export function machineLine(t: Pick<Turn, 'origin' | 'command' | 'userText' | 'inbox'>): string {
   const first = firstLine(t.userText)
   if (t.origin === 'command' && t.command) {
     const name = t.command.startsWith('/') ? t.command : `/${t.command}`
     if (!first) return name
     return first === name || first.startsWith(`${name} `) ? first : `${name} ${first}`
   }
-  const u = unwrapMachineText(t.userText)
+  const u = turnPrompt(t)
   if (u.label) return u.summary ? `${u.label}: ${u.summary}` : u.label
   return first || '(empty)'
 }

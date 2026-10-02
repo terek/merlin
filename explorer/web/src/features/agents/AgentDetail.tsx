@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Agent } from '../../api/types'
 import { formatCount } from '../../lib/format'
+import { inboxLabel } from '../../lib/inbox'
 import { fullTime, parseTime, spanMs, timeOfDay } from '../../lib/time'
 import { unwrapMachineText } from '../../lib/wrapper'
 import {
@@ -156,14 +157,22 @@ export function AgentDetail({
           <Label>Inbox ({a.inbox.length})</Label>
           <ul className="space-y-1.5">
             {a.inbox.map((m) => (
-              <li key={`${m.at}${m.text.slice(0, 20)}`} className="rounded-badge bg-surface-2 px-2 py-1 text-sec">
+              <li
+                key={`${m.at}${m.from ?? ''}${(m.text ?? m.summary ?? '').slice(0, 20)}`}
+                className="rounded-badge bg-surface-2 px-2 py-1 text-sec"
+              >
                 <div className="text-meta text-muted">
-                  <Time at={m.at} />
-                  {m.from && <> from {m.from}</>}
+                  <Time at={m.at} /> {inboxLabel(m)}
                 </div>
-                <Clamp lines={4}>
-                  <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</span>
-                </Clamp>
+                {m.summary && m.summary !== m.text && (
+                  <div className="font-medium [overflow-wrap:anywhere]">{m.summary}</div>
+                )}
+                {m.error && <div className="text-bad [overflow-wrap:anywhere]">{m.error}</div>}
+                {m.text && (
+                  <Clamp lines={4}>
+                    <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</span>
+                  </Clamp>
+                )}
               </li>
             ))}
           </ul>

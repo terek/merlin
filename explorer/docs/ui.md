@@ -322,8 +322,10 @@ Where the built UI differs from the sections above:
   badge (while it runs, the end state only says the last record is not an answer yet).
 - Session: the page is capped at 1500px and centred; without a hash, an inherited session opens at
   the "N turns copied" divider; the family strip names the relation only for the current session's
-  neighbours. Machine-authored prompts (task notifications, peer messages) are shown without their
-  wrapper markup (`src/lib/wrapper.ts`).
+  neighbours. Prompts a machine delivered (task notifications, teammate messages, idle
+  notifications) arrive from the API already parsed, as `turn.inbox`; each message shows its sender
+  or kind, summary and text, and its label selects the agent it came from (`src/lib/inbox.ts`).
+  `src/lib/wrapper.ts` unwraps the markup only for digests written before the API did.
 - Agents card: a row's bar is measured against the attributed cost of all agents, not of the
   session; runs of more than eight siblings of one type fold into one line.
 - Context chart: only the compaction nearest the cursor is labelled.

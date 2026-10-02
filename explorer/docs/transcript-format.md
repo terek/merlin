@@ -112,6 +112,70 @@ Who authored a prompt:
   - `[Request interrupted by user]`, `[Request interrupted by user for tool use]` — interruption marker
   - anything else — typed by the user
 
+### 4a. Prompts a machine delivered
+
+Two kinds of prompt are written by the harness around somebody else's content. The digest
+takes them apart (`Turn.inbox`, `Agent.inbox`) and stores none of the wrapping. Counts are
+from the surveyed corpus (3,328 sessions, 2026-10-02).
+
+**Peer prompts** (origin `peer`, 803 turns in main files, carrying 952 messages):
+
+```
+Another Claude session sent a message:
+<teammate-message teammate_id="NAME" color="COLOR" summary="SUMMARY">
+BODY
+</teammate-message>
+
+<teammate-message …>
+…
+</teammate-message>
+
+This came from another Claude session — not typed by your user, … (one fixed paragraph)
+```
+
+- One to several elements per prompt (717 with one, 86 with more). The opening tag, the
+  body and the closing tag are on lines of their own. Attribute values are entity-escaped;
+  the body is not.
+- The closing paragraph is the harness instructing the model how to treat peer messages.
+  It is on every one of the 803 and says nothing about the session.
+- `summary` is present exactly when the body is text the sender wrote (428).
+- Otherwise the body is a JSON object the harness wrote for the sender (524, all
+  `{"type":"idle_notification","from","timestamp"}` plus optional `idleReason`
+  (`available` 467, `failed` 10, absent 47), `result` (the teammate's last answer, 361),
+  `summary` (22, the summary of a message it sent to someone else, `[to NAME] …`) and
+  `failureReason` (10)).
+- `teammate_id` is the name of an agent of the same session in 951 of 952.
+- In an agent's own file the first prompt of a teammate (304) or fork (11) is a single
+  element with `teammate_id="team-lead"` and a `summary`, with no intro line and no closing
+  paragraph. Later prompts have the same shape; 7 of them carry
+  `{"type":"task_assignment","taskId","subject","description","assignedBy","timestamp"}`.
+- `<cross-session-message from="…">` is the same construction for a message from another
+  session; none in the corpus.
+
+**Task notifications** (origin `task-notification`, 389 turns):
+
+```
+<task-notification>
+<task-id>ID</task-id>
+<tool-use-id>toolu_…</tool-use-id>
+<output-file>PATH</output-file>
+<status>completed</status>
+<summary>Agent "DESCRIPTION" finished</summary>
+<note>…</note>
+<result>TEXT</result>
+<usage><subagent_tokens>N</subagent_tokens><tool_uses>N</tool_uses><duration_ms>N</duration_ms></usage>
+</task-notification>
+```
+
+- `<`, `>` and `&` are entity-escaped inside the children; quotes are not.
+- A background agent finishing (124): `task-id` is the agent's id, `result` its last answer.
+- A background command (142): `status` `completed`, `failed` or `killed`, the exit code in
+  `summary`, no `result`.
+- A monitor (81): an event has `task-id`, `summary` and `event` and no `status`; the end
+  of its stream has a `status`.
+- 41 are plain sentences with no element (`N background agents were stopped by the
+  user: …`); they stay as the turn's text.
+
 ## 5. Subagents
 
 Spawned by an `Agent` tool_use block in the parent (main or another subagent). Input keys:

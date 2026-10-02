@@ -514,8 +514,8 @@ func TestAgentFilesReduceLikeMainFiles(t *testing.T) {
 		b.Apply(r)
 	}
 	res := b.Result()
-	if len(res.Turns) != 2 || res.Turns[1].Origin != model.OriginPeer ||
-		!strings.Contains(res.Turns[1].UserText, "Please also check the tests.") {
+	if len(res.Turns) != 2 || res.Turns[1].Origin != model.OriginPeer || res.Turns[1].UserText != "" ||
+		len(res.Turns[1].Inbox) != 1 || res.Turns[1].Inbox[0].Text != "Please also check the tests." {
 		t.Fatalf("turns = %+v", res.Turns)
 	}
 	if !equal(res.AgentIDs, []string{"areviewer-09e0c0de00000001"}) {

@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { type CSSProperties, memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { Agent, Compaction, SessionDetail, Turn } from '../../api/types'
+import type { Agent, Compaction, InboxMessage, SessionDetail, Turn } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatMoneyFull, plural } from '../../lib/format'
 import { useInView, useOverflows } from '../../lib/hooks'
+import { inboxLabel } from '../../lib/inbox'
 import { sameKey } from '../../lib/session'
 import { fullTime, parseTime, shortDate, timeOfDay } from '../../lib/time'
 import { unwrapMachineText } from '../../lib/wrapper'
@@ -174,6 +175,58 @@ function FilesTouched({ files }: { files: string[] }) {
   )
 }
 
+/** The messages a machine delivered as a turn's prompt: who or what each came from, then what it says. */
+function InboxList({
+  inbox,
+  agentsById,
+  onSelectAgent,
+  struck,
+}: {
+  inbox: InboxMessage[]
+  agentsById: Map<string, Agent>
+  onSelectAgent: (id: string | null) => void
+  struck?: boolean
+}) {
+  const items = inbox.map((m, k) => ({ m, key: `m${k}` }))
+  return (
+    <ul className="space-y-1.5">
+      {items.map(({ m, key }) => {
+        const agentId = m.agentId && agentsById.has(m.agentId) ? m.agentId : undefined
+        const label = inboxLabel(m)
+        return (
+          <li
+            key={key}
+            className={cn(
+              'rounded-badge bg-surface-2 px-2.5 py-1.5 text-muted',
+              struck && 'line-through decoration-faint',
+            )}
+          >
+            <div className="mb-0.5 text-meta uppercase tracking-wide text-faint">
+              {agentId ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectAgent(agentId)}
+                  className="uppercase tracking-wide hover:text-accent hover:underline"
+                  title="Show this agent"
+                >
+                  {label}
+                </button>
+              ) : (
+                label
+              )}
+            </div>
+            {m.summary && m.summary !== m.text && (
+              <div className="max-w-col font-medium [overflow-wrap:anywhere]">{m.summary}</div>
+            )}
+            {m.error && <div className="max-w-col text-bad [overflow-wrap:anywhere]">{m.error}</div>}
+            {m.text && <PlainText text={m.text} lines={PROMPT_LINES} className="max-w-col" />}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 const TurnBlock = memo(function TurnBlock({
   turn,
   agentsById,
@@ -191,7 +244,10 @@ const TurnBlock = memo(function TurnBlock({
   const tools = topTools(turn.toolsByName)
   const files = turn.filesTouched ?? []
   // a message from a task or a peer shows without its wrapper; a typed prompt or command is as typed
-  const unwrapped = turn.origin === 'human' || turn.origin === 'command' ? null : unwrapMachineText(turn.userText)
+  // (a digest written before the API parsed delivered prompts still has the wrapper in its text)
+  const inbox = turn.inbox ?? []
+  const unwrapped =
+    inbox.length > 0 || turn.origin === 'human' || turn.origin === 'command' ? null : unwrapMachineText(turn.userText)
   const link = () => `${window.location.origin}${window.location.pathname}#${turnDomId(turn.index)}`
   return (
     <article
@@ -236,6 +292,9 @@ const TurnBlock = memo(function TurnBlock({
           </span>
         </div>
 
+        {inbox.length > 0 && (
+          <InboxList inbox={inbox} agentsById={agentsById} onSelectAgent={onSelectAgent} struck={turn.abandoned} />
+        )}
         {turn.userText && (
           <div
             className={cn(
