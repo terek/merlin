@@ -17,6 +17,7 @@ import (
 	"github.com/terek/merlin/explorer/internal/paths"
 	"github.com/terek/merlin/explorer/internal/pricing"
 	"github.com/terek/merlin/explorer/internal/server"
+	"github.com/terek/merlin/explorer/internal/webui"
 )
 
 func init() {
@@ -89,6 +90,12 @@ func runServe(args []string) int {
 	}
 
 	d.Handle("/api/", server.New(apiOptions(d, cfg)).Handler())
+	d.Handle("/", webui.Handler())
+	if webui.Built() {
+		fmt.Fprintf(os.Stderr, "explorer: UI at http://127.0.0.1:%d/\n", *port)
+	} else {
+		fmt.Fprintf(os.Stderr, "explorer: this binary has no UI (make build includes it); the API is at http://127.0.0.1:%d/api/\n", *port)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

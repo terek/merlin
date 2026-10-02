@@ -1,8 +1,9 @@
 # Merlin Explorer — plan
 
 Status: M0–M4 built and verified against the real corpus on 2026-10-02 (results in
-[docs/validation.md](docs/validation.md)); the web UI (M5) and incremental live reads
-(M6) are open. Tracked in beads (`bd list`, epic `merlin-t8s`). Decided: Go; hooks are
+[docs/validation.md](docs/validation.md)); the web UI (M5, design in
+[docs/ui.md](docs/ui.md)) was built and reviewed against the real corpus on the same day;
+incremental live reads (M6) are open. Tracked in beads (`bd list`, epic `merlin-t8s`). Decided: Go; hooks are
 installed by `explorer serve`; texts are stored whole; scripted runs are counted and
 shown only in aggregate; storage and code are split per harness (`~/.explorer/claude/`,
 `internal/claude/`) so Codex and Pi can be added later.
@@ -395,8 +396,20 @@ transcripts are never committed.
 |---|---|---|
 | 4.1 | JSON API and SSE | handler tests |
 
-**M5 — UI (later)**: React + Vite, built with bun, embedded. Session list with search and
-filters; session view with turn timeline, agent tree and compaction markers; cost views.
+**M5 — UI** (done, bead `merlin-t8s.18` and its children; design in
+[docs/ui.md](docs/ui.md)): React + Vite, built with bun, embedded behind the build tag
+`embedui`. Session list with search and filters; session view with turn timeline, agent tree
+and compaction markers; cost views.
+
+| Bead | Deliverable | Depends on |
+|---|---|---|
+| 5.1 | web scaffold, embedding, shell, data layer, shared primitives, mock API | 4.1 |
+| 5.2 | API additions: summary previews, cost `split`, `session-state` event | 4.1 |
+| 5.3 | Sessions page | 5.1, 5.2 |
+| 5.4 | Session page | 5.1, 5.2 |
+| 5.5 | Agents card and context chart | 5.1 |
+| 5.6 | Cost page | 5.1, 5.2 |
+| 5.7 | lead review on the real history | 5.3–5.6 |
 
 **M6 — later**: incremental live reads, launchd agent, rename to Merlin.
 

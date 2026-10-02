@@ -10,9 +10,11 @@ only, never edit it.
 Run from `explorer/`.
 
 ```
-make build      # bin/explorer
+make build      # bin/explorer with the web UI embedded (needs bun)
+make build-go   # bin/explorer without the UI (no bun)
 make test       # go test ./...
 make vet        # go vet ./...
+make web-check  # web/: tsc, Biome, bun test
 ```
 
 Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin/explorer`.
@@ -47,6 +49,31 @@ Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin/explorer`.
 - **JSON conventions:** camelCase keys, RFC 3339 UTC timestamps, USD as float64, token
   counts as int64, `omitempty` on optional fields.
 - **Do not commit or push.** Leave changes in the working tree.
+
+## Web UI (`web/`)
+
+The design is [docs/ui.md](docs/ui.md); the API it reads is [docs/api.md](docs/api.md). Read both
+before touching `web/`.
+
+- **bun only.** `bun install`, `bun run <script>`, `bunx <tool>`. Never `npm`, `npx` or `node`
+  (`node` is broken on this machine).
+- **Dependencies** are the ones listed in docs/ui.md §1. Do not add others.
+- **Ownership.** A bead owns its directory under `web/src/features/`. `web/src/api`, `lib` and
+  `ui` are shared: additive changes only, named in your closing note. Do not restyle a shared
+  primitive to suit one view; if it falls short, extend it with a prop.
+- **Never serve the real history.** Run the daemon only against the fixtures, with a scratch
+  home, without hooks, on the port your bead gives you:
+  `CLAUDE_CONFIG_DIR=$PWD/testdata/claude EXPLORER_HOME=<scratch dir> ./bin/explorer serve --no-hooks --port <port>`.
+  Start it as a background command and stop it when you are done.
+- **Look at what you build.** `web/dev/shot.sh <url> <out.png> [width] [height]` screenshots a
+  page with headless Chrome; read the PNG. Check both `?theme=light` and `?theme=dark`. Put
+  screenshots in your scratch directory, never in the repository.
+- **Checks.** `make web-check` (TypeScript, Biome, `bun test`) and `make build` must pass, as well
+  as `make test` and `make vet`. The repository's Stop hook formats changed `.ts`/`.tsx`/`.json`
+  files with Biome (root `biome.json`: 2 spaces, single quotes, no semicolons, 120 columns), so
+  write in that style from the start.
+- macOS has no `timeout` command, and a bare foreground `sleep` is refused by the harness: run
+  servers as background commands and poll with a loop.
 
 ## Beads
 

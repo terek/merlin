@@ -1,0 +1,350 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------------------------------
+   Design tokens (docs/ui.md section 4). Components never name a raw colour: they use the
+   utilities below (bg-surface, text-muted, border-line, ...). Light is the default; dark follows
+   the system, and ?theme=light|dark (data-theme on <html>) overrides it.
+   ------------------------------------------------------------------------------------------ */
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eff1f4;
+  --line: #e1e4e9;
+  --text: #1b1e24;
+  --muted: #5a6270;
+  --faint: #868e9c;
+  --accent: #2557d6;
+  --ok: #17874a;
+  --warn: #a4600b;
+  --bad: #c42f2f;
+  --reported: #3568d4;
+  --attributed: #d48a1c;
+  --overhead: #8a6bd0;
+  --human: #3568d4;
+  --machine: #c9ced7;
+  /* categorical series for charts (models, projects); the same order everywhere */
+  --series-1: #3568d4;
+  --series-2: #d9822b;
+  --series-3: #1f9a8f;
+  --series-4: #8a6bd0;
+  --series-5: #cf4f86;
+  --series-other: #aab1bd;
+  /* derived */
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --ok-soft: color-mix(in srgb, var(--ok) 13%, var(--surface));
+  --warn-soft: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  --bad-soft: color-mix(in srgb, var(--bad) 12%, var(--surface));
+  --flash: color-mix(in srgb, var(--accent) 16%, transparent);
+  --pop-shadow: 0 6px 24px rgb(20 24 31 / 0.14), 0 1px 3px rgb(20 24 31 / 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1014;
+    --surface: #161920;
+    --surface-2: #1e222a;
+    --line: #2a2f39;
+    --text: #e5e8ed;
+    --muted: #9ba3b0;
+    --faint: #6c7484;
+    --accent: #6c9cff;
+    --ok: #4cc47e;
+    --warn: #e2a64a;
+    --bad: #f27474;
+    --reported: #6c9cff;
+    --attributed: #e0a145;
+    --overhead: #b496f0;
+    --human: #6c9cff;
+    --machine: #3a404c;
+    --series-1: #6c9cff;
+    --series-2: #eb9c4c;
+    --series-3: #3cbfb3;
+    --series-4: #b496f0;
+    --series-5: #e872a5;
+    --series-other: #5b6372;
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    --ok-soft: color-mix(in srgb, var(--ok) 16%, var(--surface));
+    --warn-soft: color-mix(in srgb, var(--warn) 16%, var(--surface));
+    --bad-soft: color-mix(in srgb, var(--bad) 16%, var(--surface));
+    --flash: color-mix(in srgb, var(--accent) 22%, transparent);
+    --pop-shadow: 0 6px 24px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1014;
+  --surface: #161920;
+  --surface-2: #1e222a;
+  --line: #2a2f39;
+  --text: #e5e8ed;
+  --muted: #9ba3b0;
+  --faint: #6c7484;
+  --accent: #6c9cff;
+  --ok: #4cc47e;
+  --warn: #e2a64a;
+  --bad: #f27474;
+  --reported: #6c9cff;
+  --attributed: #e0a145;
+  --overhead: #b496f0;
+  --human: #6c9cff;
+  --machine: #3a404c;
+  --series-1: #6c9cff;
+  --series-2: #eb9c4c;
+  --series-3: #3cbfb3;
+  --series-4: #b496f0;
+  --series-5: #e872a5;
+  --series-other: #5b6372;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --ok-soft: color-mix(in srgb, var(--ok) 16%, var(--surface));
+  --warn-soft: color-mix(in srgb, var(--warn) 16%, var(--surface));
+  --bad-soft: color-mix(in srgb, var(--bad) 16%, var(--surface));
+  --flash: color-mix(in srgb, var(--accent) 22%, transparent);
+  --pop-shadow: 0 6px 24px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+/* Tailwind utilities on the tokens. The default palette is switched off on purpose: there is no
+   bg-white or text-gray-500, only what is named here. */
+@theme {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-reported: var(--reported);
+  --color-attributed: var(--attributed);
+  --color-overhead: var(--overhead);
+  --color-human: var(--human);
+  --color-machine: var(--machine);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-other: var(--series-other);
+  --color-flash: var(--flash);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* the five sizes of docs/ui.md: 11 labels and meta, 12 secondary, 13 body, 15 section, 20 page */
+  --text-*: initial;
+  --text-meta: 11px;
+  --text-meta--line-height: 1.45;
+  --text-sec: 12px;
+  --text-sec--line-height: 1.5;
+  --text-body: 13px;
+  --text-body--line-height: 1.5;
+  --text-title: 15px;
+  --text-title--line-height: 1.4;
+  --text-page: 20px;
+  --text-page--line-height: 1.3;
+
+  --radius-*: initial;
+  --radius-card: 6px;
+  --radius-badge: 4px;
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-pop: var(--pop-shadow);
+
+  --container-*: initial;
+  --container-col: 100ch;
+  --container-rail: 240px;
+  --container-side: 380px;
+
+  --breakpoint-*: initial;
+}
+
+@layer base {
+  html {
+    background: var(--bg);
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 var(--font-sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    min-width: 900px;
+  }
+  * {
+    border-color: var(--line);
+  }
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: var(--flash);
+  }
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: var(--font-mono);
+  }
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+
+@layer components {
+  /* a row that just changed through a live update: highlighted, then faded over 150 ms */
+  .row-fade {
+    transition: background-color 150ms ease-out;
+  }
+  .flash {
+    background-color: var(--flash);
+    transition: none;
+  }
+
+  .pulse-dot {
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.35;
+    }
+  }
+  .spin {
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* <Prose>: assistant text rendered from markdown, styled for 13 px */
+  .prose-x {
+    overflow-wrap: anywhere;
+  }
+  .prose-x > :first-child {
+    margin-top: 0;
+  }
+  .prose-x > :last-child {
+    margin-bottom: 0;
+  }
+  .prose-x p,
+  .prose-x ul,
+  .prose-x ol,
+  .prose-x pre,
+  .prose-x table,
+  .prose-x blockquote {
+    margin: 0 0 8px;
+  }
+  .prose-x h1,
+  .prose-x h2,
+  .prose-x h3,
+  .prose-x h4,
+  .prose-x h5,
+  .prose-x h6 {
+    margin: 12px 0 4px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .prose-x h1 {
+    font-size: 15px;
+  }
+  .prose-x ul,
+  .prose-x ol {
+    padding-left: 20px;
+  }
+  .prose-x ul {
+    list-style: disc;
+  }
+  .prose-x ol {
+    list-style: decimal;
+  }
+  .prose-x li > p {
+    margin: 0;
+  }
+  .prose-x :not(pre) > code {
+    background: var(--surface-2);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 12px;
+  }
+  .prose-x pre {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .prose-x pre code {
+    background: none;
+    padding: 0;
+    overflow-wrap: normal;
+    white-space: pre;
+  }
+  .prose-x blockquote {
+    border-left: 3px solid var(--line);
+    padding-left: 10px;
+    color: var(--muted);
+  }
+  .prose-x table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+  .prose-x th,
+  .prose-x td {
+    border: 1px solid var(--line);
+    padding: 3px 8px;
+    text-align: left;
+  }
+  .prose-x th {
+    background: var(--surface-2);
+    font-weight: 600;
+  }
+  .prose-x hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 12px 0;
+  }
+  .prose-x a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}

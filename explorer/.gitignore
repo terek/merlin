@@ -1,2 +1,3 @@
 bin/
 /cmd/explorer/explorer
+/internal/webui/dist/

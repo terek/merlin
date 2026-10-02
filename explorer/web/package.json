@@ -1,0 +1,31 @@
+{
+  "name": "explorer-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port ${VITE_PORT:-5173} --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "mock": "bun dev/mock.ts",
+    "test": "bun test",
+    "check": "tsc --noEmit && biome check . && bun test"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.104.0",
+    "lucide-react": "^1.49.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.4",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.11",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "^1.4.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  }
+}
