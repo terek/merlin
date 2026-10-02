@@ -1,14 +1,13 @@
 # Merlin Explorer — plan
 
-Status: M0–M4 built and verified against the real corpus on 2026-10-02 (results in
-[docs/validation.md](docs/validation.md)); the web UI (M5, design in
-[docs/ui.md](docs/ui.md)) was built and reviewed against the real corpus on the same day;
-incremental live reads (M6) are open. Tracked in beads (`bd list`, epic `merlin-t8s`). Decided: Go; hooks are
-installed by `merlin serve`; texts are stored whole; scripted runs are counted and
-shown only in aggregate; storage and code are split per harness (`~/.merlin/claude/`,
-`internal/claude/`) so Codex and Pi can be added later.
-Companion: [docs/transcript-format.md](docs/transcript-format.md) — what the transcripts
-actually look like. Read it before touching the parser.
+Status: released as v0.2.0 on 2026-10-02 (the command is `merlin`; it replaces the earlier
+Merlin binary in releases and is installed by install.sh). Core, web UI, incremental live reads
+and the release workflow are done and were verified against the real corpus (results in
+[docs/validation.md](docs/validation.md); UI design in [docs/ui.md](docs/ui.md)). Open: starting
+the daemon at login (`merlin-t8s.26`). Tracked in beads (`bd list`, epic `merlin-t8s`).
+Decided: Go; hooks are installed by `merlin serve`; texts are stored whole; scripted runs are
+counted and shown only in aggregate; storage and code are split per harness
+(`~/.merlin/claude/`, `internal/claude/`) so Codex and Pi can be added later.
 
 ## 1. What it is
 
