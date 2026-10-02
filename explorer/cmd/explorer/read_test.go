@@ -70,13 +70,13 @@ func newReadEnv(t *testing.T) *readEnv {
 }
 
 // run executes the CLI and returns stdout, stderr and the exit code. Paths of the
-// temporary directories are replaced by $EXPLORER_HOME and $CLAUDE_CONFIG_DIR.
+// temporary directories are replaced by $MERLIN_HOME and $CLAUDE_CONFIG_DIR.
 func (e *readEnv) run(extraEnv []string, args ...string) (stdout, stderr string, code int) {
 	e.t.Helper()
 	cmd := exec.Command(os.Args[0], args...)
 	cmd.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"), "HOME=" + e.t.TempDir(),
-		"EXPLORER_TEST_AS_CLI=1", "EXPLORER_HOME=" + e.home, "CLAUDE_CONFIG_DIR=" + e.claud,
+		"EXPLORER_TEST_AS_CLI=1", "MERLIN_HOME=" + e.home, "CLAUDE_CONFIG_DIR=" + e.claud,
 		"TZ=" + testTZ, "EXPLORER_NOW=" + testNow, "EXPLORER_TEST_ALIVE_PIDS=4242,4343",
 	}, extraEnv...)
 	var o, er bytes.Buffer
@@ -88,7 +88,7 @@ func (e *readEnv) run(extraEnv []string, args ...string) (stdout, stderr string,
 		}
 		code = ee.ExitCode()
 	}
-	norm := strings.NewReplacer(e.home, "$EXPLORER_HOME", e.claud, "$CLAUDE_CONFIG_DIR")
+	norm := strings.NewReplacer(e.home, "$MERLIN_HOME", e.claud, "$CLAUDE_CONFIG_DIR")
 	return norm.Replace(o.String()), norm.Replace(er.String()), code
 }
 

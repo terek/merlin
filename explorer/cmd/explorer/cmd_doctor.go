@@ -161,7 +161,7 @@ func percentile(sorted []float64, p float64) float64 {
 
 func buildDoctor(w *world) doctorReport {
 	var r doctorReport
-	r.Home, _ = paths.ExplorerHome()
+	r.Home, _ = paths.Home()
 	r.Digests = len(w.digests)
 	r.Sessions = len(w.sessions)
 	r.UnpricedModels = map[string]int{}

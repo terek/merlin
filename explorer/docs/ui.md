@@ -73,7 +73,7 @@ Development: `bun run dev` in `web/` starts Vite on port 5173 and proxies `/api`
 Run the daemon against the fixtures, never against the real `~/.claude`:
 
 ```
-CLAUDE_CONFIG_DIR=$PWD/testdata/claude EXPLORER_HOME=<a scratch dir> \
+CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scratch dir> \
   ./bin/merlin serve --no-hooks --port <your port>
 ```
 

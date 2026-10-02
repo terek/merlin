@@ -82,6 +82,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: explorer/go.mod
+          cache-dependency-path: explorer/go.sum
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -126,6 +127,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: explorer/go.mod
+          cache-dependency-path: explorer/go.sum
 
       - uses: actions/download-artifact@v8
         with:
@@ -218,6 +220,7 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: explorer/go.mod
+          cache-dependency-path: explorer/go.sum
 
       - uses: actions/download-artifact@v8
         with:

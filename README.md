@@ -31,7 +31,7 @@ merlin serve
 
 Open http://127.0.0.1:7433/. The first start:
 
-- indexes your sessions from `~/.claude` into `~/.explorer` (read-only on `~/.claude`);
+- indexes your sessions from `~/.claude` into `~/.merlin` (read-only on `~/.claude`);
 - adds five hook entries (SessionStart, UserPromptSubmit, Stop, SubagentStop, SessionEnd) to
   `~/.claude/settings.json`, keeping a backup next to it, so live sessions show up at once.
   `merlin serve --no-hooks` skips this; the page then updates on a periodic rescan.
@@ -72,10 +72,12 @@ Run the installer again. `merlin upgrade` prints the command; it does not update
 
 ## Where state lives
 
-- `~/.explorer` (`EXPLORER_HOME`): `config.json`, the lock and log, and one JSON digest per
-  session under `claude/projects/`. Everything in it can be rebuilt from `~/.claude`.
+- `~/.merlin` (`MERLIN_HOME`): `claude/` (one JSON digest per session under
+  `claude/projects/`, and the hook script), `merlin.lock`, `merlin.log` and an optional
+  `config.json`. All of it can be rebuilt from `~/.claude`. The earlier Merlin kept its files
+  in the same directory; this program never reads, changes or removes them.
 - `~/.claude/settings.json`: the five hook entries, and their backups
-  (`settings.json.explorer-backup-*`).
+  (`settings.json.merlin-backup-*`).
 - `CLAUDE_CONFIG_DIR` selects another Claude Code directory instead of `~/.claude`.
 
 ## Uninstall
@@ -83,12 +85,12 @@ Run the installer again. `merlin upgrade` prints the command; it does not update
 ```sh
 merlin hooks uninstall     # remove the five hook entries from ~/.claude/settings.json
 rm "$(command -v merlin)"  # remove the binary
-rm -rf ~/.explorer         # remove the index
+rm -rf ~/.merlin/claude ~/.merlin/merlin.lock ~/.merlin/merlin.log   # remove the index
 ```
 
 If you ran the earlier Merlin, `~/.claude/settings.json` may also hold two entries running
 `~/.merlin/hooks/session-start.sh` and `session-end.sh`; they are harmless and can be removed
-by hand, together with `~/.merlin`.
+by hand, together with the rest of `~/.merlin` (which holds that program's keys and pairings).
 
 ## Building from source
 

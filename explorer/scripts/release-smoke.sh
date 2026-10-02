@@ -3,7 +3,7 @@
 # Smoke-test a binary that runs on this machine: scripts/release-smoke.sh <binary> <version> [port]
 #
 # `merlin version` must print the version; `merlin serve --no-hooks` against the
-# fixtures (scratch EXPLORER_HOME, nothing under ~/.claude) must serve the embedded UI at /
+# fixtures (scratch MERLIN_HOME, nothing under ~/.claude) must serve the embedded UI at /
 # and JSON at /api/sessions.
 set -euo pipefail
 
@@ -25,7 +25,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-CLAUDE_CONFIG_DIR="$fixtures" EXPLORER_HOME="$home" "$bin" serve --no-hooks --port "$port" >"$log" 2>&1 &
+CLAUDE_CONFIG_DIR="$fixtures" MERLIN_HOME="$home" "$bin" serve --no-hooks --port "$port" >"$log" 2>&1 &
 pid=$!
 
 up=""

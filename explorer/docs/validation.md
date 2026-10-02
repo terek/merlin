@@ -1,7 +1,7 @@
 # Validation against the real corpus
 
 Bead `merlin-t8s.16`. Run on 2026-10-02 against the author's real `~/.claude` (read-only),
-digests in a scratch `EXPLORER_HOME`. Everything below is ids (8-character prefixes),
+digests in a scratch `MERLIN_HOME`. Everything below is ids (8-character prefixes),
 counts, model names, token totals and dollars; nothing is quoted from a transcript.
 
 The corpus is live: the session that ran this validation is itself indexed, so counts that

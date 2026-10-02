@@ -382,8 +382,8 @@ func TestProjectJSON(t *testing.T) {
 
 func TestExplorerHomeOverride(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("EXPLORER_HOME", home)
-	root, err := paths.ExplorerHome()
+	t.Setenv("MERLIN_HOME", home)
+	root, err := paths.Home()
 	if err != nil {
 		t.Fatal(err)
 	}

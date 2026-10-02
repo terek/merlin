@@ -1,4 +1,4 @@
-Explorer doctor  ($EXPLORER_HOME)
+Explorer doctor  ($MERLIN_HOME)
 
 Index
   35 sessions indexed: 34 interactive, 0 background, 1 scripted

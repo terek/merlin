@@ -40,7 +40,7 @@ func runScan(args []string) int {
 		return 2
 	}
 
-	home, err := paths.ExplorerHome()
+	home, err := paths.Home()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1

@@ -95,7 +95,7 @@ type rig struct {
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	r := &rig{t: t, home: t.TempDir(), cfg: copyClaude(t)}
-	t.Setenv("EXPLORER_HOME", r.home)
+	t.Setenv("MERLIN_HOME", r.home)
 	t.Setenv("CLAUDE_CONFIG_DIR", r.cfg)
 	st, err := store.New(r.home)
 	if err != nil {

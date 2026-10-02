@@ -5,7 +5,7 @@ Status: M0–M4 built and verified against the real corpus on 2026-10-02 (result
 [docs/ui.md](docs/ui.md)) was built and reviewed against the real corpus on the same day;
 incremental live reads (M6) are open. Tracked in beads (`bd list`, epic `merlin-t8s`). Decided: Go; hooks are
 installed by `merlin serve`; texts are stored whole; scripted runs are counted and
-shown only in aggregate; storage and code are split per harness (`~/.explorer/claude/`,
+shown only in aggregate; storage and code are split per harness (`~/.merlin/claude/`,
 `internal/claude/`) so Codex and Pi can be added later.
 Companion: [docs/transcript-format.md](docs/transcript-format.md) — what the transcripts
 actually look like. Read it before touching the parser.
@@ -13,7 +13,7 @@ actually look like. Read it before touching the parser.
 ## 1. What it is
 
 One binary, `explorer`. You start it; it keeps a summary ("digest") of every Claude Code
-session under `~/.explorer/claude/projects`, follows running sessions, and serves the result on a
+session under `~/.merlin/claude/projects`, follows running sessions, and serves the result on a
 local port.
 
 Two goals, in priority order:
@@ -73,7 +73,7 @@ explorer/
   cmd/explorer/                 main, one file per subcommand
   internal/model/               digest schema — the shared contract, harness-neutral
   internal/pricing/             price table (embedded JSON + override), cost(usage, model)
-  internal/store/               atomic JSON files under EXPLORER_HOME
+  internal/store/               atomic JSON files under MERLIN_HOME
   internal/catalog/             in-memory view: ownership, lineage, rollups, search
   internal/harness/             the interface the engine drives
   internal/engine/              reconcile loop, work queue, live following
@@ -89,10 +89,10 @@ explorer/
 ```
 
 ```
-~/.explorer/                      (EXPLORER_HOME; later ~/.merlin by changing one default)
+~/.merlin/                        (MERLIN_HOME; shared with the earlier Merlin, whose files are left alone)
   config.json                     port, source dirs, price overrides
-  explorer.lock                   flock — one instance
-  explorer.log
+  merlin.lock                     flock — one instance
+  merlin.log
   claude/                         one directory per harness; codex/, pi/ … later
     hooks/notify.sh               wrapper the Claude Code hooks call
     projects/<project-key>/
@@ -112,7 +112,7 @@ Only Claude Code is implemented. The split that keeps Codex, Pi and others cheap
   name, discover session sources with fingerprints, build a digest from a source, name
   live sessions, map a hook event to a session. The engine, store, catalog, server and
   CLI only see that interface. A new harness is a new `internal/<name>/` package and a
-  `~/.explorer/<name>/` directory.
+  `~/.merlin/<name>/` directory.
 - **Projects are identified by directory path**, not by a harness's storage key, so the
   catalog can show one project across harnesses. `projectKey` stays as the storage key.
 - **A session is identified by `(harness, id)`.**
@@ -282,7 +282,7 @@ chain must never mark history as abandoned.
   the session once from scratch. Scans and idle rescans keep no state. Kept state is capped
   at 256 MiB of source bytes, least recently built evicted first (the next build is whole).
   Needed because the largest transcript is 52 MB.
-- **One instance**: `flock` on `explorer.lock`.
+- **One instance**: `flock` on `merlin.lock`.
 - **First run**: 1.5 GB, parallel across cores; expected well under a minute.
 
 ### Hooks
@@ -291,7 +291,7 @@ chain must never mark history as abandoned.
 install | uninstall | status` does it explicitly.
 
 - Events: `SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `SessionEnd`.
-- Command: `~/.explorer/claude/hooks/notify.sh`, which runs `merlin hook` if the binary still
+- Command: `~/.merlin/claude/hooks/notify.sh`, which runs `merlin hook` if the binary still
   exists and otherwise exits 0 silently. It prints nothing (SessionStart output is
   injected into the model's context) and always exits 0.
 - `merlin hook` reads the event from stdin and POSTs it to the daemon with a ~150 ms
@@ -378,7 +378,7 @@ transcripts are never committed.
 | 1.1 | Line reader: arbitrary line length, complete lines only, offset + tail-guard resume, tolerant decode with counters | fixtures for big, partial and corrupt lines pass |
 | 1.2 | Pricing: embedded table, overrides, `[1m]` and date-suffix normalisation, 5m/1h writes, fast multiplier, unpriced reporting | reproduces the worked examples in format notes §8 |
 | 1.3 | Discovery: recursive walk, UUID filter, orphans, nested project dirs, fingerprints | fixture tree yields the expected sources |
-| 1.4 | Store: layout, atomic write, tolerant read, `EXPLORER_HOME` | concurrent-writer and torn-file tests pass |
+| 1.4 | Store: layout, atomic write, tolerant read, `MERLIN_HOME` | concurrent-writer and torn-file tests pass |
 | 1.5 | Hooks: surgical `settings.json` install/uninstall/status, wrapper script, `merlin hook` client. Verify the hook payload fields against the docs first | install twice = one entry; uninstall restores; unrelated hooks untouched byte for byte |
 
 **M2 — digest (after 1.1, 1.2)**

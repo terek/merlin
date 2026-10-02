@@ -69,7 +69,7 @@ func aliveFunc() func(int) bool {
 // loadWorld reads every digest of the Explorer home into a catalog. name is the command
 // name, for messages.
 func loadWorld(name string) (*world, error) {
-	home, err := paths.ExplorerHome()
+	home, err := paths.Home()
 	if err != nil {
 		return nil, err
 	}

@@ -6,9 +6,19 @@ import (
 	"path/filepath"
 )
 
-// ExplorerHome returns EXPLORER_HOME, defaulting to ~/.explorer.
-func ExplorerHome() (string, error) {
-	return resolve("EXPLORER_HOME", ".explorer")
+// Home returns the directory the program keeps its state in: MERLIN_HOME, defaulting to
+// ~/.merlin. EXPLORER_HOME, the variable's earlier name, is still honoured when
+// MERLIN_HOME is not set, so that a script written for it cannot fall through to the
+// real home.
+//
+// ~/.merlin is shared with the earlier Merlin program, whose files may still be there.
+// This program only ever touches claude/ (and other per-harness directories),
+// config.json, merlin.lock and merlin.log in it.
+func Home() (string, error) {
+	if v := os.Getenv("MERLIN_HOME"); v != "" {
+		return filepath.Clean(v), nil
+	}
+	return resolve("EXPLORER_HOME", ".merlin")
 }
 
 // ClaudeConfigDir returns CLAUDE_CONFIG_DIR, defaulting to ~/.claude.

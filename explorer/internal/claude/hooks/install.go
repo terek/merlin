@@ -22,13 +22,13 @@ var Events = []string{"SessionStart", "UserPromptSubmit", "Stop", "SubagentStop"
 const hookTimeoutSeconds = 2
 
 // scriptSuffix identifies an Explorer entry: any hook command ending in it is ours,
-// whatever EXPLORER_HOME it was installed under.
+// whatever MERLIN_HOME it was installed under.
 const scriptSuffix = "/claude/hooks/notify.sh"
 
 // Config says where to install.
 type Config struct {
 	ClaudeConfigDir string // directory holding settings.json
-	ExplorerHome    string // EXPLORER_HOME
+	ExplorerHome    string // MERLIN_HOME
 	Binary          string // explorer binary recorded in notify.sh; default os.Executable
 }
 
@@ -111,7 +111,7 @@ func Install(c Config) (Result, error) {
 		newDoc = createdDocument(c.ScriptPath())
 	}
 	if exists {
-		res.BackupPath = path + ".explorer-backup-" + time.Now().UTC().Format("20060102T150405.000000000Z")
+		res.BackupPath = path + ".merlin-backup-" + time.Now().UTC().Format("20060102T150405.000000000Z")
 		if err := writeAtomic(res.BackupPath, orig, mode); err != nil {
 			return Result{}, fmt.Errorf("backup settings.json: %w", err)
 		}

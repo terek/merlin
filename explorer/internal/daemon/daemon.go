@@ -32,7 +32,7 @@ const (
 
 // Options configures a Daemon. Every interval can be shortened for tests.
 type Options struct {
-	Home      string // EXPLORER_HOME; holds explorer.lock, explorer.log and the store
+	Home      string // MERLIN_HOME; holds merlin.lock, merlin.log and the store
 	Harnesses []harness.Harness
 
 	// Port is the TCP port on 127.0.0.1; 0 picks a free one (see Daemon.Addr).
@@ -171,13 +171,13 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return err
 	}
-	lock, err := acquireLock(filepath.Join(home, "explorer.lock"))
+	lock, err := acquireLock(filepath.Join(home, "merlin.lock"))
 	if err != nil {
 		return err
 	}
 	defer lock.Close() // the OS would release it anyway
 
-	if f, err := os.OpenFile(filepath.Join(home, "explorer.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+	if f, err := os.OpenFile(filepath.Join(home, "merlin.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 		defer f.Close()
 		d.logMu.Lock()
 		d.logW = io.MultiWriter(f, d.opts.Stderr)

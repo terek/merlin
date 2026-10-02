@@ -387,7 +387,7 @@ func TestSecondInstanceRefused(t *testing.T) {
 	r2 := newRig(t, r.home, r.cfg, nil)
 	err := r2.d.Run(context.Background())
 	var locked *daemon.LockedError
-	if !errors.As(err, &locked) || !strings.Contains(err.Error(), "explorer.lock") {
+	if !errors.As(err, &locked) || !strings.Contains(err.Error(), "merlin.lock") {
 		t.Fatalf("second Run = %v", err)
 	}
 	if locked.PID != os.Getpid() {
@@ -436,7 +436,7 @@ func TestStartupOrderAndHooks(t *testing.T) {
 	})
 	r2.start()
 	eventually(t, "index despite hook failure", r2.indexed)
-	b, _ := os.ReadFile(filepath.Join(r2.home, "explorer.log"))
+	b, _ := os.ReadFile(filepath.Join(r2.home, "merlin.log"))
 	if !strings.Contains(string(b), "installing hooks failed") {
 		t.Errorf("log lacks the hook failure:\n%s", b)
 	}

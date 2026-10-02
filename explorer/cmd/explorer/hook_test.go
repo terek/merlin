@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 func runCLI(t *testing.T, home, stdin string, args ...string) (stdout, stderr string, code int, took time.Duration) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], args...)
-	cmd.Env = append(os.Environ(), "EXPLORER_TEST_AS_CLI=1", "EXPLORER_HOME="+home, "CLAUDE_CONFIG_DIR="+t.TempDir())
+	cmd.Env = append(os.Environ(), "EXPLORER_TEST_AS_CLI=1", "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+t.TempDir())
 	cmd.Stdin = strings.NewReader(stdin)
 	var o, e bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &o, &e

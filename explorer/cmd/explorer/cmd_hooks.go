@@ -24,7 +24,7 @@ func runHooks(args []string) int {
 	claudeDir, err := paths.ClaudeConfigDir()
 	if err == nil {
 		var home string
-		if home, err = paths.ExplorerHome(); err == nil {
+		if home, err = paths.Home(); err == nil {
 			return runHooksIn(args[0], hooks.Config{ClaudeConfigDir: claudeDir, ExplorerHome: home})
 		}
 	}

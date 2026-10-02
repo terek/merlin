@@ -91,7 +91,7 @@ func startServe(t *testing.T, home, cfg string, extra ...string) *serveProc {
 	port := freePort(t)
 	args := append([]string{"serve", "--port", fmt.Sprint(port)}, extra...)
 	cmd := exec.Command(binary(t), args...)
-	cmd.Env = append(os.Environ(), "EXPLORER_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+	cmd.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
 	p := &serveProc{cmd: cmd, stderr: &bytes.Buffer{}, port: port}
 	cmd.Stderr = p.stderr
 	if err := cmd.Start(); err != nil {
@@ -156,19 +156,19 @@ func TestServeProcess(t *testing.T) {
 
 	// A second instance refuses and names the lock.
 	second := exec.Command(binary(t), "serve", "--port", fmt.Sprint(freePort(t)), "--no-hooks")
-	second.Env = append(os.Environ(), "EXPLORER_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+	second.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
 	out, err := second.CombinedOutput()
 	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() == 0 {
 		t.Errorf("second instance: err=%v", err)
 	}
-	if !strings.Contains(string(out), filepath.Join(home, "explorer.lock")) {
+	if !strings.Contains(string(out), filepath.Join(home, "merlin.lock")) {
 		t.Errorf("second instance did not name the lock:\n%s", out)
 	}
 
 	// It indexed the fixtures, and logs to the file.
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		if b, _ := os.ReadFile(filepath.Join(home, "explorer.log")); strings.Contains(string(b), "rescan:") {
+		if b, _ := os.ReadFile(filepath.Join(home, "merlin.log")); strings.Contains(string(b), "rescan:") {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -201,5 +201,95 @@ func TestServeInstallsHooksIntoConfigDirOnly(t *testing.T) {
 	}
 	if code := p.terminate(t); code != 0 {
 		t.Errorf("exit code = %d", code)
+	}
+}
+
+// The home is ~/.merlin, which the earlier Merlin program also used. Its files may still
+// be there: serve must leave every one of them as it is, and add nothing of its own beyond
+// the per-harness directory, the lock and the log (and config.json, which it only reads).
+func TestServeSharesTheHomeWithTheEarlierProgram(t *testing.T) {
+	home := t.TempDir()
+	earlier := map[string]string{
+		"hooks/session-start.sh":   "#!/bin/sh\n# earlier program\n",
+		"hooks/session-end.sh":     "#!/bin/sh\n# earlier program\n",
+		"sessions/4242.json":       `{"pid":4242}`,
+		"projects/demo/tasks.json": `[]`,
+		"clerk/state.json":         `{}`,
+		"pairings-main.json":       `[]`,
+		"keypair-main.json":        `{"k":"placeholder"}`,
+		"workspace.json":           `{}`,
+		"daemon.lock":              "4242\n",
+		".env":                     "PLACEHOLDER=1\n",
+	}
+	for rel, body := range earlier {
+		p := filepath.Join(home, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := copyTree(t, fixtures.ClaudeDir())
+	// The earlier program's two hook entries, as its setup wrote them.
+	earlierHooks := `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"~/.merlin/hooks/session-start.sh"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"~/.merlin/hooks/session-end.sh"}]}]}}`
+	if err := os.WriteFile(filepath.Join(cfg, "settings.json"), []byte(earlierHooks), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := startServe(t, home, cfg)
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		if b, _ := os.ReadFile(filepath.Join(home, "merlin.log")); strings.Contains(string(b), "rescan:") {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no rescan logged:\n%s", p.stderr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if code := p.terminate(t); code != 0 {
+		t.Errorf("exit code = %d", code)
+	}
+
+	// Its entries were added beside the earlier program's, which are still there, once each.
+	settings, err := os.ReadFile(filepath.Join(cfg, "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"~/.merlin/hooks/session-start.sh", "~/.merlin/hooks/session-end.sh"} {
+		if n := strings.Count(string(settings), cmd); n != 1 {
+			t.Errorf("%s appears %d times in settings.json, want 1", cmd, n)
+		}
+	}
+	if !strings.Contains(string(settings), "/claude/hooks/notify.sh") {
+		t.Errorf("settings.json lacks this program's hook:\n%s", settings)
+	}
+
+	for rel, body := range earlier {
+		got, err := os.ReadFile(filepath.Join(home, rel))
+		if err != nil || string(got) != body {
+			t.Errorf("%s was changed or removed: %q, %v", rel, got, err)
+		}
+	}
+	own := map[string]bool{"claude": true, "merlin.lock": true, "merlin.log": true}
+	theirs := map[string]bool{}
+	for rel := range earlier {
+		theirs[strings.SplitN(rel, "/", 2)[0]] = true
+	}
+	entries, err := os.ReadDir(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !own[e.Name()] && !theirs[e.Name()] {
+			t.Errorf("serve created %s in the home", e.Name())
+		}
+	}
+	// Its hook script lives under its own directory, not in the earlier program's hooks/.
+	if _, err := os.Stat(filepath.Join(home, "claude", "hooks", "notify.sh")); err != nil {
+		t.Errorf("notify.sh: %v", err)
+	}
+	if names, _ := os.ReadDir(filepath.Join(home, "hooks")); len(names) != 2 {
+		t.Errorf("the earlier program's hooks directory changed: %v", names)
 	}
 }

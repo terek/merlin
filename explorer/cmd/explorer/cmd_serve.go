@@ -48,7 +48,7 @@ func runServe(args []string) int {
 		return 1
 	}
 
-	home, err := paths.ExplorerHome()
+	home, err := paths.Home()
 	if err != nil {
 		return fail(err)
 	}

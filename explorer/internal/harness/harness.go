@@ -21,7 +21,7 @@ type Discovery struct {
 // Harness is a coding agent whose sessions Explorer indexes.
 //
 // The engine drives only this interface and never learns how a harness stores its
-// sessions. Digests are stored under <EXPLORER_HOME>/<Name()>/.
+// sessions. Digests are stored under <MERLIN_HOME>/<Name()>/.
 //
 // The daemon (explorer serve) additionally uses Locate, LiveSessions and ParseHook.
 type Harness interface {

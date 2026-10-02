@@ -21,7 +21,7 @@ func init() {
 func runHook([]string) (code int) {
 	defer func() { _ = recover(); code = 0 }()
 	port := hooks.DefaultPort
-	if home, err := paths.ExplorerHome(); err == nil {
+	if home, err := paths.Home(); err == nil {
 		port = hooks.Port(home)
 	}
 	_ = hooks.Notify(os.Stdin, port, hooks.Timeout)

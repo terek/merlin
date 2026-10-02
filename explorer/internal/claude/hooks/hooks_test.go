@@ -58,7 +58,7 @@ func read(t *testing.T, p string) string {
 }
 
 func backups(t *testing.T, cfg Config) []string {
-	m, _ := filepath.Glob(cfg.SettingsPath() + ".explorer-backup-*")
+	m, _ := filepath.Glob(cfg.SettingsPath() + ".merlin-backup-*")
 	return m
 }
 

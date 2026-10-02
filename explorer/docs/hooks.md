@@ -53,7 +53,7 @@ One matcher group, no `matcher`, per event (`SessionStart`, `UserPromptSubmit`, 
 `SubagentStop`, `SessionEnd`):
 
 ```json
-{"hooks": [{"type": "command", "command": "<EXPLORER_HOME>/claude/hooks/notify.sh", "timeout": 2}]}
+{"hooks": [{"type": "command", "command": "<MERLIN_HOME>/claude/hooks/notify.sh", "timeout": 2}]}
 ```
 
 Ownership: a hook is Explorer's if its `command` ends in `/claude/hooks/notify.sh`.

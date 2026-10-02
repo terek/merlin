@@ -1,5 +1,5 @@
 {
-  "home": "$EXPLORER_HOME",
+  "home": "$MERLIN_HOME",
   "digests": 35,
   "sessions": 35,
   "interactive": 34,
