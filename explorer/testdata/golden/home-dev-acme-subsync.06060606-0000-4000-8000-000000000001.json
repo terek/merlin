@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 3,
+  "parserVersion": 5,
   "source": [
     {
       "path": "projects/-home-dev-acme-subsync/06060606-0000-4000-8000-000000000001.jsonl",
@@ -59,7 +59,8 @@
         "cacheWrite1h": 2100,
         "usd": 0.02132
       }
-    }
+    },
+    "truncatedMessages": 1
   },
   "turns": [
     {
@@ -128,7 +129,8 @@
             "cacheWrite5m": 1200,
             "usd": 0.0092
           }
-        }
+        },
+        "truncatedMessages": 1
       },
       "subtreeUSD": 0.0092
     }
@@ -162,6 +164,7 @@
       "agentId": "a06e0c0de0000001",
       "turn": 0,
       "usd": 0.0021,
+      "truncated": true,
       "input": 300,
       "output": 40,
       "cacheRead": 3000,

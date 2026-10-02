@@ -458,3 +458,36 @@ func TestParentContinuedInsideTheSameTurn(t *testing.T) {
 		t.Errorf("parent stopped: %+v", b.Parent)
 	}
 }
+
+// A scripted run that made no API call has no spend: the rollup (sessions that spent
+// something) does not count it, the scripted line (every run) does. The two numbers
+// differ by exactly those runs.
+func TestScriptedRunsWithoutSpend(t *testing.T) {
+	c := New()
+	spent := syn("claude", "spent", "/p", 1, 2, nil, msgSpec{"m1", 1, 0.5, 0})
+	spent.Kind = model.KindSDK
+	idle := syn("claude", "idle", "/p", 3, 4, nil)
+	idle.Kind = model.KindSDK
+	withWindows(idle, window(3, 4, 0))
+	c.Upsert(spent)
+	c.Upsert(idle)
+	c.Upsert(syn("claude", "human", "/p", 5, 6, []model.Turn{turn(0, "u0", "hello", 5)}, msgSpec{"m2", 5, 1, 0}))
+
+	var sdk *Row
+	rows := c.Rollup(Filter{}, ByKind)
+	for i := range rows {
+		if rows[i].Kind == string(model.KindSDK) {
+			sdk = &rows[i]
+		}
+	}
+	if sdk == nil || sdk.Sessions != 1 {
+		t.Fatalf("sdk row = %+v, want 1 session (the one that spent)", sdk)
+	}
+	runs := 0
+	for _, l := range c.Scripted(Filter{}) {
+		runs += l.Count
+	}
+	if runs != 2 {
+		t.Errorf("scripted runs = %d, want 2 (the idle one counts)", runs)
+	}
+}

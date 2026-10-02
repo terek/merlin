@@ -399,3 +399,14 @@ func TestLoadFromStoreAndProjectFiles(t *testing.T) {
 		t.Errorf("sdk project file = %+v", sdk)
 	}
 }
+
+// Scenario 06's agent ends on a message with a null stop_reason; scenario 02 has none.
+func TestTruncatedMessagesCounted(t *testing.T) {
+	c := fixtureCatalog(t)
+	if in, _ := c.Session(sid("06", "01")); in.Cost.TruncatedMessages != 1 {
+		t.Errorf("06: truncated = %d, want 1", in.Cost.TruncatedMessages)
+	}
+	if in, _ := c.Session(sid("02", "01")); in.Cost.TruncatedMessages != 0 {
+		t.Errorf("02: truncated = %d, want 0", in.Cost.TruncatedMessages)
+	}
+}

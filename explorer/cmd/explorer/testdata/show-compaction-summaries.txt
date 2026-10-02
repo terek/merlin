@@ -21,16 +21,24 @@ Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --ful
      > add migrations
      < Migrations added
    ── compaction 1 · Sep 5 06:00 · auto · 150k → 12k tokens · took 8s ──
-     | This session is being continued from a previous conversation that ran out of context.
+     | This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+       
        Summary:
        The database layer and migrations exist.
+       
+       If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dev/acme/.claude/projects/-home-dev-acme-s05-compaction/earlier.jsonl
+       Continue the conversation from where it left off without asking the user any further questions. Resume directly, do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.
   #2   Sep 5 06:00   human                $0.0012  3s
      > add seed data
      < Seed data added
    ── compaction 2 · Sep 5 06:00 · manual · 90k tokens · took 5s ──
-     | This session is being continued from a previous conversation that ran out of context.
+     | This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+       
        Summary:
        Seed data was added after the first compaction.
+       
+       If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dev/acme/.claude/projects/-home-dev-acme-s05-compaction/earlier.jsonl
+       Continue the conversation from where it left off without asking the user any further questions. Resume directly, do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.
   #3   Sep 5 06:00   human                $0.0013  3s
      > add an index on email
      < Index added

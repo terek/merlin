@@ -1240,7 +1240,8 @@
         "overheadUSD": 0,
         "inheritedUSD": 0,
         "ownMessages": 4,
-        "inheritedMessages": 0
+        "inheritedMessages": 0,
+        "truncatedMessages": 1
       },
       "firstOwnTurn": 0,
       "root": {
@@ -1430,7 +1431,8 @@
         "overheadUSD": 0,
         "inheritedUSD": 0,
         "ownMessages": 9,
-        "inheritedMessages": 0
+        "inheritedMessages": 0,
+        "truncatedMessages": 3
       },
       "firstOwnTurn": 0,
       "root": {

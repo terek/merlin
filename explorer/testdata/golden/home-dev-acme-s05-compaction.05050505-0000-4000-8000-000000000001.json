@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 3,
+  "parserVersion": 5,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000001.jsonl",
@@ -57,7 +57,17 @@
       "preTokens": 150000,
       "postTokens": 12000,
       "durationMs": 8000,
-      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nThe database layer and migrations exist."
+      "summary": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\nThe database layer and migrations exist.\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dev/acme/.claude/projects/-home-dev-acme-s05-compaction/earlier.jsonl\nContinue the conversation from where it left off without asking the user any further questions. Resume directly, do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.",
+      "boilerplate": [
+        {
+          "from": 0,
+          "to": 162
+        },
+        {
+          "from": 204,
+          "to": 662
+        }
+      ]
     },
     {
       "at": "2026-09-05T10:00:26Z",
@@ -65,7 +75,17 @@
       "trigger": "manual",
       "preTokens": 90000,
       "durationMs": 5000,
-      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nSeed data was added after the first compaction."
+      "summary": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\nSeed data was added after the first compaction.\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dev/acme/.claude/projects/-home-dev-acme-s05-compaction/earlier.jsonl\nContinue the conversation from where it left off without asking the user any further questions. Resume directly, do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.",
+      "boilerplate": [
+        {
+          "from": 0,
+          "to": 162
+        },
+        {
+          "from": 211,
+          "to": 669
+        }
+      ]
     }
   ],
   "turns": [

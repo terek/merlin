@@ -91,7 +91,7 @@
   "resume": "cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001",
   "digest": {
     "schemaVersion": 1,
-    "parserVersion": 3,
+    "parserVersion": 5,
     "source": [
       {
         "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001.jsonl",

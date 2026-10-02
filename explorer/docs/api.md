@@ -27,6 +27,10 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
   is spend the harness reported that no transcript message explains; it is a session-level figure
   and is never spread over agents or turns. `inheritedUSD` is history copied from another session
   that the other session already paid for; it is not in `bestUSD`.
+  `truncatedMessages` (omitted when 0) counts the owned messages the harness wrote down before
+  they finished (null `stop_reason` on the last line; mostly sub-agent messages): their output
+  tokens are partial, so the recomputed part of the cost is a lower bound when it is non-zero.
+  The per-agent counts are in the detail's `digest.agents[].cost.truncatedMessages`.
 - **Dates and times** given as parameters are an RFC 3339 time or a date (`2026-09-16`, local
   midnight). A date-only `until` includes that whole day.
 - **Errors.** Every non-2xx body has this shape:
@@ -691,7 +695,11 @@ A `by=session` row also carries `harness`, `project` and `lastActivityAt` (a scr
 `project`), so it can be shown and linked without a second request; its cost is the session's
 whole best cost, whatever the range.
 `backing` counts the sessions in the table by cost flag. `sessions` counts the sessions behind
-the figure, scripted runs included.
+the figure, scripted runs included. A row's `sessions` (and `sessions`) counts the sessions that
+spent something inside the row, so a scripted run that made no API call (it ended before the first
+request; it has a reported window of $0 and no messages) is in none of them; `backing.scriptedRuns`
+counts every scripted run that started in the range, such runs included. The two figures differ by
+exactly those runs: on one real history 2,529 of 3,132 scripted runs had spend, the other 603 none.
 
 ```json
 {

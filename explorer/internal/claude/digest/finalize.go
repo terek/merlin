@@ -99,10 +99,14 @@ func (b *Builder) priceMessages(res *FileResult) []*billedMsg {
 			mc = model.ModelCost{Tokens: tok}
 		} else {
 			res.Cost.AddMessage(name, mc.Tokens, mc.USD)
+			if m.truncated() {
+				res.Cost.AddTruncated()
+			}
 		}
 		turn := m.turn
 		res.Messages = append(res.Messages, model.Message{
 			ID: m.id, At: m.firstTS, Model: name, Turn: &turn, USD: mc.USD, Tokens: tok,
+			Truncated: m.truncated(),
 		})
 		billed[i] = &billedMsg{st: m, cost: mc, ok: ok}
 	}
@@ -139,6 +143,9 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 			t.ContextTokens = bm.st.usage.ContextTokens()
 			if bm.ok {
 				t.Cost.AddMessage(bm.st.modelOrUnknown(), bm.cost.Tokens, bm.cost.USD)
+				if bm.st.truncated() {
+					t.Cost.AddTruncated()
+				}
 			}
 			for _, tu := range bm.st.tools {
 				t.ToolCalls++
@@ -158,6 +165,11 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 		res.Turns[i] = t
 	}
 }
+
+// truncated reports a message whose last line has a null stop_reason: Claude Code wrote the
+// line before the response finished, so output_tokens is the count at that moment (median
+// 2 to 4 tokens; docs/validation.md, cause A). Cache and input counts are complete.
+func (m *msgState) truncated() bool { return m.stop == "" && !m.synthetic }
 
 func (m *msgState) modelOrUnknown() string {
 	if m.model == "" {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 3,
+  "parserVersion": 5,
   "source": [
     {
       "path": "projects/-home-dev-acme-s13d-partial-copy/13131313-0000-4000-8000-000000000008.jsonl",
@@ -58,7 +58,17 @@
       "preTokens": 120000,
       "postTokens": 8000,
       "durationMs": 6000,
-      "summary": "This session is being continued from a previous conversation that ran out of context.\nSummary:\nThe search box was added and styled in session A."
+      "summary": "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\nThe search box was added and styled in session A.\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dev/acme/.claude/projects/-home-dev-acme-s05-compaction/earlier.jsonl\nContinue the conversation from where it left off without asking the user any further questions. Resume directly, do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.",
+      "boilerplate": [
+        {
+          "from": 0,
+          "to": 162
+        },
+        {
+          "from": 213,
+          "to": 671
+        }
+      ]
     }
   ],
   "turns": [

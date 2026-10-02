@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 3,
+  "parserVersion": 5,
   "source": [
     {
       "path": "projects/-home-dev-acme-interrupt/04040404-0000-4000-8000-000000000001.jsonl",
@@ -47,7 +47,8 @@
         "cacheWrite1h": 2400,
         "usd": 0.020880000000000003
       }
-    }
+    },
+    "truncatedMessages": 3
   },
   "turns": [
     {
@@ -73,7 +74,8 @@
             "cacheWrite1h": 2000,
             "usd": 0.0104
           }
-        }
+        },
+        "truncatedMessages": 1
       },
       "costWithAgents": 0.0104
     },
@@ -186,7 +188,8 @@
             "cacheRead": 2800,
             "usd": 0.00096
           }
-        }
+        },
+        "truncatedMessages": 1
       },
       "costWithAgents": 0.00096
     },
@@ -239,7 +242,8 @@
             "cacheRead": 3000,
             "usd": 0.001
           }
-        }
+        },
+        "truncatedMessages": 1
       },
       "costWithAgents": 0.001
     },
@@ -277,6 +281,7 @@
       "model": "claude-sonnet-5-5",
       "turn": 0,
       "usd": 0.0104,
+      "truncated": true,
       "input": 1000,
       "output": 40,
       "cacheWrite1h": 2000
@@ -329,6 +334,7 @@
       "model": "claude-sonnet-5-5",
       "turn": 4,
       "usd": 0.00096,
+      "truncated": true,
       "input": 100,
       "output": 20,
       "cacheRead": 2800
@@ -349,6 +355,7 @@
       "model": "claude-sonnet-5-5",
       "turn": 6,
       "usd": 0.001,
+      "truncated": true,
       "input": 100,
       "output": 20,
       "cacheRead": 3000

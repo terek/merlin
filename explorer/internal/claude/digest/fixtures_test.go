@@ -193,14 +193,19 @@ func TestCompactionTwoPairs(t *testing.T) {
 	if c0.Turn != 1 || c0.Trigger != model.TriggerAuto || c0.PreTokens != 150000 || c0.PostTokens != 12000 || c0.DurationMs != 8000 {
 		t.Errorf("compaction 0 = %+v", c0)
 	}
-	if !strings.HasSuffix(c0.Summary, "The database layer and migrations exist.") || !strings.HasPrefix(c0.Summary, "This session is being continued") {
+	if !strings.Contains(c0.Summary, "The database layer and migrations exist.") || !strings.HasPrefix(c0.Summary, "This session is being continued") ||
+		!strings.Contains(c0.Summary, "read the full transcript at:") {
 		t.Errorf("summary 0 not whole: %q", c0.Summary)
+	}
+	// The fixed lead and closing sentences are marked; what is left is the text itself.
+	if got := unmarkedSummary(c0); got != "The database layer and migrations exist.\n\n" {
+		t.Errorf("summary 0 outside its boilerplate = %q", got)
 	}
 	// Second boundary: logicalParentUuid not in the file, no postTokens, summary at +2.
 	if c1.Turn != 2 || c1.Trigger != model.TriggerManual || c1.PreTokens != 90000 || c1.PostTokens != 0 || c1.DurationMs != 5000 {
 		t.Errorf("compaction 1 = %+v", c1)
 	}
-	if !strings.HasSuffix(c1.Summary, "Seed data was added after the first compaction.") {
+	if !strings.Contains(c1.Summary, "Seed data was added after the first compaction.") {
 		t.Errorf("summary 1 = %q (dangling logicalParentUuid, summary two records later)", c1.Summary)
 	}
 	if !c0.At.Before(c1.At) || c0.At.IsZero() {
@@ -452,4 +457,16 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// unmarkedSummary is the summary without its boilerplate spans.
+func unmarkedSummary(c model.Compaction) string {
+	var sb strings.Builder
+	prev := 0
+	for _, sp := range c.Boilerplate {
+		sb.WriteString(c.Summary[prev:sp.From])
+		prev = sp.To
+	}
+	sb.WriteString(c.Summary[prev:])
+	return sb.String()
 }

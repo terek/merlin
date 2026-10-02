@@ -67,6 +67,7 @@ type msgState struct {
 	id        string
 	model     string
 	usage     transcript.Usage // from the last line
+	stop      string           // stop_reason of the last line; empty when null
 	firstTS   time.Time
 	turn      int
 	texts     []string
@@ -350,7 +351,9 @@ func (b *Builder) system(r *transcript.Record, ts time.Time, pos int) (away bool
 func (b *Builder) user(r *transcript.Record, ts time.Time, pos int) {
 	if r.IsCompactSummary {
 		if b.pendingSummary >= 0 && pos-b.pendingPos <= summaryWindow {
-			b.compactions[b.pendingSummary].Summary = r.PromptText()
+			c := &b.compactions[b.pendingSummary]
+			c.Summary = r.PromptText()
+			c.Boilerplate = summaryBoilerplate(c.Summary)
 			b.pendingSummary = -1
 		} else {
 			b.counters.UnattachedSummaries++
@@ -496,6 +499,7 @@ func (b *Builder) assistant(r *transcript.Record, ts time.Time, pos int) {
 		b.tailText = n > 0 && am.Content.Blocks[n-1].Type == "text"
 	}
 	m.usage = am.Usage // the last line wins
+	m.stop = am.StopReason
 	if am.Model != "" {
 		m.model = am.Model
 	}

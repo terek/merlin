@@ -35,6 +35,9 @@ What did my sessions cost, subagents included? One table, grouped by --by
 History that a forked or continued session copied from another session is paid
 for once, by the session that has it first. Scripted runs (one-shot 'claude -p'
 calls) are counted in every table; in --by session they are summed per project.
+A row's SESSIONS counts the sessions that spent something in it, so a scripted run
+that made no API call is in no row; the "scripted runs" figure under the table
+counts every run.
 
 --by model has a line "(overhead)": reported spend that belongs to no model
 because no transcript message accounts for it.
@@ -170,7 +173,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 			case "kind":
 				row.Key = r.Kind
 				if r.Kind == string(model.KindSDK) {
-					row.Label = "sdk (scripted runs)"
+					row.Label = "sdk (scripted runs with spend)"
 				}
 			}
 			rows = append(rows, row)
@@ -316,7 +319,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	parts := []string{fmt.Sprintf("%d exact", exact), fmt.Sprintf("%d partial", partial), fmt.Sprintf("%d estimated", estimated)}
 	line := "Sessions: " + strings.Join(parts, ", ")
 	if scriptedRuns > 0 {
-		line += fmt.Sprintf("; plus %s", plural(scriptedRuns, "scripted run", "scripted runs"))
+		line += fmt.Sprintf("; plus %s, counting any that made no API call", plural(scriptedRuns, "scripted run", "scripted runs"))
 	}
 	fmt.Println(line + "  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)")
 	return nil

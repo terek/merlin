@@ -40,6 +40,9 @@
     "11111111-0000-4000-8000-000000000001",
     "12121212-0000-4000-8000-000000000001"
   ],
+  "truncatedMessages": 4,
+  "truncatedSessions": 2,
+  "truncatedAgentMessages": 1,
   "catalog": {
     "Sessions": 35,
     "Stubs": 0,

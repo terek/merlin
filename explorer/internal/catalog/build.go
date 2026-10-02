@@ -533,6 +533,9 @@ func (v *view) costs() {
 			}
 			sums[k] += m.USD
 			c.OwnUSD += m.USD
+			if m.Truncated {
+				c.TruncatedMessages++
+			}
 			if wi < 0 {
 				c.UncoveredUSD += m.USD
 				continue

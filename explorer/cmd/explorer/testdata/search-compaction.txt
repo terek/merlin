@@ -7,7 +7,7 @@ Sep 5 06:00 · s05-compaction · set up the database layer   [final text, turn 2
     cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000001
 
 Sep 5 06:00 · s05-compaction · set up the database layer   [compaction summary 2]
-    …ation that ran out of context. Summary: Seed data was added after the first compaction.
+    …Seed data was added after the first compaction.…
     cd /home/dev/acme/s05-compaction && claude --resume 05050505-0000-4000-8000-000000000001
 
 3 of 3 matches

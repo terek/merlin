@@ -484,6 +484,9 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 			continue
 		}
 		ag.Cost.AddMessage(m.Model, m.Tokens, m.USD)
+		if m.Truncated {
+			ag.Cost.AddTruncated()
+		}
 	}
 	return ag
 }

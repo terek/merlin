@@ -23,7 +23,7 @@ Sep 13 06:00 · s13e-sdk-pickup · add a search box   [prompt, turn 1]
     cd /home/dev/acme/s13e-sdk-pickup && claude --resume 13131313-0000-4000-8000-000000000009
 
 Sep 13 06:00 · s13d-partial-copy · add a reset button   [compaction summary 1]
-    …ation that ran out of context. Summary: The search box was added and styled in session A.
+    …The search box was added and styled in session A.…
     cd /home/dev/acme/s13d-partial-copy && claude --resume 13131313-0000-4000-8000-000000000008
 
 6 of 6 matches

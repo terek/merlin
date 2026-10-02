@@ -7,15 +7,16 @@ find where logins are validated
   turns      1 turn · 4 assistant messages · 2 tool calls · 1 agent
 
 Cost    ≈$0.021   estimated: Claude Code reported no figure; recomputed from tokens
-  attributed      $0.021   recomputed from tokens, messages this session owns
+  attributed      $0.021   at least; recomputed from tokens, 1 message cut short in the transcript
 
   by model
   MODEL       ATTRIBUTED
   sonnet-5-5      $0.021
 
 Agents  (1 agent; own cost is attributed from tokens)
-  AGENT                               KIND      MODEL   STATUS         OWN  WITH SUBTREE
-  └─ Explore · Find login validation  subagent  sonnet  completed  $0.0092
+  AGENT                               KIND      MODEL   STATUS           OWN  WITH SUBTREE
+  └─ Explore · Find login validation  subagent  sonnet  completed  ≥ $0.0092
+  ≥ at least: 1 message cut short in the transcript (output tokens partial, mostly agents)
 
 Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
   #0   Sep 6 06:00   human                 $0.021  15s  [+1 agent]

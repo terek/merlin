@@ -82,6 +82,10 @@ type SessionCost struct {
 
 	OwnMessages       int `json:"ownMessages"`
 	InheritedMessages int `json:"inheritedMessages"`
+	// TruncatedMessages is how many of the owned messages the harness wrote down before
+	// they finished (Message.Truncated): their output tokens are partial, so OwnUSD and
+	// the part of the best cost recomputed from tokens are lower bounds when it is non-zero.
+	TruncatedMessages int `json:"truncatedMessages,omitempty"`
 }
 
 // LinkKind says whether a child session took over from its parent or branched off it.

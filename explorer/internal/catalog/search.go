@@ -18,6 +18,31 @@ const (
 // fold lowercases rune by rune, so the result has the same number of runes as s.
 func fold(s string) string { return strings.Map(unicode.ToLower, s) }
 
+// unmarked blanks out the spans of s that the harness marked as boilerplate, one space per
+// rune, so a search does not match inside them and the offsets stay as they were. Spans
+// that do not fit s are ignored.
+func unmarked(s string, spans []model.TextSpan) string {
+	if len(spans) == 0 {
+		return s
+	}
+	var sb strings.Builder
+	for i, r := range s {
+		blank := false
+		for _, sp := range spans {
+			if i >= sp.From && i < sp.To {
+				blank = true
+				break
+			}
+		}
+		if blank {
+			sb.WriteByte(' ')
+		} else {
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
 // match checks that every term occurs in text (already folded) and returns the byte
 // offset of the earliest first occurrence.
 func match(terms []string, text string) (int, bool) {
@@ -122,7 +147,7 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 					others = v.compHolders[key]
 				}
 			}
-			add(FieldCompaction, k, cp.At, cp.Summary, false, others)
+			add(FieldCompaction, k, cp.At, unmarked(cp.Summary, cp.Boilerplate), false, others)
 		}
 		add(FieldProject, -1, time.Time{}, s.project, false, nil)
 		for _, cwd := range d.Cwds {

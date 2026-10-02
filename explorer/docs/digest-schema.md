@@ -102,6 +102,7 @@ Recomputed from token usage with the price table.
 |---|---|
 | `usd` | total dollars |
 | `byModel` | per model, as `ModelCost` |
+| `truncatedMessages` | how many of the summed messages are `truncated` (see `Message`); when non-zero, `usd` is a lower bound |
 
 ## ModelCost
 
@@ -160,7 +161,17 @@ Spending outside every window was not reported and can only be attributed from t
 | `preTokens` | context size before |
 | `postTokens` | context size after |
 | `durationMs` | how long the compaction took |
+| `boilerplate` | the parts of `summary` the harness writes into every summary, as `TextSpan`; search skips them, `summary` itself stays whole; omitted when none were recognised |
 | `summary` | the summary text, whole; it is not a prompt and not a turn |
+
+## TextSpan
+
+A stretch of a text, as UTF-8 byte offsets.
+
+| key | meaning |
+|---|---|
+| `from` | first byte of the span |
+| `to` | first byte after the span |
 
 ## Turn
 
@@ -238,6 +249,7 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `agentId` | agent that made it; omitted for the main agent |
 | `turn` | index of the turn it belongs to, when any |
 | `usd` | attributed dollars |
+| `truncated` | the harness wrote the message down before it finished (its last line has a null `stop_reason`), so its `output` count is partial and `usd` a lower bound; omitted when false |
 
 ## Diagnostics
 

@@ -119,7 +119,9 @@ Totals: turns = 8 (refactor, rename, tests, built-in runner, rename-again, stop-
 - **05a** `05050505-0000-4000-8000-000000000001`: turns 1-2 before, boundary #1 (**auto**, preTokens 150000, postTokens 12000, durationMs 8000, logicalParentUuid resolves, summary at +1),
   turn 3 between, boundary #2 (**manual**, preTokens 90000, **no postTokens**, logicalParentUuid `05010000-ffff-4000-9000-000000000999` is **not in the file**,
   an attachment record sits between boundary and summary so the summary is at +2), turn 4 after. 4 turns, 2 compactions, 2 epoch changes.
-- **05b** `05050505-0000-4000-8000-000000000002`: the file BEGINS with a manual boundary (logicalParentUuid not in file) + summary, then one turn. 1 compaction at epoch 0, no earlier turns.
+  Every summary is written in Claude Code's shape: a fixed preamble paragraph and `Summary:` line, the text, then a fixed pointer to the full transcript and a fixed closing instruction
+  (the digest's `compactions[].boilerplate` spans cover exactly those fixed parts, so the words in them must never be found by search).
+- **05b** `05050505-0000-4000-8000-000000000002`: the file BEGINS with a manual boundary (logicalParentUuid not in file) + summary, then one turn. 1 compaction at epoch 0, no earlier turns. Its summary has the fixed preamble but no closing pointer or instruction.
 - **05c** `05050505-0000-4000-8000-000000000003`: 2 turns. Two trailing records repeat the uuid of the first prompt and of the first assistant message (with different text and a huge usage,
   message id `msg_cmpc_dup`); both must be **skipped**, so turns = 2 and cost is unaffected.
 - **05d** `05050505-0000-4000-8000-000000000004` + agent `a05e0c0de0000001`: the agent file contains a manual boundary (pre 80000, post 9000) + summary; 1 compaction on the agent.
@@ -151,7 +153,9 @@ Totals: turns = 8 (refactor, rename, tests, built-in runner, rename-again, stop-
 
 ### 06 sync subagent
 Main prompt, Agent tool_use `toolu_sync_01` (subagent_type Explore), agent `a06e0c0de0000001` (meta.toolUseId `toolu_sync_01`, spawnDepth 1), tool_result with
-toolUseResult status completed (agentId, totalTokens, totalDurationMs). Linkage "meta". Agent cost uses 5m cache writes. Also present and to be ignored:
+toolUseResult status completed (agentId, totalTokens, totalDurationMs). Linkage "meta". Agent cost uses 5m cache writes. The agent's last line, `msg_sync_a2`, has `stop_reason: null`: the one **truncated** message
+of the fixtures with an agent (agent and session `cost.truncatedMessages` 1, `messages[].truncated` on `msg_sync_a2` only; the cost below is unchanged, it
+treats the 40 output tokens as written). Scenario 04 has three main-file messages cut short by interruptions. Scenario 02 has two lines with a null stop_reason that are not truncated, because the last line of their message is complete. Also present and to be ignored:
 `<session>/tool-results/toolu_sync_01.txt`, `<session>/custom-title.json`.
 
 - `msg_sync_01` (claude-sonnet-5-5): 1000 in x $2/M = $0.002 + 80 out x $10/M = $0.0008 + 2000 cache-write-1h x $4/M = $0.008 = **$0.0108**

@@ -28,11 +28,16 @@ type ModelCost struct {
 type Cost struct {
 	USD     float64              `json:"usd"`
 	ByModel map[string]ModelCost `json:"byModel,omitempty"`
+	// TruncatedMessages is how many of the summed messages were cut short in the transcript
+	// (see Message.Truncated). Their output tokens are a partial count, so USD is a lower
+	// bound whenever this is non-zero.
+	TruncatedMessages int64 `json:"truncatedMessages,omitempty"`
 }
 
 // Add adds other into c. It is safe on a zero Cost.
 func (c *Cost) Add(other Cost) {
 	c.USD += other.USD
+	c.TruncatedMessages += other.TruncatedMessages
 	for m, oc := range other.ByModel {
 		c.addModel(m, oc)
 	}
@@ -44,6 +49,9 @@ func (c *Cost) AddMessage(model string, tokens Tokens, usd float64) {
 	c.USD += usd
 	c.addModel(model, ModelCost{Tokens: tokens, USD: usd})
 }
+
+// AddTruncated counts one message, already added with AddMessage, that was cut short.
+func (c *Cost) AddTruncated() { c.TruncatedMessages++ }
 
 func (c *Cost) addModel(model string, add ModelCost) {
 	if c.ByModel == nil {

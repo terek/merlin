@@ -136,6 +136,15 @@ type Compaction struct {
 	PostTokens int64             `json:"postTokens,omitempty"`
 	DurationMs int64             `json:"durationMs,omitempty"`
 	Summary    string            `json:"summary,omitempty"` // whole
+	// Boilerplate marks the parts of Summary that the harness writes into every summary
+	// (fixed sentences around the real text). Search skips them; the summary stays whole.
+	Boilerplate []TextSpan `json:"boilerplate,omitempty"`
+}
+
+// TextSpan is a stretch of a text: UTF-8 byte offsets, From inclusive and To exclusive.
+type TextSpan struct {
+	From int `json:"from"`
+	To   int `json:"to"`
 }
 
 // Turn is one prompt and everything the main agent did in answer to it.
@@ -216,6 +225,9 @@ type Message struct {
 	AgentID string    `json:"agentId,omitempty"` // empty = main agent
 	Turn    *int      `json:"turn,omitempty"`
 	USD     float64   `json:"usd"`
+	// Truncated marks a message the harness wrote down before it finished: its output
+	// token count is partial, so USD is a lower bound.
+	Truncated bool `json:"truncated,omitempty"`
 	Tokens
 }
 

@@ -31,7 +31,9 @@ Health of the index, read from the digests and the catalog; nothing is changed.
                  Code upgrade means the transcript format changed. Only versions
                  with a finding are listed; --all-versions lists every version
   Pricing        models seen in transcripts that have no price (their cost is 0)
-  Agents         subagents that could not be tied to the call that started them
+  Agents         subagents that could not be tied to the call that started them;
+                 messages cut short in the transcript (output tokens partial,
+                 so attributed cost is a lower bound)
   Cost           how much of what Claude Code reported the transcripts explain
                  (covered / reported): overall, its distribution over sessions,
                  the ten largest gaps in both directions, and sessions with spend
@@ -105,6 +107,11 @@ type doctorReport struct {
 	UnpricedModels   map[string]int `json:"unpricedModels"` // model -> sessions
 	UnresolvedAgents int64          `json:"unresolvedAgents"`
 	UnresolvedIn     []string       `json:"unresolvedAgentsIn,omitempty"`
+	// TruncatedMessages counts the messages cut short in the transcript, in TruncatedIn
+	// sessions (see model.Message.Truncated); AgentTruncated is the part inside agent files.
+	TruncatedMessages int64 `json:"truncatedMessages"`
+	TruncatedIn       int   `json:"truncatedSessions"`
+	AgentTruncated    int64 `json:"truncatedAgentMessages"`
 
 	Catalog catalog.Diagnostics `json:"catalog"`
 
@@ -207,6 +214,15 @@ func buildDoctor(w *world) doctorReport {
 		}
 		for _, m := range d.Diagnostics.UnpricedModels {
 			r.UnpricedModels[m]++
+		}
+		if n := d.Cost.TruncatedMessages; n > 0 {
+			r.TruncatedMessages += n
+			r.TruncatedIn++
+			for _, m := range d.Messages {
+				if m.Truncated && m.AgentID != "" {
+					r.AgentTruncated++
+				}
+			}
 		}
 		if n := d.Diagnostics.UnresolvedAgents; n > 0 {
 			r.UnresolvedAgents += n
@@ -400,6 +416,13 @@ func doDoctor(asJSON, allVersions bool) error {
 			ids = append(ids, w.shortID(id))
 		}
 		fmt.Fprintf(out, "  unresolved agents: %d in %s (%s); attached to the session root\n", r.UnresolvedAgents, plural(len(ids), "session", "sessions"), idList(ids))
+	}
+
+	if r.TruncatedMessages == 0 {
+		fmt.Fprintln(out, "  messages cut short in the transcript: none")
+	} else {
+		fmt.Fprintf(out, "  messages cut short in the transcript: %d in %s (%d in agent files); their output tokens are partial, so attributed cost is a lower bound\n",
+			r.TruncatedMessages, plural(r.TruncatedIn, "session", "sessions"), r.AgentTruncated)
 	}
 
 	section("Cost: reported vs recomputed from the transcripts")

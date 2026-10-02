@@ -95,13 +95,28 @@ func TestSearchRanking(t *testing.T) {
 	}
 
 	// a term that occurs only in compaction summaries is found, labelled, and never a prompt
-	hits = c.Search("ran out of context", SearchOptions{})
-	if len(hits) < 3 {
+	hits = c.Search("planned in an earlier", SearchOptions{})
+	if len(hits) < 1 {
 		t.Fatalf("hits = %+v", hits)
 	}
 	for _, h := range hits {
 		if h.Field != FieldCompaction {
 			t.Errorf("field = %s", h.Field)
+		}
+	}
+	// words that occur only in the fixed sentences Claude Code writes into every summary
+	// (lead, "Summary:" label, transcript pointer with its path, closing instruction) match nothing
+	for _, q := range []string{"ran out of context", "continued from a previous", "full transcript", "before compaction", "earlier.jsonl", "resume directly", "summary below"} {
+		if hits := c.Search(q, SearchOptions{}); len(hits) != 0 {
+			t.Errorf("search %q found %+v, want nothing", q, hits)
+		}
+	}
+	// the stored summaries are whole, and the words still count when the summary's own text has them
+	for _, d := range goldens(t) {
+		for _, cp := range d.Compactions {
+			if !strings.Contains(cp.Summary, "ran out of context") {
+				t.Errorf("%s: stored summary was altered: %q", d.ID, cp.Summary)
+			}
 		}
 	}
 	// only one of the compaction texts says "added and styled"

@@ -521,8 +521,15 @@ const edit = (file: string): J => ({ file_path: `/home/dev/acme/${file}`, old_st
 }
 
 // ================================================================ 05 compaction
-const SUMMARY = (what: string) =>
-  `This session is being continued from a previous conversation that ran out of context.\nSummary:\n${what}`
+// The shape of a Claude Code compaction summary: a fixed preamble paragraph and a "Summary:" line before
+// the text, a fixed pointer to the full transcript and a fixed instruction after it (written by hand).
+const SUMMARY_LEAD =
+  'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\nSummary:\n'
+const SUMMARY_TAIL =
+  '\n\nIf you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dev/acme/.claude/projects/-home-dev-acme-s05-compaction/earlier.jsonl\nContinue the conversation from where it left off without asking the user any further questions. Resume directly, do not acknowledge the summary, do not recap what was happening. Pick up the last task as if the break never happened.'
+const SUMMARY = (what: string) => `${SUMMARY_LEAD}${what}${SUMMARY_TAIL}`
+// Older versions wrote the preamble only.
+const SUMMARY_NO_TAIL = (what: string) => `${SUMMARY_LEAD}${what}`
 {
   // 05a: two boundary+summary pairs, turns before / between / after
   const f = mk(5, 's05-compaction', { v: 1, ff: 1, lkey: '05a' })
@@ -566,7 +573,7 @@ const SUMMARY = (what: string) =>
   // 05b: file BEGINS with boundary + summary
   const f = mk(5, 's05-compaction', { v: 2, ff: 2, lkey: '05b' })
   f.boundary('manual', { preTokens: 70000, postTokens: 9000, durationMs: 4000 }, '05020000-ffff-4000-9000-000000000888')
-  f.summary(SUMMARY('A repository layer was planned in an earlier session.'))
+  f.summary(SUMMARY_NO_TAIL('A repository layer was planned in an earlier session.'))
   f.user('continue with the repository layer')
   f.asst('msg_cmpb_01', [T('Repository layer continued')], u(500, 60, 0, 0, 1000))
   f.turnEnd(3000, 2)
@@ -650,7 +657,8 @@ const SUMMARY = (what: string) =>
     u(2000, 60, 0, 1000),
   )
   a.result('toolu_sync_a1', 'src/auth.ts:12: validateLogin()', { mode: 'content', numFiles: 1 })
-  a.asst('msg_sync_a2', [T('Login validation lives in src/auth.ts.')], u(300, 40, 3000, 200))
+  // The agent's last line is written before the response finishes: stop_reason null (truncated output).
+  a.asst('msg_sync_a2', [T('Login validation lives in src/auth.ts.')], u(300, 40, 3000, 200), { stop: null })
   writeMeta(a, {
     agentType: 'Explore',
     description: 'Find login validation',
@@ -1740,7 +1748,9 @@ ${B('04')}
 - **05a** \`${d(5, 1)}\`: turns 1-2 before, boundary #1 (**auto**, preTokens 150000, postTokens 12000, durationMs 8000, logicalParentUuid resolves, summary at +1),
   turn 3 between, boundary #2 (**manual**, preTokens 90000, **no postTokens**, logicalParentUuid \`05010000-ffff-4000-9000-000000000999\` is **not in the file**,
   an attachment record sits between boundary and summary so the summary is at +2), turn 4 after. 4 turns, 2 compactions, 2 epoch changes.
-- **05b** \`${d(5, 2)}\`: the file BEGINS with a manual boundary (logicalParentUuid not in file) + summary, then one turn. 1 compaction at epoch 0, no earlier turns.
+  Every summary is written in Claude Code's shape: a fixed preamble paragraph and \`Summary:\` line, the text, then a fixed pointer to the full transcript and a fixed closing instruction
+  (the digest's \`compactions[].boilerplate\` spans cover exactly those fixed parts, so the words in them must never be found by search).
+- **05b** \`${d(5, 2)}\`: the file BEGINS with a manual boundary (logicalParentUuid not in file) + summary, then one turn. 1 compaction at epoch 0, no earlier turns. Its summary has the fixed preamble but no closing pointer or instruction.
 - **05c** \`${d(5, 3)}\`: 2 turns. Two trailing records repeat the uuid of the first prompt and of the first assistant message (with different text and a huge usage,
   message id \`msg_cmpc_dup\`); both must be **skipped**, so turns = 2 and cost is unaffected.
 - **05d** \`${d(5, 4)}\` + agent \`${aid(5, 1)}\`: the agent file contains a manual boundary (pre 80000, post 9000) + summary; 1 compaction on the agent.
@@ -1759,7 +1769,9 @@ ${B('05d')}
 `)
   L.push(`### 06 sync subagent
 Main prompt, Agent tool_use \`toolu_sync_01\` (subagent_type Explore), agent \`${aid(6, 1)}\` (meta.toolUseId \`toolu_sync_01\`, spawnDepth 1), tool_result with
-toolUseResult status completed (agentId, totalTokens, totalDurationMs). Linkage "meta". Agent cost uses 5m cache writes. Also present and to be ignored:
+toolUseResult status completed (agentId, totalTokens, totalDurationMs). Linkage "meta". Agent cost uses 5m cache writes. The agent's last line, \`msg_sync_a2\`, has \`stop_reason: null\`: the one **truncated** message
+of the fixtures with an agent (agent and session \`cost.truncatedMessages\` 1, \`messages[].truncated\` on \`msg_sync_a2\` only; the cost below is unchanged, it
+treats the 40 output tokens as written). Scenario 04 has three main-file messages cut short by interruptions. Scenario 02 has two lines with a null stop_reason that are not truncated, because the last line of their message is complete. Also present and to be ignored:
 \`<session>/tool-results/toolu_sync_01.txt\`, \`<session>/custom-title.json\`.
 
 ${B('06')}

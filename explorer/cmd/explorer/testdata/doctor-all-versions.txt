@@ -19,6 +19,7 @@ Pricing
 
 Agents
   unresolved agents: 4 in 2 sessions (11111111, 12121212); attached to the session root
+  messages cut short in the transcript: 4 in 2 sessions (1 in agent files); their output tokens are partial, so attributed cost is a lower bound
 
 Cost: reported vs recomputed from the transcripts
   2 sessions carry Claude Code's reported cost: $0.131 reported, $0.128 of it explained by transcript messages (covered)

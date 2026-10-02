@@ -257,7 +257,11 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 			p.printf("  %-11s %10s     %s → %s\n", "", usd(wd.TotalUSD), stamp(wd.From), wd.To.Local().Format("Jan 2 15:04"))
 		}
 	}
-	row("attributed", c.OwnUSD, "recomputed from tokens, messages this session owns")
+	attributed := "recomputed from tokens, messages this session owns"
+	if c.TruncatedMessages > 0 {
+		attributed = fmt.Sprintf("at least; recomputed from tokens, %s cut short in the transcript", plural(c.TruncatedMessages, "message", "messages"))
+	}
+	row("attributed", c.OwnUSD, attributed)
 	if len(c.Windows) > 0 {
 		row("overhead", c.OverheadUSD, "reported but not in the transcript (inside windows)")
 		row("outside", c.UncoveredUSD, "outside every window, recomputed; added to the total")
@@ -377,7 +381,11 @@ func (p *printer) agents(d *model.SessionDigest) {
 		if len(children[a.ID]) > 0 {
 			sub = usd(a.SubtreeUSD)
 		}
-		rows = append(rows, []string{prefix + branch + name, kind, shortModel(a.Model), string(a.Status), usd(a.Cost.USD), sub})
+		own := atLeast(usd(a.Cost.USD), a.Cost.TruncatedMessages > 0)
+		if sub != "" {
+			sub = atLeast(sub, subtreeTruncated(a, children))
+		}
+		rows = append(rows, []string{prefix + branch + name, kind, shortModel(a.Model), string(a.Status), own, sub})
 		kids := children[a.ID]
 		order(kids)
 		next := prefix
@@ -403,7 +411,32 @@ func (p *printer) agents(d *model.SessionDigest) {
 		walk(r, "  ", b)
 	}
 	p.printf("\nAgents  (%s; own cost is attributed from tokens)\n", plural(len(d.Agents), "agent", "agents"))
+	truncated := d.Cost.TruncatedMessages
 	renderTable(p.out, []column{{head: "  AGENT", flex: true, max: 48}, {head: "KIND"}, {head: "MODEL"}, {head: "STATUS"}, {head: "OWN", right: true}, {head: "WITH SUBTREE", right: true}}, rows, termWidth())
+	if truncated > 0 {
+		p.printf("  ≥ at least: %s cut short in the transcript (output tokens partial, mostly agents)\n", plural(int(truncated), "message", "messages"))
+	}
+}
+
+// atLeast marks a cost figure that is a lower bound.
+func atLeast(s string, lower bool) string {
+	if lower {
+		return "≥ " + s
+	}
+	return s
+}
+
+// subtreeTruncated reports whether an agent or any descendant has messages cut short.
+func subtreeTruncated(a *model.Agent, children map[string][]*model.Agent) bool {
+	if a.Cost.TruncatedMessages > 0 {
+		return true
+	}
+	for _, k := range children[a.ID] {
+		if subtreeTruncated(k, children) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *printer) family(self model.SessionKey, fam catalog.Family) {
