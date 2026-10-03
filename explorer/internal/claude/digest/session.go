@@ -15,7 +15,7 @@ import (
 // ParserVersion identifies the output of this package. Bump it whenever a change here, in
 // the Builder, in Assemble or in the transcript package would change a digest built from
 // the same files: the engine rebuilds every digest whose parserVersion differs.
-const ParserVersion = 6
+const ParserVersion = 7
 
 // BuildSession reads the files of one discovered session and returns its complete digest.
 //
@@ -60,7 +60,7 @@ func BuildSessionFrom(src discover.Source, reduce FileReducer) (*model.SessionDi
 		if err != nil {
 			return nil, err
 		}
-		af := AgentFile{ID: a.ID, Result: r}
+		af := AgentFile{ID: a.ID, Dir: a.Dir, Result: r}
 		if a.MetaPath != "" {
 			// A meta file that is unreadable or not JSON is treated as absent: the agent is
 			// still linked by the weaker rungs of the ladder.
@@ -72,7 +72,7 @@ func BuildSessionFrom(src discover.Source, reduce FileReducer) (*model.SessionDi
 	}
 
 	asm := Assemble(main, files)
-	d.Turns, d.Agents, d.Messages = asm.Turns, asm.Agents, asm.Messages
+	d.Turns, d.Agents, d.Messages, d.Workflows = asm.Turns, asm.Agents, asm.Messages, asm.Workflows
 	d.Compactions, d.Cost, d.Diagnostics = asm.Compactions, asm.Cost, asm.Diagnostics
 
 	// The files in time order: the main file first, then the agent files.

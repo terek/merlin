@@ -24,6 +24,7 @@ func (b *Builder) Result() *FileResult {
 		AgentSpawns:     slices.Clone(b.spawns),
 		SpawnResults:    slices.Clone(b.spawnRes),
 		Notifications:   slices.Clone(b.notes),
+		Workflows:       slices.Clone(b.workflows),
 		AgentsKilled:    slices.Clone(b.killed),
 		CostStates:      slices.Clone(b.costStates),
 		Recaps:          slices.Clone(b.recaps),
@@ -62,6 +63,7 @@ func (b *Builder) Result() *FileResult {
 	res.EndState = b.endState()
 	billed := b.priceMessages(res)
 	b.buildTurns(res, billed)
+	b.compactionCalls(res)
 	if ab := b.abandoned(); ab != nil {
 		for i := range res.Turns {
 			res.Turns[i].Abandoned = ab[i]
@@ -122,7 +124,7 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 		t := model.Turn{
 			Index: i, Epoch: ts.epoch, UUID: ts.uuid,
 			StartedAt: ts.startedAt, EndedAt: ts.endedAt,
-			Origin: ts.origin, UserText: ts.userText, Inbox: slices.Clone(ts.inbox), Images: ts.images,
+			Origin: ts.origin, UserText: ts.userText, Inbox: slices.Clone(ts.inbox), Queued: slices.Clone(ts.queued), Images: ts.images,
 			Command: ts.command, Interrupted: ts.interrupted,
 		}
 		switch {

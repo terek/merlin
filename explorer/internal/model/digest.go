@@ -54,10 +54,11 @@ type SessionDigest struct {
 	Cost     Cost      `json:"cost"`
 	Reported *Reported `json:"reported,omitempty"`
 
-	Compactions []Compaction `json:"compactions,omitempty"`
-	Turns       []Turn       `json:"turns,omitempty"`
-	Agents      []Agent      `json:"agents,omitempty"`
-	Messages    []Message    `json:"messages,omitempty"`
+	Compactions []Compaction  `json:"compactions,omitempty"`
+	Turns       []Turn        `json:"turns,omitempty"`
+	Agents      []Agent       `json:"agents,omitempty"`
+	Workflows   []WorkflowRun `json:"workflows,omitempty"`
+	Messages    []Message     `json:"messages,omitempty"`
 
 	Diagnostics Diagnostics `json:"diagnostics"`
 }
@@ -139,6 +140,28 @@ type Compaction struct {
 	// Boilerplate marks the parts of Summary that the harness writes into every summary
 	// (fixed sentences around the real text). Search skips them; the summary stays whole.
 	Boilerplate []TextSpan `json:"boilerplate,omitempty"`
+	// Call is what the call that wrote the summary cost: an estimate, since the harness does
+	// not record that call. Absent when the context size or the model's price is unknown.
+	Call *CompactionCall `json:"call,omitempty"`
+}
+
+// CompactionCall is the estimated cost of a compaction's API call: the whole context as
+// input, the summary as output. It is never part of a recomputed total. Cold means the
+// main agent's previous call was older than the cache lifetime, so the context was read
+// again at full price instead of from the cache.
+type CompactionCall struct {
+	Model string `json:"model"`
+	// IdleMs is the time since the main agent's previous API call.
+	IdleMs int64      `json:"idleMs"`
+	Cache  CacheState `json:"cache"`
+	// Billing is how the context was charged, which follows from Cache and the harness
+	// version.
+	Billing      CallBilling `json:"billing"`
+	InputTokens  int64       `json:"inputTokens"`  // the context size before the compaction
+	OutputTokens int64       `json:"outputTokens"` // from the summary's length
+	USD          float64     `json:"usd"`
+	// WarmUSD is what the same call would have cost had the cache been warm.
+	WarmUSD float64 `json:"warmUSD"`
 }
 
 // TextSpan is a stretch of a text: UTF-8 byte offsets, From inclusive and To exclusive.
@@ -163,7 +186,10 @@ type Turn struct {
 	// apart into Inbox, and UserText keeps only what was not recognised (normally nothing).
 	UserText string `json:"userText"`
 	// Inbox holds the messages a machine delivered as this prompt, in order.
-	Inbox       []InboxMessage `json:"inbox,omitempty"`
+	Inbox []InboxMessage `json:"inbox,omitempty"`
+	// Queued holds the prompts that arrived while the turn was running, in order. They
+	// start no turn of their own.
+	Queued      []QueuedPrompt `json:"queued,omitempty"`
 	Images      int            `json:"images,omitempty"`
 	Command     string         `json:"command,omitempty"`
 	FinalText   string         `json:"finalText,omitempty"`
@@ -178,6 +204,18 @@ type Turn struct {
 	Cost           Cost     `json:"cost"`
 	CostWithAgents float64  `json:"costWithAgents"`
 	Spawned        []string `json:"spawned,omitempty"` // agent ids
+}
+
+// QueuedPrompt is a prompt that arrived while a turn was running: a message the user typed
+// without waiting, or one a machine delivered. The agent reads it in the middle of the
+// turn; it starts no turn.
+type QueuedPrompt struct {
+	At     time.Time  `json:"at"`
+	Origin TurnOrigin `json:"origin"`
+	// Text is the prompt as its author wrote it; for a delivered prompt, what was not
+	// recognised as a message (normally nothing), as in Turn.UserText.
+	Text  string         `json:"text,omitempty"`
+	Inbox []InboxMessage `json:"inbox,omitempty"`
 }
 
 // InboxMessage is one message an agent received that nobody typed: a teammate's message, a
@@ -217,6 +255,10 @@ type Agent struct {
 	Depth          int     `json:"depth"`
 	Background     bool    `json:"background,omitempty"`
 	Linkage        Linkage `json:"linkage"`
+	// RunID is the workflow run the agent belongs to (kind workflow), and Phase the phase of
+	// the run its script put it in.
+	RunID string `json:"runId,omitempty"`
+	Phase string `json:"phase,omitempty"`
 
 	StartedAt time.Time   `json:"startedAt,omitzero"`
 	EndedAt   time.Time   `json:"endedAt,omitzero"`
@@ -233,6 +275,28 @@ type Agent struct {
 
 	Cost       Cost    `json:"cost"`
 	SubtreeUSD float64 `json:"subtreeUSD"` // own + descendants
+}
+
+// WorkflowRun is one run of a workflow script, launched by one tool call. Its agents are
+// in the agent list with RunID set; the run is what ties them to a turn.
+type WorkflowRun struct {
+	ID      string `json:"id"`
+	Name    string `json:"name,omitempty"`
+	Summary string `json:"summary,omitempty"`
+	// TaskID is the id the run's task notification carries.
+	TaskID    string `json:"taskId,omitempty"`
+	ToolUseID string `json:"toolUseId,omitempty"`
+	// Turn is the turn of the main agent the run was launched in; AgentID is set instead
+	// when an agent launched it (Turn is then that agent's spawn turn).
+	Turn      *int      `json:"turn,omitempty"`
+	AgentID   string    `json:"agentId,omitempty"`
+	StartedAt time.Time `json:"startedAt,omitzero"`
+	EndedAt   time.Time `json:"endedAt,omitzero"`
+	// Status is how the harness said the run ended (completed, failed, killed), or open
+	// when the files hold no such notice.
+	Status string  `json:"status"`
+	Agents int     `json:"agents"`
+	USD    float64 `json:"usd"` // its agents and everything below them
 }
 
 // Message is one billed API message. It exists so cross-session rules (a message id is

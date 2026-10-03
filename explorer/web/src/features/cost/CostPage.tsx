@@ -6,9 +6,10 @@ import { X } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useCost, useProjects } from '../../api/queries'
-import type { CostRow, CostTable } from '../../api/types'
+import type { CompactionTally, CostRow, CostTable } from '../../api/types'
+import { tallyLine, warmLine } from '../../lib/compaction'
 import { backingSentence } from '../../lib/cost'
-import { formatCount } from '../../lib/format'
+import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
 import { sessionPath, shortProject } from '../../lib/paths'
@@ -41,6 +42,7 @@ import {
   RANGES,
   type Range,
   rangeWindow,
+  type Stack,
   selectedWindow,
   stackOf,
   topModels,
@@ -150,6 +152,12 @@ export function CostPage() {
                 options={[
                   { value: 'model', label: 'By model' },
                   { value: 'source', label: 'Reported / attributed', title: 'Stack by where the figure comes from' },
+                  {
+                    value: 'compaction',
+                    label: 'Compactions',
+                    title:
+                      'The estimated cost of the calls that wrote compaction summaries, and what a cold cache added',
+                  },
                 ]}
               />
             }
@@ -258,6 +266,21 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
                   <Source tone="attributed" name="Attributed" usd={attributedUSD} note="recomputed from token counts" />
                 </div>
                 <div className="text-sec text-muted">{backingSentence(d.backing)}</div>
+                {d.total.compactions && d.total.compactions.calls > 0 && (
+                  <div
+                    className="text-sec text-muted"
+                    data-testid="compaction-line"
+                    title="The harness does not record the call that writes a compaction summary; this is estimated from the context size and the price table. Inside a reported figure it is part of the overhead; outside, it is in no figure at all. A cold call read its whole context again at full price."
+                  >
+                    Compaction calls, estimated: {tallyLine(d.total.compactions)}
+                    {d.total.compactions.cold > 0 && (
+                      <>
+                        {' · '}
+                        <span className="text-bad">{warmLine(d.total.compactions)}</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -299,7 +322,7 @@ function ChartBody({
   rows: CostRow[]
   range: Range
   win: ReturnType<typeof rangeWindow>
-  stack: 'model' | 'source'
+  stack: Stack
   selected: ReturnType<typeof selectedWindow>
   onPick: (b: Bucket) => void
 }) {
@@ -321,16 +344,63 @@ function ChartBody({
             {segmentLabel(l.key)}
           </span>
         ))}
+        {stack === 'compaction' && legend.length > 0 && (
+          <span className="text-bad">N over a bar: cold compactions</span>
+        )}
         {weekly && <span className="ml-auto text-faint">One bar per week (Mon to Sun)</span>}
       </div>
+      {stack === 'compaction' && <CompactionNote buckets={buckets} />}
     </div>
   )
 }
 
-function legendOf(buckets: Bucket[], stack: 'model' | 'source', top: string[]) {
+/**
+ * What the compaction view stands for. A compaction is one more call over the whole context; with a
+ * warm cache that context is a cache read, after an idle gap longer than the cache lifetime it is
+ * read again at full price. The figures are estimates and are kept out of the spend.
+ */
+function CompactionNote({ buckets }: { buckets: Bucket[] }) {
+  let calls = 0
+  let cold = 0
+  let usd = 0
+  let warm = 0
+  for (const b of buckets) {
+    const c = b.compactions
+    if (!c) continue
+    calls += c.calls
+    cold += c.cold
+    usd += c.usd
+    warm += c.warmUSD
+  }
+  if (calls === 0) return <p className="text-sec text-muted">No compactions in this range.</p>
+  return (
+    <p className="max-w-[110ch] text-sec text-muted" data-testid="compaction-chart-note">
+      {plural(calls, 'compaction')} cost ~{formatMoney(usd)}
+      {cold > 0 ? (
+        <>
+          ; <span className="text-bad">{cold} of them ran on a cold cache</span>, which added ~{formatMoney(usd - warm)}{' '}
+          over the ~{formatMoney(warm)} they would have cost warm.
+        </>
+      ) : (
+        ', all on a warm cache.'
+      )}{' '}
+      A compaction sends the whole context once more to write the summary: warm, that is a cache read; after the main
+      agent sat idle longer than the cache lifetime, it is read again at full price. Compacting before a long break, or
+      right after coming back while the turn is still cached, is what keeps it cheap. Estimated from the context size;
+      Claude Code does not record the call, so these figures are not in the spend above.
+    </p>
+  )
+}
+
+function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
   const seen = new Map<string, ReturnType<typeof modelTone>>()
   for (const b of buckets) for (const s of stackOf(b, stack, top)) seen.set(s.key, s.tone)
-  const order = stack === 'source' ? ['reported', 'attributed'] : [...top, 'other', OVERHEAD]
+  const order =
+    stack === 'source'
+      ? ['reported', 'attributed']
+      : stack === 'compaction'
+        ? ['compaction-warm', 'compaction-cold']
+        : [...top, 'other', OVERHEAD]
   return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
 }
 
@@ -469,6 +539,13 @@ function TopSessions({ query }: { query: CutQuery }) {
               ),
           },
           {
+            key: 'compactions',
+            header: 'Compactions',
+            align: 'right',
+            width: '150px',
+            cell: (r) => <CompactionCell tally={r.compactions} />,
+          },
+          {
             key: 'total',
             header: 'Cost',
             align: 'right',
@@ -492,5 +569,18 @@ function TopSessions({ query }: { query: CutQuery }) {
         )
       }}
     </QueryBoundary>
+  )
+}
+
+/** A session's compaction calls in the top-sessions table: the estimate, and how many were cold. */
+function CompactionCell({ tally }: { tally?: CompactionTally }) {
+  if (!tally || tally.calls === 0) return <span className="text-faint">–</span>
+  return (
+    <span
+      className="font-mono text-muted"
+      title={`${tallyLine(tally)}${tally.cold ? `; ${warmLine(tally)}` : ''}. Estimated; not in the cost.`}
+    >
+      {tally.cold > 0 && <span className="text-bad">{tally.cold} cold · </span>}~{formatMoney(tally.usd)}
+    </span>
   )
 }

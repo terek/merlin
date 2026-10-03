@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -311,5 +312,55 @@ func unwrap(err error) error {
 			return err
 		}
 		err = u.Unwrap()
+	}
+}
+
+// Claude Code writes the agents of a workflow run below subagents/, in
+// workflows/<runId>/, next to the run's journal. They belong to the session like the files
+// directly in subagents/.
+func TestAgentsInSubdirectories(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "projects")
+	const sid = "33333333-0000-4000-8000-000000000001"
+	sub := filepath.Join(root, "-home-dev-acme", sid, "subagents")
+	files := []string{
+		filepath.Join(root, "-home-dev-acme", sid+".jsonl"),
+		filepath.Join(sub, "agent-a1.jsonl"),
+		filepath.Join(sub, "agent-a1.meta.json"),
+		filepath.Join(sub, "workflows", "wf_1", "agent-w1.jsonl"),
+		filepath.Join(sub, "workflows", "wf_1", "agent-w1.meta.json"),
+		filepath.Join(sub, "workflows", "wf_1", "agent-w2.jsonl"),
+		filepath.Join(sub, "workflows", "wf_1", "journal.jsonl"),
+		filepath.Join(sub, "workflows", "wf_2", "agent-w3.jsonl"),
+		// the scripts of the runs: not transcripts
+		filepath.Join(root, "-home-dev-acme", sid, "workflows", "scripts", "count-wf_1.js"),
+	}
+	for _, f := range files {
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := Scan(root)
+	if err != nil || len(res.Sessions) != 1 || len(res.Warnings) != 0 {
+		t.Fatalf("scan = %+v, %v", res, err)
+	}
+	s := res.Sessions[0]
+	var got []string
+	for _, a := range s.Agents {
+		meta := ""
+		if a.MetaPath != "" {
+			meta = " +meta"
+		}
+		got = append(got, a.ID+" in "+a.Dir+meta)
+	}
+	want := []string{"a1 in  +meta", "w1 in workflows/wf_1 +meta", "w2 in workflows/wf_1", "w3 in workflows/wf_2"}
+	if strings.Join(got, "; ") != strings.Join(want, "; ") {
+		t.Errorf("agents = %q, want %q", got, want)
+	}
+	// main + 4 transcripts + 2 meta files; the journal and the script are not read
+	if len(s.Fingerprint) != 7 {
+		t.Errorf("fingerprint has %d files: %v", len(s.Fingerprint), s.Fingerprint)
 	}
 }

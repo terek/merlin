@@ -37,6 +37,8 @@ type FileResult struct {
 	SpawnResults []SpawnResult
 	// Notifications lists the task-notification prompts (background agent finished).
 	Notifications []TaskNotification
+	// Workflows lists the workflow runs launched from this file (Workflow tool results).
+	Workflows []WorkflowLaunch
 	// AgentsKilled lists system/agents_killed events.
 	AgentsKilled []AgentsKilled
 
@@ -162,6 +164,19 @@ type TaskNotification struct {
 	Status    string
 	ToolUseID string // <tool-use-id>, when present
 	Summary   string // <summary>, whole
+}
+
+// WorkflowLaunch is the result of a Workflow tool call: a run of a workflow script, whose
+// agents are written to subagents/workflows/<RunID>/ and are not started by a tool call
+// of their own.
+type WorkflowLaunch struct {
+	ToolUseID string
+	Turn      int // the turn it was launched in (-1 before any turn)
+	At        time.Time
+	RunID     string
+	TaskID    string // the id its task notification carries
+	Name      string
+	Summary   string
 }
 
 // AgentsKilled is a system/agents_killed event.

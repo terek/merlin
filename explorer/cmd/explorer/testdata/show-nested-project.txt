@@ -17,7 +17,7 @@ Agents  (1 agent; own cost is attributed from tokens)
   AGENT                              KIND      MODEL   STATUS         OWN  WITH SUBTREE
   └─ general-purpose · Inner helper  subagent  sonnet  completed  $0.0022
 
-Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+Timeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text; texts shortened, --full for all)
   #0   Sep 22 06:00  human                 $0.014  5s  [+1 agent]
      > inner session in a nested project directory
      < Inner done

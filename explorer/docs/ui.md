@@ -48,7 +48,8 @@ web/
     shell/              Layout, TopBar, ScanIndicator
     features/
       sessions/         SessionsPage and its parts            (Sessions bead)
-      session/          SessionPage, header, cost, timeline   (Session bead)
+      spend/            SessionPage: the spend tree, header, decisions, turn card
+      session/          the retired Session page (not routed)
       agents/           AgentTree, AgentDetail                (Agents bead)
       context/          ContextChart                          (Agents bead)
       cost/             CostPage and its parts                (Cost bead)
@@ -82,7 +83,7 @@ CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scratch dir> \
 | Route | Page | State kept in the URL |
 |---|---|---|
 | `/` | Sessions | `project`, `state`, `kind`, `q` (search), `since` |
-| `/s/:harness/:id` | Session | `#t<index>` scrolls to a turn, `#a<agentId>` opens an agent, `#c<index>` a compaction |
+| `/s/:harness/:id` | Session | `#t<index>` pins a turn, `#a<agentId>` opens an agent's work, `#c<index>` pins a compaction's turn |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | anything else | Not found | |
 
@@ -246,70 +247,77 @@ The landing page, and the answer to "where was that session".
 
 ## 9. Session page (`/s/:harness/:id`)
 
-Two columns: the timeline (fluid) and a side panel (380px, sticky) with Cost, Agents and Context.
+The page answers "which of my decisions cost the most", for a session and every session forked or
+continued from it: they are one tree, and the page is the same whichever member it is opened on.
+Code in `features/spend/` (bead `merlin-t8s.34`; the design history is on `merlin-t8s.27`). The
+page loads every member of `family.members` with `?messages=1`; dollars are recomputed from the
+messages' token counts with prices fitted per model (the web has no price table).
 
-- **Header**: title; project path and branch; started, last activity, wall time; state and end
-  state; counts (prompts, turns, agents, tool calls, lines added / removed). A **resume** box with
-  the command `cd <cwd> && claude --resume <id>` and a copy button; when the session is not a leaf
-  the box says so and points at the leaves of the family instead. `sourceMissing`: a banner saying
-  the transcript files are gone and this digest is what remains.
-- **Family strip** (only when the family has more than one member): the tree from `family.members`,
-  one line each: title, relation (`fork` / `continuation`), time, cost; the current one marked, the
-  leaves marked "resume here".
-- **Cost card** (side panel):
-  - the best cost, large, with its flag, and one line in words for the flag;
-  - a stacked `Bar`: reported (covered), attributed outside the windows, overhead; the same three
-    as a small table with dollars, plus `inheritedUSD` shown apart as "inherited, paid by the parent
-    session, not counted here";
-  - main agent versus sub-agents: two figures and a bar, from `digest.agents[].cost` (attributed);
-  - by model, from `digest.cost.byModel`: label, input, output, cache read, cache write, dollars;
-    footnote: attributed from token counts;
-  - the reported windows (`cost.windows`) as a collapsed list: from, to, dollars.
-- **Timeline**: one block per turn, in order.
-  - A human turn: gutter in `--human`; index, time, duration; the prompt as `PlainText` clamped to
-    6 lines; images count; the final text as `Prose` clamped to 12 lines; a foot line with assistant
-    messages, tool calls (top three tool names), files touched (count; the list on expand), context
-    size, and on the right the turn's cost and, when agents were spawned, the cost with agents.
-  - A turn nobody typed (`command`, `task-notification`, `peer`, `scheduled`, `continuation`, `sdk`)
-    is a compact single line with its origin badge, the first line of its text and its cost; it
-    expands to the full block. A toggle "prompts only" hides these.
-  - Spawned agents of a turn are chips under it (type or name, status, subtree cost); a chip
-    selects the agent in the side panel.
-  - `abandoned` turns are struck out lightly and labelled "rewound: not on the path that
-    continued"; their cost still counts and the label says so.
-  - Inherited turns (`lineage.inheritedTurns`) are collapsed into one divider "N turns copied from
-    ‹parent title›", expandable; the first own turn is where the page first scrolls to.
-  - A **compaction** is a divider between turns (after turn `compaction.turn`): trigger, context
-    before → after, duration, and the summary behind "show summary" (`Prose`).
-  - `interrupted` turns carry the red badge. The last turn of a `mid-turn` session carries the amber
-    one.
-  - A turn is addressable (`#t12`), and the block has a "copy link" affordance.
-  - Sessions with hundreds of turns must stay smooth: render clamped blocks, and mount `Prose`
-    only when a block is near the viewport (an IntersectionObserver is enough; no virtual list).
-- **Agents card** (side panel; Agents bead): the tree from `parentAgentId`, each node: kind icon,
-  type or name, description, model label, status, own cost and subtree cost with a proportion bar
-  against the session's total. Background agents carry a "bg" badge. Agents with `linkage:
-  unresolved` are listed apart under "not tied to a spawn". Selecting a node opens **agent detail**
-  below the tree: prompt (`PlainText`, clamped), final text (`Prose`, clamped), inbox messages,
-  counts, tools by name, its cost by model, and a link to its spawn turn. Compaction calls
-  (`kind: compact`) are listed last, quietly: they are cost, not topology.
-- **Context chart** (side panel; Agents bead): an SVG sawtooth of `contextTokens` per turn, with a
-  vertical marker at each compaction (pre → post). Hovering shows the turn and the size; clicking
-  scrolls the timeline to it. Hidden when the session has fewer than 3 turns.
-- **Diagnostics** (foot of the side panel, collapsed): source files, harness versions, parser and
-  schema version, unknown record types, bad lines, unpriced models, unresolved agents.
+From top to bottom:
+
+- **Header**: state, title, end state; project, branch, started, last activity, wall time, id; the
+  tree's total (Claude Code's figure for every member) and this session's own share; prompts,
+  turns, agents, tool calls, lines added and removed; "fork of" / "continued in" links; a line when
+  the messages add up to a different figure than Claude Code reported. Banners when the transcript
+  files are gone or the digest could not be built.
+- **Resume** box: `cd <cwd> && claude --resume <id>` with a copy button; when the session is not a
+  leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
+- **Spend graph** (`SpendGraph.tsx`), one turn axis for the whole tree:
+  - context along the path from the root to the session in focus, with compactions, and the
+    context written to the cache again (a cache miss) as a bar on its turn;
+  - one line per session: the root at the top, each other session on a line of its own under its
+    parent, starting at the turn after the last one it copied, with only its own turns. Forks and
+    continuations are drawn the same way; nothing is merged across session ids;
+  - above a line, a bar per turn: what the main agent spent in it, split by who (main agent, cache
+    miss, compaction) or by token class;
+  - on the line, a dot for every prompt a person typed, and over it a bracket with the total of
+    everything up to the next typed prompt (a **decision**);
+  - below a line, a bar per piece of agent work, under the turn that launched it, as tall as all
+    it cost (its own sub-agents included), with a tail to the turn its report came in. A sub-agent
+    or fork is one piece; a teammate is one piece per message it was sent. Agents that do not
+    overlap share a row;
+  - one dollar scale for every bar; hover reads a turn or a piece of work above the plot, arrow
+    keys move, a click pins. A pinned turn tints its decision's turns.
+- **Decision panel**: the pinned turn's decision, its total split by who, then every step and every
+  piece of agent work in it, most expensive first. A decision is only "everything between two typed
+  prompts": work an earlier prompt asked for is counted where it ran, and the page says so rather
+  than claiming the prompt caused it.
+- **Turn card**: the pinned turn's prompt (machine-delivered messages parsed, `lib/inbox.ts`) and
+  reply, what the main agent paid for by token class, its cache misses in words, the work launched
+  in it and the reports that came in; a selected piece of work opens under it with what it was
+  asked, what it paid for and the agent's detail (`features/agents/AgentDetail`).
+- **Your most expensive decisions**: the top ten of the tree, always shown; a click pins the
+  decision and scrolls back to the graph.
+- **Sessions in this tree** (more than one member): title, relation, time, cost, "resume here" on
+  the leaves. **Diagnostics**, collapsed.
+
+Addresses: `#t<n>` pins turn n (a copied turn on the session that ran it), `#a<agentId>` opens that
+agent's piece of work (a nested agent opens the piece it is inside), `#c<n>` pins the turn of
+compaction n; search results and the Cost page link with these. `?pin=`, `?unit=`, `?split=class`
+and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harness/:id` redirects
+here.
+
+The previous page (a timeline of every turn with Cost, Agents and Context cards in a side panel)
+is retired. Its files under `features/session/` are no longer routed; they are deleted once no one
+has uncommitted edits in them.
 
 ## 10. Cost page (`/cost`)
 
 - **Controls**: range (`7d`, `30d`, `90d`, `all`), project (from `/api/projects`).
 - **Headline**: total for the range; reported versus attributed as a `Bar` with both figures; a
-  sentence on backing ("69 sessions exact, 5 partial, 149 estimated, 3,132 scripted runs").
+  sentence on backing ("69 sessions exact, 5 partial, 149 estimated, 3,132 scripted runs"); a line
+  on the compaction calls of the range, with what a warm cache every time would have cost.
 - **By day**: an SVG bar chart, one bar per local day, stacked by model (`by=day&split=model`),
   the top five models coloured and the rest grouped as "other"; hovering a bar lists that day's
-  split. A toggle switches the stack to reported / attributed.
+  split. A toggle switches the stack to reported / attributed, or to **compactions**
+  (`stack=compaction`): the estimated compaction calls on their own, each bar the warm-cache price
+  (grey) with the extra a cold cache cost on top (red) and the number of cold calls over it, and a
+  paragraph under the chart that says what makes a compaction cold. The estimate is not part of the
+  spend, so it never shares a bar with it.
 - **Tables**, each a `DataTable` sorted by cost with a share bar: by project, by model (with the
   `(overhead)` row explained in a footnote), by kind.
-- **Top sessions** (`by=session`, limit 50): title, project, last activity, cost with flag, linking
+- **Top sessions** (`by=session`, limit 50): title, project, last activity, compaction calls ("1 cold
+  · ~$3.48"), cost with flag, linking
   to the session. Scripted runs are the `scripted:<project>` rows, not links.
 - Selecting a project row sets the `project` filter; selecting a day bar narrows the range to it.
 
@@ -320,15 +328,20 @@ Where the built UI differs from the sections above:
 - Sessions: kind and date range are dropdowns; search ignores the state filter; scripted-run
   lines are hidden while a state or kind filter is active; a running session shows no end-state
   badge (while it runs, the end state only says the last record is not an answer yet).
-- Session: the page is capped at 1500px and centred; without a hash, an inherited session opens at
+- Session (the retired timeline page): the page is capped at 1500px and centred; without a hash, an inherited session opens at
   the "N turns copied" divider; the family strip names the relation only for the current session's
   neighbours. Prompts a machine delivered (task notifications, teammate messages, idle
   notifications) arrive from the API already parsed, as `turn.inbox`; each message shows its sender
   or kind, summary and text, and its label selects the agent it came from (`src/lib/inbox.ts`).
   `src/lib/wrapper.ts` unwraps the markup only for digests written before the API did.
-- Agents card: a row's bar is measured against the attributed cost of all agents, not of the
+  Prompts that arrived while a turn was running (`turn.queued`) are listed under the turn's prompt,
+  marked "typed while the turn ran" or "arrived while the turn ran".
+- Workflow runs: the agents of a run (`agent.runId`) are one unit. On the retired page, the Agents card folds them into
+  one line, "workflow <name>" with the count and the phases in order, however few they are; a turn
+  shows one chip per run instead of one per agent.
+- Agents card (retired page): a row's bar is measured against the attributed cost of all agents, not of the
   session; runs of more than eight siblings of one type fold into one line.
-- Context chart: only the compaction nearest the cursor is labelled.
+- Context chart (retired page): only the compaction nearest the cursor is labelled.
 - Cost: the range defaults to 7 days; selecting a bar narrows the figures to that day or week and
   keeps the chart; "Top sessions" lists sessions last active in the range with their whole cost,
   which is not the same sum as the other cuts, and says so.

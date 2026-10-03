@@ -15,6 +15,9 @@ type AgentFile struct {
 	// ID is the agent id (the <id> of agent-<id>.jsonl). When empty, the first agentId seen
 	// in the file is used; a file with neither is ignored.
 	ID string
+	// Dir is the file's directory relative to the session's subagents directory (empty, or
+	// "workflows/<runId>").
+	Dir string
 	// Result is what the Builder produced for the file.
 	Result *FileResult
 	// Meta is the content of agent-<id>.meta.json; nil when there is no such file.
@@ -34,6 +37,8 @@ type Assembly struct {
 	// time (main first on ties). Each message id appears once; agent messages carry the
 	// owning agent's id and the agent's spawn turn.
 	Messages []model.Message
+	// Workflows are the session's workflow runs, ordered by start time.
+	Workflows []model.WorkflowRun
 	// Compactions are the main file's compactions.
 	Compactions []model.Compaction
 	// Cost is the session total: main messages plus every agent's, each message id once.
@@ -99,7 +104,23 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 		}
 	}
 
-	links := linkAgents(ags, spawns, spawnByID, results)
+	var launches []launchRef
+	var notes []TaskNotification
+	if main != nil {
+		for _, l := range main.Workflows {
+			launches = append(launches, launchRef{l, mainOwner})
+		}
+		notes = append(notes, main.Notifications...)
+	}
+	for i, a := range ags {
+		for _, l := range a.res.Workflows {
+			launches = append(launches, launchRef{l, i})
+		}
+		notes = append(notes, a.res.Notifications...)
+	}
+	sort.SliceStable(launches, func(i, j int) bool { return earlier(launches[i].At, launches[j].At) })
+
+	links := linkAgents(ags, spawns, spawnByID, results, launches)
 	parent := resolveParents(ags, links, spawns)
 
 	asm := &Assembly{}
@@ -125,6 +146,7 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 	fillDepthAndSpawnTurn(agents, ags, links, parent)
 	fillStatus(agents, ags, links, spawns, results, main)
 	rollUp(agents, parent)
+	asm.Workflows = buildWorkflows(launches, agents, ags, notes)
 
 	// Who the delivered messages came from. An agent does not send to itself.
 	for i := range agents {
@@ -143,6 +165,14 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 			if len(asm.Turns[i].Inbox) > 0 {
 				asm.Turns[i].Inbox = slices.Clone(asm.Turns[i].Inbox)
 				resolveInbox(asm.Turns[i].Inbox, agents)
+			}
+			if len(asm.Turns[i].Queued) > 0 {
+				asm.Turns[i].Queued = slices.Clone(asm.Turns[i].Queued)
+				for k := range asm.Turns[i].Queued {
+					q := &asm.Turns[i].Queued[k]
+					q.Inbox = slices.Clone(q.Inbox)
+					resolveInbox(q.Inbox, agents)
+				}
 			}
 		}
 		for i, a := range agents {
@@ -183,6 +213,7 @@ type agentIn struct {
 	id   string
 	res  *FileResult
 	meta *transcript.AgentMeta
+	dir  string
 }
 
 // prepareAgents drops unusable files and duplicates and orders the rest by first
@@ -202,7 +233,7 @@ func prepareAgents(files []AgentFile) []agentIn {
 			continue
 		}
 		seen[id] = true
-		out = append(out, agentIn{id: id, res: f.Result, meta: f.Meta})
+		out = append(out, agentIn{id: id, res: f.Result, meta: f.Meta, dir: f.Dir})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i], out[j]
@@ -236,7 +267,7 @@ func firstPrompt(turns []model.Turn) int {
 // so a weak match never takes a tool_use that a stronger rung would give to another agent.
 // An agent's own file is never its spawner: a fork replays its parent's context, so the
 // spawning tool_use can appear in the fork's file too.
-func linkAgents(ags []agentIn, spawns []spawnRef, byID map[string][]int, results []resultRef) []link {
+func linkAgents(ags []agentIn, spawns []spawnRef, byID map[string][]int, results []resultRef, launches []launchRef) []link {
 	links := make([]link, len(ags))
 	for i := range links {
 		links[i] = link{kind: model.LinkUnresolved, spawn: -1, owner: mainOwner, turn: -1}
@@ -290,9 +321,28 @@ func linkAgents(ags []agentIn, spawns []spawnRef, byID map[string][]int, results
 		links[i] = l
 	}
 
+	// 0. an agent of a workflow run: the run's launch, found by the run id in its directory.
+	// No tool call names the agent, so no other rung applies to it.
+	for i, a := range ags {
+		run := runOf(a.dir)
+		if run == "" {
+			continue
+		}
+		for _, l := range launches {
+			if l.RunID != run || l.owner == i {
+				continue
+			}
+			links[i] = link{kind: model.LinkRun, spawn: -1, toolUse: l.ToolUseID, owner: l.owner, turn: -1}
+			if l.owner == mainOwner {
+				links[i].turn = l.Turn
+			}
+			break
+		}
+	}
+
 	// 1. meta.toolUseId
 	for i, a := range ags {
-		if a.meta == nil || a.meta.ToolUseID == "" || claimed[a.meta.ToolUseID] {
+		if linked(i) || a.meta == nil || a.meta.ToolUseID == "" || claimed[a.meta.ToolUseID] {
 			continue
 		}
 		if si, o, ok := pick(i, a.meta.ToolUseID); ok {
@@ -428,6 +478,7 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 	ag := model.Agent{
 		ID:             a.id,
 		Kind:           agentKind(a),
+		RunID:          runOf(a.dir),
 		Linkage:        l.kind,
 		SpawnToolUseID: l.toolUse,
 		StartedAt:      a.res.FirstTimestamp,
@@ -445,6 +496,7 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 	}
 	if m := a.meta; m != nil {
 		ag.Name, ag.AgentType, ag.Description, ag.Model = m.Name, m.AgentType, m.Description, m.Model
+		ag.Phase = m.WorkflowPhase
 	}
 	if sp != nil {
 		ag.Name = firstNonEmpty(ag.Name, sp.Name)
@@ -473,16 +525,27 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 		// A prompt that was delivered as a message is that message's text; its summary
 		// stands in for a missing description.
 		ag.Prompt = turns[p].UserText
+		// A workflow agent's file opens with the relayed user request and then the task its
+		// script computed: the task is the agent's prompt.
+		if ag.Kind == model.AgentWorkflow {
+			for j := p; j < len(turns); j++ {
+				if task, ok := computedTask(turns[j].UserText); ok {
+					p, ag.Prompt = j, task
+					break
+				}
+			}
+		}
 		if first := turns[p].Inbox; ag.Prompt == "" && len(first) > 0 {
 			ag.Prompt = first[0].Text
 			ag.Description = firstNonEmpty(ag.Description, first[0].Summary)
 			ag.Inbox = append(ag.Inbox, first[1:]...)
 		}
+		ag.Inbox = append(ag.Inbox, queuedMessages(turns[p])...)
 		for _, t := range turns[p+1:] {
-			if t.Origin == model.OriginContinuation {
-				continue
+			if t.Origin != model.OriginContinuation {
+				ag.Inbox = append(ag.Inbox, inboxMessages(t)...)
 			}
-			ag.Inbox = append(ag.Inbox, inboxMessages(t)...)
+			ag.Inbox = append(ag.Inbox, queuedMessages(t)...)
 		}
 	}
 	if len(turns) > 0 {
@@ -524,6 +587,8 @@ func firstNonEmpty(ss ...string) string {
 
 func agentKind(a agentIn) model.AgentKind {
 	switch m := a.meta; {
+	case runOf(a.dir) != "":
+		return model.AgentWorkflow
 	case m != nil && (m.TeamName != "" || m.TaskKind == "in_process_teammate"):
 		return model.AgentTeammate
 	case m != nil && (m.IsFork || m.AgentType == "fork"):
@@ -540,6 +605,19 @@ func inboxMessages(t model.Turn) []model.InboxMessage {
 	out := slices.Clone(t.Inbox)
 	if t.UserText != "" || len(out) == 0 {
 		out = append(out, model.InboxMessage{At: t.StartedAt, Kind: model.InboxMessageKind, Text: t.UserText})
+	}
+	return out
+}
+
+// queuedMessages turns the prompts that reached an agent in the middle of a turn into
+// inbox entries, like inboxMessages does for the prompts that started one.
+func queuedMessages(t model.Turn) []model.InboxMessage {
+	var out []model.InboxMessage
+	for _, q := range t.Queued {
+		out = append(out, q.Inbox...)
+		if q.Text != "" {
+			out = append(out, model.InboxMessage{At: q.At, Kind: model.InboxMessageKind, Text: q.Text})
+		}
 	}
 	return out
 }

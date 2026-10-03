@@ -120,6 +120,7 @@ func doShow(arg string, opt showOpts, asJSON bool) error {
 	p.header(d, in)
 	p.cost(d, in)
 	p.agents(d)
+	p.workflows(d)
 	p.family(key, fam)
 	p.timeline(d, in)
 	fmt.Println()
@@ -532,6 +533,13 @@ func (p *printer) compaction(c model.Compaction, n int) {
 		bits = append(bits, "took "+fmtDur(c.DurationMs))
 	}
 	p.printf("   ── compaction %d · %s · %s ──\n", n+1, stamp(c.At), strings.Join(bits, " · "))
+	if call := c.Call; call != nil {
+		line := fmt.Sprintf("      call ~%s, estimated: %s cache", usd(call.USD), call.Cache)
+		if call.Cache == model.CacheCold {
+			line += fmt.Sprintf(" after %s idle, the context was read again at the %s price; warm it would have cost ~%s", fmtDur(call.IdleMs), billingName(call.Billing), usd(call.WarmUSD))
+		}
+		p.printf("%s\n", line)
+	}
 	if p.opt.summaries && c.Summary != "" {
 		p.block("|", c.Summary)
 	}
@@ -550,7 +558,7 @@ func (p *printer) timeline(d *model.SessionDigest, in catalog.SessionInfo) {
 	if p.opt.full {
 		hint = ""
 	}
-	p.printf("\nTimeline  (turns numbered from 0; > prompt, < final text%s)\n", hint)
+	p.printf("\nTimeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text%s)\n", hint)
 	for _, ci := range after[-1] {
 		p.compaction(d.Compactions[ci], ci)
 	}
@@ -617,6 +625,12 @@ func (p *printer) timeline(d *model.SessionDigest, in catalog.SessionInfo) {
 		for _, m := range t.Inbox {
 			p.inbox(m)
 		}
+		for _, q := range t.Queued {
+			p.text("+", q.Text)
+			for _, m := range q.Inbox {
+				p.inbox(m)
+			}
+		}
 		p.text("<", t.FinalText)
 		for _, ci := range after[t.Index] {
 			p.compaction(d.Compactions[ci], ci)
@@ -666,4 +680,35 @@ func firstOf(s, fallback string) string {
 		return s
 	}
 	return fallback
+}
+
+// workflows prints one line per workflow run: what it was, how it ended, what its agents
+// cost and where it was launched.
+func (p *printer) workflows(d *model.SessionDigest) {
+	if len(d.Workflows) == 0 {
+		return
+	}
+	p.printf("\nWorkflow runs  (%d; their agents are listed above as kind workflow)\n", len(d.Workflows))
+	for _, w := range d.Workflows {
+		line := fmt.Sprintf("  %s  %s  %s  %s", firstOf(w.Name, w.ID), plural(w.Agents, "agent", "agents"), w.Status, usd(w.USD))
+		if w.Turn != nil {
+			line += fmt.Sprintf("  launched in #%d", *w.Turn)
+		}
+		if w.Summary != "" {
+			line += "  " + w.Summary
+		}
+		p.printf("%s\n", snip(line, p.textW+7))
+	}
+}
+
+func billingName(b model.CallBilling) string {
+	switch b {
+	case model.BillingCacheWrite1h:
+		return "one-hour cache-write"
+	case model.BillingCacheWrite5m:
+		return "cache-write"
+	case model.BillingInput:
+		return "plain input"
+	}
+	return string(b)
 }

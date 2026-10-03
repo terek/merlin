@@ -351,7 +351,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			c := in.Cost
 			out.Rows = append(out.Rows, CostRow{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: c.Flag,
 				Harness: in.Key.Harness, Project: in.Project, LastActivityAt: in.LastActivityAt,
-				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD}})
+				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD, Compactions: c.Compactions}})
 		}
 		perProject := map[string]*CostRow{}
 		var order []string
@@ -467,26 +467,32 @@ func Preview(s string) (string, bool) {
 	return s, false
 }
 
-// lastPrompt picks the last human turn that was not abandoned, else the last human turn.
+// lastPrompt picks the last thing a person typed: a human turn's prompt, or a message
+// typed while a turn was running. Turns that were not abandoned come first; among those the
+// latest wins.
 func lastPrompt(d *model.SessionDigest) *PromptPreview {
-	best := -1
+	var best *PromptPreview
+	bestAbandoned := true
+	consider := func(t *model.Turn, at time.Time, text string) {
+		if best != nil && t.Abandoned && !bestAbandoned {
+			return
+		}
+		text, cut := Preview(text)
+		best = &PromptPreview{Turn: t.Index, At: at, Text: text, Truncated: cut}
+		bestAbandoned = t.Abandoned
+	}
 	for i := range d.Turns {
 		t := &d.Turns[i]
-		if t.Origin != model.OriginHuman {
-			continue
+		if t.Origin == model.OriginHuman {
+			consider(t, t.StartedAt, t.UserText)
 		}
-		if !t.Abandoned {
-			best = i
-		} else if best < 0 || d.Turns[best].Abandoned {
-			best = i
+		for k := range t.Queued {
+			if q := &t.Queued[k]; q.Origin == model.OriginHuman && strings.TrimSpace(q.Text) != "" {
+				consider(t, q.At, q.Text)
+			}
 		}
 	}
-	if best < 0 {
-		return nil
-	}
-	t := &d.Turns[best]
-	text, cut := Preview(t.UserText)
-	return &PromptPreview{Turn: t.Index, At: t.StartedAt, Text: text, Truncated: cut}
+	return best
 }
 
 func lastRecap(d *model.SessionDigest) *RecapPreview {

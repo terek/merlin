@@ -176,6 +176,26 @@ This came from another Claude session — not typed by your user, … (one fixed
 - 41 are plain sentences with no element (`N background agents were stopped by the
   user: …`); they stay as the turn's text.
 
+### 4b. Prompts that arrive in the middle of a turn
+
+A prompt that arrives while a turn is running is not written as a `user` record. Claude
+Code writes an `attachment` record instead and shows the text to the model inside the turn:
+
+```
+{"type":"attachment","attachment":{"type":"queued_command","prompt":"…","commandMode":"prompt",
+ "origin":{"kind":"human"},"timestamp":"…"}, "uuid":…, "timestamp":…}
+```
+
+- `commandMode` is `prompt` (typed by the user) or `task-notification`; agents' files
+  leave it out and carry `origin.kind` `coordinator` (the lead) or `human`.
+- `prompt` is a string in all 792 records of the corpus (2026-10-02), in the same shapes as
+  a normal prompt (§4a for notifications).
+- Main files: 74 typed messages, 184 task notifications. Agent files: 520 task
+  notifications, 14 messages. None of the 74 typed messages is also written as a `user`
+  record, so this record is the only trace of it.
+- The digest keeps them on the running turn (`Turn.queued`); a task notification among
+  them counts for the status of the agent or run it reports on.
+
 ## 5. Subagents
 
 Spawned by an `Agent` tool_use block in the parent (main or another subagent). Input keys:
@@ -215,6 +235,34 @@ Other subagent records: `progress` (bash progress; ignore), `fork-context-ref`
 (`{agentId, parentSessionId, parentLastUuid, contextLength}` — a fork referencing its
 parent's context instead of copying it), `system/compact_boundary` (subagents compact too).
 
+### 5a. Workflow runs
+
+Seen on Claude Code 2.1.287 (two sample runs, 2026-10-02). A `Workflow` tool call runs a
+script that starts agents itself; no tool call names them one by one.
+
+- The tool result arrives at once: `toolUseResult` `{status: "async_launched", taskType:
+  "local_workflow", taskId, runId: "wf_…", workflowName, summary, transcriptDir, scriptPath}`.
+- The agents are written to `<session>/subagents/workflows/<runId>/agent-<id>.jsonl` with
+  `agent-<id>.meta.json` `{agentType: "workflow-subagent" (or the custom type asked for),
+  description: <the label>, workflowPhase, spawnDepth: 1, model}`. The meta names no tool
+  call. `journal.jsonl` in the same directory lists `launched`, `started {agentId, label,
+  phase}` and `result {agentId, result}`; the digest does not read it.
+- An agent's file opens with two `user` records the harness writes: `[Workflow harness —
+  user request] …:` followed by the user's request, and `[Workflow harness — computed
+  task] …:` followed by the task the script computed. In both the text sits below the
+  first line, every line indented by two spaces. The second is the agent's prompt.
+- Assistant records of these agents carry `attributionAgent: "workflow-subagent"`.
+- The run ends with a task notification whose `task-id` is the `taskId` and whose
+  `tool-use-id` is the `Workflow` call's; its `usage` has `agent_count`, `agents_done`,
+  `agents_error`, `subagent_tokens`. When the launching turn is still running it arrives
+  as a `queued_command` attachment (§4b).
+- The script is saved under `<session>/workflows/scripts/`, in the project directory of the
+  working directory at that moment, which can differ from the session's own project.
+- A workflow agent has no tool for starting a sub-agent (both the default type and
+  `general-purpose` said so when asked).
+- `<session>/remote-agents/remote-agent-<id>.meta.json` exists in the code for agents run
+  in the cloud; none seen, and they would have no local transcript.
+
 ## 6. Compaction
 
 Two adjacent records, in main or subagent files:
@@ -246,6 +294,32 @@ Measured over all 79 boundaries (46 files; 74 manual, 5 auto):
 - One main session compacted 9 times. Subagent files compact too (5 boundaries).
 - Old versions wrote the compaction call as `agent-acompact-*.jsonl`. Recent versions do
   not appear to record its usage anywhere in the transcript (to be confirmed).
+
+### 6a. What a compaction costs
+
+The call that writes the summary is not in the transcript: the `compact_boundary` record
+has `preTokens`, `postTokens` and `durationMs` but no usage, and no `acompact` agent file
+was seen here. The digest estimates it (`Compaction.call`): `preTokens` as the context,
+the summary's length / 4 as output, priced for the main agent's previous model.
+
+What the context costs depends on the cache. Checked against `cost-state` per token class
+(reported minus attributed, inside the windows), on the sessions whose main model is
+Fable or Opus (2026-10-02):
+
+- 7 sessions with a compaction after the cache lifetime (idle longer than an hour, with
+  the one-hour cache in use) are missing 1.8M cache-write tokens or input tokens against
+  2.4M `preTokens` compacted cold; in each the missing count is within 20% of that
+  session's cold `preTokens`. 68 sessions without compactions are missing 0.5M in total.
+- Sessions with warm compactions only are missing nothing in those classes.
+- On 2.1.257 to 2.1.263 the cold context shows as a cache write (at the one-hour price,
+  twice the input price); on 2.1.269 and 2.1.270 as plain input. The digest switches at
+  2.1.269.
+
+So a cold compaction of a 240k context on Fable 5.1 costs about $2.40 (input) or $4.80
+(one-hour cache write) plus the summary, against about $0.30 warm; the whole history has
+81 compactions, 34 cold, $126 estimated against $22 had every one been warm. The first
+message after a compaction then writes the new context to the cache; that one is in the
+transcript ($0.30 median here).
 
 ## 7. Metadata records (no `uuid`, no envelope)
 

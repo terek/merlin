@@ -6,6 +6,8 @@
 import type {
   Agent,
   Compaction,
+  CompactionCall,
+  CompactionTally,
   Cost,
   CostFlag,
   EndState,
@@ -25,6 +27,7 @@ import type {
   State,
   Turn,
   TurnOrigin,
+  WorkflowRun,
 } from '../src/api/types'
 
 // ---- random ---------------------------------------------------------------------------
@@ -355,6 +358,17 @@ function makeTurn(r: Rng, i: number, t: number, ctx: number, epoch: number, spec
     origin,
     userText,
     inbox,
+    // now and then the user types again before the answer is there
+    queued:
+      origin === 'human' && i % 9 === 4
+        ? [
+            {
+              at: iso(t + dur / 2),
+              origin: 'human' as const,
+              text: 'Also keep the old flag working, one release more.',
+            },
+          ]
+        : undefined,
     images: origin === 'human' && r.chance(0.04) ? r.int(1, 3) : undefined,
     command: origin === 'command' ? userText.slice(1).split(' ')[0] : undefined,
     finalText: r.chance(0.97)
@@ -509,6 +523,95 @@ function shapeZoo(agents: Agent[]) {
     spawnTurn: undefined,
   })
   set(33, 32, { agentType: 'Explore', description: 'Child of the unresolved one' })
+  // a workflow run: twelve agents in three phases, started by the run's script
+  const phases = [
+    'Find',
+    'Find',
+    'Find',
+    'Find',
+    'Find',
+    'Find',
+    'Verify',
+    'Verify',
+    'Verify',
+    'Verify',
+    'Verify',
+    'Summarise',
+  ]
+  phases.forEach((phase, k) => {
+    set(34 + k, null, {
+      kind: 'workflow',
+      runId: ZOO_RUN,
+      phase,
+      linkage: 'run',
+      agentType: 'workflow-subagent',
+      description: phase === 'Summarise' ? 'summary' : `${phase.toLowerCase()}:endpoint-${(k % 6) + 1}`,
+      background: true,
+      status: k === 8 ? 'killed' : 'completed',
+    })
+  })
+}
+
+const ZOO_RUN = 'wf_5e1f00d-zoo'
+
+/** The workflow runs of a mock session, from its agents: one per run id. */
+function runsOf(agents: Agent[]): WorkflowRun[] | undefined {
+  const runs = new Map<string, WorkflowRun>()
+  for (const a of agents) {
+    if (a.kind !== 'workflow' || !a.runId) continue
+    const run = runs.get(a.runId) ?? {
+      id: a.runId,
+      name: 'audit-endpoints',
+      summary: 'Audit every endpoint for missing authorisation checks, verify each finding',
+      taskId: 'w7zoo1',
+      turn: a.spawnTurn,
+      startedAt: a.startedAt,
+      status: 'completed',
+      agents: 0,
+      usd: 0,
+    }
+    run.agents++
+    run.usd += a.subtreeUSD
+    if ((a.endedAt ?? '') > (run.endedAt ?? '')) run.endedAt = a.endedAt
+    runs.set(a.runId, run)
+  }
+  return runs.size ? [...runs.values()] : undefined
+}
+
+/**
+ * What the summarising call cost, estimated as the API does it: the context at the cache-read
+ * price when the agent was busy within the hour, at the input price after a longer pause (cold).
+ */
+function compactionCall(r: Rng, pre: number): CompactionCall {
+  const cold = r.chance(0.4)
+  const outputTokens = r.int(2500, 6000)
+  const warmUSD = (pre * 0.25 + outputTokens * 50) / 1e6
+  return {
+    model: 'claude-fable-5-1',
+    idleMs: cold ? r.int(65, 600) * 60_000 : r.int(1, 50) * 60_000,
+    cache: cold ? 'cold' : 'warm',
+    billing: cold ? 'input' : 'cache-read',
+    inputTokens: pre,
+    outputTokens,
+    usd: cold ? (pre * 10 + outputTokens * 50) / 1e6 : warmUSD,
+    warmUSD,
+  }
+}
+
+/** The tally of a session's compaction calls; covered when the session has a reported window. */
+function tallyOf(compactions: Compaction[], covered: boolean): CompactionTally | undefined {
+  const calls = compactions.filter((c) => c.call)
+  if (!calls.length) return undefined
+  const t: CompactionTally = { calls: 0, cold: 0, usd: 0, warmUSD: 0, uncoveredUSD: 0 }
+  for (const c of calls) {
+    const call = c.call as CompactionCall
+    t.calls++
+    if (call.cache === 'cold') t.cold++
+    t.usd += call.usd
+    t.warmUSD += call.warmUSD
+    if (!covered) t.uncoveredUSD += call.usd
+  }
+  return t
 }
 
 export function makeSession(r: Rng, spec: Spec, now: number): Sess {
@@ -529,6 +632,7 @@ export function makeSession(r: Rng, spec: Spec, now: number): Sess {
         postTokens: Math.round(ctx),
         durationMs: r.int(20, 90) * 1000,
         summary: `## Summary\n\n${paragraph(r, 4)}\n\n- ${sentence(r)}\n- ${sentence(r)}`,
+        call: compactionCall(r, pre),
       })
       epoch++
     }
@@ -643,6 +747,7 @@ export function finishSession(r: Rng, spec: Spec, p: Parts, inherited?: { turns:
     coveredUSD: covered,
     uncoveredUSD: uncovered,
     overheadUSD: overhead,
+    compactions: tallyOf(compactions, !!windowEnd),
     inheritedUSD,
     inheritedFrom:
       inherited && inheritedUSD > 0
@@ -694,6 +799,7 @@ export function finishSession(r: Rng, spec: Spec, p: Parts, inherited?: { turns:
     compactions: compactions.length ? compactions : undefined,
     turns,
     agents: agents.length ? agents : undefined,
+    workflows: runsOf(agents),
     diagnostics: spec.special ? { badLines: 2, unknownTypes: { 'x-progress': 14 } } : {},
   }
   if (spec.endState === 'interrupted') turns[turns.length - 1].interrupted = true
@@ -1018,7 +1124,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
       flag: 'exact',
       endState: 'clean',
       title: 'agent zoo: long runs, deep chain, orphan, unresolved',
-      agents: 34,
+      agents: 46,
       zoo: true,
     },
     now,

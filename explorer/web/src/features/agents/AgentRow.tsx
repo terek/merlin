@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, ChevronRight, GitFork, Minimize2, Users } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, GitFork, Minimize2, Users, Workflow } from 'lucide-react'
 import type { AgentKind } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { firstLine } from '../../lib/paths'
@@ -10,6 +10,7 @@ const KIND_ICON: Record<AgentKind, typeof Bot> = {
   teammate: Users,
   fork: GitFork,
   compact: Minimize2,
+  workflow: Workflow,
 }
 
 export function KindIcon({ kind, size = 14 }: { kind: AgentKind; size?: number }) {
@@ -117,12 +118,15 @@ export function AgentRow({
           <span className="flex items-center gap-1.5">
             <KindIcon kind={first.kind} />
             <span className="min-w-0 flex-1 truncate font-medium">
-              {row.nodes.length} × {row.label}
+              {row.run ? row.label : `${row.nodes.length} × ${row.label}`}
             </span>
+            {row.run && row.run.status !== 'completed' && (
+              <Badge tone={row.run.status === 'open' ? undefined : 'bad'}>{row.run.status}</Badge>
+            )}
             {row.stats.killed > 0 && <Badge tone="bad">{row.stats.killed} killed</Badge>}
             <Money usd={row.stats.usd} className={heavy ? 'font-semibold' : undefined} />
           </span>
-          <span className="block truncate text-sec text-muted">{row.nodes.length} agents of one type in a row</span>
+          <span className="block truncate text-sec text-muted">{row.subtitle}</span>
           {bar}
         </button>
       </div>

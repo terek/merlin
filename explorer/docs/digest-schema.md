@@ -50,6 +50,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `compactions` | main-agent compactions, as `Compaction` |
 | `turns` | the turns, as `Turn` |
 | `agents` | flat list of sub-agents, as `Agent` |
+| `workflows` | the workflow runs launched in the session, as `WorkflowRun`, ordered by start time |
 | `messages` | one entry per billed API message, as `Message` |
 | `diagnostics` | what the parser could not interpret, as `Diagnostics` |
 
@@ -163,6 +164,25 @@ Spending outside every window was not reported and can only be attributed from t
 | `durationMs` | how long the compaction took |
 | `boilerplate` | the parts of `summary` the harness writes into every summary, as `TextSpan`; search skips them, `summary` itself stays whole; omitted when none were recognised |
 | `summary` | the summary text, whole; it is not a prompt and not a turn |
+| `call` | what the call that wrote the summary cost, as `CompactionCall`: an estimate, since the harness does not record that call; omitted when the context size or the model's price is unknown |
+
+## CompactionCall
+
+The estimated cost of a compaction's API call: the whole context as input, the summary as
+output. It is never part of a recomputed total (`cost`, `turns[].cost`). Inside a reported
+window it is part of what the harness reported, as overhead; outside, it is in no figure at
+all. Validated against Claude Code's own totals (format notes §6a).
+
+| key | meaning |
+|---|---|
+| `model` | the model of the main agent's previous call, which the compaction uses |
+| `idleMs` | time since the main agent's previous API call |
+| `cache` | `warm` (the previous call was within the cache lifetime: the context was read from the cache) or `cold` (it was older: the context was read again at full price) |
+| `billing` | how the context was charged: `cache-read`; for a cold call `input` (Claude Code 2.1.269 and later) or `cache-write-1h` / `cache-write-5m` (earlier versions, at the lifetime in use) |
+| `inputTokens` | the context size before the compaction (`preTokens`) |
+| `outputTokens` | the summary's length in tokens, from its length in characters |
+| `usd` | the estimate |
+| `warmUSD` | what the same call would have cost had the cache been warm |
 
 ## TextSpan
 
@@ -187,6 +207,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `origin` | who authored the prompt: `human`, `command`, `task-notification`, `peer`, `scheduled`, `sdk`, `continuation` |
 | `userText` | the prompt as its author wrote it, complete. For a command, what was typed. For a prompt a machine delivered, only what was not recognised as a message or as the harness's own framing (normally nothing): the messages are in `inbox` |
 | `inbox` | the messages a machine delivered as this prompt, as `InboxMessage`, in order; omitted for a typed prompt |
+| `queued` | the prompts that arrived while the turn was running, as `QueuedPrompt`, in order; they start no turn |
 | `images` | number of pasted images (image data is not stored) |
 | `command` | slash command name, when `origin` is `command` |
 | `finalText` | last assistant text of the turn, complete |
@@ -205,7 +226,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | key | meaning |
 |---|---|
 | `id` | agent id |
-| `kind` | `subagent`, `teammate`, `fork` or `compact` |
+| `kind` | `subagent`, `teammate`, `fork`, `compact` or `workflow` (an agent of a workflow run: started by the run's script, not by a tool call of its own) |
 | `name` | teammate or given name |
 | `agentType` | agent type, e.g. `general-purpose`, `Explore` |
 | `description` | short description from the spawning call |
@@ -215,19 +236,53 @@ A stretch of a text, as UTF-8 byte offsets.
 | `spawnTurn` | index of the turn that spawned it |
 | `depth` | nesting depth; 1 for direct sub-agents |
 | `background` | it ran in the background |
-| `linkage` | how it was tied to its spawn: `meta`, `tool-result`, `name`, `prompt`, `unresolved` |
+| `linkage` | how it was tied to its spawn: `meta`, `tool-result`, `name`, `prompt`, `run` (its directory names a workflow run a tool call launched), `unresolved` |
+| `runId` | the workflow run it belongs to, for kind `workflow` |
+| `phase` | the phase of the run its script put it in |
 | `startedAt` | time of its first record |
 | `endedAt` | time of its last record |
 | `status` | `completed`, `killed` or `open` (no terminal marker in the files) |
-| `prompt` | its first prompt, complete; when it arrived as a delivered message, that message's text |
+| `prompt` | its first prompt, complete; when it arrived as a delivered message, that message's text; for a workflow agent, the task its script computed, without the harness's frame |
 | `finalText` | its last assistant text, complete |
-| `inbox` | later prompts it received, as `InboxMessage`; a later prompt that is not a delivered message is one entry of kind `message` with no sender |
+| `inbox` | later prompts it received, as `InboxMessage`, including those that arrived in the middle of a turn; a prompt that is not a delivered message is one entry of kind `message` with no sender |
 | `assistantMessages` | assistant API messages it made |
 | `toolCalls` | tool calls it made |
 | `toolsByName` | tool calls per tool name |
 | `compactions` | its own compactions |
 | `cost` | its own attributed cost |
 | `subtreeUSD` | own dollars plus all descendants |
+
+## QueuedPrompt
+
+A prompt that arrived while a turn was running: a message the user typed without waiting for
+the answer, or one a machine delivered. The agent reads it in the middle of the turn.
+
+| key | meaning |
+|---|---|
+| `at` | when it arrived |
+| `origin` | who authored it, as in `Turn.origin` (`human`, `task-notification`, `peer`) |
+| `text` | the prompt as its author wrote it, complete; for a delivered prompt only what was not recognised, as in `Turn.userText` |
+| `inbox` | the messages a machine delivered, as `InboxMessage` |
+
+## WorkflowRun
+
+One run of a workflow script, launched by one tool call. Its agents are in `agents` with
+`runId` set; they are spawned by the launching turn.
+
+| key | meaning |
+|---|---|
+| `id` | the run id |
+| `name` | the workflow's name |
+| `summary` | its one-line description |
+| `taskId` | the id the run's task notification carries (`InboxMessage.taskId`) |
+| `toolUseId` | the tool call that launched it; omitted when the launch was not found in the files |
+| `turn` | the main agent's turn it was launched in; when an agent launched it, that agent's spawn turn |
+| `agentId` | the agent that launched it; omitted for the main agent |
+| `startedAt` | time of the launch, else of its first agent's first record |
+| `endedAt` | time of its closing notification, else of its agents' last record |
+| `status` | how the harness said it ended (`completed`, `failed`, `killed`), or `open` when the files hold no such notice |
+| `agents` | how many agents it ran |
+| `usd` | attributed dollars of its agents and everything below them |
 
 ## InboxMessage
 

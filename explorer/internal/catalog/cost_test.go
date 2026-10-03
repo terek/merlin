@@ -491,3 +491,45 @@ func TestScriptedRunsWithoutSpend(t *testing.T) {
 		t.Errorf("scripted runs = %d, want 2 (the idle one counts)", runs)
 	}
 }
+
+// Compaction calls are tallied apart from the spend: a call inside a reported window is part
+// of that window's total already, one outside is in no figure.
+func TestCompactionCallsTallied(t *testing.T) {
+	call := func(cache model.CacheState, usd, warm float64) *model.CompactionCall {
+		return &model.CompactionCall{Model: "sonnet", Cache: cache, USD: usd, WarmUSD: warm}
+	}
+	d := syn("claude", "aaaaaaaa-0000-4000-8000-000000000001", "p", 0, 300, []model.Turn{{Index: 0}, {Index: 1}},
+		msgSpec{"m1", 10, 1, 0}, msgSpec{"m2", 200, 2, 1})
+	d.Compactions = []model.Compaction{
+		{At: at(20), Turn: 0, PreTokens: 100, Call: call(model.CacheWarm, 0.3, 0.3)},   // inside the window
+		{At: at(250), Turn: 1, PreTokens: 100, Call: call(model.CacheCold, 5, 0.4)},    // outside
+		{At: at(260), Turn: 1, PreTokens: 100},                                         // no estimate
+	}
+	d.Agents = []model.Agent{{ID: "a1", Compactions: []model.Compaction{{At: at(30), Call: call(model.CacheCold, 2, 0.2)}}}}
+	withWindows(d, model.ReportedWindow{From: at(0), To: at(100), TotalUSD: 1.5})
+	c := New()
+	c.Upsert(d)
+	in, _ := c.Session(d.Key())
+	want := CompactionTally{Calls: 3, Cold: 2, USD: 7.3, WarmUSD: 0.9, UncoveredUSD: 5}
+	got := in.Cost.Compactions
+	if got.Calls != want.Calls || got.Cold != want.Cold || !near(got.USD, want.USD) || !near(got.WarmUSD, want.WarmUSD) || !near(got.UncoveredUSD, want.UncoveredUSD) {
+		t.Errorf("session tally = %+v, want %+v", got, want)
+	}
+	total := c.Total(Filter{})
+	if total.Compactions != got || !near(total.TotalUSD, 1.5+2) {
+		t.Errorf("total = %+v", total)
+	}
+	rows := c.Rollup(Filter{}, ByModel)
+	var sonnet, overhead *Row
+	for i := range rows {
+		switch rows[i].Model {
+		case "sonnet":
+			sonnet = &rows[i]
+		case OverheadModel:
+			overhead = &rows[i]
+		}
+	}
+	if sonnet == nil || sonnet.Compactions != got || overhead == nil || overhead.Compactions.Calls != 0 {
+		t.Errorf("rows = %+v", rows)
+	}
+}

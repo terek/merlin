@@ -141,3 +141,77 @@ describe('revealKeys', () => {
     expect(rows).toHaveLength(4)
   })
 })
+
+const base: Agent = {
+  id: '',
+  kind: 'subagent',
+  agentType: 'Explore',
+  parentAgentId: null,
+  depth: 1,
+  linkage: 'meta',
+  status: 'completed',
+  assistantMessages: 1,
+  toolCalls: 0,
+  cost: { usd: 1 },
+  subtreeUSD: 1,
+}
+
+describe('workflow runs', () => {
+  // own start times: the shared counter of `agent` must not move while tests are collected
+  const at = (n: number) => `2026-09-17T10:00:0${n}Z`
+  const plain = (id: string, n: number): Agent => ({ ...base, id, startedAt: at(n) })
+  const wf = (id: string, n: number, run: string, phase: string): Agent => ({
+    ...base,
+    id,
+    startedAt: at(n),
+    kind: 'workflow',
+    agentType: 'workflow-subagent',
+    runId: run,
+    phase,
+    linkage: 'run',
+  })
+  const agents = [
+    plain('x', 0),
+    wf('w1', 1, 'wf_a', 'Find'),
+    wf('w2', 2, 'wf_a', 'Find'),
+    wf('w3', 3, 'wf_a', 'Verify'),
+    wf('v1', 4, 'wf_b', 'Only'),
+    plain('y', 5),
+  ]
+  const runs = new Map([
+    ['wf_a', { id: 'wf_a', name: 'audit', status: 'completed', agents: 3, usd: 3 }],
+    ['wf_b', { id: 'wf_b', status: 'failed', agents: 1, usd: 1 }],
+  ])
+
+  test('the agents of a run fold into one group however few they are, one group per run', () => {
+    const entries = groupSiblings(forestOf(agents))
+    expect(
+      entries.map((e) => (e.group ? `group:${e.nodes.map((n) => n.agent.id).join('+')}` : e.node.agent.id)),
+    ).toEqual(['x', 'group:w1+w2+w3', 'group:v1', 'y'])
+  })
+
+  test('the group line names the run and its phases', () => {
+    const f = forestOf(agents)
+    const rows = visibleRows(f, subtreeStats(f), none, undefined, runs)
+    const groups = rows.filter((r) => r.kind === 'group')
+    expect(groups.map((g) => (g.kind === 'group' ? [g.label, g.subtitle, g.run?.status, g.stats.usd] : []))).toEqual([
+      ['workflow audit', '3 agents · Find → Verify', 'completed', 3],
+      ['workflow wf_b', '1 agent · Only', 'failed', 1],
+    ])
+    // closed by default; opening lists the members one level deeper
+    expect(rows.map((r) => r.key)).toEqual(['x', 'g:w1', 'g:v1', 'y'])
+    const open = visibleRows(f, subtreeStats(f), new Map([['g:w1', true]]), undefined, runs)
+    expect(open.map((r) => `${r.key}@${r.level}`)).toEqual(['x@0', 'g:w1@0', 'w1@1', 'w2@1', 'w3@1', 'g:v1@0', 'y@0'])
+  })
+
+  test('selecting an agent of a run opens its group', () => {
+    expect(revealKeys(forestOf(agents), 'w2')).toEqual(['g:w1'])
+  })
+
+  test('a run the digest does not list is still a group, named by its id', () => {
+    const f = forestOf(agents)
+    const rows = visibleRows(f, subtreeStats(f), none)
+    const g = rows.find((r) => r.key === 'g:w1')
+    expect(g?.kind === 'group' && g.label).toBe('workflow wf_a')
+  })
+})

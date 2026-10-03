@@ -25,4 +25,5 @@ DAY         SESSIONS     COST  REPORTED  ATTRIBUTED
 TOTAL             35   $0.631    $0.131      $0.500
 
 Of $0.631: $0.131 (21%) is Claude Code's own reported figure; $0.500 (79%) is recomputed from tokens where it reported nothing.
+Compaction calls, estimated: $0.069 for 3 compactions. $0.069 of it is in no figure above (outside every reported window).
 Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run, counting any that made no API call  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

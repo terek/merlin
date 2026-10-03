@@ -48,6 +48,9 @@ const (
 	AgentTeammate AgentKind = "teammate"
 	AgentFork     AgentKind = "fork"    // subagent that inherits its parent's context
 	AgentCompact  AgentKind = "compact" // the call that wrote a compaction summary
+	// AgentWorkflow is an agent of a workflow run: started by the workflow's script, not by a
+	// tool call of its own.
+	AgentWorkflow AgentKind = "workflow"
 )
 
 // AgentStatus is how an agent's life ended, as far as the files show.
@@ -70,6 +73,7 @@ const (
 	LinkToolResult Linkage = "tool-result" // the spawn's tool result named the agent id
 	LinkName       Linkage = "name"        // matched by teammate name
 	LinkPrompt     Linkage = "prompt"      // matched by identical first prompt
+	LinkRun        Linkage = "run"         // its directory names the workflow run a tool call launched
 	LinkUnresolved Linkage = "unresolved"  // no link; attached to the session root
 )
 
@@ -81,6 +85,24 @@ const (
 	EndInterrupted EndState = "interrupted" // the user interrupted
 	EndMidTurn     EndState = "mid-turn"    // the files stop in the middle of work
 	EndUnknown     EndState = "unknown"
+)
+
+// CacheState says whether a compaction call found its context in the prompt cache.
+type CacheState string
+
+const (
+	CacheWarm CacheState = "warm"
+	CacheCold CacheState = "cold"
+)
+
+// CallBilling says how a compaction call's context was charged.
+type CallBilling string
+
+const (
+	BillingCacheRead    CallBilling = "cache-read"
+	BillingInput        CallBilling = "input"
+	BillingCacheWrite1h CallBilling = "cache-write-1h"
+	BillingCacheWrite5m CallBilling = "cache-write-5m"
 )
 
 // CompactionTrigger says what started a compaction.

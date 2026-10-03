@@ -1,8 +1,9 @@
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { type CSSProperties, memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { Agent, Compaction, InboxMessage, SessionDetail, Turn } from '../../api/types'
+import type { Agent, Compaction, InboxMessage, QueuedPrompt, SessionDetail, Turn, WorkflowRun } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatMoneyFull, plural } from '../../lib/format'
+import { callLine } from '../../lib/compaction'
+import { formatMoney, formatMoneyFull, plural } from '../../lib/format'
 import { useInView, useOverflows } from '../../lib/hooks'
 import { inboxLabel } from '../../lib/inbox'
 import { sameKey } from '../../lib/session'
@@ -86,20 +87,70 @@ function FinalText({ text, defaultOpen }: { text: string; defaultOpen: boolean }
 
 // ---- agent chips ------------------------------------------------------------------------
 
-function AgentChips({
+/** One chip for a whole workflow run: its agents are one unit, however many they are. */
+function RunChip({
+  run,
   agents,
   selectedAgentId,
   onSelectAgent,
 }: {
+  run: WorkflowRun | undefined
   agents: Agent[]
   selectedAgentId: string | null
   onSelectAgent: (id: string | null) => void
 }) {
+  const on = agents.some((a) => a.id === selectedAgentId)
+  const usd = agents.reduce((s, a) => s + a.subtreeUSD, 0)
+  const name = run?.name || agents[0].runId || 'workflow'
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      title={`${run?.summary ?? name}\n${plural(agents.length, 'agent')} of a workflow run. Cost attributed from token counts.`}
+      onClick={() => onSelectAgent(on ? null : agents[0].id)}
+      className={cn(
+        'inline-flex max-w-80 items-center gap-1.5 rounded-badge border px-1.5 py-px text-sec',
+        on ? 'border-accent bg-accent-soft' : 'border-line bg-surface-2 hover:border-faint',
+      )}
+    >
+      <span className="min-w-0 truncate">workflow {name}</span>
+      <span className="text-meta text-faint">×{agents.length}</span>
+      {run && run.status !== 'completed' && (
+        <Badge tone={run.status === 'open' ? undefined : 'bad'}>{run.status}</Badge>
+      )}
+      <Money usd={usd} dim title={`${formatMoneyFull(usd)}\n${TURN_COST_TIP}`} />
+    </button>
+  )
+}
+
+function AgentChips({
+  agents: every,
+  runsById,
+  selectedAgentId,
+  onSelectAgent,
+}: {
+  agents: Agent[]
+  runsById: Map<string, WorkflowRun>
+  selectedAgentId: string | null
+  onSelectAgent: (id: string | null) => void
+}) {
   const [all, setAll] = useState(false)
+  const agents = every.filter((a) => a.kind !== 'workflow')
+  const byRun = new Map<string, Agent[]>()
+  for (const a of every) if (a.kind === 'workflow') byRun.set(a.runId ?? '', [...(byRun.get(a.runId ?? '') ?? []), a])
   const shown = all ? agents : agents.slice(0, CHIPS_SHOWN)
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-meta text-faint">spawned</span>
+      {[...byRun].map(([id, members]) => (
+        <RunChip
+          key={`run:${id}`}
+          run={runsById.get(id)}
+          agents={members}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={onSelectAgent}
+        />
+      ))}
       {shown.map((a) => {
         const on = a.id === selectedAgentId
         const label = a.name || a.agentType || a.kind
@@ -136,6 +187,7 @@ function AgentChips({
 interface TurnProps {
   turn: Turn
   agentsById: Map<string, Agent>
+  runsById: Map<string, WorkflowRun>
   /** The selected agent, only when this turn spawned it. */
   selectedAgentId: string | null
   onSelectAgent: (id: string | null) => void
@@ -227,9 +279,54 @@ function InboxList({
   )
 }
 
+/** The prompts that arrived while the turn was running: typed without waiting, or delivered by a machine. */
+function QueuedList({
+  queued,
+  agentsById,
+  onSelectAgent,
+  startDay,
+}: {
+  queued: QueuedPrompt[]
+  agentsById: Map<string, Agent>
+  onSelectAgent: (id: string | null) => void
+  startDay: string
+}) {
+  const items = queued.map((q, k) => ({ q, key: `q${k}` }))
+  return (
+    <div className="space-y-1.5 border-l-2 border-line pl-2.5">
+      {items.map(({ q, key }) => {
+        const d = parseTime(q.at)
+        const when = d ? (d.toDateString() === startDay ? timeOfDay(d) : `${shortDate(d)} ${timeOfDay(d)}`) : ''
+        return (
+          <div key={key} className="space-y-1">
+            <div className="text-meta uppercase tracking-wide text-faint" title={d ? fullTime(d) : undefined}>
+              {q.origin === 'human' ? 'typed while the turn ran' : 'arrived while the turn ran'}
+              {when && <span className="normal-case tracking-normal"> · {when}</span>}
+            </div>
+            {q.text && (
+              <div
+                className={cn(
+                  'rounded-badge bg-surface-2 px-2.5 py-1.5',
+                  q.origin === 'human' ? 'font-medium' : 'text-muted',
+                )}
+              >
+                <PlainText text={q.text} lines={PROMPT_LINES} className="max-w-col" />
+              </div>
+            )}
+            {q.inbox && q.inbox.length > 0 && (
+              <InboxList inbox={q.inbox} agentsById={agentsById} onSelectAgent={onSelectAgent} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const TurnBlock = memo(function TurnBlock({
   turn,
   agentsById,
+  runsById,
   selectedAgentId,
   onSelectAgent,
   highlighted,
@@ -310,6 +407,9 @@ const TurnBlock = memo(function TurnBlock({
           </div>
         )}
         {!!turn.images && <div className="text-sec text-muted">{plural(turn.images, 'image')} pasted</div>}
+        {turn.queued && turn.queued.length > 0 && (
+          <QueuedList queued={turn.queued} agentsById={agentsById} onSelectAgent={onSelectAgent} startDay={startDay} />
+        )}
 
         {turn.finalText ? (
           <FinalText text={turn.finalText} defaultOpen={expandAll} />
@@ -320,7 +420,12 @@ const TurnBlock = memo(function TurnBlock({
         )}
 
         {agents.length > 0 && (
-          <AgentChips agents={agents} selectedAgentId={selectedAgentId} onSelectAgent={onSelectAgent} />
+          <AgentChips
+            agents={agents}
+            runsById={runsById}
+            selectedAgentId={selectedAgentId}
+            onSelectAgent={onSelectAgent}
+          />
         )}
 
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-t border-line pt-1.5 text-sec text-muted">
@@ -450,6 +555,14 @@ function CompactionDivider({
           )}
           {compaction.durationMs !== undefined && <Duration ms={compaction.durationMs} />}
           {at && <span title={fullTime(at)}>{timeOfDay(at)}</span>}
+          {compaction.call && (
+            <span
+              className={compaction.call.cache === 'cold' ? 'text-bad' : undefined}
+              title={`${callLine(compaction.call)}. The harness does not record this call: an estimate from the context size and the price table, not part of any total.`}
+            >
+              {compaction.call.cache === 'cold' ? 'cold cache' : 'warm cache'} ~{formatMoney(compaction.call.usd)}
+            </span>
+          )}
           {compaction.summary && (
             <button
               type="button"
@@ -545,6 +658,10 @@ export function Timeline({
 
   const timeline = useMemo(() => buildTimeline(detail, onlyPrompts), [detail, onlyPrompts])
   const agentsById = useMemo(() => new Map((detail.digest.agents ?? []).map((a) => [a.id, a])), [detail.digest.agents])
+  const runsById = useMemo(
+    () => new Map((detail.digest.workflows ?? []).map((w) => [w.id, w])),
+    [detail.digest.workflows],
+  )
   const turns = detail.digest.turns ?? []
   const lastTurnIndex = turns.length ? turns[turns.length - 1].index : -1
   const midTurnIndex = detail.summary.endState === 'mid-turn' ? lastTurnIndex : -1
@@ -581,6 +698,7 @@ export function Timeline({
   const turnProps = (turn: Turn): TurnProps => ({
     turn,
     agentsById,
+    runsById,
     selectedAgentId: selectedAgentId && turn.spawned?.includes(selectedAgentId) ? selectedAgentId : null,
     onSelectAgent,
     highlighted: turn.index === highlightedTurn,

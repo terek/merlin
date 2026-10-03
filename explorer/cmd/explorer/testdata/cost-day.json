@@ -125,7 +125,14 @@
       "sessions": 4,
       "totalUSD": 0.05766,
       "reportedUSD": 0,
-      "attributedUSD": 0.05766
+      "attributedUSD": 0.05766,
+      "compactions": {
+        "calls": 3,
+        "cold": 0,
+        "usd": 0.06896,
+        "warmUSD": 0.06896,
+        "uncoveredUSD": 0.06896
+      }
     },
     {
       "key": "2026-09-04",
@@ -159,7 +166,14 @@
   "total": {
     "totalUSD": 0.6307099999999998,
     "reportedUSD": 0.1311,
-    "attributedUSD": 0.49961000000000017
+    "attributedUSD": 0.49961000000000017,
+    "compactions": {
+      "calls": 3,
+      "cold": 0,
+      "usd": 0.06896,
+      "warmUSD": 0.06896,
+      "uncoveredUSD": 0.06896
+    }
   },
   "sessions": 35,
   "backing": {

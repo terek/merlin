@@ -203,22 +203,29 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 }
 
 // promptText is what a search of a turn's prompt looks at: the typed text and, for a prompt
-// a machine delivered, the summary, text and error of each message.
+// a machine delivered, the summary, text and error of each message; then the same for the
+// prompts that arrived while the turn ran.
 func promptText(t *model.Turn) string {
-	if len(t.Inbox) == 0 {
+	if len(t.Inbox) == 0 && len(t.Queued) == 0 {
 		return t.UserText
 	}
-	parts := make([]string, 0, 1+3*len(t.Inbox))
-	if t.UserText != "" {
-		parts = append(parts, t.UserText)
-	}
-	for i := range t.Inbox {
-		m := &t.Inbox[i]
-		for _, s := range []string{m.Summary, m.Text, m.Error} {
-			if s != "" {
-				parts = append(parts, s)
+	var parts []string
+	add := func(text string, inbox []model.InboxMessage) {
+		if text != "" {
+			parts = append(parts, text)
+		}
+		for i := range inbox {
+			m := &inbox[i]
+			for _, s := range []string{m.Summary, m.Text, m.Error} {
+				if s != "" {
+					parts = append(parts, s)
+				}
 			}
 		}
+	}
+	add(t.UserText, t.Inbox)
+	for i := range t.Queued {
+		add(t.Queued[i].Text, t.Queued[i].Inbox)
 	}
 	return strings.Join(parts, "\n")
 }

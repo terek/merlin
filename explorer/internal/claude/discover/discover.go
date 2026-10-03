@@ -22,8 +22,12 @@ const Harness = "claude"
 
 // Agent is one subagent of a session.
 type Agent struct {
-	ID       string // parsed from agent-<id>.jsonl
-	Path     string // the transcript
+	ID   string // parsed from agent-<id>.jsonl
+	Path string // the transcript
+	// Dir is the directory of the transcript relative to the session's subagents directory,
+	// with forward slashes: empty for a file directly in it, "workflows/<runId>" for an
+	// agent of a workflow run.
+	Dir      string
 	MetaPath string // agent-<id>.meta.json; empty when absent
 }
 
@@ -138,12 +142,21 @@ type session struct {
 }
 
 type agentFiles struct {
+	id, dir     string
 	jsonl, meta *model.SourceFile
+}
+
+func pathJoin(rel, name string) string {
+	if rel == "" {
+		return name
+	}
+	return rel + "/" + name
 }
 
 // dir handles one directory that is a project directory or sits inside one: UUID-named
 // jsonl files are main transcripts, UUID-named subdirectories are session directories
-// (only their subagents directory is read), other directories are walked recursively.
+// (only their subagents directory is read, with its subdirectories), other directories are
+// walked recursively.
 func (w *walker) dir(path, project string) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
@@ -164,7 +177,7 @@ func (w *walker) dir(path, project string) {
 		full := filepath.Join(path, name)
 		switch {
 		case e.IsDir() && isUUID(name):
-			w.subagents(filepath.Join(full, "subagents"), get(name))
+			w.subagents(filepath.Join(full, "subagents"), "", get(name))
 		case e.IsDir():
 			if !skipDirs[name] {
 				w.dir(full, project)
@@ -182,7 +195,10 @@ func (w *walker) dir(path, project string) {
 	}
 }
 
-func (w *walker) subagents(path string, s *session) {
+// subagents lists the agent files in path and, recursively, in its subdirectories: Claude
+// Code puts the agents of a workflow run in subagents/workflows/<runId>/. rel is path
+// relative to the session's subagents directory.
+func (w *walker) subagents(path, rel string, s *session) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -192,7 +208,11 @@ func (w *walker) subagents(path string, s *session) {
 	}
 	for _, e := range entries {
 		name := e.Name()
-		if e.IsDir() || !strings.HasPrefix(name, "agent-") {
+		if e.IsDir() {
+			w.subagents(filepath.Join(path, name), pathJoin(rel, name), s)
+			continue
+		}
+		if !strings.HasPrefix(name, "agent-") {
 			continue
 		}
 		var id string
@@ -212,10 +232,13 @@ func (w *walker) subagents(path string, s *session) {
 		if !ok {
 			continue
 		}
-		a := s.agents[id]
+		// An agent id names one agent of the session; should two directories hold the same
+		// id, each is listed and the assembly keeps the first.
+		key := rel + "\x00" + id
+		a := s.agents[key]
 		if a == nil {
-			a = &agentFiles{}
-			s.agents[id] = a
+			a = &agentFiles{id: id, dir: rel}
+			s.agents[key] = a
 		}
 		if meta {
 			a.meta = &sf
@@ -250,11 +273,11 @@ func build(dir, project, id string, s *session) (Source, bool) {
 		src.Main = s.main.Path
 		src.Fingerprint = append(src.Fingerprint, *s.main)
 	}
-	for aid, a := range s.agents {
+	for _, a := range s.agents {
 		if a.jsonl == nil {
 			continue // metadata without a transcript describes nothing
 		}
-		ag := Agent{ID: aid, Path: a.jsonl.Path}
+		ag := Agent{ID: a.id, Path: a.jsonl.Path, Dir: a.dir}
 		src.Fingerprint = append(src.Fingerprint, *a.jsonl)
 		if a.meta != nil {
 			ag.MetaPath = a.meta.Path
@@ -265,7 +288,12 @@ func build(dir, project, id string, s *session) (Source, bool) {
 	if src.Main == "" && len(src.Agents) == 0 {
 		return Source{}, false
 	}
-	sort.Slice(src.Agents, func(i, j int) bool { return src.Agents[i].ID < src.Agents[j].ID })
+	sort.Slice(src.Agents, func(i, j int) bool {
+		if src.Agents[i].ID != src.Agents[j].ID {
+			return src.Agents[i].ID < src.Agents[j].ID
+		}
+		return src.Agents[i].Dir < src.Agents[j].Dir
+	})
 	sort.Slice(src.Fingerprint, func(i, j int) bool { return src.Fingerprint[i].Path < src.Fingerprint[j].Path })
 	return src, true
 }

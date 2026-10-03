@@ -244,6 +244,13 @@ type ToolUseResult struct {
 	ResolvedModel string `json:"resolvedModel"`
 	OutputFile    string `json:"outputFile"`
 
+	// async_launched by the Workflow tool: a workflow run, not one agent
+	TaskType     string `json:"taskType"` // "local_workflow"
+	TaskID       string `json:"taskId"`
+	RunID        string `json:"runId"`
+	WorkflowName string `json:"workflowName"`
+	Summary      string `json:"summary"`
+
 	// teammate_spawned
 	Name       string `json:"name"`
 	TeamName   string `json:"team_name"`

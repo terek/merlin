@@ -415,10 +415,7 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [
-        0,
-        1
-      ],
+      "inheritedTurns": [0, 1],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -482,10 +479,7 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [
-        0,
-        1
-      ],
+      "inheritedTurns": [0, 1],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -549,9 +543,7 @@
         "ownMessages": 1,
         "inheritedMessages": 1
       },
-      "inheritedTurns": [
-        0
-      ],
+      "inheritedTurns": [0],
       "firstOwnTurn": 1,
       "parent": {
         "parent": {
@@ -725,10 +717,7 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [
-        0,
-        1
-      ],
+      "inheritedTurns": [0, 1],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -792,10 +781,7 @@
         "ownMessages": 1,
         "inheritedMessages": 3
       },
-      "inheritedTurns": [
-        0,
-        1
-      ],
+      "inheritedTurns": [0, 1],
       "firstOwnTurn": 2,
       "parent": {
         "parent": {
@@ -1279,7 +1265,14 @@
         "overheadUSD": 0,
         "inheritedUSD": 0,
         "ownMessages": 5,
-        "inheritedMessages": 0
+        "inheritedMessages": 0,
+        "compactions": {
+          "calls": 2,
+          "cold": 0,
+          "usd": 0.05132,
+          "warmUSD": 0.05132,
+          "uncoveredUSD": 0.05132
+        }
       },
       "firstOwnTurn": 0,
       "root": {
@@ -1317,7 +1310,14 @@
         "overheadUSD": 0,
         "inheritedUSD": 0,
         "ownMessages": 5,
-        "inheritedMessages": 0
+        "inheritedMessages": 0,
+        "compactions": {
+          "calls": 1,
+          "cold": 0,
+          "usd": 0.01764,
+          "warmUSD": 0.01764,
+          "uncoveredUSD": 0.01764
+        }
       },
       "firstOwnTurn": 0,
       "root": {

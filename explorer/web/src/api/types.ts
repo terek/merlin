@@ -17,9 +17,9 @@ export type State = 'busy' | 'idle' | 'recent' | 'ended'
 export type CostFlag = 'exact' | 'partial' | 'estimated'
 export type LinkKind = 'fork' | 'continuation'
 export type TurnOrigin = 'human' | 'command' | 'task-notification' | 'peer' | 'scheduled' | 'sdk' | 'continuation'
-export type AgentKind = 'subagent' | 'teammate' | 'fork' | 'compact'
+export type AgentKind = 'subagent' | 'teammate' | 'fork' | 'compact' | 'workflow'
 export type AgentStatus = 'completed' | 'killed' | 'open'
-export type Linkage = 'meta' | 'tool-result' | 'name' | 'prompt' | 'unresolved'
+export type Linkage = 'meta' | 'tool-result' | 'name' | 'prompt' | 'run' | 'unresolved'
 export type CompactionTrigger = 'auto' | 'manual'
 export type SearchField = 'title' | 'prompt' | 'final' | 'compaction' | 'project' | 'cwd' | 'branch'
 
@@ -30,6 +30,8 @@ export interface Money {
   totalUSD: number
   reportedUSD: number
   attributedUSD: number
+  /** Compaction calls in the same scope, estimated; see CompactionTally. */
+  compactions?: CompactionTally
 }
 
 // ---- list shapes (internal/server) ----------------------------------------------------
@@ -204,6 +206,8 @@ export interface SessionCost {
   reportedUSD: number
   /** Owned messages cut short in the transcript (their attributed cost is a lower bound). */
   truncatedMessages?: number
+  /** The session's compaction calls, estimated; see CompactionTally. */
+  compactions?: CompactionTally
   windows?: ReportedWindow[]
   /** Attributed cost of the messages this session owns, agents included. */
   ownUSD: number
@@ -297,6 +301,40 @@ export interface Compaction {
   summary?: string
   /** Byte ranges of the summary that are the harness's fixed wording (search skips them). */
   boilerplate?: { from: number; to: number }[]
+  /** What the call that wrote the summary cost: an estimate, the harness does not record it. */
+  call?: CompactionCall
+}
+
+/**
+ * The estimated cost of a compaction's API call: the whole context as input, the summary as output.
+ * Never part of a recomputed total. Cold: the main agent's previous call was older than the cache
+ * lifetime, so the context was read again at full price.
+ */
+export interface CompactionCall {
+  model: string
+  /** Since the main agent's previous API call. */
+  idleMs: number
+  cache: 'warm' | 'cold'
+  /** How the context was charged: cache-read, input, cache-write-1h, cache-write-5m. */
+  billing: string
+  inputTokens: number
+  outputTokens: number
+  usd: number
+  /** What the same call would have cost had the cache been warm. */
+  warmUSD: number
+}
+
+/**
+ * The estimated cost of compaction calls in a scope. A call inside a reported window is part of the
+ * reported figure already (as overhead); uncoveredUSD is the part that is in no figure at all.
+ */
+export interface CompactionTally {
+  calls: number
+  cold: number
+  usd: number
+  /** What the calls would have cost with a warm cache every time. */
+  warmUSD: number
+  uncoveredUSD: number
 }
 
 export interface Turn {
@@ -315,6 +353,8 @@ export interface Turn {
   userText: string
   /** The messages a machine delivered as this prompt. */
   inbox?: InboxMessage[]
+  /** The prompts that arrived while the turn was running; they start no turn of their own. */
+  queued?: QueuedPrompt[]
   images?: number
   command?: string
   finalText?: string
@@ -328,6 +368,36 @@ export interface Turn {
   costWithAgents: number
   /** Ids of agents spawned in this turn. */
   spawned?: string[]
+}
+
+/** A prompt that arrived while a turn was running: typed without waiting, or delivered by a machine. */
+export interface QueuedPrompt {
+  at: string
+  origin: TurnOrigin
+  /** As `Turn.userText`: what was typed, or what of a delivered prompt was not recognised. */
+  text?: string
+  inbox?: InboxMessage[]
+}
+
+/** One run of a workflow script, launched by one tool call. Its agents carry `runId`. */
+export interface WorkflowRun {
+  id: string
+  name?: string
+  summary?: string
+  /** The id the run's task notification carries (`InboxMessage.taskId`). */
+  taskId?: string
+  toolUseId?: string
+  /** The main agent's turn it was launched in. */
+  turn?: number
+  /** The agent that launched it; absent for the main agent. */
+  agentId?: string
+  startedAt?: string
+  endedAt?: string
+  /** completed, failed, killed as the harness said, or open. */
+  status: string
+  agents: number
+  /** Attributed cost of its agents and everything below them. */
+  usd: number
 }
 
 export type InboxKind = 'message' | 'idle' | 'task' | 'assignment'
@@ -357,6 +427,9 @@ export interface InboxMessage {
 export interface Agent {
   id: string
   kind: AgentKind
+  /** For kind workflow: the run it belongs to and the phase its script put it in. */
+  runId?: string
+  phase?: string
   name?: string
   agentType?: string
   description?: string
@@ -432,6 +505,8 @@ export interface SessionDigest {
   compactions?: Compaction[]
   turns?: Turn[]
   agents?: Agent[]
+  /** The workflow runs launched in the session, by start time. */
+  workflows?: WorkflowRun[]
   messages?: Message[]
   diagnostics: Diagnostics
 }
@@ -465,11 +540,8 @@ export type CostBy = 'project' | 'day' | 'model' | 'kind' | 'session'
 export type CostSplit = 'project' | 'model' | 'kind'
 
 /** One slice of a row when the table is requested with `split=`. */
-export interface CostSplitEntry {
+export interface CostSplitEntry extends Money {
   key: string
-  totalUSD: number
-  reportedUSD: number
-  attributedUSD: number
 }
 
 export interface CostRow extends Money {

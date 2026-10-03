@@ -37,12 +37,48 @@ type Money struct {
 	TotalUSD      float64 `json:"totalUSD"`
 	ReportedUSD   float64 `json:"reportedUSD"`
 	AttributedUSD float64 `json:"attributedUSD"`
+	// Compactions is the estimated cost of the compaction calls in the same scope; see
+	// CompactionTally for how it relates to TotalUSD.
+	Compactions CompactionTally `json:"compactions,omitzero"`
 }
 
 func (m *Money) add(reported, attributed float64) {
 	m.ReportedUSD += reported
 	m.AttributedUSD += attributed
 	m.TotalUSD += reported + attributed
+}
+
+// CompactionTally sums the estimated cost of compaction calls (model.CompactionCall).
+// A call inside a reported window is already part of ReportedUSD, as overhead; one
+// outside every window (UncoveredUSD) is in no total at all, since the harness never
+// wrote it down. WarmUSD is what the same calls would have cost had the cache been warm
+// each time.
+type CompactionTally struct {
+	Calls        int     `json:"calls"`
+	Cold         int     `json:"cold"`
+	USD          float64 `json:"usd"`
+	WarmUSD      float64 `json:"warmUSD"`
+	UncoveredUSD float64 `json:"uncoveredUSD"`
+}
+
+func (t *CompactionTally) add(o CompactionTally) {
+	t.Calls += o.Calls
+	t.Cold += o.Cold
+	t.USD += o.USD
+	t.WarmUSD += o.WarmUSD
+	t.UncoveredUSD += o.UncoveredUSD
+}
+
+// tally is the tally of one compaction call.
+func tally(call *model.CompactionCall, covered bool) CompactionTally {
+	t := CompactionTally{Calls: 1, USD: call.USD, WarmUSD: call.WarmUSD}
+	if call.Cache == model.CacheCold {
+		t.Cold = 1
+	}
+	if !covered {
+		t.UncoveredUSD = call.USD
+	}
+	return t
 }
 
 // Inherited says how much of a session's history is billed to another session.
@@ -86,6 +122,9 @@ type SessionCost struct {
 	// they finished (Message.Truncated): their output tokens are partial, so OwnUSD and
 	// the part of the best cost recomputed from tokens are lower bounds when it is non-zero.
 	TruncatedMessages int `json:"truncatedMessages,omitempty"`
+	// Compactions is the estimated cost of the session's compaction calls, main agent and
+	// sub-agents; see CompactionTally.
+	Compactions CompactionTally `json:"compactions,omitzero"`
 }
 
 // LinkKind says whether a child session took over from its parent or branched off it.

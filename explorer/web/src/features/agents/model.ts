@@ -1,7 +1,7 @@
 // The logic behind the Agents card: subtree sums, grouping of long runs of siblings, which rows
 // are visible. Pure, so it is tested; the components only draw what this returns.
 
-import type { Agent } from '../../api/types'
+import type { Agent, WorkflowRun } from '../../api/types'
 import type { AgentNode } from '../../lib/tree'
 
 /** More than this many consecutive siblings of one type are shown as one expandable line. */
@@ -58,6 +58,8 @@ export function treeDepth(forest: readonly AgentNode[]): number {
 
 /** What makes two siblings "of one type": the kind and the agent type (or name for a teammate). */
 export function typeKey(a: Agent): string {
+  // the agents of one workflow run belong together whatever their type
+  if (a.kind === 'workflow') return `workflow:${a.runId ?? ''}`
   return `${a.kind}:${a.agentType ?? a.name ?? ''}`
 }
 
@@ -67,18 +69,42 @@ export function agentLabel(a: Agent): string {
 
 export type Entry = { group: false; node: AgentNode } | { group: true; id: string; nodes: AgentNode[] }
 
-/** Sibling list with each run of more than `min` consecutive same-type agents folded into one group. */
+/**
+ * Sibling list with each run of more than `min` consecutive same-type agents folded into one group.
+ * The agents of a workflow run always fold, however few they are: the run is the unit.
+ */
 export function groupSiblings(nodes: readonly AgentNode[], min = GROUP_MIN): Entry[] {
   const out: Entry[] = []
   let i = 0
   while (i < nodes.length) {
     let j = i + 1
     while (j < nodes.length && typeKey(nodes[j].agent) === typeKey(nodes[i].agent)) j++
-    if (j - i > min) out.push({ group: true, id: `g:${nodes[i].agent.id}`, nodes: nodes.slice(i, j) })
+    if (j - i > min || nodes[i].agent.kind === 'workflow')
+      out.push({ group: true, id: `g:${nodes[i].agent.id}`, nodes: nodes.slice(i, j) })
     else for (let k = i; k < j; k++) out.push({ group: false, node: nodes[k] })
     i = j
   }
   return out
+}
+
+/** Label and subtitle of a group line: a workflow run by its name and phases, else "n agents of one type". */
+export function groupText(
+  nodes: readonly AgentNode[],
+  runs: ReadonlyMap<string, WorkflowRun>,
+): { label: string; subtitle: string; run?: WorkflowRun } {
+  const first = nodes[0].agent
+  if (first.kind !== 'workflow') {
+    return { label: agentLabel(first), subtitle: `${nodes.length} agents of one type in a row` }
+  }
+  const run = runs.get(first.runId ?? '') ?? { id: first.runId ?? '', status: 'open', agents: nodes.length, usd: 0 }
+  const phases: string[] = []
+  for (const n of nodes) if (n.agent.phase && !phases.includes(n.agent.phase)) phases.push(n.agent.phase)
+  const count = `${nodes.length} ${nodes.length === 1 ? 'agent' : 'agents'}`
+  return {
+    label: `workflow ${run.name || run.id}`,
+    subtitle: phases.length ? `${count} · ${phases.join(' → ')}` : count,
+    run,
+  }
 }
 
 export type Row =
@@ -90,6 +116,10 @@ export type Row =
       open: boolean
       nodes: AgentNode[]
       label: string
+      /** What the line under the label says. */
+      subtitle: string
+      /** Set when the group is a workflow run. */
+      run?: WorkflowRun
       stats: SubtreeStats
     }
 
@@ -106,6 +136,7 @@ export function visibleRows(
   stats: ReadonlyMap<string, SubtreeStats>,
   overrides: ReadonlyMap<string, boolean>,
   min = GROUP_MIN,
+  runs: ReadonlyMap<string, WorkflowRun> = new Map(),
 ): Row[] {
   const rows: Row[] = []
   const emit = (nodes: readonly AgentNode[], level: number, fold = true) => {
@@ -133,8 +164,8 @@ export function visibleRows(
         sum.killed += s.killed
         sum.open += s.open
       }
-      const first = e.nodes[0].agent
-      rows.push({ kind: 'group', key: e.id, level, open, nodes: e.nodes, label: agentLabel(first), stats: sum })
+      const group = groupText(e.nodes, runs)
+      rows.push({ kind: 'group', key: e.id, level, open, nodes: e.nodes, ...group, stats: sum })
       // the members of an open group are listed ungrouped: they are the folded run
       if (open) emit(e.nodes, level + 1, false)
     }

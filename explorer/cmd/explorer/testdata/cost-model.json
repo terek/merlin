@@ -6,7 +6,14 @@
       "sessions": 35,
       "totalUSD": 0.4949100000000002,
       "reportedUSD": 0.020499999999999997,
-      "attributedUSD": 0.47441000000000016
+      "attributedUSD": 0.47441000000000016,
+      "compactions": {
+        "calls": 3,
+        "cold": 0,
+        "usd": 0.06896,
+        "warmUSD": 0.06896,
+        "uncoveredUSD": 0.06896
+      }
     },
     {
       "key": "claude-opus-5-5",
@@ -48,7 +55,14 @@
   "total": {
     "totalUSD": 0.6307099999999998,
     "reportedUSD": 0.1311,
-    "attributedUSD": 0.49961000000000017
+    "attributedUSD": 0.49961000000000017,
+    "compactions": {
+      "calls": 3,
+      "cold": 0,
+      "usd": 0.06896,
+      "warmUSD": 0.06896,
+      "uncoveredUSD": 0.06896
+    }
   },
   "sessions": 35,
   "backing": {

@@ -51,6 +51,7 @@ type turnState struct {
 	origin      model.TurnOrigin
 	userText    string
 	inbox       []model.InboxMessage
+	queued      []model.QueuedPrompt
 	images      int
 	command     string
 	interrupted bool
@@ -100,20 +101,22 @@ type Builder struct {
 	pendingSummary int // index of a compaction awaiting its summary, -1 when none
 	pendingPos     int
 
-	spawns      []AgentSpawn
-	spawnIDs    map[string]struct{}
-	spawnRes    []SpawnResult
-	notes       []TaskNotification
-	killed      []AgentsKilled
-	costStates  []CostStateRecord
-	recaps      []model.Recap
-	forkRefs    []ForkContextRef
-	forkedFrom  *model.ForkRef
-	aiTitle     string
-	customTitle string
-	agentName   string
-	lastPrompt  string
-	lastLeaf    string
+	spawns       []AgentSpawn
+	spawnIDs     map[string]struct{}
+	spawnRes     []SpawnResult
+	notes        []TaskNotification
+	workflows    []WorkflowLaunch
+	compVersions []string // harness version at each compaction, parallel to compactions
+	killed       []AgentsKilled
+	costStates   []CostStateRecord
+	recaps       []model.Recap
+	forkRefs     []ForkContextRef
+	forkedFrom   *model.ForkRef
+	aiTitle      string
+	customTitle  string
+	agentName    string
+	lastPrompt   string
+	lastLeaf     string
 
 	slugs, cwds, branches, versions, entrypoints, kinds, sessionIDs, agentIDs, inherited uniq
 
@@ -218,6 +221,8 @@ func (b *Builder) Apply(r *transcript.Record) {
 		}
 	case transcript.TypeSystem:
 		away = b.system(r, ts, pos)
+	case transcript.TypeAttachment:
+		b.queued(r, ts)
 	case transcript.TypeAITitle:
 		if t := r.AITitle(); t != "" {
 			b.aiTitle = t
@@ -329,6 +334,7 @@ func (b *Builder) system(r *transcript.Record, ts time.Time, pos int) (away bool
 			}
 		}
 		b.compactions = append(b.compactions, c)
+		b.compVersions = append(b.compVersions, r.Version)
 		b.pendingSummary, b.pendingPos = len(b.compactions)-1, pos
 		b.epoch++
 	case transcript.SubtypeTurnDuration:
@@ -346,6 +352,32 @@ func (b *Builder) system(r *transcript.Record, ts time.Time, pos int) (away bool
 		})
 	}
 	return false
+}
+
+// queued handles a prompt that arrived while a turn was running. It starts no turn: it is
+// kept on the running turn, and a task notification among them counts like any other.
+func (b *Builder) queued(r *transcript.Record, ts time.Time) {
+	q, ok := r.QueuedCommand()
+	if !ok {
+		return
+	}
+	text := q.Prompt.Text()
+	origin := q.PromptOrigin()
+	if origin == model.OriginTaskNotification {
+		n := parseNotification(text)
+		n.Turn, n.At = b.cur, ts
+		b.notes = append(b.notes, n)
+	}
+	if b.cur < 0 || strings.TrimSpace(text) == "" {
+		return
+	}
+	qp := model.QueuedPrompt{At: ts, Origin: origin, Text: text}
+	if origin == model.OriginPeer || origin == model.OriginTaskNotification {
+		if msgs, rest, ok := delivered(text, ts); ok {
+			qp.Inbox, qp.Text = msgs, rest
+		}
+	}
+	b.turns[b.cur].queued = append(b.turns[b.cur].queued, qp)
 }
 
 // user handles user records: summaries, tool results and prompts.
@@ -450,6 +482,12 @@ func (b *Builder) toolResult(r *transcript.Record, ts time.Time) {
 	for _, blk := range um.Content.Blocks {
 		if blk.Type != "tool_result" {
 			continue
+		}
+		if hasTUR && tur.RunID != "" {
+			b.workflows = append(b.workflows, WorkflowLaunch{
+				ToolUseID: blk.ToolUseID, Turn: b.cur, At: ts, RunID: tur.RunID, TaskID: tur.TaskID,
+				Name: tur.WorkflowName, Summary: tur.Summary,
+			})
 		}
 		_, owned := b.spawnIDs[blk.ToolUseID]
 		spawnLike := hasTUR && (tur.Status == transcript.SpawnCompleted ||

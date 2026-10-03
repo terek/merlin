@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 6,
+  "parserVersion": 7,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000001.jsonl",
@@ -67,7 +67,17 @@
           "from": 204,
           "to": 662
         }
-      ]
+      ],
+      "call": {
+        "model": "claude-sonnet-5-5",
+        "idleMs": 4000,
+        "cache": "warm",
+        "billing": "cache-read",
+        "inputTokens": 150000,
+        "outputTokens": 165,
+        "usd": 0.03165,
+        "warmUSD": 0.03165
+      }
     },
     {
       "at": "2026-09-05T10:00:26Z",
@@ -85,7 +95,17 @@
           "from": 211,
           "to": 669
         }
-      ]
+      ],
+      "call": {
+        "model": "claude-sonnet-5-5",
+        "idleMs": 4000,
+        "cache": "warm",
+        "billing": "cache-read",
+        "inputTokens": 90000,
+        "outputTokens": 167,
+        "usd": 0.01967,
+        "warmUSD": 0.01967
+      }
     }
   ],
   "turns": [

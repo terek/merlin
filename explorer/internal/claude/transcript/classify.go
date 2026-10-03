@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"bytes"
 	"regexp"
 	"strings"
 
@@ -168,4 +169,51 @@ func SlashCommand(text string) (name, args string, ok bool) {
 		args = strings.TrimSpace(a[1])
 	}
 	return name, args, true
+}
+
+// QueuedCommand is a prompt that arrived while a turn was running. Claude Code does not
+// write it as a user record: it is an attachment record of type "queued_command" (format
+// notes §4b).
+type QueuedCommand struct {
+	Prompt Content `json:"prompt"`
+	// Mode is "prompt" for a typed message and "task-notification" for a notification;
+	// agents' files leave it out.
+	Mode   string  `json:"commandMode"`
+	Origin *Origin `json:"origin"`
+}
+
+var markQueuedCommand = []byte(`"queued_command"`)
+
+// QueuedCommand decodes an attachment record of type queued_command. ok is false for
+// every other record.
+func (r *Record) QueuedCommand() (QueuedCommand, bool) {
+	if r.Type != TypeAttachment || !bytes.Contains(r.Raw, markQueuedCommand) {
+		return QueuedCommand{}, false
+	}
+	var v struct {
+		Attachment struct {
+			Type string `json:"type"`
+			QueuedCommand
+		} `json:"attachment"`
+	}
+	if unmarshalTolerant(r.Raw, &v) != nil || v.Attachment.Type != "queued_command" {
+		return QueuedCommand{}, false
+	}
+	return v.Attachment.QueuedCommand, true
+}
+
+// PromptOrigin classifies who authored a queued prompt: the attachment's origin and mode,
+// then the text prefix.
+func (q QueuedCommand) PromptOrigin() model.TurnOrigin {
+	kind := ""
+	if q.Origin != nil {
+		kind = q.Origin.Kind
+	}
+	switch {
+	case kind == "task-notification" || q.Mode == "task-notification":
+		return model.OriginTaskNotification
+	case kind == "peer" || kind == "coordinator":
+		return model.OriginPeer
+	}
+	return PromptOriginFromText(q.Prompt.Text())
 }

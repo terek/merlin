@@ -3,6 +3,7 @@ import type { CostRow, CostSplitEntry, CostTable } from '../../api/types'
 import {
   addDays,
   type Bucket,
+  barTotal,
   bucketsFor,
   disagreements,
   isWeekly,
@@ -12,6 +13,7 @@ import {
   niceTicks,
   parseDay,
   parseRange,
+  parseStack,
   rangeWindow,
   selectedWindow,
   stackOf,
@@ -241,5 +243,36 @@ describe('every cut of the mock data adds up to one total', async () => {
   }
   test('stop the mock', () => {
     proc.kill()
+  })
+})
+
+describe('the compaction stack', () => {
+  const b: Bucket = {
+    key: '2026-10-02',
+    to: '2026-10-02',
+    weekly: false,
+    total: 40,
+    reported: 10,
+    attributed: 30,
+    parts: [],
+    compactions: { calls: 3, cold: 2, usd: 11.8, warmUSD: 1.21, uncoveredUSD: 11.8 },
+  }
+  test('the warm-cache cost, then the cold extra; they add up to the estimate, not to the spend', () => {
+    const segs = stackOf(b, 'compaction', [])
+    expect(segs.map((s) => s.key)).toEqual(['compaction-warm', 'compaction-cold'])
+    expect(segs[0].usd).toBeCloseTo(1.21)
+    expect(segs[1].usd).toBeCloseTo(10.59)
+    expect(barTotal(b, 'compaction')).toBeCloseTo(11.8)
+    expect(barTotal(b, 'model')).toBe(40)
+  })
+  test('all warm: no cold segment; no compactions: an empty bar', () => {
+    const warm = { ...b, compactions: { calls: 1, cold: 0, usd: 0.7, warmUSD: 0.7, uncoveredUSD: 0 } }
+    expect(stackOf(warm, 'compaction', []).map((s) => s.key)).toEqual(['compaction-warm'])
+    expect(stackOf({ ...b, compactions: undefined }, 'compaction', [])).toEqual([])
+    expect(barTotal({ ...b, compactions: undefined }, 'compaction')).toBe(0)
+  })
+  test('the URL value', () => {
+    expect(parseStack('compaction')).toBe('compaction')
+    expect(parseStack('nonsense')).toBe('model')
   })
 })

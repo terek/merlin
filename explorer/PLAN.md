@@ -149,6 +149,7 @@ SessionDigest
   compactions[]   Compaction
   turns[]         Turn
   agents[]        Agent                 flat list; tree via parentAgentId
+  workflows[]     WorkflowRun           runs of workflow scripts; their agents carry runId
   messages[]      {id, at, model, agentId?, turn?, usd, tokens…}  one per billed API message
   diagnostics     {unknownTypes{}, badLines, unpricedModels[], unresolvedAgents}
 
@@ -162,6 +163,7 @@ Turn
   origin          human | command | task-notification | peer | scheduled | sdk | continuation
   userText        the prompt as its author wrote it, complete; for a machine-delivered prompt only what was not recognised
   inbox[]?        InboxMessage: the messages a machine delivered as this prompt
+  queued[]?       {at, origin, text?, inbox[]?}: prompts that arrived while the turn was running
   images          count of pasted images (the image data is not stored)
   command?        slash command name, when origin is command
   finalText       last assistant text of the turn, complete
@@ -173,11 +175,12 @@ Turn
   spawned[]       agentIds
 
 Agent
-  id, kind        subagent | teammate | fork | compact
+  id, kind        subagent | teammate | fork | compact | workflow
+  runId?, phase?  the workflow run and phase, for kind workflow
   name?, agentType?, description?, model
   parentAgentId   null = spawned by the main agent
   spawnToolUseId?, spawnTurn?, depth, background
-  linkage         meta | tool-result | name | prompt | unresolved
+  linkage         meta | tool-result | name | prompt | run | unresolved
   startedAt, endedAt
   status          completed | killed | open     open = no terminal marker in the files; whether it is actually running is the catalog's call
   prompt          first prompt, complete
@@ -188,7 +191,10 @@ Agent
   cost            own
   subtreeUSD      own + descendants
 
-Compaction  {at, turn, trigger, preTokens, postTokens?, durationMs?, summary}
+Compaction  {at, turn, trigger, preTokens, postTokens?, durationMs?, summary, call?}
+                call = CompactionCall {model, idleMs, cache: warm | cold, billing, inputTokens, outputTokens, usd, warmUSD}: the summarising call, estimated; never in a recomputed total
+
+WorkflowRun   {id, name?, summary?, taskId?, toolUseId?, turn?, agentId?, startedAt, endedAt, status, agents, usd}
 
 InboxMessage  {at, kind: message | idle | task | assignment, from?, agentId?, taskId?, status?, summary?, text?, error?}
 ```

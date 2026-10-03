@@ -13,7 +13,7 @@ Cost    ≈$0.017   estimated: Claude Code reported no figure; recomputed from t
   MODEL       ATTRIBUTED
   sonnet-5-5      $0.017
 
-Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+Timeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text; texts shortened, --full for all)
   #0   Sep 18 23:50  human                 $0.011  12s
      > add a footer
      < Footer added

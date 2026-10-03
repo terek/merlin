@@ -44,8 +44,12 @@ export function AgentsCard({ detail, selectedAgentId, onSelectAgent, onSelectTur
   })
   const [compactOpen, setCompactOpen] = useState(false)
 
-  const rows = useMemo(() => visibleRows(tree.roots, stats, overrides), [tree, stats, overrides])
-  const unresolvedRows = useMemo(() => visibleRows(tree.unresolved, stats, overrides), [tree, stats, overrides])
+  const runs = useMemo(() => new Map((digest.workflows ?? []).map((w) => [w.id, w])), [digest.workflows])
+  const rows = useMemo(() => visibleRows(tree.roots, stats, overrides, undefined, runs), [tree, stats, overrides, runs])
+  const unresolvedRows = useMemo(
+    () => visibleRows(tree.unresolved, stats, overrides, undefined, runs),
+    [tree, stats, overrides, runs],
+  )
 
   const toggle = (key: string, value: boolean) => setOverrides((prev) => new Map(prev).set(key, value))
 

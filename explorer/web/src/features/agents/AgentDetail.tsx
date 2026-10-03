@@ -31,7 +31,13 @@ function Time({ at }: { at: string | undefined }) {
 }
 
 const linkLabel = (a: Agent) =>
-  a.linkage === 'meta' ? '' : a.linkage === 'unresolved' ? 'not tied to a spawn' : `tied by ${a.linkage}`
+  a.linkage === 'meta' || a.linkage === 'run'
+    ? ''
+    : a.linkage === 'unresolved'
+      ? a.kind === 'workflow'
+        ? 'the launch of its workflow run was not found'
+        : 'not tied to a spawn'
+      : `tied by ${a.linkage}`
 
 /** The detail of one agent, under the tree. */
 export function AgentDetail({
@@ -67,6 +73,7 @@ export function AgentDetail({
             <span className="font-semibold [overflow-wrap:anywhere]">{agentLabel(a)}</span>
             <Badge>{a.kind}</Badge>
             {a.name && a.agentType && <span className="text-sec text-muted">{a.agentType}</span>}
+            {a.phase && <Badge title="the phase of the workflow run">{a.phase}</Badge>}
             {a.background && <Badge title="ran in the background">bg</Badge>}
             <AgentStatusMark status={a.status} />
             {link && (

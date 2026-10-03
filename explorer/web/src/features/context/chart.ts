@@ -1,7 +1,7 @@
 // The numbers behind the context chart: points, scales, segments, compaction positions, cursor
 // movement. Pure and tested; ContextChart.tsx only draws them.
 
-import type { Compaction, Turn } from '../../api/types'
+import type { Compaction, CompactionCall, Turn } from '../../api/types'
 import { firstLine } from '../../lib/paths'
 
 export interface Point {
@@ -79,6 +79,7 @@ export interface Mark {
   pre?: number
   post?: number
   trigger?: string
+  call?: CompactionCall
 }
 
 /** Compactions placed between turn c and c + 1, clamped to the drawn range [lo, hi]. */
@@ -86,7 +87,7 @@ export function compactionMarks(compactions: readonly Compaction[] | undefined, 
   const marks: Mark[] = []
   for (const c of compactions ?? []) {
     const at = Math.min(hi, Math.max(lo, c.turn + 0.5))
-    marks.push({ at, turn: c.turn, pre: c.preTokens, post: c.postTokens, trigger: c.trigger })
+    marks.push({ at, turn: c.turn, pre: c.preTokens, post: c.postTokens, trigger: c.trigger, call: c.call })
   }
   return marks.sort((a, b) => a.at - b.at)
 }
@@ -106,6 +107,25 @@ export function spacedLabels(xs: readonly number[], gap: number): boolean[] {
     last = x
     return true
   })
+}
+
+/**
+ * The marks whose call cost is written over them: each at least `gap` px from every other labelled
+ * one. Cold calls claim the room first, then the dearer ones, so a crowded chart still prices the
+ * calls worth knowing about.
+ */
+export function pricedLabels(marks: readonly Mark[], px: (at: number) => number, gap: number): Set<Mark> {
+  const order = marks
+    .filter((m) => m.call)
+    .sort(
+      (a, b) =>
+        Number(b.call?.cache === 'cold') - Number(a.call?.cache === 'cold') ||
+        (b.call?.usd ?? 0) - (a.call?.usd ?? 0) ||
+        a.at - b.at,
+    )
+  const out = new Set<Mark>()
+  for (const m of order) if ([...out].every((o) => Math.abs(px(o.at) - px(m.at)) >= gap)) out.add(m)
+  return out
 }
 
 /** The point whose turn index is nearest to `index`; undefined for no points. */

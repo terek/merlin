@@ -2,7 +2,7 @@
 // empty ones filled in, the top five models, nice axis ticks, and the check that every cut of the
 // same range adds up to the same total. No React in here, so all of it is tested.
 
-import type { CostRow, CostSplitEntry } from '../../api/types'
+import type { CompactionTally, CostRow, CostSplitEntry } from '../../api/types'
 import { daysBefore, localDay } from '../../lib/time'
 
 export type Range = '7d' | '30d' | '90d' | 'all'
@@ -80,6 +80,8 @@ export interface Bucket {
   attributed: number
   /** Spend by model, largest first. */
   parts: CostSplitEntry[]
+  /** The compaction calls of the bucket, estimated. */
+  compactions?: CompactionTally
 }
 
 function emptyBucket(key: string, to: string, weekly: boolean): Bucket {
@@ -93,6 +95,17 @@ function addParts(into: Map<string, CostSplitEntry>, parts: CostSplitEntry[] | u
     cur.reportedUSD += p.reportedUSD
     cur.attributedUSD += p.attributedUSD
     into.set(p.key, cur)
+  }
+}
+
+function addTally(a: CompactionTally | undefined, b: CompactionTally): CompactionTally {
+  if (!a) return { ...b }
+  return {
+    calls: a.calls + b.calls,
+    cold: a.cold + b.cold,
+    usd: a.usd + b.usd,
+    warmUSD: a.warmUSD + b.warmUSD,
+    uncoveredUSD: a.uncoveredUSD + b.uncoveredUSD,
   }
 }
 
@@ -127,6 +140,7 @@ export function makeBuckets(rows: CostRow[], window: Window, weekly: boolean): B
     e.b.total += row.totalUSD
     e.b.reported += row.reportedUSD
     e.b.attributed += row.attributedUSD
+    if (row.compactions) e.b.compactions = addTally(e.b.compactions, row.compactions)
     addParts(e.parts, row.split)
   }
   return [...buckets.values()].map(({ b, parts }) => ({ ...b, parts: [...parts.values()].sort(bySize) }))
@@ -153,6 +167,8 @@ export type Tone =
   | 'overhead'
   | 'reported'
   | 'attributed'
+  | 'faint'
+  | 'bad'
 
 export interface Segment {
   key: string
@@ -162,10 +178,19 @@ export interface Segment {
 
 const SERIES: Tone[] = ['series-1', 'series-2', 'series-3', 'series-4', 'series-5']
 
-export type Stack = 'model' | 'source'
+/** By model, by source (reported or attributed), or the estimated compaction calls on their own. */
+export type Stack = 'model' | 'source' | 'compaction'
 
 export function parseStack(s: string | null): Stack {
-  return s === 'source' ? 'source' : 'model'
+  return s === 'source' || s === 'compaction' ? s : 'model'
+}
+
+/**
+ * The height of a bar: its spend, or for the compaction stack what its compaction calls cost. That
+ * estimate is not part of the spend (format notes §6a), so it gets a chart of its own.
+ */
+export function barTotal(b: Bucket, stack: Stack): number {
+  return stack === 'compaction' ? (b.compactions?.usd ?? 0) : b.total
 }
 
 /** The colour of a model in the legend and the bars. */
@@ -178,9 +203,19 @@ export function modelTone(key: string, top: string[]): Tone {
 /**
  * The stack of one bar, bottom first. By model: the top models in rank order, "other" (every
  * other model) and (overhead) on top. By source: reported, then attributed. The segments add up
- * to the bucket's total.
+ * to the bucket's total. By compaction: the warm-cache cost of the calls, then the extra the cold
+ * ones cost; they add up to the estimate.
  */
 export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
+  if (stack === 'compaction') {
+    // what the calls would have cost with a warm cache, then what the cold ones cost on top
+    const c = b.compactions
+    if (!c) return []
+    return [
+      { key: 'compaction-warm', tone: 'faint' as const, usd: c.warmUSD },
+      { key: 'compaction-cold', tone: 'bad' as const, usd: Math.max(0, c.usd - c.warmUSD) },
+    ].filter((s) => s.usd > 0)
+  }
   if (stack === 'source') {
     return [
       { key: 'reported', tone: 'reported' as const, usd: b.reported },

@@ -130,7 +130,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 		for _, in := range listing.Sessions {
 			c := in.Cost
 			rows = append(rows, costRowJSON{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: string(c.Flag),
-				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD}})
+				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD, Compactions: c.Compactions}})
 		}
 		perProject := map[string]*costRowJSON{}
 		var order []string
@@ -154,6 +154,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 			total.TotalUSD += r.TotalUSD
 			total.ReportedUSD += r.ReportedUSD
 			total.AttributedUSD += r.AttributedUSD
+			total.Compactions = addTally(total.Compactions, r.Compactions)
 			nSessions += r.Sessions
 		}
 	} else {
@@ -316,6 +317,9 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 		fmt.Printf("Of %s: %s (%.0f%%) is Claude Code's own reported figure; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
 			usd(total.TotalUSD), usd(total.ReportedUSD), 100*total.ReportedUSD/total.TotalUSD, usd(total.AttributedUSD), 100*total.AttributedUSD/total.TotalUSD)
 	}
+	if line := compactionLine(total.Compactions); line != "" {
+		fmt.Println(line)
+	}
 	parts := []string{fmt.Sprintf("%d exact", exact), fmt.Sprintf("%d partial", partial), fmt.Sprintf("%d estimated", estimated)}
 	line := "Sessions: " + strings.Join(parts, ", ")
 	if scriptedRuns > 0 {
@@ -323,4 +327,29 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	}
 	fmt.Println(line + "  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)")
 	return nil
+}
+
+func addTally(a, b catalog.CompactionTally) catalog.CompactionTally {
+	return catalog.CompactionTally{Calls: a.Calls + b.Calls, Cold: a.Cold + b.Cold, USD: a.USD + b.USD,
+		WarmUSD: a.WarmUSD + b.WarmUSD, UncoveredUSD: a.UncoveredUSD + b.UncoveredUSD}
+}
+
+// compactionLine says what the compaction calls in the table's scope cost, as an estimate:
+// the harness never writes those calls down, so the figure is derived from the context
+// size and the price table. A cold call read its context again at full price.
+func compactionLine(t catalog.CompactionTally) string {
+	if t.Calls == 0 {
+		return ""
+	}
+	line := fmt.Sprintf("Compaction calls, estimated: %s for %s", usd(t.USD), plural(t.Calls, "compaction", "compactions"))
+	if t.Cold > 0 {
+		line += fmt.Sprintf(", %d with a cold cache; with a warm cache every time they would have cost %s", t.Cold, usd(t.WarmUSD))
+	}
+	line += "."
+	if t.UncoveredUSD > 0 {
+		line += fmt.Sprintf(" %s of it is in no figure above (outside every reported window).", usd(t.UncoveredUSD))
+	} else {
+		line += " Included in the reported figure above, as part of its overhead."
+	}
+	return line
 }

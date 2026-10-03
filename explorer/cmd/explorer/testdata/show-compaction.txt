@@ -13,7 +13,7 @@ Cost    ≈$0.018   estimated: Claude Code reported no figure; recomputed from t
   MODEL       ATTRIBUTED
   sonnet-5-5      $0.018
 
-Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+Timeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text; texts shortened, --full for all)
   #0   Sep 5 06:00   human                 $0.014  6s
      > set up the database layer
      < Database layer created
@@ -21,10 +21,12 @@ Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --ful
      > add migrations
      < Migrations added
    ── compaction 1 · Sep 5 06:00 · auto · 150k → 12k tokens · took 8s ──
+      call ~$0.032, estimated: warm cache
   #2   Sep 5 06:00   human                $0.0012  3s
      > add seed data
      < Seed data added
    ── compaction 2 · Sep 5 06:00 · manual · 90k tokens · took 5s ──
+      call ~$0.020, estimated: warm cache
   #3   Sep 5 06:00   human                $0.0013  3s
      > add an index on email
      < Index added

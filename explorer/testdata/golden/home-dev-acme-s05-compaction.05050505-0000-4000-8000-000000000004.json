@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 6,
+  "parserVersion": 7,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000004.jsonl",
@@ -136,7 +136,17 @@
               "from": 199,
               "to": 657
             }
-          ]
+          ],
+          "call": {
+            "model": "claude-sonnet-5-5",
+            "idleMs": 2000,
+            "cache": "warm",
+            "billing": "cache-read",
+            "inputTokens": 80000,
+            "outputTokens": 164,
+            "usd": 0.01764,
+            "warmUSD": 0.01764
+          }
         }
       ],
       "cost": {

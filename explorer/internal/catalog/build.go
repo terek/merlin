@@ -33,6 +33,7 @@ type fact struct {
 	day, model string
 	reported   float64
 	attributed float64
+	comp       CompactionTally // compaction calls; nothing else set on such a fact
 }
 
 // view is the derived state of a catalog. It is immutable once built.
@@ -555,6 +556,30 @@ func (v *view) costs() {
 			}
 		}
 		c.OwnMessages = len(s.own)
+		// Compaction calls: the session's own (a copied compaction belongs to the session
+		// that made it) and its agents'.
+		addCall := func(cp *model.Compaction) {
+			if cp.Call == nil {
+				return
+			}
+			t := tally(cp.Call, covered(s.windows, cp.At) >= 0)
+			c.Compactions.add(t)
+			v.facts = append(v.facts, fact{s: s, day: v.day(cp.At), model: cp.Call.Model, comp: t})
+		}
+		for k := range s.d.Compactions {
+			cp := &s.d.Compactions[k]
+			if key := compactionKey(cp); key != "" {
+				if o, shared := v.compOwner[key]; shared && int(o) != s.idx {
+					continue
+				}
+			}
+			addCall(cp)
+		}
+		for k := range s.d.Agents {
+			for j := range s.d.Agents[k].Compactions {
+				addCall(&s.d.Agents[k].Compactions[j])
+			}
+		}
 		for _, k := range order {
 			f := fact{s: s, day: k.day, model: k.model}
 			if k.cov {

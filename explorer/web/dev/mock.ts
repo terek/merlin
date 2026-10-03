@@ -6,6 +6,7 @@
 
 import type {
   Candidate,
+  CompactionTally,
   CostBacking,
   CostBy,
   CostRow,
@@ -145,6 +146,17 @@ function projects(): ProjectList {
     cur.cost.attributedUSD += l.attributedUSD
   }
   return { projects: [...by.values()].sort((a, b) => ((a.lastActivityAt ?? '') < (b.lastActivityAt ?? '') ? 1 : -1)) }
+}
+
+function addTally(a: CompactionTally | undefined, b: CompactionTally): CompactionTally {
+  if (!a) return { ...b }
+  return {
+    calls: a.calls + b.calls,
+    cold: a.cold + b.cold,
+    usd: a.usd + b.usd,
+    warmUSD: a.warmUSD + b.warmUSD,
+    uncoveredUSD: a.uncoveredUSD + b.uncoveredUSD,
+  }
 }
 
 function addMoney(m: Money, usd: number, reported: boolean) {
@@ -317,6 +329,8 @@ interface Contribution {
   /** Sessions this contribution stands for (a scripted line stands for `count`). */
   count: number
   scripted: boolean
+  /** A compaction call: no spend of its own, an estimate on the side. */
+  comp?: CompactionTally
 }
 
 function costTable(u: URL): CostTable {
@@ -358,6 +372,33 @@ function costTable(u: URL): CostTable {
         reported: e.reported,
         count: 1,
         scripted: false,
+      })
+    }
+    for (const c of s.detail.digest.compactions ?? []) {
+      if (!c.call) continue
+      const day = localDay(Date.parse(c.at))
+      if (by !== 'session' && !inDays(day)) continue
+      const covered = p.cost.flag !== 'estimated'
+      cs.push({
+        session: p.key.id,
+        label: p.title,
+        flag: p.cost.flag,
+        project: p.project,
+        at: p.lastActivityAt,
+        day,
+        model: c.call.model,
+        kind: p.kind,
+        usd: 0,
+        reported: covered,
+        count: 0,
+        scripted: false,
+        comp: {
+          calls: 1,
+          cold: c.call.cache === 'cold' ? 1 : 0,
+          usd: c.call.usd,
+          warmUSD: c.call.warmUSD,
+          uncoveredUSD: covered ? 0 : c.call.usd,
+        },
       })
     }
   }
@@ -414,6 +455,7 @@ function costTable(u: URL): CostTable {
       rows.set(k, row)
     }
     addMoney(row, c.usd, c.reported)
+    if (c.comp) row.compactions = addTally(row.compactions, c.comp)
     row.sessions += c.count
     if (!c.scripted && c.model !== '(overhead)') row.ids.add(c.session)
     if (!c.scripted && c.model === '(overhead)') row.ids.add(c.session)
@@ -421,6 +463,7 @@ function costTable(u: URL): CostTable {
       const sk = keyOf(c, split)
       const part = row.parts.get(sk) ?? { key: sk, totalUSD: 0, reportedUSD: 0, attributedUSD: 0 }
       addMoney(part, c.usd, c.reported)
+      if (c.comp) part.compactions = addTally(part.compactions, c.comp)
       row.parts.set(sk, part)
     }
   }
@@ -431,7 +474,10 @@ function costTable(u: URL): CostTable {
   }))
   out = by === 'day' ? out.sort((a, b) => (a.key < b.key ? -1 : 1)) : out.sort((a, b) => b.totalUSD - a.totalUSD)
   const total: Money = { totalUSD: 0, reportedUSD: 0, attributedUSD: 0 }
-  for (const c of cs) addMoney(total, c.usd, c.reported)
+  for (const c of cs) {
+    addMoney(total, c.usd, c.reported)
+    if (c.comp) total.compactions = addTally(total.compactions, c.comp)
+  }
   const backing: CostBacking = { exact: 0, partial: 0, estimated: 0, scriptedRuns: 0 }
   const seen = new Set<string>()
   for (const c of cs) {

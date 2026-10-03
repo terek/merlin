@@ -17,7 +17,7 @@ Agents  (1 agent; own cost is attributed from tokens)
   AGENT                           KIND           MODEL   STATUS         OWN  WITH SUBTREE
   └─ general-purpose · Run audit  subagent (bg)  sonnet  completed  $0.0092
 
-Timeline  (turns numbered from 0; > prompt, < final text)
+Timeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text)
   #0   Sep 7 06:00   human                 $0.021  5s  [+1 agent]
      > run the slow audit in the background
      < The audit is running in the background.

@@ -1,16 +1,21 @@
-// The context chart: a sawtooth of the context size per turn, a marker at each compaction.
+// The context chart: a sawtooth of the context size per turn, a marker at each compaction. A
+// compaction's marker is red when its call ran on a cold cache, and carries the call's estimated
+// cost; the line under the chart adds them up.
 import { type KeyboardEvent, type PointerEvent, type RefObject, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionDetail } from '../../api/types'
-import { formatCount, formatTokens, plural } from '../../lib/format'
+import { callLine, idleText } from '../../lib/compaction'
+import { formatCount, formatMoney, formatTokens, plural } from '../../lib/format'
 import { Card } from '../../ui'
 import {
   compactionMarks,
   contextPoints,
   linear,
+  type Mark,
   nearestMark,
   nearestPoint,
   niceTicks,
   type Point,
+  pricedLabels,
   segments,
   stepCursor,
 } from './chart'
@@ -24,7 +29,7 @@ export interface ContextChartProps {
 }
 
 const HEIGHT = 128
-const M = { top: 14, right: 8, bottom: 18, left: 34 }
+const M = { top: 20, right: 8, bottom: 18, left: 34 }
 
 const path = (pts: readonly Point[], x: (i: number) => number, y: (v: number) => number) =>
   pts.map((p, i) => `${i ? 'L' : 'M'}${x(p.index).toFixed(1)} ${y(p.tokens).toFixed(1)}`).join('')
@@ -89,6 +94,8 @@ export function ContextChart({ detail, onSelectTurn, initialCursor }: ContextCha
   }
 
   const segs = segments(points)
+  const priced = marks.filter((m) => m.call)
+  const shown = pricedLabels(priced, x, 38)
 
   return (
     <Card
@@ -109,6 +116,9 @@ export function ContextChart({ detail, onSelectTurn, initialCursor }: ContextCha
             {nearMarks.map((m) => (
               <div key={m.at} className="text-muted">
                 compaction{m.trigger ? ` (${m.trigger})` : ''}: {tok(m.pre)} → {tok(m.post)}
+                {m.call && (
+                  <span className={m.call.cache === 'cold' ? 'text-bad' : undefined}> · {callLine(m.call)}</span>
+                )}
               </div>
             ))}
           </>
@@ -191,17 +201,29 @@ export function ContextChart({ detail, onSelectTurn, initialCursor }: ContextCha
             return (
               <g key={m.at}>
                 <title>
-                  {`compaction after turn ${m.turn}${m.trigger ? ` (${m.trigger})` : ''}: ${tok(m.pre)} → ${tok(m.post)}`}
+                  {`compaction after turn ${m.turn}${m.trigger ? ` (${m.trigger})` : ''}: ${tok(m.pre)} → ${tok(m.post)}${m.call ? ` · ${callLine(m.call)}` : ''}`}
                 </title>
                 <line
                   x1={x(m.at)}
                   x2={x(m.at)}
                   y1={M.top - 4}
                   y2={base}
-                  stroke="var(--warn)"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 2"
+                  stroke={m.call?.cache === 'cold' ? 'var(--bad)' : 'var(--warn)'}
+                  strokeWidth={m.call?.cache === 'cold' ? 2 : 1.5}
+                  strokeDasharray={m.call?.cache === 'cold' ? undefined : '3 2'}
+                  data-cache={m.call?.cache}
                 />
+                {m.call && shown.has(m) && (
+                  <text
+                    x={x(m.at)}
+                    y={M.top - 7}
+                    textAnchor="middle"
+                    fontSize={10}
+                    fill={m.call.cache === 'cold' ? 'var(--bad)' : 'var(--muted)'}
+                  >
+                    {formatMoney(m.call.usd)}
+                  </text>
+                )}
                 {labelled === m && (
                   <text
                     transform={`translate(${x(m.at) + 11},${M.top}) rotate(90)`}
@@ -233,6 +255,44 @@ export function ContextChart({ detail, onSelectTurn, initialCursor }: ContextCha
           )}
         </svg>
       </div>
+      {priced.length > 0 && <CallsLine marks={priced} />}
     </Card>
+  )
+}
+
+/** Under the chart: what the compaction calls cost, the cold ones apart with their idle gaps. */
+function CallsLine({ marks }: { marks: Mark[] }) {
+  const cold = marks.filter((m) => m.call?.cache === 'cold')
+  const warm = marks.filter((m) => m.call?.cache !== 'cold')
+  const sum = (ms: Mark[], f: (m: Mark) => number) => ms.reduce((a, m) => a + f(m), 0)
+  const coldUSD = sum(cold, (m) => m.call?.usd ?? 0)
+  const coldWarmUSD = sum(cold, (m) => m.call?.warmUSD ?? 0)
+  const idles = cold.map((m) => idleText(m.call?.idleMs ?? 0)).join(', ')
+  return (
+    <div className="mt-2 space-y-0.5 text-sec text-muted" data-testid="context-calls">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
+        {cold.length > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 w-0.5 bg-bad" />
+            <span className="text-bad">
+              {cold.length} cold ~{formatMoney(coldUSD)}
+            </span>
+          </span>
+        )}
+        {warm.length > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 border-l-[1.5px] border-dashed border-warn" />
+            {warm.length} warm ~{formatMoney(sum(warm, (m) => m.call?.usd ?? 0))}
+          </span>
+        )}
+      </div>
+      {cold.length > 0 && (
+        <p className="text-faint">
+          Cold after {idles} idle: the whole context was read again at full price. Warm,{' '}
+          {cold.length === 1 ? 'that call' : `those ${plural(cold.length, 'call')}`} would have cost ~
+          {formatMoney(coldWarmUSD)}. Estimates; not in the session's cost.
+        </p>
+      )}
+    </div>
   )
 }

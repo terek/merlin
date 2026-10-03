@@ -17,7 +17,7 @@ Agents  (1 agent; own cost is attributed from tokens)
   AGENT                          KIND      MODEL   STATUS        OWN  WITH SUBTREE
   └─ reviewer · Review the diff  teammate  sonnet  completed  $0.011
 
-Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+Timeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text; texts shortened, --full for all)
   #0   Sep 9 06:00   human                 $0.023  4s  [+1 agent]
      > ask the reviewer to check the diff
      < The reviewer is on it.

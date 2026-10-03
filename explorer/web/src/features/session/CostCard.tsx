@@ -2,7 +2,8 @@
 // labelled by source; everything below the rule is attributed from token counts, said once.
 
 import type { ReactNode } from 'react'
-import type { SessionDetail } from '../../api/types'
+import type { CompactionTally, SessionDetail } from '../../api/types'
+import { tallyLine, warmLine } from '../../lib/compaction'
 import { agentCostSplit, sessionCostSegments } from '../../lib/cost'
 import { formatPercent } from '../../lib/format'
 import { fullTime, parseTime } from '../../lib/time'
@@ -15,6 +16,49 @@ const SEGMENT_HINT: Record<string, string> = {
   reported: 'Part of what Claude Code reported: the spend that transcript messages explain',
   overhead: 'Part of what Claude Code reported: spend that no transcript message explains; session level only',
   attributed: 'Spend outside every reported window, recomputed from token counts',
+}
+
+/**
+ * What the session's compaction calls cost. The harness never writes those calls down, so the
+ * figure is an estimate; a cold call (the agent idle longer than the cache lifetime) read its
+ * whole context again at full price, which is the part worth knowing about.
+ */
+function CompactionNote({ tally }: { tally: CompactionTally }) {
+  const extra = tally.usd - tally.warmUSD
+  return (
+    <div data-testid="compaction-note" className="mt-2 rounded-badge bg-surface-2 px-2.5 py-1.5 text-sec">
+      <div className="flex items-baseline justify-between gap-2">
+        <span>
+          Compaction calls, estimated{' '}
+          <span className="text-muted">
+            ({tally.calls} {tally.calls === 1 ? 'compaction' : 'compactions'}
+            {tally.cold > 0 && (
+              <>
+                , <span className="text-bad">{tally.cold} cold</span>
+              </>
+            )}
+            )
+          </span>
+        </span>
+        <Money usd={tally.usd} title={tallyLine(tally)} />
+      </div>
+      {tally.cold > 0 && (
+        <div className="mt-0.5 flex items-baseline justify-between gap-2 text-muted">
+          <span title="A cold call reads the whole context again at full price instead of from the cache">
+            {warmLine(tally)}
+          </span>
+          <span className="text-bad" title="What the cold calls cost over warm ones">
+            +<Money usd={extra} />
+          </span>
+        </div>
+      )}
+      <p className="mt-1 text-meta text-faint">
+        {tally.uncoveredUSD > 0
+          ? `Not in the figures above: Claude Code does not record these calls, and ${tally.uncoveredUSD >= tally.usd - 0.005 ? 'this session has no reported figure that would include them' : 'only part of this session is covered by a reported figure'}.`
+          : 'Already inside the reported figure, as part of its overhead; Claude Code does not record the calls themselves.'}
+      </p>
+    </div>
+  )
 }
 
 function Row({
@@ -81,6 +125,7 @@ export function CostCard({ detail }: { detail: SessionDetail }) {
         {cost.inheritedUSD > 0 && (
           <p className="mt-1 pl-4 text-meta text-faint">Inherited: paid by the parent session, not counted here.</p>
         )}
+        {cost.compactions && cost.compactions.calls > 0 && <CompactionNote tally={cost.compactions} />}
       </div>
 
       <div className="space-y-4 border-t border-line pt-3">

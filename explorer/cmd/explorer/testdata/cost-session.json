@@ -62,6 +62,13 @@
       "totalUSD": 0.0222,
       "reportedUSD": 0,
       "attributedUSD": 0.0222,
+      "compactions": {
+        "calls": 1,
+        "cold": 0,
+        "usd": 0.01764,
+        "warmUSD": 0.01764,
+        "uncoveredUSD": 0.01764
+      },
       "flag": "estimated"
     },
     {
@@ -116,6 +123,13 @@
       "totalUSD": 0.01796,
       "reportedUSD": 0,
       "attributedUSD": 0.01796,
+      "compactions": {
+        "calls": 2,
+        "cold": 0,
+        "usd": 0.05132,
+        "warmUSD": 0.05132,
+        "uncoveredUSD": 0.05132
+      },
       "flag": "estimated"
     },
     {
@@ -320,7 +334,14 @@
   "total": {
     "totalUSD": 0.6307100000000002,
     "reportedUSD": 0.1311,
-    "attributedUSD": 0.49960999999999994
+    "attributedUSD": 0.49960999999999994,
+    "compactions": {
+      "calls": 3,
+      "cold": 0,
+      "usd": 0.06896,
+      "warmUSD": 0.06896,
+      "uncoveredUSD": 0.06896
+    }
   },
   "sessions": 35,
   "backing": {

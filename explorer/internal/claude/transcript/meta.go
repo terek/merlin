@@ -172,6 +172,7 @@ type AgentMeta struct {
 	TaskKind      string `json:"taskKind,omitempty"` // "in_process_teammate"
 	Color         string `json:"color,omitempty"`
 	IsFork        bool   `json:"isFork,omitempty"`
+	WorkflowPhase string `json:"workflowPhase,omitempty"` // agents of a workflow run
 }
 
 // ParseAgentMeta decodes a meta.json file. Unknown and mistyped fields are ignored; only

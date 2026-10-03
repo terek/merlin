@@ -19,7 +19,7 @@ Family  (2 sessions that share history; leaves are the ones to resume, newest fi
   13131313-0000-4000-8000-000000000003  Sep 13 06:05  root  ≈$0.017  add a search box  leaf
     13131313-0000-4000-8000-000000000004  Sep 13 06:10  fork after turn 1  ≈$0.0016  add a search box  ◀ this session, leaf, newest
 
-Timeline  (turns numbered from 0; > prompt, < final text; texts shortened, --full for all)
+Timeline  (turns numbered from 0; > prompt, + sent while the turn ran, < final text; texts shortened, --full for all)
   turns 0–1 inherited from 13131313-0000-4000-8000-000000000003 “add a search box”  (2 turns, not counted here; --inherited shows them)
   #2   Sep 13 06:10  human                $0.0016  4s
      > add search suggestions

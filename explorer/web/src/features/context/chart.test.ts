@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import type { Compaction, Turn } from '../../api/types'
+import type { Compaction, CompactionCall, Turn } from '../../api/types'
 import {
   compactionMarks,
   contextPoints,
   linear,
+  type Mark,
   nearestMark,
   nearestPoint,
   niceTicks,
   type Point,
+  pricedLabels,
   segments,
   spacedLabels,
   stepCursor,
@@ -119,5 +121,35 @@ describe('nearestMark', () => {
   })
   test('none', () => {
     expect(nearestMark([], 3)).toBeUndefined()
+  })
+})
+
+describe('pricedLabels', () => {
+  const call = (cache: 'warm' | 'cold', usd: number): CompactionCall => ({
+    model: 'claude-fable-5-1',
+    idleMs: cache === 'cold' ? 7_200_000 : 60_000,
+    cache,
+    billing: cache === 'cold' ? 'input' : 'cache-read',
+    inputTokens: 100_000,
+    outputTokens: 2_000,
+    usd,
+    warmUSD: cache === 'cold' ? usd / 10 : usd,
+  })
+  const mark = (at: number, c?: CompactionCall): Mark => ({ at, turn: Math.floor(at), call: c })
+  const px = (at: number) => at * 10
+
+  test('a cold call wins the room over a warm one next to it, even a dearer one', () => {
+    const warm = mark(10.5, call('warm', 3))
+    const cold = mark(12.5, call('cold', 2))
+    expect([...pricedLabels([warm, cold], px, 38)]).toEqual([cold])
+  })
+  test('among calls of one kind the dearer one wins; far apart all are labelled', () => {
+    const a = mark(10.5, call('warm', 0.5))
+    const b = mark(11.5, call('warm', 0.9))
+    const c = mark(30.5, call('warm', 0.1))
+    expect(pricedLabels([a, b, c], px, 38)).toEqual(new Set([b, c]))
+  })
+  test('a mark without a call is never labelled', () => {
+    expect(pricedLabels([mark(5.5)], px, 38).size).toBe(0)
   })
 })

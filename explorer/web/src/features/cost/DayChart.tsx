@@ -1,13 +1,15 @@
 // The day chart: an SVG bar chart, one bar per local day (per week for a long "all"), stacked by
-// model or by source. Hover or arrow keys show the bar's split; a click or Enter selects it.
+// model or by source, or showing the estimated compaction calls on their own (warm-cache cost, the
+// cold-cache extra on top, and the number of cold calls over the bar). Hover or arrow keys show the
+// bar's split; a click or Enter selects it.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/cn'
-import { formatMoney } from '../../lib/format'
+import { formatMoney, plural } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
 import { dayStart, shortDate } from '../../lib/time'
 import { Money } from '../../ui'
-import { type Bucket, labelEvery, niceTicks, type Segment, type Stack, stackOf, tickLabel } from './model'
+import { type Bucket, barTotal, labelEvery, niceTicks, type Segment, type Stack, stackOf, tickLabel } from './model'
 
 const HEIGHT = 224
 const M = { left: 52, right: 8, top: 10, bottom: 24 }
@@ -17,6 +19,8 @@ export function segmentLabel(key: string): string {
   if (key === 'other') return 'Other models'
   if (key === 'reported') return 'Reported'
   if (key === 'attributed') return 'Attributed'
+  if (key === 'compaction-warm') return 'At the warm-cache price'
+  if (key === 'compaction-cold') return 'Extra for a cold cache'
   return modelLabel(key)
 }
 
@@ -62,7 +66,7 @@ export function DayChart({
   const [active, setActive] = useState<number | undefined>(undefined)
   const n = buckets.length
   const stacks = buckets.map((b) => stackOf(b, stack, top))
-  const max = Math.max(0, ...buckets.map((b) => b.total))
+  const max = Math.max(0, ...buckets.map((b) => barTotal(b, stack)))
   const { ticks, top: yTop } = niceTicks(max)
   const plotW = Math.max(40, width - M.left - M.right)
   const plotH = HEIGHT - M.top - M.bottom
@@ -83,7 +87,7 @@ export function DayChart({
         role="application"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: the chart is one tab stop; arrow keys move between bars
         tabIndex={0}
-        aria-label={`Spend per ${buckets[0]?.weekly ? 'week' : 'day'}. Arrow keys move between bars, Enter selects one.`}
+        aria-label={`${stack === 'compaction' ? 'Estimated compaction calls' : 'Spend'} per ${buckets[0]?.weekly ? 'week' : 'day'}. Arrow keys move between bars, Enter selects one.`}
         className="block rounded-card"
         onFocus={() => setActive((a) => a ?? n - 1)}
         onBlur={() => setActive(undefined)}
@@ -140,7 +144,21 @@ export function DayChart({
                   />
                 )
               })}
-              {b.total <= 0 && <rect x={x} y={M.top + plotH - 1} width={barW} height={1} fill="var(--line)" />}
+              {barTotal(b, stack) <= 0 && (
+                <rect x={x} y={M.top + plotH - 1} width={barW} height={1} fill="var(--line)" />
+              )}
+              {stack === 'compaction' && (b.compactions?.cold ?? 0) > 0 && band >= 12 && (
+                <text
+                  x={centre(i)}
+                  y={y(acc) - 4}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fill="var(--bad)"
+                  data-testid="cold-count"
+                >
+                  {b.compactions?.cold}
+                </text>
+              )}
               {i % every === 0 && (
                 <text x={centre(i)} y={HEIGHT - 6} textAnchor="middle" fontSize={11} fill="var(--muted)">
                   {shortDate(dayStart(b.key))}
@@ -163,9 +181,13 @@ export function DayChart({
         })}
       </svg>
       <span className="sr-only" aria-live="polite">
-        {cur ? `${bucketTitle(cur)}: ${formatMoney(cur.total)}` : ''}
+        {cur
+          ? `${bucketTitle(cur)}: ${formatMoney(cur.total)}${cur.compactions ? ` · compactions ~${formatMoney(cur.compactions.usd)}${cur.compactions.cold ? ` (${cur.compactions.cold} cold, warm ~${formatMoney(cur.compactions.warmUSD)})` : ''}` : ''}`
+          : ''}
       </span>
-      {cur && active !== undefined && <Tip bucket={cur} segments={stacks[active]} x={centre(active)} width={width} />}
+      {cur && active !== undefined && (
+        <Tip bucket={cur} stack={stack} segments={stacks[active]} x={centre(active)} width={width} />
+      )}
     </div>
   )
 }
@@ -179,8 +201,21 @@ export function Swatch({ tone }: { tone: string }) {
   return <span className="inline-block size-2 shrink-0 rounded-badge" style={style} />
 }
 
-function Tip({ bucket, segments, x, width }: { bucket: Bucket; segments: Segment[]; x: number; width: number }) {
-  const w = 232
+function Tip({
+  bucket,
+  stack,
+  segments,
+  x,
+  width,
+}: {
+  bucket: Bucket
+  stack: Stack
+  segments: Segment[]
+  x: number
+  width: number
+}) {
+  const w = stack === 'compaction' ? 300 : 232
+  const c = bucket.compactions
   const left = Math.min(Math.max(0, x - w / 2), width - w)
   return (
     <div
@@ -192,10 +227,20 @@ function Tip({ bucket, segments, x, width }: { bucket: Bucket; segments: Segment
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-medium text-fg">{bucketTitle(bucket)}</span>
-        <Money usd={bucket.total} />
+        {stack === 'compaction' ? (
+          <span className="font-mono">~{formatMoney(c?.usd ?? 0)}</span>
+        ) : (
+          <Money usd={bucket.total} />
+        )}
       </div>
+      {stack === 'compaction' && c && (
+        <p className="mt-0.5 text-muted">
+          {plural(c.calls, 'compaction')}
+          {c.cold > 0 && <span className="text-bad">, {c.cold} cold</span>}
+        </p>
+      )}
       {segments.length === 0 ? (
-        <p className="mt-1 text-muted">No spend.</p>
+        <p className="mt-1 text-muted">{stack === 'compaction' ? 'No compactions.' : 'No spend.'}</p>
       ) : (
         <ul className="mt-1 space-y-0.5">
           {[...segments].reverse().map((s) => (
@@ -206,6 +251,12 @@ function Tip({ bucket, segments, x, width }: { bucket: Bucket; segments: Segment
             </li>
           ))}
         </ul>
+      )}
+      {stack === 'compaction' && c && (
+        <p className="mt-1 text-faint">
+          Estimated; not in the spend totals.
+          {c.uncoveredUSD > 0 && ` ~${formatMoney(c.uncoveredUSD)} of it is outside any reported figure.`}
+        </p>
       )}
     </div>
   )

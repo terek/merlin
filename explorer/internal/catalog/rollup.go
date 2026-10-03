@@ -100,6 +100,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 			keys = append(keys, k)
 		}
 		a.row.add(x.reported, x.attributed)
+		a.row.Compactions.add(x.comp)
 		if a.last != x.s {
 			a.last = x.s
 			a.row.Sessions++
@@ -138,6 +139,7 @@ func (c *Catalog) Total(f Filter) Money {
 	var m Money
 	for _, x := range c.view().selected(f) {
 		m.add(x.reported, x.attributed)
+		m.Compactions.add(x.comp)
 	}
 	return m
 }
