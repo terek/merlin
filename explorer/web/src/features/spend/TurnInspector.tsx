@@ -181,7 +181,12 @@ export function DecisionPanel({
             : ''}
           Work that an earlier prompt asked for and that ran here is counted here.
         </p>
-        {dec.compactions.length > 0 && <CompactionTallyLine list={dec.compactions} />}
+        {dec.compactions.length + dec.agentCompactions.length > 0 && (
+          <CompactionTallyLine
+            list={[...dec.compactions, ...dec.agentCompactions]}
+            inAgents={dec.agentCompactions.length}
+          />
+        )}
       </div>
       <ul className="max-h-80 divide-y divide-line overflow-y-auto">
         {items.map((x) => {
@@ -257,11 +262,12 @@ export function DecisionPanel({
 }
 
 /** The compactions of a decision, added up: how many ran on a cold cache, and what that cost. */
-function CompactionTallyLine({ list }: { list: Compaction[] }) {
+function CompactionTallyLine({ list, inAgents }: { list: Compaction[]; inAgents: number }) {
   const t = compactionTally(list)
   return (
     <p className={`text-meta ${t.cold > 0 ? 'text-bad' : 'text-muted'}`}>
-      Compactions after these turns: {t.calls > 0 ? tallyLine(t) : list.length}
+      Compactions in these turns: {t.calls > 0 ? tallyLine(t) : list.length}
+      {inAgents > 0 && `, ${inAgents} of them inside agent work`}
       {t.cold > 0 && ` (${warmLine(t)})`}
       {t.unknown > 0 && t.calls > 0 && `, ${t.unknown} without an estimate`}
       {t.calls > 0 ? '. Estimated; not in this total.' : '.'}
@@ -270,11 +276,17 @@ function CompactionTallyLine({ list }: { list: Compaction[] }) {
 }
 
 /** A compaction that followed the turn: when, how much context, and what its call is estimated to have cost. */
-function CompactionLine({ compaction: cp }: { compaction: Compaction }) {
+function CompactionLine({
+  compaction: cp,
+  lead = 'Compacted after this turn',
+}: {
+  compaction: Compaction
+  lead?: ReactNode
+}) {
   const cold = cp.call?.cache === 'cold'
   return (
     <p className={`mt-1.5 text-sec ${cold ? 'text-bad' : 'text-muted'}`}>
-      Compacted after this turn
+      {lead}
       {cp.trigger && ` (${cp.trigger})`}
       {cp.preTokens !== undefined &&
         `, ${formatTokens(cp.preTokens)}${cp.postTokens !== undefined ? ` → ${formatTokens(cp.postTokens)}` : ''} tokens`}
@@ -491,6 +503,21 @@ function UnitDetail({
               {u.nested.map((x) => `${agentLabel(x)} ${formatMoney(x.cost.usd)}`).join(', ')}.
             </p>
           )}
+          {u.compactions.map((x) => (
+            <CompactionLine
+              key={`${x.agent.id}${x.compaction.at}`}
+              compaction={x.compaction}
+              lead={
+                <>
+                  {x.agent === u.agent ? 'Its conversation' : `The conversation of ${agentLabel(x.agent)}`} was
+                  compacted during{' '}
+                  <button type="button" onClick={() => onPin(x.turn)} className="text-accent hover:underline">
+                    turn {x.turn}
+                  </button>
+                </>
+              }
+            />
+          ))}
         </div>
       </div>
       <AgentDetail

@@ -239,6 +239,13 @@ const classPart = (key: string, usd: number): Part => ({ ...(CLASS_BY_KEY.get(ke
 
 // ---- the model ------------------------------------------------------------------------
 
+/** A compaction of an agent's own conversation: which agent, and the turn of the main session it fell in. */
+export interface AgentCompaction {
+  agent: Agent
+  compaction: Compaction
+  turn: number
+}
+
 /** One piece of work handed to an agent, from the message that started it to its report. */
 export interface Unit {
   id: string
@@ -264,6 +271,8 @@ export interface Unit {
   /** Its own sub-agents: their dollars (inside `bucket.usd`) and who they were. */
   nestedUSD: number
   nested: Agent[]
+  /** Compactions of its agent's (or its sub-agents') conversations while it ran, in time order. */
+  compactions: AgentCompaction[]
 }
 
 /** One turn of the main session. */
@@ -317,6 +326,8 @@ export interface Decision {
   parts: Part[]
   /** The compactions after its turns; their cost is an estimate and in no figure above. */
   compactions: Compaction[]
+  /** The compactions inside the agent work launched in its turns. */
+  agentCompactions: Compaction[]
 }
 
 /** An agent the main session launched: a row under the main line. */
@@ -340,6 +351,8 @@ export interface SpendModel {
   total: number
   /** The compactions after its own turns. */
   compactions: Compaction[]
+  /** The compactions inside its own agent work. */
+  agentCompactions: Compaction[]
   stepsUSD: number
   unitsUSD: number
   /** Legend totals for the two splits (only the parts that are not zero). */
@@ -553,6 +566,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       bucket: newBucket(),
       nestedUSD: 0,
       nested: [],
+      compactions: [],
     })
     unitsOf.set(a.id, [
       mk(0, bornAt(a, Number.NaN), a.prompt ?? ''),
@@ -656,6 +670,17 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       const named = [...new Set([...(reportsById.get(a.id) ?? []), ...((a.name && reports.get(a.name)) || [])])].sort(
         (x, y) => x - y,
       )
+      // an agent's compactions (its sub-agents' too) belong to the piece of work that was running
+      for (const x of agents) {
+        if (x.kind === 'compact' || rootOf(x) !== a) continue
+        for (const cp of x.compactions ?? []) {
+          const at = ms(cp.at)
+          let u = kept[0]
+          for (const v of kept) if (v.startMs <= at) u = v
+          u?.compactions.push({ agent: x, compaction: cp, turn: place(undefined, at) })
+        }
+      }
+      for (const u of kept) u.compactions.sort((x, y) => ms(x.compaction.at) - ms(y.compaction.at))
       kept.forEach((u, k) => {
         const next = kept[k + 1]
         u.ordinal = k + 1
@@ -716,13 +741,17 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         units: 0,
         parts: [],
         compactions: [],
+        agentCompactions: [],
       })
     }
     const dec = decisions[decisions.length - 1]
     dec.end = c.index
     c.decision = dec.index
     const launchedUSD = c.launched.reduce((s, u) => s + u.bucket.usd, 0)
-    if (!c.inherited) dec.compactions.push(...c.compactions)
+    if (!c.inherited) {
+      dec.compactions.push(...c.compactions)
+      for (const u of c.launched) dec.agentCompactions.push(...u.compactions.map((x) => x.compaction))
+    }
     if (c.inherited) {
       inheritedUSD += c.usd + launchedUSD
       continue
@@ -762,6 +791,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     decisions,
     total: stepsUSD + unitsUSD,
     compactions: cols.flatMap((c) => (c.inherited ? [] : c.compactions)),
+    agentCompactions: units.flatMap((u) => u.compactions.map((x) => x.compaction)),
     stepsUSD,
     unitsUSD,
     byKind: KIND_SERIES.map((s) => kindPart(s.key, kinds[s.key] ?? 0)).filter((p) => p.usd > 0),

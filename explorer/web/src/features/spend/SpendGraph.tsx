@@ -184,6 +184,16 @@ function Readout({
               {u.nested.length > 0 &&
                 `, ${plural(u.nested.length, 'sub-agent')} of its own (${formatMoney(u.nestedUSD)})`}
             </span>
+            {u.compactions.length > 0 && (
+              <span
+                className={u.compactions.some((x) => x.compaction.call?.cache === 'cold') ? 'text-bad' : 'text-muted'}
+              >
+                compacted {plural(u.compactions.length, 'time')}
+                {u.compactions.some((x) => x.compaction.call)
+                  ? ` (~${formatMoney(u.compactions.reduce((s, x) => s + (x.compaction.call?.usd ?? 0), 0))})`
+                  : ''}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-x-3">
             <Chips parts={unitParts(u, split)} />
@@ -287,7 +297,13 @@ export function SpendGraph({
     [branches],
   )
 
-  const compactions = useMemo(() => compactionTally(branches.flatMap((b) => b.model.compactions)), [branches])
+  const compactions = useMemo(
+    () => ({
+      ...compactionTally(branches.flatMap((b) => [...b.model.compactions, ...b.model.agentCompactions])),
+      inAgents: branches.reduce((n, b) => n + b.model.agentCompactions.length, 0),
+    }),
+    [branches],
+  )
 
   if (branches.length === 0) return null
 
@@ -756,6 +772,22 @@ export function SpendGraph({
                       />
                     )}
                     {stack(unitParts(u, split), ua, ub - ua, y, 1, 2)}
+                    {u.compactions.map((x) => {
+                      const cx = Math.min(xt ?? ub, Math.max(ua, xc(sx(x.turn))))
+                      const cold = x.compaction.call?.cache === 'cold'
+                      return (
+                        <line
+                          key={`${x.agent.id}${x.compaction.at}`}
+                          x1={cx}
+                          x2={cx}
+                          y1={y - 3}
+                          y2={y + 6}
+                          stroke={markColor(x.compaction.call)}
+                          strokeWidth={cold ? 2.5 : 2}
+                          pointerEvents="none"
+                        />
+                      )
+                    })}
                     {on && (
                       <rect
                         x={ua - 1}
@@ -828,6 +860,9 @@ export function SpendGraph({
             Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
           </span>
           {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
+          {compactions.inAgents > 0 && (
+            <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
+          )}
           <span className="text-muted">
             {compactions.unknown > 0 && compactions.calls > 0 && `${compactions.unknown} more without an estimate. `}
             {compactions.calls > 0
@@ -971,8 +1006,8 @@ export function SpendGraph({
         agent, under the turn that launched it and as tall as everything it cost (its own sub-agents included); the tail
         runs to the turn its report came in. All bars are on one dollar scale. A dot is a prompt you typed, a ring one
         you typed while a turn ran; the bracket above it totals everything up to your next one, and a click tints those
-        turns. A red mark is a compaction on a cold cache, an amber dashed one on a warm cache. Dollars are recomputed
-        from token counts
+        turns. A red mark is a compaction on a cold cache, an amber dashed one on a warm cache; a short mark on an
+        agent's bar is a compaction of that agent's own conversation. Dollars are recomputed from token counts
         {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
         {tree.rereads.length > 0 &&
           ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was written again): ${expired} after the cache had expired, ${tree.rereads.length - expired} sooner.`}

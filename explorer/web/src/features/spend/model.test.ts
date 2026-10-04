@@ -392,6 +392,65 @@ describe('workflows, compactions and prompts typed while a turn ran', () => {
   })
 })
 
+describe("compactions of an agent's own conversation", () => {
+  // a teammate launched in turn 0 is sent more work in turn 2; its conversation is compacted in
+  // each piece of work, and its helper's once during the first
+  const turns = [turn(0, 0, 1), turn(1, 2, 3), turn(2, 4, 5), turn(3, 6, 7)]
+  const cp = (min: number, cache?: 'warm' | 'cold') => ({
+    at: at(min),
+    turn: -1,
+    trigger: 'auto' as const,
+    preTokens: 900_000,
+    postTokens: 15_000,
+    call: cache && {
+      model: 'model-a',
+      idleMs: 60_000,
+      cache,
+      billing: 'cache-read',
+      inputTokens: 900_000,
+      outputTokens: 2000,
+      usd: 0.3,
+      warmUSD: 0.3,
+    },
+  })
+  const agents = [
+    agent('mate', {
+      kind: 'teammate',
+      name: 'builder',
+      spawnTurn: 0,
+      startedAt: at(0),
+      endedAt: at(7),
+      inbox: [{ at: at(4), from: 'team-lead', text: 'next' }],
+      compactions: [cp(2, 'warm'), cp(6, 'cold')],
+    }),
+    agent('helper', { parentAgentId: 'mate', depth: 2, spawnTurn: 0, startedAt: at(1), compactions: [cp(3)] }),
+  ]
+  const messages = [
+    msg(0, { output: 100 }, { turn: 0 }),
+    msg(1, { output: 100 }, { agentId: 'mate', turn: 0 }),
+    msg(1, { output: 100 }, { agentId: 'helper', turn: 0 }),
+    msg(5, { output: 100 }, { agentId: 'mate', turn: 0 }),
+    msg(2, { output: 100 }, { turn: 1 }),
+    msg(4, { output: 100 }, { turn: 2 }),
+    msg(6, { output: 100 }, { turn: 3 }),
+  ]
+  const m = buildSpend(detail(turns, messages, agents))
+
+  test('each lands on the piece of work that was running, with the turn it fell in', () => {
+    expect(m.units.map((u) => u.compactions.map((x) => [x.agent.id, x.turn]))).toEqual([
+      [
+        ['mate', 1],
+        ['helper', 1],
+      ],
+      [['mate', 3]],
+    ])
+    expect(m.agentCompactions).toHaveLength(3)
+    expect(m.compactions).toHaveLength(0)
+    expect(m.decisions.map((x) => x.agentCompactions.length)).toEqual([2, 0, 1, 0])
+    expect(m.total).toBeCloseTo(sum(messages), 10)
+  })
+})
+
 describe('packRows', () => {
   const row = (id: string, first: number, last: number): Row => ({
     agent: agent(id),
