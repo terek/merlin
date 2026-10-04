@@ -1,16 +1,17 @@
 // The Sessions page (docs/ui.md section 8): project rail, filters kept in the URL, the day-grouped
-// list with families and scripted lines, search, keyboard navigation. Live updates arrive through
+// list of trees (a session and everything forked or continued from it, one row each) with scripted
+// lines, search grouped by tree, keyboard navigation. Live updates arrive through
 // the shared cache layer and re-render the rows in place.
 
 import { FolderOpen, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useSearch, useSessions } from '../../api/queries'
-import type { SessionSummary } from '../../api/types'
+import { useSearch, useTrees } from '../../api/queries'
+import type { TreeSummary } from '../../api/types'
 import { plural } from '../../lib/format'
 import { useDebounced, useDocumentTitle, useInView } from '../../lib/hooks'
 import { sessionPath, shortProject } from '../../lib/paths'
-import { keyString, sessionTitle } from '../../lib/session'
+import { keyString } from '../../lib/session'
 import { dayLabelOf } from '../../lib/time'
 import { useShortcut } from '../../shell/useShortcut'
 import {
@@ -29,6 +30,7 @@ import {
 import {
   apiFilters,
   buildDayGroups,
+  countLabel,
   type DayGroup,
   groupHits,
   hasFilters,
@@ -43,7 +45,7 @@ import {
 } from './model'
 import { ProjectRail } from './ProjectRail'
 import { hitNavItems, SearchResults } from './SearchResults'
-import { SessionRow } from './SessionRow'
+import { TreeRow } from './TreeRow'
 
 const RAIL_KEY = 'explorer-sessions-rail'
 
@@ -116,11 +118,11 @@ export function SessionsPage() {
   const { project, state, kind, since } = filters
   const api = useMemo(() => apiFilters({ project, state, kind, since, q: '' }), [project, state, kind, since])
   const { state: _state, ...searchFilters } = api
-  const sessions = useSessions(api)
+  const sessions = useTrees(api)
   const search = useSearch(term, searchFilters)
   const [collapsed, setCollapsed] = useState(loadCollapsed)
 
-  const loaded: SessionSummary[] = useMemo(() => sessions.data?.pages.flatMap((p) => p.sessions) ?? [], [sessions.data])
+  const loaded: TreeSummary[] = useMemo(() => sessions.data?.pages.flatMap((p) => p.trees) ?? [], [sessions.data])
   const more = sessions.hasNextPage
   const scriptedOn = showsScripted({ project, state, kind, since, q: '' })
   const scripted = sessions.data?.pages[0]?.scripted
@@ -128,16 +130,21 @@ export function SessionsPage() {
     () => buildDayGroups(loaded, scriptedOn ? (scripted ?? []) : [], Boolean(more)),
     [loaded, scripted, scriptedOn, more],
   )
-  const titles = useMemo(() => new Map(loaded.map((s) => [keyString(s.key), sessionTitle(s)])), [loaded])
+  // trees whose sessions are listed under their row, by root
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const toggle = (root: string) =>
+    setExpanded((cur) => {
+      const next = new Set(cur)
+      if (!next.delete(root)) next.add(root)
+      return next
+    })
 
   // ---- keyboard: j / k move the selection, Enter opens it, / searches, Esc clears ----
   const [selected, setSelected] = useState<string | null>(null)
   const scrollToSelected = useRef(false)
   const nav = useMemo(() => {
     if (searching) return search.data ? hitNavItems(search.data) : []
-    return groups.flatMap((g) =>
-      g.rows.map((r) => ({ id: keyString(r.session.key), href: sessionPath(r.session.key) })),
-    )
+    return groups.flatMap((g) => g.trees.map((t) => ({ id: keyString(t.open), href: sessionPath(t.open) })))
   }, [searching, search.data, groups])
   const move = (delta: 1 | -1) => {
     scrollToSelected.current = true
@@ -236,8 +243,8 @@ export function SessionsPage() {
           <span className="ml-auto hidden shrink-0 whitespace-nowrap text-sec text-muted @[900px]:block">
             {searching
               ? search.data &&
-                `${plural(search.data.hits.length, 'hit')} in ${plural(groupHits(search.data.hits).length, 'session')}`
-              : sessions.data && plural(sessions.data.pages[0].total, 'session')}
+                `${plural(search.data.hits.length, 'hit')} in ${plural(groupHits(search.data.hits).length, 'tree')}`
+              : sessions.data && countLabel(sessions.data.pages[0].sessions, sessions.data.pages[0].total)}
           </span>
         </div>
 
@@ -261,7 +268,8 @@ export function SessionsPage() {
           <ListView
             query={sessions}
             groups={groups}
-            titles={titles}
+            expanded={expanded}
+            onToggle={toggle}
             filters={filters}
             selected={selected}
             onClear={clearFilters}
@@ -275,14 +283,16 @@ export function SessionsPage() {
 function ListView({
   query,
   groups,
-  titles,
+  expanded,
+  onToggle,
   filters,
   selected,
   onClear,
 }: {
-  query: ReturnType<typeof useSessions>
+  query: ReturnType<typeof useTrees>
   groups: DayGroup[]
-  titles: Map<string, string>
+  expanded: ReadonlySet<string>
+  onToggle: (root: string) => void
   filters: PageFilters
   selected: string | null
   onClear: () => void
@@ -318,13 +328,18 @@ function ListView({
                 <Group
                   key={g.day || 'none'}
                   group={g}
-                  titles={titles}
+                  expanded={expanded}
+                  onToggle={onToggle}
                   hideProject={Boolean(filters.project)}
                   selected={selected}
                 />
               ))}
             </div>
-            <Footer query={query} count={groups.reduce((n, g) => n + g.rows.length, 0)} />
+            <Footer
+              query={query}
+              trees={groups.reduce((n, g) => n + g.trees.length, 0)}
+              sessions={groups.reduce((n, g) => n + g.trees.reduce((m, t) => m + t.sessions.length, 0), 0)}
+            />
           </>
         )}
       </QueryBoundary>
@@ -334,38 +349,42 @@ function ListView({
 
 function Group({
   group,
-  titles,
+  expanded,
+  onToggle,
   hideProject,
   selected,
 }: {
   group: DayGroup
-  titles: Map<string, string>
+  expanded: ReadonlySet<string>
+  onToggle: (root: string) => void
   hideProject: boolean
   selected: string | null
 }) {
+  const sessions = group.trees.reduce((n, t) => n + t.sessions.length, 0)
   return (
     <section>
       <header className="sticky top-[88px] z-[5] flex items-baseline gap-2 border-b border-line bg-bg px-3 py-1">
         <h3 className="text-sec font-medium">{group.day ? dayLabelOf(group.day) : 'No activity time'}</h3>
-        {group.rows.length > 0 && <span className="text-meta text-faint">{plural(group.rows.length, 'session')}</span>}
-        <span className="ml-auto flex items-baseline gap-0.5 text-sec">
-          <Money usd={group.totalUSD} />
-          {group.incomplete && (
-            <span className="text-faint" title="More sessions of this day may follow; the sum grows as they load">
-              +
-            </span>
-          )}
-        </span>
+        {group.trees.length > 0 && (
+          <span
+            className="text-meta text-faint"
+            title="Trees whose newest activity falls on this day; their cost is the whole tree's, over every day"
+          >
+            {countLabel(sessions, group.trees.length)}
+            {group.incomplete && ' so far'}
+          </span>
+        )}
       </header>
-      {group.rows.map((row) => {
-        const parent = row.session.lineage.parent
+      {group.trees.map((t) => {
+        const root = keyString(t.root)
         return (
-          <SessionRow
-            key={keyString(row.session.key)}
-            row={row}
-            selected={selected === keyString(row.session.key)}
+          <TreeRow
+            key={root}
+            tree={t}
+            selected={selected === keyString(t.open)}
             hideProject={hideProject}
-            parentTitle={parent ? titles.get(keyString(parent)) : undefined}
+            expanded={expanded.has(root)}
+            onToggle={() => onToggle(root)}
           />
         )
       })}
@@ -386,13 +405,13 @@ function Group({
 }
 
 /** The end of the list: loads the next page when it scrolls into view. */
-function Footer({ query, count }: { query: ReturnType<typeof useSessions>; count: number }) {
+function Footer({ query, trees, sessions }: { query: ReturnType<typeof useTrees>; trees: number; sessions: number }) {
   const [ref, inView] = useInView({ rootMargin: '600px' })
   const { hasNextPage, isFetchingNextPage, fetchNextPage, isFetchNextPageError } = query
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `count` re-runs this after each page, while the end is still in view
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `trees` re-runs this after each page, while the end is still in view
   useEffect(() => {
     if (inView && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) void fetchNextPage()
-  }, [inView, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, count])
+  }, [inView, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, trees])
   return (
     <div ref={ref} className="flex min-h-16 items-center justify-center px-3 py-4 text-sec text-muted">
       {isFetchNextPageError ? (
@@ -405,7 +424,7 @@ function Footer({ query, count }: { query: ReturnType<typeof useSessions>; count
       ) : isFetchingNextPage || hasNextPage ? (
         <Spinner />
       ) : (
-        <span className="text-faint">That is all: {plural(count, 'session')}</span>
+        <span className="text-faint">That is all: {countLabel(sessions, trees)}</span>
       )}
     </div>
   )

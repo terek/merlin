@@ -118,6 +118,29 @@ export interface SessionList {
   scripted: ScriptedLine[]
 }
 
+/** One tree of linked sessions (GET /api/sessions?by=tree). */
+export interface TreeSummary {
+  root: SessionKey
+  /** The member to resume: the newest leaf. */
+  open: SessionKey
+  lastActivityAt?: string
+  /** Sum of the members' best costs. */
+  bestUSD: number
+  /** Every member in tree order (a parent before its children), matching the filters or not. */
+  sessions: SessionSummary[]
+}
+
+export interface TreeList {
+  trees: TreeSummary[]
+  /** Trees with a member matching the filters, over all pages. */
+  total: number
+  /** Sessions in those trees. */
+  sessions: number
+  nextCursor?: string
+  /** Aggregate lines of scripted runs; filled on the first page only. */
+  scripted: ScriptedLine[]
+}
+
 export interface ProjectSummary {
   harness: string
   projectKey: string
@@ -515,6 +538,8 @@ export interface SessionDigest {
 
 export interface Hit {
   session: SessionKey
+  /** Root of the session's tree (the session itself when it has no parent). */
+  root: SessionKey
   title?: string
   project: string
   at?: string

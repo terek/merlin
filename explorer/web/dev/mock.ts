@@ -21,6 +21,8 @@ import type {
   SessionList,
   SessionSummary,
   State,
+  TreeList,
+  TreeSummary,
 } from '../src/api/types'
 import { buildDataset, type Dataset, makeRng, messagesOf, order, type Sess } from './gen'
 
@@ -169,7 +171,10 @@ function addMoney(m: Money, usd: number, reported: boolean) {
 
 const enc = (s: SessionSummary) => btoa(`${s.lastActivityAt}|${s.key.id}`).replace(/=+$/, '')
 
-function sessionsList(u: URL): SessionList {
+function sessionsList(u: URL): SessionList | TreeList {
+  const by = u.searchParams.get('by')
+  if (by === 'tree') return treesList(u)
+  if (by && by !== 'session') throw new BadRequest(`by=${JSON.stringify(by)}: use session or tree`)
   const f = filterOf(u)
   const limit = limitParam(u, 50)
   const cursor = u.searchParams.get('cursor')
@@ -198,6 +203,64 @@ function sessionsList(u: URL): SessionList {
     scripted = ds.scripted.filter((l) => dayInRange(l.day, f.since, f.until) && (!f.project || l.project === f.project))
   }
   return { sessions: page, total: all.length, nextCursor: more ? enc(page[page.length - 1]) : undefined, scripted }
+}
+
+/** Trees with a member matching the filters, each with every member, newest last activity first. */
+function treesList(u: URL): TreeList {
+  const f = filterOf(u)
+  const limit = limitParam(u, 50)
+  const cursor = u.searchParams.get('cursor')
+  const byRoot = new Map<string, Sess[]>()
+  for (const s of visible()) {
+    const k = s.summary.lineage.root.id
+    byRoot.set(k, [...(byRoot.get(k) ?? []), s])
+  }
+  const all: TreeSummary[] = []
+  for (const members of byRoot.values()) {
+    if (!members.some((m) => matches(f, m.summary))) continue
+    const fam = members[0].detail.family
+    const pos = (s: Sess) => fam.members.findIndex((m) => m.key.id === s.summary.key.id)
+    const sessions = [...members].sort((a, b) => pos(a) - pos(b)).map((m) => m.summary)
+    const newest = [...members].sort(order)[0].summary
+    const open = fam.leaves.find((k) => members.some((m) => m.summary.key.id === k.id)) ?? newest.key
+    all.push({
+      root: members[0].summary.lineage.root,
+      open,
+      lastActivityAt: newest.lastActivityAt,
+      bestUSD: sessions.reduce((n, m) => n + m.cost.bestUSD, 0),
+      sessions,
+    })
+  }
+  all.sort((a, b) => {
+    const x = a.lastActivityAt ?? ''
+    const y = b.lastActivityAt ?? ''
+    return x < y ? 1 : x > y ? -1 : a.root.id < b.root.id ? -1 : 1
+  })
+  let start = 0
+  if (cursor) {
+    let at: string
+    let id: string
+    try {
+      ;[at, id] = atob(cursor).split('|')
+    } catch {
+      throw new BadRequest('cursor: not a cursor of this API')
+    }
+    start = all.findIndex((t) => (t.lastActivityAt ?? '') < at || ((t.lastActivityAt ?? '') === at && t.root.id > id))
+    if (start < 0) start = all.length
+  }
+  const page = all.slice(start, start + limit)
+  const last = page[page.length - 1]
+  const more = start + limit < all.length
+  const scripted = cursor
+    ? []
+    : ds.scripted.filter((l) => dayInRange(l.day, f.since, f.until) && (!f.project || l.project === f.project))
+  return {
+    trees: page,
+    total: all.length,
+    sessions: all.reduce((n, t) => n + t.sessions.length, 0),
+    nextCursor: more && last ? btoa(`${last.lastActivityAt}|${last.root.id}`).replace(/=+$/, '') : undefined,
+    scripted,
+  }
 }
 
 function dayInRange(day: string, since: number | undefined, until: number | undefined): boolean {
@@ -255,7 +318,7 @@ function search(u: URL): SearchResult {
   for (const s of visible()) {
     if (!matches(f, s.summary)) continue
     const p = s.summary
-    const base = { session: p.key, title: p.title, project: p.project }
+    const base = { session: p.key, root: p.lineage.root, title: p.title, project: p.project }
     if (hit(p.title))
       ranked.push({
         rank: 0,

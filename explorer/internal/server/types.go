@@ -125,6 +125,30 @@ type SessionList struct {
 	Scripted []catalog.ScriptedLine `json:"scripted"`
 }
 
+// TreeSummary is one tree of linked sessions in GET /api/sessions?by=tree.
+type TreeSummary struct {
+	Root model.SessionKey `json:"root"`
+	// Open is the member to resume: the newest leaf.
+	Open           model.SessionKey `json:"open"`
+	LastActivityAt time.Time        `json:"lastActivityAt,omitzero"`
+	// BestUSD is the sum of the members' best costs.
+	BestUSD float64 `json:"bestUSD"`
+	// Sessions are all members in tree order, matching the filters or not.
+	Sessions []SessionSummary `json:"sessions"`
+}
+
+// TreeList is the body of GET /api/sessions?by=tree.
+type TreeList struct {
+	Trees []TreeSummary `json:"trees"`
+	// Total is the number of trees with a member matching the filters, over all pages;
+	// Sessions the number of sessions in those trees.
+	Total    int `json:"total"`
+	Sessions int `json:"sessions"`
+	// NextCursor is set when more trees follow; pass it as ?cursor= together with by=tree.
+	NextCursor string                 `json:"nextCursor,omitempty"`
+	Scripted   []catalog.ScriptedLine `json:"scripted"`
+}
+
 // ProjectSummary is one project of GET /api/projects. Cost is the sum of the best costs of
 // its sessions plus its scripted runs.
 type ProjectSummary struct {

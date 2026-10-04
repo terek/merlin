@@ -1,18 +1,21 @@
 import { describe, expect, test } from 'bun:test'
-import type { Hit, ScriptedLine, SessionSummary } from '../../api/types'
+import type { Hit, ScriptedLine, SessionSummary, TreeSummary } from '../../api/types'
 import {
   apiFilters,
-  arrangeFamilies,
   buildDayGroups,
   cachedTitles,
+  countLabel,
   fieldLabel,
   groupHits,
   hitHash,
   hitPlace,
   moveSelection,
+  openMember,
   readFilters,
   showsScripted,
   sinceDate,
+  treeFlag,
+  treeState,
   writeFilters,
 } from './model'
 
@@ -35,6 +38,18 @@ function session(id: string, at: string, over: Partial<SessionSummary> = {}, usd
       firstOwnTurn: 0,
     },
     ...over,
+  }
+}
+
+/** A tree of the given members (root first), opening `open` (default the last). */
+function tree(members: SessionSummary[], open = members[members.length - 1]): TreeSummary {
+  const at = members.map((m) => m.lastActivityAt ?? '').sort()
+  return {
+    root: members[0].key,
+    open: open.key,
+    lastActivityAt: at[at.length - 1] || undefined,
+    bestUSD: members.reduce((n, m) => n + m.cost.bestUSD, 0),
+    sessions: members,
   }
 }
 
@@ -91,20 +106,23 @@ describe('filters in the URL', () => {
 
 describe('buildDayGroups', () => {
   const list = [
-    session('a', noon('2026-09-16', 15), {}, 2),
-    session('b', noon('2026-09-16', 9), {}, 0.5),
-    session('c', noon('2026-09-15'), {}, 4),
+    tree([session('a', noon('2026-09-16', 15), {}, 2)]),
+    tree([session('b', noon('2026-09-16', 9), {}, 0.5)]),
+    tree([session('c', noon('2026-09-15'), {}, 4)]),
   ]
-  test('groups by local day with sums including scripted lines', () => {
+  test('groups trees by the local day of their last activity; scripted lines join their day', () => {
     const g = buildDayGroups(list, [line('2026-09-16', 0.25), line('2026-09-14', 1)], false)
     expect(g.map((x) => x.day)).toEqual(['2026-09-16', '2026-09-15', '2026-09-14'])
-    expect(g[0].rows.map((r) => r.session.key.id)).toEqual(['a', 'b'])
-    expect(g[0].totalUSD).toBeCloseTo(2.75)
-    expect(g[1].totalUSD).toBeCloseTo(4)
+    expect(g[0].trees.map((t) => t.root.id)).toEqual(['a', 'b'])
+    expect(g[0].scripted).toHaveLength(1)
     // a day with only scripted runs is a group of its own
-    expect(g[2].rows).toHaveLength(0)
-    expect(g[2].totalUSD).toBe(1)
+    expect(g[2].trees).toHaveLength(0)
     expect(g.every((x) => !x.incomplete)).toBe(true)
+  })
+  test('a tree stands on the day of its newest member only', () => {
+    const old = session('old', noon('2026-09-10'), { lineage: { ...session('x', '').lineage, leaf: false } }, 3)
+    const g = buildDayGroups([tree([old, session('new', noon('2026-09-16'), {}, 1, 'old')])], [], false)
+    expect(g.map((x) => [x.day, x.trees.length])).toEqual([['2026-09-16', 1]])
   })
   test('while pages follow the oldest day is incomplete and older scripted lines wait', () => {
     const g = buildDayGroups(list, [line('2026-09-15', 0.1), line('2026-09-14', 1)], true)
@@ -112,10 +130,9 @@ describe('buildDayGroups', () => {
       ['2026-09-16', false],
       ['2026-09-15', true],
     ])
-    expect(g[1].totalUSD).toBeCloseTo(4.1)
   })
   test('no activity time sorts last', () => {
-    const g = buildDayGroups([session('z', '', { lastActivityAt: undefined }), ...list], [], false)
+    const g = buildDayGroups([tree([session('z', '', { lastActivityAt: undefined })]), ...list], [], false)
     expect(g[g.length - 1].day).toBe('')
   })
   test('empty', () => {
@@ -123,42 +140,25 @@ describe('buildDayGroups', () => {
   })
 })
 
-describe('arrangeFamilies', () => {
-  const leaf = session('leaf', noon('2026-09-16', 15), {}, 1, 'root')
-  const mid = session(
-    'mid',
-    noon('2026-09-16', 14),
-    { lineage: { ...session('x', '').lineage, root: { harness: 'claude', id: 'root' }, leaf: false } },
-    1,
-    'root',
-  )
-  const other = session('other', noon('2026-09-16', 13))
-  const root = session(
-    'root',
-    noon('2026-09-16', 12),
-    { lineage: { ...session('x', '').lineage, root: { harness: 'claude', id: 'root' }, leaf: false } },
-    1,
-    'root',
-  )
-  test('leaf first, ancestors indented below, the family stands where its newest member stood', () => {
-    const rows = arrangeFamilies([mid, other, leaf, root])
-    expect(rows.map((r) => [r.session.key.id, r.level])).toEqual([
-      ['leaf', 0],
-      ['mid', 1],
-      ['root', 1],
-      ['other', 0],
-    ])
+describe('trees', () => {
+  const root = session('root', noon('2026-09-15'), {
+    state: 'idle',
+    cost: { ...session('x', '').cost, flag: 'partial' },
+    lineage: { ...session('x', '').lineage, leaf: false },
   })
-  test('without a leaf in the day the newest member leads', () => {
-    const rows = arrangeFamilies([mid, other, root])
-    expect(rows.map((r) => [r.session.key.id, r.level])).toEqual([
-      ['mid', 0],
-      ['root', 1],
-      ['other', 0],
-    ])
+  const leaf = session('leaf', noon('2026-09-16'), {}, 1, 'root')
+  test('the row shows the open member, the busiest state and the weakest cost backing', () => {
+    const t = tree([root, leaf])
+    expect(openMember(t).key.id).toBe('leaf')
+    expect(treeState(t)).toBe('idle')
+    expect(treeState(tree([leaf]))).toBe('ended')
+    expect(treeFlag(t)).toBe('partial')
+    expect(treeFlag(tree([leaf]))).toBe('exact')
   })
-  test('a lone member of a family is not indented', () => {
-    expect(arrangeFamilies([mid]).map((r) => r.level)).toEqual([0])
+  test('counts', () => {
+    expect(countLabel(3, 3)).toBe('3 sessions')
+    expect(countLabel(5, 3)).toBe('5 sessions in 3 trees')
+    expect(countLabel(1, 1)).toBe('1 session')
   })
 })
 
@@ -181,18 +181,24 @@ describe('moveSelection', () => {
 })
 
 describe('search hits', () => {
-  const hit = (id: string, field: Hit['field'], turn: number): Hit => ({
+  const hit = (id: string, field: Hit['field'], turn: number, root = id): Hit => ({
     session: { harness: 'claude', id },
+    root: { harness: 'claude', id: root },
     project: '/p',
     field,
     turn,
     snippet: 's',
   })
-  test('grouped by session in API order', () => {
-    const g = groupHits([hit('a', 'title', -1), hit('b', 'prompt', 3), hit('a', 'final', 2)])
-    expect(g.map((x) => [x.session.id, x.hits.map((h) => h.index)])).toEqual([
-      ['a', [0, 2]],
-      ['b', [1]],
+  test('grouped by tree in API order', () => {
+    const g = groupHits([
+      hit('a', 'title', -1),
+      hit('b', 'prompt', 3),
+      hit('a2', 'final', 2, 'a'),
+      hit('a', 'final', 1),
+    ])
+    expect(g.map((x) => [x.root.id, x.session.id, x.sessions, x.hits.map((h) => h.index)])).toEqual([
+      ['a', 'a', 2, [0, 2, 3]],
+      ['b', 'b', 1, [1]],
     ])
   })
   test('labels and links', () => {
@@ -210,7 +216,7 @@ describe('search hits', () => {
     expect(hitPlace(hit('a', 'final', 0))).toBe('turn 0')
   })
   test('titles of cached sessions', () => {
-    const m = cachedTitles([{ sessions: [session('s1', '2026-09-16T10:00:00Z', { title: 'Fix login' })] }])
+    const m = cachedTitles([{ trees: [tree([session('s1', '2026-09-16T10:00:00Z', { title: 'Fix login' })])] }])
     expect(m.get('claude/s1')).toBe('Fix login')
     expect(m.get('claude/s2')).toBeUndefined()
   })

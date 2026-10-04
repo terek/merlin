@@ -7,9 +7,13 @@ import {
   patchDetailState,
   patchSessionPages,
   patchSessionStateInPages,
+  patchTreePages,
+  patchTreeStateInPages,
+  retally,
   type SessionPages,
+  type TreePages,
 } from './cache'
-import type { SessionDetail, SessionList, SessionSummary, State } from './types'
+import type { SessionDetail, SessionList, SessionSummary, State, TreeList, TreeSummary } from './types'
 
 const sum = (id: string, at: string, extra: Partial<SessionSummary> = {}): SessionSummary => ({
   key: { harness: 'claude', id },
@@ -204,12 +208,103 @@ describe('applyEvent', () => {
   test('session-missing invalidates lists and the detail', () => {
     const { qc, b, calls, sink } = setup()
     applyEvent(qc, 'session-missing', { key: b.key }, sink)
-    expect(calls).toEqual(['["sessions"]', '["session","claude","b"]'])
+    expect(calls).toEqual(['["sessions"]', '["trees"]', '["session","claude","b"]'])
   })
 
   test('scan-progress does nothing to the cache', () => {
     const { qc, calls, sink } = setup()
     applyEvent(qc, 'scan-progress', { pending: 1, seen: 1, processed: 0, unchanged: 0, failed: 0, missing: 0 }, sink)
     expect(calls).toEqual([])
+  })
+})
+
+describe('tree pages', () => {
+  const child = (id: string, at: string, root: string, extra: Partial<SessionSummary> = {}) =>
+    sum(id, at, {
+      lineage: {
+        ...sum(id, at).lineage,
+        root: { harness: 'claude', id: root },
+        parent: { harness: 'claude', id: root },
+      },
+      ...extra,
+    })
+  const notLeaf = (s: SessionSummary): SessionSummary => ({ ...s, lineage: { ...s.lineage, leaf: false } })
+  const tree = (...members: SessionSummary[]): TreeSummary =>
+    retally({ root: members[0].key, open: members[0].key, bestUSD: 0, sessions: members })
+  const tpage = (trees: TreeSummary[], total: number, nextCursor?: string): TreeList => ({
+    trees,
+    total,
+    sessions: trees.reduce((n, t) => n + t.sessions.length, 0),
+    nextCursor,
+    scripted: [],
+  })
+  const tpages = (...p: TreeList[]): TreePages => ({ pages: p, pageParams: p.map((_, i) => (i ? `c${i}` : undefined)) })
+  const roots = (d: TreePages | undefined, i = 0) => d?.pages[i].trees.map((t) => t.root.id)
+
+  const r = notLeaf(sum('r', '2026-09-14T10:00:00Z'))
+  const c = child('c', '2026-09-15T10:00:00Z', 'r')
+  const x = sum('x', '2026-09-16T10:00:00Z')
+
+  test('retally takes the newest leaf, the newest activity and the sum', () => {
+    const t = tree(r, c)
+    expect(t.open.id).toBe('c')
+    expect(t.lastActivityAt).toBe('2026-09-15T10:00:00Z')
+    expect(t.bestUSD).toBeCloseTo(0.2)
+  })
+  test('a member update re-tallies its tree and re-sorts the first page', () => {
+    const d = tpages(tpage([tree(x), tree(r, c)], 2))
+    const out = patchTreePages(d, {}, { ...c, lastActivityAt: '2026-09-17T10:00:00Z', cost: { ...c.cost, bestUSD: 1 } })
+    expect(out.refetch).toBe(false)
+    expect(roots(out.data)).toEqual(['r', 'x'])
+    expect(out.data?.pages[0].trees[0].bestUSD).toBeCloseTo(1.1)
+    expect(out.data?.pages[0].trees[0].lastActivityAt).toBe('2026-09-17T10:00:00Z')
+  })
+  test('a tree whose members no longer match leaves; one member still matching keeps it whole', () => {
+    const run = { state: 'running' }
+    const busy = tpages(tpage([tree(r, { ...c, state: 'busy' })], 1))
+    const kept = patchTreePages(busy, run, { ...r, state: 'idle' })
+    expect(kept.data?.pages[0].trees[0].sessions).toHaveLength(2)
+    const gone = patchTreeStateInPages(busy, run, c.key, 'ended')
+    expect(roots(gone.data)).toEqual([])
+    expect(gone.data?.pages[0].total).toBe(0)
+    expect(gone.data?.pages[0].sessions).toBe(0)
+  })
+  test('a new session without a parent is a new tree where the first page covers it', () => {
+    const d = tpages(tpage([tree(x), tree(r, c)], 2))
+    const out = patchTreePages(d, {}, sum('n', '2026-09-15T12:00:00Z'))
+    expect(roots(out.data)).toEqual(['x', 'n', 'r'])
+    expect(out.data?.pages[0].total).toBe(3)
+    expect(out.data?.pages[0].sessions).toBe(4)
+    // older than a first page that has more after it: only the counts move
+    const paged = tpages(tpage([tree(x)], 2, 'c1'))
+    const later = patchTreePages(paged, {}, sum('o', '2026-09-01T00:00:00Z'))
+    expect(roots(later.data)).toEqual(['x'])
+    expect(later.data?.pages[0].total).toBe(3)
+  })
+  test('a new member of a tree, or a matching fork of an unknown tree, asks the daemon again', () => {
+    const d = tpages(tpage([tree(r, c)], 1))
+    const fork = child('f', '2026-09-16T10:00:00Z', 'r')
+    expect(patchTreePages(d, {}, fork)).toEqual({ data: d, refetch: true })
+    expect(patchTreePages(d, {}, child('g', '2026-09-16T10:00:00Z', 'elsewhere')).refetch).toBe(true)
+    expect(patchTreePages(d, { kind: 'background' }, child('g', '2026-09-16T10:00:00Z', 'elsewhere')).refetch).toBe(
+      false,
+    )
+  })
+  test('applyEvent patches tree lists and invalidates them when membership changes', () => {
+    const qc = new QueryClient()
+    const key = ['trees', {}]
+    qc.setQueryData(key, tpages(tpage([tree(r, c)], 1)))
+    const invalidated: unknown[] = []
+    const sink = { invalidate: (k: readonly unknown[]) => void invalidated.push(k) }
+    applyEvent(qc, 'session-state', { key: c.key, state: 'busy', previous: 'ended' }, sink)
+    expect(qc.getQueryData<TreePages>(key)?.pages[0].trees[0].sessions[1].state).toBe('busy')
+    expect(invalidated.some((k) => (k as string[])[0] === 'trees')).toBe(false)
+    applyEvent(
+      qc,
+      'session-updated',
+      { key: { harness: 'claude', id: 'f' }, session: child('f', '2026-09-16T10:00:00Z', 'r') },
+      sink,
+    )
+    expect(invalidated.some((k) => (k as string[])[0] === 'trees')).toBe(true)
   })
 })

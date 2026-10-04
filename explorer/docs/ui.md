@@ -183,14 +183,19 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
 - `api/client.ts`: `get<T>(path, params)` builds the query string, fetches, and throws an
   `ApiError` carrying `status`, `code`, `message` and `candidates` for a non-2xx answer.
 - `api/queries.ts`: one hook per endpoint. Keys: `['projects']`, `['sessions', filters]`,
-  `['session', harness, id]`, `['search', q, filters]`, `['cost', params]`. `staleTime` 30 s;
-  `refetchOnWindowFocus` on. The session list is an infinite query over `nextCursor`.
+  `['trees', filters]` (the list by tree, `by=tree`), `['session', harness, id]`,
+  `['search', q, filters]`, `['cost', params]`. `staleTime` 30 s; `refetchOnWindowFocus` on. Both
+  lists are infinite queries over `nextCursor`.
 - `api/events.tsx`: `EventsProvider` opens one `EventSource('/api/events')` for the app.
   - `session-updated`: replace the matching row in every cached `['sessions', ...]` page (insert
     at the top of unfiltered first pages when it is new), invalidate `['session', harness, id]`,
-    and mark `['projects']` and `['cost']` stale without refetching hidden queries.
+    and mark `['projects']` and `['cost']` stale without refetching hidden queries. In cached
+    `['trees', ...]` pages the member is replaced and its tree re-tallied (last activity, cost,
+    the member to open); a new session with no parent becomes a new tree. A new member of a tree,
+    or a matching session whose tree is not cached, changes which sessions a tree holds, which
+    only the daemon knows: the tree lists are invalidated instead.
   - `session-state`: patch the row's `state` in the cached lists and in a cached detail.
-  - `session-missing`: invalidate lists and that detail.
+  - `session-missing`: invalidate lists (sessions and trees) and that detail.
   - `scan-progress`: kept in a small store read by `useScanProgress()`.
   - on `open` after an error (a reconnect): invalidate everything, because events are not replayed.
   - `useConnection()` gives `connecting | live | offline` for the indicator in the top bar.
@@ -205,44 +210,52 @@ last 7 days as a quiet link to Cost. `g s` and `g c` switch pages; `/` focuses s
 
 ## 8. Sessions page (`/`)
 
-The landing page, and the answer to "where was that session".
+The landing page, and the answer to "where was that session". It lists **trees**, as the Session
+page draws them: a session and every session forked or continued from it are one row.
 
 ```
-┌ top bar ───────────────────────────────────────────────────────────────┐
-│ Projects        │ [ search prompts, answers, titles…  / ]  state kind  │
-│ All        223  │ ───────────────────────────────────────────────────  │
-│ merlin      41  │ Today                                       $41.20   │
-│ acme/web    30  │ ● add the footer        acme/web  main  3m  12  $4.10│
-│ …               │   "last prompt preview, one line, muted…"            │
-│                 │ ○ plan billing          acme/api  feat  1h   3 ~$0.80│
-│                 │ Yesterday                                   $12.02   │
-│                 │   31 scripted runs · merlin                  $0.42   │
-└─────────────────┴──────────────────────────────────────────────────────┘
+┌ top bar ───────────────────────────────────────────────────────────────────┐
+│ Projects        │ [ search prompts, answers, titles…  / ]  state kind  since │
+│ All        223  │ ─────────────────────────────────────────────────────────  │
+│ merlin      41  │ Today  3 sessions in 2 trees                               │
+│ acme/web    30  │ › ● add the footer [2 sessions] acme/web main 3m 12  $9.10 │
+│ …               │     "recap or last prompt preview, one line, muted…"       │
+│                 │   ○ plan billing          acme/api  feat  1h   3  ~$0.80   │
+│                 │ Yesterday  1 session                                       │
+│                 │   31 scripted runs · merlin                        $0.42   │
+└─────────────────┴────────────────────────────────────────────────────────────┘
 ```
 
 - **Project rail** (240px, collapsible): "All" and each project from `/api/projects`, most recently
   active first: short name, session count, cost. Selecting one sets `project` in the URL.
 - **Filters**: state (`All`, `Running`, `Recent`), kind (`interactive`, `background`, both by
-  default), and a since preset (`7d`, `30d`, `all`; default all).
-- **List**, grouped by local day of last activity, each group headed by the day and the sum of
-  its rows' cost. A row, two lines:
-  1. state dot, title (or the first line of the last prompt when there is none), end-state badge,
-     lineage hint ("fork of …", "continues …", "continued in ›"), then right-aligned: short project,
-     branch, relative time, prompts (`humanTurns`), agents (when > 0), cost with its flag.
-  2. the last prompt preview (`lastPrompt.text`), one line, muted; when the session has a recap,
-     the recap instead, marked with a small "recap" label.
-  The whole row is a link to the session. `j` / `k` move the selection, `Enter` opens it.
-- **Families.** Sessions of one family that fall in the same day group are drawn together: the
-  leaf first, its ancestors indented below it and dimmed. A member in another day group stays
-  where its own date puts it, with the hint text.
+  default), and a since preset (`7d`, `30d`, `all`; default all). They select trees through their
+  members (`/api/sessions?by=tree`): a tree is listed when any member matches, and then whole.
+- **List**, one row per tree, grouped by the local day of the tree's last activity (its newest
+  member's). A day header names the day and counts ("3 sessions in 2 trees", or "2 sessions" when
+  every tree is a single session). It shows **no money**: a tree's cost is the whole tree's, spent
+  over many days, so a day sum would overstate the day. A row, two lines, describes the tree
+  through its **open** member (the newest leaf, the one to resume):
+  1. state dot (the busiest member's), title, end-state badge, background and "no source" badges,
+     "N sessions" when the tree has several, then right-aligned: short project, branch, the tree's
+     last activity, prompts (`humanTurns`) and agents of the open member, the tree's cost (the sum
+     of its members' best cost) with the weakest member's flag.
+  2. the open member's recap, marked "recap", or its last prompt preview; one line, muted.
+  The row is a link to the open member. `j` / `k` move the selection, `Enter` opens it.
+- **Members.** A tree of several sessions has a chevron left of the row that lists its members
+  underneath, in tree order (a parent before its children), indented, each the two-line session row
+  with its lineage hint ("fork of …", "continues …", "continued in ›"), its own cost, and a link to
+  that session.
 - **Scripted runs** appear only as aggregate lines at the end of a day group ("31 scripted runs ·
   merlin · $0.42"), not clickable.
-- **Paging**: load the next page when the end of the list scrolls into view.
+- **Paging**: load the next page of trees when the end of the list scrolls into view.
 - **Search** (`q` in the URL, debounced 200 ms, at least 2 characters): the list is replaced by
-  the hits of `/api/search`, grouped by session in the order the API returns them. A group shows
-  the session's title, project and time, then each hit as a line: a label for `field` (`title`,
-  `prompt`, `answer`, `summary`, `project`, …), the snippet with the terms highlighted, and for a
-  turn hit a link to `/s/…#t<turn>`. `continuedIn` is shown as "also in ›" links. `Esc` clears.
+  the hits of `/api/search`, grouped by tree (`hit.root`) in the order the API returns them. A group
+  shows the title, project and time of its best-ranked hit's session, then each hit as a line: a
+  label for `field` (`title`, `prompt`, `answer`, `summary`, `project`, …), the snippet with the
+  terms highlighted, and for a turn hit a link to `/s/…#t<turn>`. When the tree has hits in several
+  sessions, the header says so and each hit names its session. `continuedIn` is shown as "also in
+  ›" links. `Esc` clears.
 
 ## 9. Session page (`/s/:harness/:id`)
 

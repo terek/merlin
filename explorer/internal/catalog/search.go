@@ -107,7 +107,7 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 			if at.IsZero() {
 				at = d.LastActivityAt
 			}
-			h := Hit{Session: s.key, Title: d.Title, Project: s.project, At: at, Field: field,
+			h := Hit{Session: s.key, Root: s.info.Root, Title: d.Title, Project: s.project, At: at, Field: field,
 				Turn: idx, Abandoned: abandoned, Snippet: snippet(orig, folded, pos)}
 			if len(others) > 0 {
 				var set []*sess

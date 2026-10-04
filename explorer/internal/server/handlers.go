@@ -91,12 +91,21 @@ func (a *API) handleSessions(w http.ResponseWriter, r *http.Request) {
 			cur = &c
 		}
 	}
+	by := q.Get("by")
+	if err == nil && by != "" && by != "session" && by != "tree" {
+		a.badParam(w, "by=%q: use session or tree", by)
+		return
+	}
 	if err != nil {
 		a.paramError(w, err)
 		return
 	}
 
 	lv := a.liveness()
+	if by == "tree" {
+		a.json(w, http.StatusOK, treePage(cat, f, lv, cur, limit))
+		return
+	}
 	l := cat.List(f, lv)
 	out := SessionList{Sessions: []SessionSummary{}, Total: len(l.Sessions), Scripted: []catalog.ScriptedLine{}}
 	rest := l.Sessions
@@ -115,6 +124,37 @@ func (a *API) handleSessions(w http.ResponseWriter, r *http.Request) {
 		out.Sessions = append(out.Sessions, summarize(cat, in, in.State))
 	}
 	a.json(w, http.StatusOK, out)
+}
+
+// treePage is one page of GET /api/sessions?by=tree. The cursor holds the last tree's
+// activity and root.
+func treePage(cat *catalog.Catalog, f catalog.Filter, lv catalog.Liveness, cur *cursor, limit int) TreeList {
+	trees := cat.Trees(f, lv)
+	out := TreeList{Trees: []TreeSummary{}, Total: len(trees), Scripted: []catalog.ScriptedLine{}}
+	for _, t := range trees {
+		out.Sessions += len(t.Members)
+	}
+	rest := trees
+	if cur != nil {
+		i := sort.Search(len(rest), func(i int) bool { return cur.follows(rest[i].LastActivityAt, rest[i].Root) })
+		rest = rest[i:]
+	} else if s := cat.List(f, lv).Scripted; s != nil {
+		out.Scripted = s
+	}
+	if len(rest) > limit {
+		rest = rest[:limit]
+		last := rest[limit-1]
+		out.NextCursor = cursor{at: last.LastActivityAt, key: last.Root}.encode()
+	}
+	for _, t := range rest {
+		ts := TreeSummary{Root: t.Root, Open: t.Open, LastActivityAt: t.LastActivityAt, BestUSD: t.BestUSD,
+			Sessions: make([]SessionSummary, 0, len(t.Members))}
+		for _, in := range t.Members {
+			ts.Sessions = append(ts.Sessions, summarize(cat, in, in.State))
+		}
+		out.Trees = append(out.Trees, ts)
+	}
+	return out
 }
 
 // resolve finds the session a path names: an exact id, else a unique id prefix among the

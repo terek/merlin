@@ -1,9 +1,10 @@
-// The hits of a search, grouped by session. The terms are highlighted as React text nodes, so any
+// The hits of a search, grouped by tree (a session and everything forked or continued from it);
+// in a tree with hits in several sessions, each hit names its session. The terms are highlighted as React text nodes, so any
 // query text is safe.
 
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import type { SearchResult, SessionList } from '../../api/types'
+import type { SearchResult, TreeList } from '../../api/types'
 import { plural } from '../../lib/format'
 import { sessionPath, shortId } from '../../lib/paths'
 import { keyString } from '../../lib/session'
@@ -32,12 +33,12 @@ export function SearchResults({
   // "also in" names a session by its title when the session list has it in the cache
   const qc = useQueryClient()
   const titles = cachedTitles(
-    qc.getQueriesData<{ pages: SessionList[] }>({ queryKey: ['sessions'] }).flatMap(([, d]) => d?.pages ?? []),
+    qc.getQueriesData<{ pages: TreeList[] }>({ queryKey: ['trees'] }).flatMap(([, d]) => d?.pages ?? []),
   )
   return (
     <div>
       {groups.map((g) => (
-        <section key={`${g.session.harness}/${g.session.id}`} className="border-b border-line pb-1">
+        <section key={keyString(g.root)} className="border-b border-line pb-1">
           <Link
             to={sessionPath(g.session)}
             className="flex min-w-0 items-baseline gap-3 px-3 pt-2 pb-0.5 hover:underline"
@@ -45,6 +46,11 @@ export function SearchResults({
             <span className="min-w-0 flex-1 truncate text-body font-medium text-fg" title={g.title}>
               {g.title || shortId(g.session.id)}
             </span>
+            {g.sessions > 1 && (
+              <span className="shrink-0 text-meta text-faint">
+                hits in {plural(g.sessions, 'session')} of this tree
+              </span>
+            )}
             <span className="shrink-0 text-sec text-muted">
               <ProjectName path={g.project} />
             </span>
@@ -72,6 +78,11 @@ export function SearchResults({
                       <Badge tone="warn" title="Rewound: not on the path that continued">
                         rewound
                       </Badge>
+                    )}
+                    {g.sessions > 1 && (
+                      <span className="max-w-48 shrink-0 truncate text-meta text-muted" title={hit.session.id}>
+                        {hit.title || titles.get(keyString(hit.session)) || shortId(hit.session.id)}
+                      </span>
                     )}
                     {hash && <span className="shrink-0 font-mono text-meta text-faint">{hitPlace(hit)}</span>}
                   </Link>

@@ -252,6 +252,21 @@ type Listing struct {
 	Scripted []ScriptedLine
 }
 
+// Tree is one family of linked sessions as the list shows it. A tree is selected when any
+// of its members is; it then holds all of them.
+type Tree struct {
+	Root model.SessionKey
+	// Open is the member to resume: the newest leaf.
+	Open model.SessionKey
+	// LastActivityAt is the newest last activity of any member.
+	LastActivityAt time.Time
+	// BestUSD is the sum of the members' best costs (each counts only what it owns).
+	BestUSD float64
+	// Members in tree order (a parent before its children, siblings oldest first), State
+	// filled when liveness is known.
+	Members []SessionInfo
+}
+
 // Filter selects sessions. The zero value selects everything.
 type Filter struct {
 	Harness string
@@ -297,6 +312,8 @@ func (f Field) rank() int {
 // Hit is one search result.
 type Hit struct {
 	Session model.SessionKey `json:"session"`
+	// Root is the root of the session's tree (the session itself when it has no parent).
+	Root    model.SessionKey `json:"root"`
 	Title   string           `json:"title,omitempty"`
 	Project string           `json:"project"`
 	At      time.Time        `json:"at,omitzero"`

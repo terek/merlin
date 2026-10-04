@@ -7,6 +7,10 @@
         "harness": "claude",
         "id": "13131313-0000-4000-8000-000000000004"
       },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000003"
+      },
       "title": "add a search box",
       "project": "/home/dev/acme/s13b-fork-unmarked",
       "at": "2026-09-13T10:10:20Z",
@@ -20,6 +24,10 @@
       "session": {
         "harness": "claude",
         "id": "13131313-0000-4000-8000-000000000006"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000005"
       },
       "title": "add a search box",
       "project": "/home/dev/acme/s13c-fork-marked",
@@ -35,6 +43,10 @@
         "harness": "claude",
         "id": "13131313-0000-4000-8000-000000000002"
       },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000001"
+      },
       "title": "add a search box",
       "project": "/home/dev/acme/s13a-continuation",
       "at": "2026-09-13T10:02:20Z",
@@ -48,6 +60,10 @@
       "session": {
         "harness": "claude",
         "id": "13131313-0000-4000-8000-000000000010"
+      },
+      "root": {
+        "harness": "claude",
+        "id": "13131313-0000-4000-8000-000000000009"
       },
       "title": "add a search box",
       "project": "/home/dev/acme/s13e-sdk-pickup",

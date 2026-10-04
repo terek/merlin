@@ -2,6 +2,7 @@
 //
 //   ['projects']                          useProjects
 //   ['sessions', filters]                 useSessions       (infinite, pages of SessionList)
+//   ['trees', filters]                    useTrees          (infinite, pages of TreeList)
 //   ['session', harness, id]              useSession        (['session', harness, id, 'messages'] with messages)
 //   ['search', q, filters]                useSearch
 //   ['cost', params]                      useCost
@@ -24,6 +25,7 @@ import type {
   SessionDetail,
   SessionFilters,
   SessionList,
+  TreeList,
 } from './types'
 
 export const STALE_MS = 30_000
@@ -31,6 +33,7 @@ export const STALE_MS = 30_000
 export const queryKeys = {
   projects: () => ['projects'] as const,
   sessions: (filters: SessionFilters) => ['sessions', filters] as const,
+  trees: (filters: SessionFilters) => ['trees', filters] as const,
   session: (harness: string, id: string, messages = false) =>
     messages ? (['session', harness, id, 'messages'] as const) : (['session', harness, id] as const),
   search: (q: string, filters: SessionFilters) => ['search', q, filters] as const,
@@ -78,6 +81,21 @@ export function useSessions(filters: SessionFilters): UseInfiniteQueryResult<{ p
   return useInfiniteQuery({
     queryKey: queryKeys.sessions(f),
     queryFn: ({ pageParam, signal }) => get<SessionList>('/api/sessions', { ...f, cursor: pageParam }, signal),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * The session list one tree of linked sessions per row (`/api/sessions?by=tree`), paged like
+ * useSessions: `pages[0].total` counts trees, `pages[0].sessions` the sessions in them.
+ */
+export function useTrees(filters: SessionFilters): UseInfiniteQueryResult<{ pages: TreeList[] }> {
+  const f = clean({ limit: SESSIONS_PAGE, ...filters })
+  return useInfiniteQuery({
+    queryKey: queryKeys.trees(f),
+    queryFn: ({ pageParam, signal }) => get<TreeList>('/api/sessions', { ...f, by: 'tree', cursor: pageParam }, signal),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor,
     placeholderData: keepPreviousData,

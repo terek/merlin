@@ -109,6 +109,7 @@ Session summaries, newest last activity first: no turns, no messages. Meant for 
 | `state` | `running` (busy or idle), `recent` (not running, active in the last 10 minutes), `ended`; comma separated. `busy` and `idle` are accepted too |
 | `limit` | page size, 1 to 500, default 50 |
 | `cursor` | the `nextCursor` of the previous page |
+| `by` | `session` (the default) or `tree`: see [By tree](#by-tree) |
 
 `total` counts all sessions matching the filters, over all pages. `nextCursor` is set while more
 follow; it encodes a position (last activity, key), so paging stays correct when sessions are
@@ -179,6 +180,45 @@ inherited.
     }
   ],
   "nextCursor": "MjAyNi0wOS0yMlQxMDowMDoxNFp8Y2xhdWRlfDIyMjIyMjIyLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMg"
+}
+```
+
+### By tree
+
+`?by=tree` lists **trees** instead: a session and every session forked or continued from it (a
+family, as `family` in the detail has it). The filters select trees through their members: a tree
+is listed when any member matches, and it then holds all its members. Trees come newest last
+activity first, where a tree's last activity is its newest member's; ties by root harness and id.
+`limit` counts trees, and `nextCursor` (a position: the tree's last activity and root) is only
+valid with `by=tree`.
+
+| Field | Meaning |
+|---|---|
+| `trees[].root` | the family root |
+| `trees[].open` | the member to resume: the newest leaf |
+| `trees[].lastActivityAt` | the newest last activity of any member |
+| `trees[].bestUSD` | the sum of the members' `cost.bestUSD`; each counts only what it owns, so nothing is counted twice |
+| `trees[].sessions` | every member's summary (as above), in tree order: a parent before its children, siblings oldest first |
+| `total` | trees with a matching member, over all pages |
+| `sessions` | sessions in those trees |
+| `scripted` | as without `by` (first page only) |
+
+```json
+{
+  "trees": [
+    {
+      "root": {"harness": "claude", "id": "13131313-0000-4000-8000-000000000001"},
+      "open": {"harness": "claude", "id": "13131313-0000-4000-8000-000000000002"},
+      "lastActivityAt": "2026-09-13T10:04:00Z",
+      "bestUSD": 0.0412,
+      "sessions": [{"key": {"harness": "claude", "id": "13131313-0000-4000-8000-000000000001"}, "…": "…"},
+                   {"key": {"harness": "claude", "id": "13131313-0000-4000-8000-000000000002"}, "…": "…"}]
+    }
+  ],
+  "total": 29,
+  "sessions": 34,
+  "scripted": [],
+  "nextCursor": "…"
 }
 ```
 
@@ -638,8 +678,9 @@ cwd and branch containing every term (case-insensitive). Title and prompt hits r
 | `kind`, `project`, `since`, `until` | as for `/api/sessions` |
 | `limit` | 1 to 500, default 50 |
 
-`turn` is the turn index for `prompt` and `final` hits, the compaction index for `compaction`,
-and `-1` for session-level fields. A turn copied into several sessions is a hit once, in the
+`root` is the root of the hit's session's tree (the session itself when it has no parent), so
+hits can be grouped by tree. `turn` is the turn index for `prompt` and `final` hits, the compaction
+index for `compaction`, and `-1` for session-level fields. A turn copied into several sessions is a hit once, in the
 session that owns it; `continuedIn` lists the others (family leaves first). `truncated` is true
 when more hits exist than `limit`.
 
@@ -652,6 +693,10 @@ when more hits exist than `limit`.
         "harness": "claude",
         "id": "21212121-0000-4000-8000-000000000001"
       },
+      "root": {
+        "harness": "claude",
+        "id": "21212121-0000-4000-8000-000000000001"
+      },
       "title": "write the changelog",
       "project": "/home/dev/acme/misc",
       "at": "2026-09-21T10:00:04Z",
@@ -661,6 +706,10 @@ when more hits exist than `limit`.
     },
     {
       "session": {
+        "harness": "claude",
+        "id": "21212121-0000-4000-8000-000000000001"
+      },
+      "root": {
         "harness": "claude",
         "id": "21212121-0000-4000-8000-000000000001"
       },

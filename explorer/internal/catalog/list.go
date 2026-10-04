@@ -40,6 +40,57 @@ func (c *Catalog) List(f Filter, lv Liveness) Listing {
 	return l
 }
 
+// Trees returns the trees of linked sessions that have a member selected by f, newest last
+// activity of the tree first (then root harness and id). Each tree holds all its members,
+// selected or not; scripted sessions are left out.
+func (c *Catalog) Trees(f Filter, lv Liveness) []Tree {
+	v := c.view()
+	var out []Tree
+	seen := make(map[model.SessionKey]bool)
+	for _, s := range v.sessions {
+		if s.d.Kind == model.KindSDK || seen[s.info.Root] || !f.selects(s, lv.StateOf(s.key, s.d.LastActivityAt)) {
+			continue
+		}
+		seen[s.info.Root] = true
+		fam := v.family(s)
+		t := Tree{Root: fam.Root}
+		for _, k := range fam.Members {
+			m := v.byKey[k]
+			if m.d.Kind == model.KindSDK {
+				continue
+			}
+			in := m.info
+			if lv.known() {
+				in.State = lv.StateOf(k, m.d.LastActivityAt)
+			}
+			t.Members = append(t.Members, in)
+			t.BestUSD += in.Cost.BestUSD
+			if in.LastActivityAt.After(t.LastActivityAt) {
+				t.LastActivityAt = in.LastActivityAt
+			}
+		}
+		t.Open = t.Members[0].Key
+		for _, k := range fam.Leaves {
+			if v.byKey[k].d.Kind != model.KindSDK {
+				t.Open = k
+				break
+			}
+		}
+		out = append(out, t)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if !a.LastActivityAt.Equal(b.LastActivityAt) {
+			return a.LastActivityAt.After(b.LastActivityAt)
+		}
+		if a.Root.Harness != b.Root.Harness {
+			return a.Root.Harness < b.Root.Harness
+		}
+		return a.Root.ID < b.Root.ID
+	})
+	return out
+}
+
 // StateOf returns the liveness of one session.
 func (c *Catalog) StateOf(key model.SessionKey, lv Liveness) (State, bool) {
 	s, ok := c.view().byKey[key]
