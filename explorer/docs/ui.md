@@ -49,9 +49,8 @@ web/
     features/
       sessions/         SessionsPage and its parts            (Sessions bead)
       spend/            SessionPage: the spend tree, header, decisions, turn card
-      session/          the retired Session page (not routed)
-      agents/           AgentTree, AgentDetail                (Agents bead)
-      context/          ContextChart                          (Agents bead)
+      agents/           AgentDetail, AgentRow (KindIcon), agent helpers
+      context/          chart.ts (niceTicks)
       cost/             CostPage and its parts                (Cost bead)
 ```
 
@@ -265,25 +264,34 @@ From top to bottom:
 - **Spend graph** (`SpendGraph.tsx`), one turn axis for the whole tree:
   - context along the path from the root to the session in focus, with compactions, and the
     context written to the cache again (a cache miss) as a bar on its turn;
+  - a **compaction** is a mark after the turn it followed, on the context track and on its
+    session's line: solid red when its call ran on a cold cache (the main agent had been idle longer
+    than the cache lifetime), labelled with the estimated cost and the idle gap; dashed amber when
+    warm; grey when the digest has no estimate. Above the graph, one line adds them up for the tree,
+    with what a warm cache every time would have cost. The estimate (`compaction.call`, the
+    harness does not record the call) is in no figure on the page;
   - one line per session: the root at the top, each other session on a line of its own under its
     parent, starting at the turn after the last one it copied, with only its own turns. Forks and
     continuations are drawn the same way; nothing is merged across session ids;
   - above a line, a bar per turn: what the main agent spent in it, split by who (main agent, cache
     miss, compaction) or by token class;
   - on the line, a dot for every prompt a person typed, and over it a bracket with the total of
-    everything up to the next typed prompt (a **decision**);
+    everything up to the next typed prompt (a **decision**). A ring marks a turn during which a
+    prompt was typed (`turn.queued`): it starts no turn and no decision, but it steered that turn;
   - below a line, a bar per piece of agent work, under the turn that launched it, as tall as all
     it cost (its own sub-agents included), with a tail to the turn its report came in. A sub-agent
-    or fork is one piece; a teammate is one piece per message it was sent. Agents that do not
+    or fork is one piece; a teammate is one piece per message it was sent; a workflow run
+    (`digest.workflows`) is one piece with all its agents inside, back where its task notification
+    came in. Agents that do not
     overlap share a row;
   - one dollar scale for every bar; hover reads a turn or a piece of work above the plot, arrow
     keys move, a click pins. A pinned turn tints its decision's turns.
 - **Decision panel**: the pinned turn's decision, its total split by who, then every step and every
-  piece of agent work in it, most expensive first. A decision is only "everything between two typed
+  piece of agent work in it, most expensive first, and the compactions after its turns. A decision is only "everything between two typed
   prompts": work an earlier prompt asked for is counted where it ran, and the page says so rather
   than claiming the prompt caused it.
-- **Turn card**: the pinned turn's prompt (machine-delivered messages parsed, `lib/inbox.ts`) and
-  reply, what the main agent paid for by token class, its cache misses in words, the work launched
+- **Turn card**: the pinned turn's prompt (machine-delivered messages parsed, `lib/inbox.ts`), the
+  prompts typed or delivered while it ran, the reply, the compaction after it (`lib/compaction.ts`), what the main agent paid for by token class, its cache misses in words, the work launched
   in it and the reports that came in; a selected piece of work opens under it with what it was
   asked, what it paid for and the agent's detail (`features/agents/AgentDetail`).
 - **Your most expensive decisions**: the top ten of the tree, always shown; a click pins the
@@ -298,8 +306,7 @@ and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harne
 here.
 
 The previous page (a timeline of every turn with Cost, Agents and Context cards in a side panel)
-is retired. Its files under `features/session/` are no longer routed; they are deleted once no one
-has uncommitted edits in them.
+was retired and deleted on 2026-10-03; it is in the git history before that date.
 
 ## 10. Cost page (`/cost`)
 
@@ -328,20 +335,6 @@ Where the built UI differs from the sections above:
 - Sessions: kind and date range are dropdowns; search ignores the state filter; scripted-run
   lines are hidden while a state or kind filter is active; a running session shows no end-state
   badge (while it runs, the end state only says the last record is not an answer yet).
-- Session (the retired timeline page): the page is capped at 1500px and centred; without a hash, an inherited session opens at
-  the "N turns copied" divider; the family strip names the relation only for the current session's
-  neighbours. Prompts a machine delivered (task notifications, teammate messages, idle
-  notifications) arrive from the API already parsed, as `turn.inbox`; each message shows its sender
-  or kind, summary and text, and its label selects the agent it came from (`src/lib/inbox.ts`).
-  `src/lib/wrapper.ts` unwraps the markup only for digests written before the API did.
-  Prompts that arrived while a turn was running (`turn.queued`) are listed under the turn's prompt,
-  marked "typed while the turn ran" or "arrived while the turn ran".
-- Workflow runs: the agents of a run (`agent.runId`) are one unit. On the retired page, the Agents card folds them into
-  one line, "workflow <name>" with the count and the phases in order, however few they are; a turn
-  shows one chip per run instead of one per agent.
-- Agents card (retired page): a row's bar is measured against the attributed cost of all agents, not of the
-  session; runs of more than eight siblings of one type fold into one line.
-- Context chart (retired page): only the compaction nearest the cursor is labelled.
 - Cost: the range defaults to 7 days; selecting a bar narrows the figures to that day or week and
   keeps the chart; "Top sessions" lists sessions last active in the range with their whole cost,
   which is not the same sum as the other cuts, and says so.
