@@ -59,7 +59,7 @@ merlin search <terms...>                  matching turns with the resume command
 merlin serve [--port 7433] [--no-hooks]   daemon: index, follow, serve
 merlin sessions [--project P] [--kind K] [--since D]   list sessions, newest first
 merlin show <session-id>                  turns, agent tree, compactions, cost
-merlin upgrade                            how to upgrade (prints the installer command)
+merlin upgrade [--check] [--force]        replace this binary with the latest release
 merlin version                            print the version
 ```
 
@@ -68,7 +68,12 @@ HTTP API and the design.
 
 ## Upgrade
 
-Run the installer again. `merlin upgrade` prints the command; it does not update itself.
+`merlin upgrade` downloads the latest release, verifies its SHA-256 and replaces the binary in
+place; `merlin upgrade --check` only reports whether there is one. If merlin is installed in a
+directory you cannot write to (such as `/usr/local/bin`), run it with `sudo`. A running
+`merlin serve` keeps the old version until you restart it.
+
+Versions 0.2.0 and 0.3.0 cannot update themselves: run the installer again to get past them.
 
 ## Where state lives
 
