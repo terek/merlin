@@ -3,7 +3,15 @@
   "cacheWrite5mMultiplier": 1.25,
   "cacheWrite1hMultiplier": 2,
   "fastMultiplier": 2,
-  "fastModels": ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"],
+  "fastModels": [
+    "claude-opus-5-5",
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "gpt-6.1-sol",
+    "gpt-6-sol",
+    "gpt-6-luna",
+    "gpt-6-astra"
+  ],
   "fastStatus": "assumed",
   "models": {
     "claude-fable-5-1": {
@@ -64,6 +72,38 @@
       "cacheRead": 0.1,
       "status": "verified",
       "note": "input/output verified, cache read assumed"
+    },
+    "gpt-6.1-sol": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.1,
+      "long": { "above": 272000, "input": 4, "output": 15, "cacheRead": 0.2 },
+      "status": "verified",
+      "note": "OpenAI API pricing page, standard tier, read 2026-10-24; fast mode (priority) is 2x"
+    },
+    "gpt-6-sol": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.2,
+      "long": { "above": 272000, "input": 4, "output": 15, "cacheRead": 0.4 },
+      "status": "verified",
+      "note": "OpenAI API pricing page, standard tier, read 2026-10-24; fast mode (priority) is 2x"
+    },
+    "gpt-6-luna": {
+      "input": 0.1,
+      "output": 0.5,
+      "cacheRead": 0.01,
+      "long": { "above": 272000, "input": 0.2, "output": 0.75, "cacheRead": 0.02 },
+      "status": "verified",
+      "note": "OpenAI API pricing page, standard tier, read 2026-10-24; fast mode (priority) is 2x"
+    },
+    "gpt-6-astra": {
+      "input": 10,
+      "output": 50,
+      "cacheRead": 1,
+      "long": { "above": 272000, "input": 20, "output": 75, "cacheRead": 2 },
+      "status": "verified",
+      "note": "OpenAI API pricing page, standard tier, read 2026-10-24; fast mode (priority) is 2x"
     }
   }
 }

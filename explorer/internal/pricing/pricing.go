@@ -30,6 +30,18 @@ type Price struct {
 	// Fast, in an override entry only, sets whether fast mode applies to the model.
 	// Absent leaves the table's fastModels list in charge.
 	Fast *bool `json:"fast,omitempty"`
+	// Long, when set, is the price of a long-context request: one whose input (uncached,
+	// cached and written) is more than Long.Above tokens is billed at it in full.
+	Long *LongPrice `json:"long,omitempty"`
+}
+
+// LongPrice is a model's long-context price in USD per million tokens. Cache writes are
+// priced from Input with the table's multipliers, as for the normal price.
+type LongPrice struct {
+	Above     int64   `json:"above"`
+	Input     float64 `json:"input"`
+	Output    float64 `json:"output"`
+	CacheRead float64 `json:"cacheRead"`
 }
 
 // tableFile is the shape of the embedded prices.json.
@@ -170,6 +182,9 @@ func (t *Table) Cost(name string, tok model.Tokens, fast bool) (model.ModelCost,
 	resolved, p, ok := t.Lookup(name)
 	if !ok {
 		return model.ModelCost{}, false
+	}
+	if l := p.Long; l != nil && tok.Input+tok.CacheRead+tok.CacheWrite5m+tok.CacheWrite1h > l.Above {
+		p.Input, p.Output, p.CacheRead = l.Input, l.Output, l.CacheRead
 	}
 	usd := float64(tok.Input)*p.Input +
 		float64(tok.Output)*p.Output +

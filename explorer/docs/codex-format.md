@@ -46,6 +46,11 @@ of `output_tokens`, and `total = input + output`. The sum of a thread's records 
 cached`, `cacheRead = cached`, `output = output`. `cache_write_input_tokens` has always been 0
 and is not used.
 
+Prices are OpenAI's standard API rates (`internal/pricing/prices.json`): a call in fast mode
+(`service_tier: priority`) costs 2× every rate, and a call with more than 272K input tokens is
+billed at the model's long-context rate in full. `codex-auto-review` is not on OpenAI's price
+list and stays unpriced (`diagnostics.unpricedModels`).
+
 ## Session trees
 
 A session is all threads sharing a `session_id`; its id is the root thread's. `source`:

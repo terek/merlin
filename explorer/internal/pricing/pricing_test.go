@@ -161,6 +161,27 @@ func TestOverrides(t *testing.T) {
 	}
 }
 
+func TestCodexModels(t *testing.T) {
+	tab := Default()
+	// gpt-6.1-sol: $2 input, $0.10 cached, $10 output per million.
+	mc, ok := tab.Cost("gpt-6.1-sol", model.Tokens{Input: 1000, CacheRead: 150000, Output: 4000}, false)
+	if !ok {
+		t.Fatal("gpt-6.1-sol unpriced")
+	}
+	near(t, mc.USD*1e6, 1000*2+150000*0.1+4000*10)
+	// Fast mode (priority tier) doubles every rate.
+	fast, _ := tab.Cost("gpt-6.1-sol", model.Tokens{Input: 1000, CacheRead: 150000, Output: 4000}, true)
+	near(t, fast.USD, 2*mc.USD)
+	// Above 272K input tokens the whole request is billed at the long-context price.
+	long, _ := tab.Cost("gpt-6-sol", model.Tokens{Input: 2001, CacheRead: 270000, Output: 100}, false)
+	near(t, long.USD*1e6, 2001*4+270000*0.4+100*15)
+	short, _ := tab.Cost("gpt-6-sol", model.Tokens{Input: 2000, CacheRead: 270000, Output: 100}, false)
+	near(t, short.USD*1e6, 2000*2+270000*0.2+100*10)
+	if _, ok := tab.Cost("gpt-6-luna", model.Tokens{Input: 1}, false); !ok {
+		t.Error("gpt-6-luna unpriced")
+	}
+}
+
 func TestFable5Verified(t *testing.T) {
 	p := Default().models["claude-fable-5"]
 	if p.Status != "verified" || p.CacheRead != 1.0 {

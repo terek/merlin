@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 1
+const ParserVersion = 2
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
