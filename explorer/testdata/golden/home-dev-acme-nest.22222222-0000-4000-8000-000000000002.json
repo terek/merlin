@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-nest/-home-dev-acme-nest-inner/22222222-0000-4000-8000-000000000002.jsonl",
@@ -114,6 +114,30 @@
       "finalText": "Hello from the inner project.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-22T10:00:05Z",
+          "endedAt": "2026-09-22T10:00:07Z",
+          "origin": "spawn",
+          "prompt": "Say hello from the inner project.",
+          "finalText": "Hello from the inner project.",
+          "rootTurn": 0,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0022,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 500,
+                "output": 20,
+                "cacheWrite5m": 400,
+                "usd": 0.0022
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0022,
         "byModel": {
@@ -145,6 +169,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a22e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0022,
       "input": 500,
       "output": 20,

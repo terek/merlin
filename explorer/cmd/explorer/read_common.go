@@ -531,13 +531,17 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// resumeCommand is what to type to pick a session up again: Claude Code finds a session
-// by the directory it was started in.
-func resumeCommand(project, id string) string {
-	if project == "" {
-		return "claude --resume " + id
+// resumeCommand is what to type to pick a session up again, from the directory it was
+// started in (Claude Code finds a session by that directory).
+func resumeCommand(harness, project, id string) string {
+	resume := "claude --resume " + id
+	if harness == "codex" {
+		resume = "codex resume " + id
 	}
-	return "cd " + shellQuote(project) + " && claude --resume " + id
+	if project == "" {
+		return resume
+	}
+	return "cd " + shellQuote(project) + " && " + resume
 }
 
 func plural(n int, one, many string) string {

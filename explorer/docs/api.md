@@ -16,7 +16,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
   float. Absent optional fields are omitted; lists are `[]`, never `null`. Responses carry
   `Cache-Control: no-store`.
 - **Sessions are keyed by `(harness, id)`**; a key is the object `{"harness": "claude", "id": "..."}`.
-  Today the only harness is `claude`.
+  The harnesses are `claude` (Claude Code) and `codex` (Codex CLI).
 - **Scripted runs** (`kind: "sdk"`, one-shot `claude -p` calls) are never listed, searched or
   matched by id prefix. They appear only in aggregate: `scripted` lines in the session list, the
   `sdk` row of `/api/cost?by=kind`, `scriptedRuns` in `/api/projects`.
@@ -583,6 +583,20 @@ indexes of turns copied from the parent; `firstOwnTurn`: index of the first turn
         "depth": 1,
         "status": "completed",
         "assistantMessages": 1,
+        "turns": [
+          {
+            "index": 0,
+            "startedAt": "2026-09-16T11:00:15Z",
+            "endedAt": "2026-09-16T11:00:17Z",
+            "origin": "spawn",
+            "prompt": "List the tax rules in billing.ts.",
+            "finalText": "Tax rules: flat 10 percent.",
+            "rootTurn": 1,
+            "assistantMessages": 1,
+            "toolCalls": 0,
+            "cost": { "usd": 0.00475 }
+          }
+        ],
         "cost": {
           "usd": 0.00475,
           "byModel": {

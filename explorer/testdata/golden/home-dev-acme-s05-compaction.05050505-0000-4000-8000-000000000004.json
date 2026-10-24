@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000004.jsonl",
@@ -149,6 +149,34 @@
           }
         }
       ],
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-05T10:00:05Z",
+          "endedAt": "2026-09-05T10:00:17Z",
+          "origin": "spawn",
+          "prompt": "Audit every module and summarise.",
+          "finalText": "Read the first module\n\nAll modules audited",
+          "rootTurn": 0,
+          "assistantMessages": 3,
+          "toolCalls": 1,
+          "toolsByName": {
+            "Read": 1
+          },
+          "cost": {
+            "usd": 0.010100000000000001,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 1300,
+                "output": 130,
+                "cacheRead": 1000,
+                "cacheWrite5m": 2400,
+                "usd": 0.010100000000000001
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.010100000000000001,
         "byModel": {
@@ -181,6 +209,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a05e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0051,
       "input": 1000,
       "output": 60,
@@ -192,6 +221,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a05e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.00195,
       "input": 100,
       "output": 30,
@@ -204,6 +234,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a05e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.00305,
       "input": 200,
       "output": 40,

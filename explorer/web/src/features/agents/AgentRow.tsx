@@ -1,4 +1,14 @@
-import { Bot, ChevronDown, ChevronRight, GitFork, Minimize2, Users, Workflow } from 'lucide-react'
+import {
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  FileSearch,
+  GitFork,
+  Minimize2,
+  ShieldCheck,
+  Users,
+  Workflow,
+} from 'lucide-react'
 import type { AgentKind } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { firstLine } from '../../lib/paths'
@@ -11,6 +21,8 @@ const KIND_ICON: Record<AgentKind, typeof Bot> = {
   fork: GitFork,
   compact: Minimize2,
   workflow: Workflow,
+  review: FileSearch,
+  'approval-review': ShieldCheck,
 }
 
 export function KindIcon({ kind, size = 14 }: { kind: AgentKind; size?: number }) {

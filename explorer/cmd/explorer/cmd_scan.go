@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/terek/merlin/explorer/internal/claude"
+	"github.com/terek/merlin/explorer/internal/codex"
 	"github.com/terek/merlin/explorer/internal/engine"
 	"github.com/terek/merlin/explorer/internal/harness"
 	"github.com/terek/merlin/explorer/internal/paths"
@@ -50,6 +51,11 @@ func runScan(args []string) int {
 		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
+	codexHome, err := paths.CodexHome()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
+		return 1
+	}
 	pricer, err := pricing.Load(filepath.Join(home, "config.json"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
@@ -65,7 +71,7 @@ func runScan(args []string) int {
 	p := &progressPrinter{w: os.Stderr, enabled: !*quiet}
 	eng, err := engine.New(engine.Options{
 		Store:      st,
-		Harnesses:  []harness.Harness{claude.New(cfg, pricer)},
+		Harnesses:  []harness.Harness{claude.New(cfg, pricer), codex.New(codexHome, pricer)},
 		Workers:    *workers,
 		Logf:       func(format string, a ...any) { fmt.Fprintf(os.Stderr, "merlin scan: "+format+"\n", a...) },
 		OnProgress: p.update,

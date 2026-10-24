@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-orphan/12121212-0000-4000-8000-000000000001/subagents/agent-a12e0c0de0000001.jsonl",
@@ -77,6 +77,29 @@
       "finalText": "Found 3 TODO comments.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-12T10:00:00Z",
+          "endedAt": "2026-09-12T10:00:02Z",
+          "origin": "spawn",
+          "prompt": "Scan the repo for TODO comments.",
+          "finalText": "Found 3 TODO comments.",
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0043,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 1000,
+                "output": 30,
+                "cacheWrite5m": 800,
+                "usd": 0.0043
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0043,
         "byModel": {
@@ -104,6 +127,29 @@
       "finalText": "There are 5 markdown files.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-12T10:01:00Z",
+          "endedAt": "2026-09-12T10:01:02Z",
+          "origin": "spawn",
+          "prompt": "Count the markdown files.",
+          "finalText": "There are 5 markdown files.",
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0042,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 1000,
+                "output": 20,
+                "cacheWrite5m": 800,
+                "usd": 0.0042
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0042,
         "byModel": {
@@ -121,6 +167,7 @@
       "id": "acompact-12e0c0de",
       "kind": "compact",
       "model": "claude-sonnet-5-5",
+      "inheritsContext": true,
       "parentAgentId": null,
       "depth": 1,
       "linkage": "unresolved",
@@ -131,6 +178,28 @@
       "finalText": "Summary: scanning and counting were done.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-12T10:02:00Z",
+          "endedAt": "2026-09-12T10:02:02Z",
+          "origin": "spawn",
+          "prompt": "Summarise the conversation so far.",
+          "finalText": "Summary: scanning and counting were done.",
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0046,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 2000,
+                "output": 60,
+                "usd": 0.0046
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0046,
         "byModel": {
@@ -150,6 +219,7 @@
       "at": "2026-09-12T10:00:02Z",
       "model": "claude-sonnet-5-5",
       "agentId": "a12e0c0de0000001",
+      "agentTurn": 0,
       "usd": 0.0043,
       "input": 1000,
       "output": 30,
@@ -160,6 +230,7 @@
       "at": "2026-09-12T10:01:02Z",
       "model": "claude-sonnet-5-5",
       "agentId": "a1b2c3d",
+      "agentTurn": 0,
       "usd": 0.0042,
       "input": 1000,
       "output": 20,
@@ -170,6 +241,7 @@
       "at": "2026-09-12T10:02:02Z",
       "model": "claude-sonnet-5-5",
       "agentId": "acompact-12e0c0de",
+      "agentTurn": 0,
       "usd": 0.0046,
       "input": 2000,
       "output": 60

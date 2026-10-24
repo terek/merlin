@@ -372,7 +372,10 @@ func TestFormatters(t *testing.T) {
 	if !reflect.DeepEqual(labels, want) {
 		t.Errorf("projectLabels = %v, want %v", labels, want)
 	}
-	if got := resumeCommand("/p q", "id1"); got != "cd '/p q' && claude --resume id1" {
+	if got := resumeCommand("codex", "/p", "id2"); got != "cd /p && codex resume id2" {
+		t.Errorf("codex resume = %q", got)
+	}
+	if got := resumeCommand("claude", "/p q", "id1"); got != "cd '/p q' && claude --resume id1" {
 		t.Errorf("resumeCommand = %q", got)
 	}
 }

@@ -221,6 +221,19 @@ func TestOwnershipRules(t *testing.T) {
 			t.Errorf("%+v", ch)
 		}
 	})
+	t.Run("a fork marker links sessions that share nothing", func(t *testing.T) {
+		parent := syn("codex", "parent", "/p", 1, 9, tu, msg("m1"))
+		child := syn("codex", "child", "/p", 5, 9, tu, msg("m2"))
+		child.Lineage.ForkedFrom = &model.ForkRef{SessionID: "parent"}
+		c := New()
+		c.Upsert(child)
+		c.Upsert(parent)
+		ch, _ := c.Session(model.SessionKey{Harness: "codex", ID: "child"})
+		if ch.Parent == nil || ch.Parent.Parent.ID != "parent" || ch.Parent.Kind != LinkFork || !ch.Parent.Explicit ||
+			ch.Parent.SharedMessages != 0 || ch.Cost.OwnMessages != 1 {
+			t.Errorf("link = %+v cost = %+v", ch.Parent, ch.Cost)
+		}
+	})
 	t.Run("cyclic markers fall back to the order and still form a tree", func(t *testing.T) {
 		x := syn("claude", "x", "/p", 1, 9, tu, msg("m"))
 		y := syn("claude", "y", "/p", 2, 9, tu, msg("m"))

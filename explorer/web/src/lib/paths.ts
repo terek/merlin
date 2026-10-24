@@ -33,9 +33,9 @@ export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`
 }
 
-/** The command that resumes a session: `cd <cwd> && claude --resume <id>`. */
-export function resumeCommand(cwd: string | undefined, id: string): string {
-  const resume = `claude --resume ${shellQuote(id)}`
+/** The command that resumes a session: `cd <cwd> && claude --resume <id>` (Codex: `codex resume <id>`). */
+export function resumeCommand(cwd: string | undefined, id: string, harness = 'claude'): string {
+  const resume = harness === 'codex' ? `codex resume ${shellQuote(id)}` : `claude --resume ${shellQuote(id)}`
   return cwd ? `cd ${shellQuote(cwd)} && ${resume}` : resume
 }
 

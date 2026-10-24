@@ -126,7 +126,7 @@ func doSessions(project, kind, since string, limit int, asJSON bool) error {
 		}
 		for _, in := range l.Sessions {
 			out.Sessions = append(out.Sessions, sessionJSON{SessionInfo: in, ID: in.Key.ID,
-				Agents: agents(in.Key), Resume: resumeCommand(in.Project, in.Key.ID)})
+				Agents: agents(in.Key), Resume: resumeCommand(in.Key.Harness, in.Project, in.Key.ID)})
 		}
 		return writeJSON(out)
 	}

@@ -100,7 +100,7 @@ func doShow(arg string, opt showOpts, asJSON bool) error {
 		in.State = st
 	}
 	fam, _ := w.cat.Family(key)
-	resume := resumeCommand(in.Project, key.ID)
+	resume := resumeCommand(key.Harness, in.Project, key.ID)
 
 	if asJSON {
 		cp := *d

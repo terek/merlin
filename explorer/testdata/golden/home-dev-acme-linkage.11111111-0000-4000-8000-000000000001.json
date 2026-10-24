@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001.jsonl",
@@ -130,6 +130,30 @@
       "finalText": "The entry point is main.ts.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-11T10:00:07Z",
+          "endedAt": "2026-09-11T10:00:09Z",
+          "origin": "spawn",
+          "prompt": "Context: the repo is small. Find the entry point.",
+          "finalText": "The entry point is main.ts.",
+          "rootTurn": 0,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0043,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 1000,
+                "output": 30,
+                "cacheWrite5m": 800,
+                "usd": 0.0043
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0043,
         "byModel": {
@@ -161,6 +185,30 @@
       "finalText": "Config files: tsconfig.json, package.json.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-11T10:00:07Z",
+          "endedAt": "2026-09-11T10:00:09Z",
+          "origin": "spawn",
+          "prompt": "List the config files.",
+          "finalText": "Config files: tsconfig.json, package.json.",
+          "rootTurn": 0,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0044,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 1000,
+                "output": 40,
+                "cacheWrite5m": 800,
+                "usd": 0.0044
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0044,
         "byModel": {
@@ -188,6 +236,30 @@
       "finalText": "Housekeeping finished.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-11T10:00:07Z",
+          "endedAt": "2026-09-11T10:00:09Z",
+          "origin": "spawn",
+          "prompt": "Unrelated housekeeping task nobody asked for.",
+          "finalText": "Housekeeping finished.",
+          "rootTurn": 0,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.0042,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 1000,
+                "output": 20,
+                "cacheWrite5m": 800,
+                "usd": 0.0042
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0042,
         "byModel": {
@@ -219,6 +291,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a11e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0043,
       "input": 1000,
       "output": 30,
@@ -230,6 +303,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a11e0c0de0000002",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0044,
       "input": 1000,
       "output": 40,
@@ -240,6 +314,7 @@
       "at": "2026-09-11T10:00:09Z",
       "model": "claude-sonnet-5-5",
       "agentId": "a11e0c0de0000003",
+      "agentTurn": 0,
       "usd": 0.0042,
       "input": 1000,
       "output": 20,

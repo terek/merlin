@@ -12,13 +12,18 @@ import (
 // real home.
 //
 // ~/.merlin is shared with the earlier Merlin program, whose files may still be there.
-// This program only ever touches claude/ (and other per-harness directories),
+// This program only ever touches claude/, codex/ (and other per-harness directories),
 // config.json, merlin.lock and merlin.log in it.
 func Home() (string, error) {
 	if v := os.Getenv("MERLIN_HOME"); v != "" {
 		return filepath.Clean(v), nil
 	}
 	return resolve("EXPLORER_HOME", ".merlin")
+}
+
+// CodexHome returns CODEX_HOME, defaulting to ~/.codex.
+func CodexHome() (string, error) {
+	return resolve("CODEX_HOME", ".codex")
 }
 
 // ClaudeConfigDir returns CLAUDE_CONFIG_DIR, defaulting to ~/.claude.

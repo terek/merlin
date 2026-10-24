@@ -16,8 +16,17 @@ export type EndState = 'clean' | 'interrupted' | 'mid-turn' | 'unknown'
 export type State = 'busy' | 'idle' | 'recent' | 'ended'
 export type CostFlag = 'exact' | 'partial' | 'estimated'
 export type LinkKind = 'fork' | 'continuation'
-export type TurnOrigin = 'human' | 'command' | 'task-notification' | 'peer' | 'scheduled' | 'sdk' | 'continuation'
-export type AgentKind = 'subagent' | 'teammate' | 'fork' | 'compact' | 'workflow'
+export type TurnOrigin =
+  | 'human'
+  | 'command'
+  | 'task-notification'
+  | 'peer'
+  | 'scheduled'
+  | 'sdk'
+  | 'continuation'
+  /** The task an agent was started with (`AgentTurn` only). */
+  | 'spawn'
+export type AgentKind = 'subagent' | 'teammate' | 'fork' | 'compact' | 'workflow' | 'review' | 'approval-review'
 export type AgentStatus = 'completed' | 'killed' | 'open'
 export type Linkage = 'meta' | 'tool-result' | 'name' | 'prompt' | 'run' | 'unresolved'
 export type CompactionTrigger = 'auto' | 'manual'
@@ -324,8 +333,10 @@ export interface Compaction {
   summary?: string
   /** Byte ranges of the summary that are the harness's fixed wording (search skips them). */
   boilerplate?: { from: number; to: number }[]
-  /** What the call that wrote the summary cost: an estimate, the harness does not record it. */
+  /** What the call that wrote the summary cost: an estimate, for a harness that does not record it. */
   call?: CompactionCall
+  /** The billed message of that call, for a harness that records it (Codex); it is in the totals. */
+  messageId?: string
 }
 
 /**
@@ -457,6 +468,10 @@ export interface Agent {
   agentType?: string
   description?: string
   model?: string
+  /** It started with a copy of its parent's conversation (kinds fork and compact). */
+  inheritsContext?: boolean
+  /** It could be sent more work after its launch (a teammate), or was. */
+  addressable?: boolean
   /** null = spawned by the main agent. */
   parentAgentId: string | null
   spawnToolUseId?: string
@@ -474,9 +489,35 @@ export interface Agent {
   toolCalls: number
   toolsByName?: Record<string, number>
   compactions?: Compaction[]
+  /** Its stretches of work: the task it was started with, then each message or task that set it working again. */
+  turns?: AgentTurn[]
   cost: Cost
   /** Own dollars plus all descendants. */
   subtreeUSD: number
+}
+
+/**
+ * One stretch of work of an agent, from the task or message that set it working to the answer it stopped
+ * with. The turns' messages, tool calls and costs add up to the agent's.
+ */
+export interface AgentTurn {
+  index: number
+  startedAt?: string
+  endedAt?: string
+  /** 'spawn' for the first turn; later, who authored the prompt. */
+  origin: TurnOrigin
+  /** First turn: the agent's prompt. Later: what was typed; delivered messages are in `inbox`. */
+  prompt?: string
+  inbox?: InboxMessage[]
+  queued?: QueuedPrompt[]
+  finalText?: string
+  interrupted?: boolean
+  /** The main agent's turn this work belongs to: the one that set it off, else the one running when it started. */
+  rootTurn?: number
+  assistantMessages: number
+  toolCalls: number
+  toolsByName?: Record<string, number>
+  cost: Cost
 }
 
 /** One billed API message; present only with `?messages=1`. */
@@ -487,6 +528,8 @@ export interface Message extends Tokens {
   /** Omitted for the main agent. */
   agentId?: string
   turn?: number
+  /** For an agent's message: the index of the agent's turn (`Agent.turns`) it belongs to. */
+  agentTurn?: number
   usd: number
   /** Written down before it finished: output tokens are a partial count. */
   truncated?: boolean

@@ -71,7 +71,7 @@ export function resumeInfo(d: SessionDetail): ResumeInfo {
     .filter((k) => !sameKey(k, d.summary.key))
     .map((k) => d.family.members.find((m) => sameKey(m.key, k)))
     .filter((m): m is FamilyMember => !!m)
-  return { command: resumeCommand(cwd, d.summary.key.id), leaf: d.lineage.leaf, leaves }
+  return { command: resumeCommand(cwd, d.summary.key.id, d.summary.key.harness), leaf: d.lineage.leaf, leaves }
 }
 
 // ---- family -----------------------------------------------------------------------------

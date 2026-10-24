@@ -130,8 +130,9 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 
 	owned := assignMessages(main, ags)
 	agents := make([]model.Agent, n)
+	msgTurns := make([][]int, n) // per agent, per owned message: index into its Turns
 	for i, a := range ags {
-		agents[i] = buildAgent(a, links[i], parent[i], spawns, owned[i])
+		agents[i], msgTurns[i] = buildAgent(a, links[i], parent[i], spawns, owned[i])
 		if links[i].kind == model.LinkUnresolved {
 			asm.Diagnostics.UnresolvedAgents++
 		}
@@ -150,10 +151,12 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 
 	// Who the delivered messages came from. An agent does not send to itself.
 	for i := range agents {
-		resolveInbox(agents[i].Inbox, agents)
-		for k := range agents[i].Inbox {
-			if agents[i].Inbox[k].AgentID == agents[i].ID {
-				agents[i].Inbox[k].AgentID = ""
+		resolveOwnInbox(agents[i].Inbox, agents, agents[i].ID)
+		for k := range agents[i].Turns {
+			t := &agents[i].Turns[k]
+			resolveOwnInbox(t.Inbox, agents, agents[i].ID)
+			for q := range t.Queued {
+				resolveOwnInbox(t.Queued[q].Inbox, agents, agents[i].ID)
 			}
 		}
 	}
@@ -175,6 +178,7 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 				}
 			}
 		}
+		fillRootTurns(agents, parent, asm.Turns)
 		for i, a := range agents {
 			if parent[i] >= 0 || a.SpawnTurn == nil {
 				continue // nested agents are inside their top-level ancestor's subtree
@@ -193,9 +197,12 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 		asm.Cost.Add(main.Cost)
 	}
 	for i, a := range ags {
-		for _, m := range owned[i] {
+		for j, m := range owned[i] {
 			m.AgentID = a.id
 			m.Turn = agents[i].SpawnTurn
+			if k := msgTurns[i][j]; k >= 0 {
+				m.AgentTurn = &k
+			}
 			asm.Messages = append(asm.Messages, m)
 		}
 		asm.Cost.Add(agents[i].Cost)
@@ -472,9 +479,10 @@ func assignMessages(main *FileResult, ags []agentIn) [][]model.Message {
 	return owned
 }
 
-// buildAgent fills everything about an agent except depth, spawn turn, status, parent id
-// and subtree cost.
-func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.Message) model.Agent {
+// buildAgent fills everything about an agent except depth, spawn turn, status, parent id,
+// subtree cost and the root turns of its turns. It also returns, for each of msgs, the index
+// of the agent turn it belongs to (-1 when the agent has no turns).
+func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.Message) (model.Agent, []int) {
 	ag := model.Agent{
 		ID:             a.id,
 		Kind:           agentKind(a),
@@ -510,13 +518,25 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 
 	// Turn-derived fields.
 	turns := a.res.Turns
-	if p := firstPrompt(turns); p >= 0 {
+	p := firstPrompt(turns)
+	fromInbox := false // the prompt is the first message its first prompt delivered
+	if p >= 0 {
 		// A fork replays its parent's context before its own prompt: when the spawn's
 		// input.prompt is a later prompt of the file, that one is the agent's prompt.
 		if ag.Kind == model.AgentFork && sp != nil && sp.Prompt != "" {
 			for j := p; j < len(turns); j++ {
 				if turns[j].Origin != model.OriginContinuation &&
 					strings.TrimSpace(promptText(&turns[j])) == strings.TrimSpace(sp.Prompt) {
+					p = j
+					break
+				}
+			}
+		}
+		// A compaction call is given the conversation to summarise, its prompts included, and
+		// then the instruction to summarise it: the last prompt is the agent's.
+		if ag.Kind == model.AgentCompact {
+			for j := len(turns) - 1; j > p; j-- {
+				if turns[j].Origin != model.OriginContinuation {
 					p = j
 					break
 				}
@@ -536,6 +556,7 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 			}
 		}
 		if first := turns[p].Inbox; ag.Prompt == "" && len(first) > 0 {
+			fromInbox = true
 			ag.Prompt = first[0].Text
 			ag.Description = firstNonEmpty(ag.Description, first[0].Summary)
 			ag.Inbox = append(ag.Inbox, first[1:]...)
@@ -563,6 +584,13 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 
 	// Own cost: the messages this agent bills, minus models with no price.
 	unpriced := a.res.Diagnostics.UnpricedModels
+	var msgTurn []int
+	ag.Turns, msgTurn = agentTurns(turns, p, ag.Prompt, fromInbox, msgs, unpriced)
+	ag.InheritsContext = ag.Kind == model.AgentFork || ag.Kind == model.AgentCompact
+	ag.Addressable = ag.Kind == model.AgentTeammate || ag.Kind != model.AgentCompact &&
+		slices.ContainsFunc(ag.Inbox, func(m model.InboxMessage) bool {
+			return m.Kind == model.InboxMessageKind || m.Kind == model.InboxAssignment
+		})
 	for _, m := range msgs {
 		ag.AssistantMessages++
 		if slices.Contains(unpriced, m.Model) {
@@ -573,7 +601,85 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 			ag.Cost.AddTruncated()
 		}
 	}
-	return ag
+	return ag, msgTurn
+}
+
+// agentTurns groups an agent's file turns into its turns of work. p is its first prompt
+// (-1 when it has none): the turns before it (a fork's copy of its parent's conversation,
+// a workflow agent's relayed request) fold into the first turn, and so does every
+// continuation into the turn before it. prompt and fromInbox are what buildAgent made of the
+// first prompt. Messages belong to the turn their file turn folded into (by time when they
+// name none). It returns the turns and, per message, its turn's index.
+func agentTurns(turns []model.Turn, p int, prompt string, fromInbox bool, msgs []model.Message, unpriced []string) ([]model.AgentTurn, []int) {
+	msgTurn := make([]int, len(msgs))
+	if len(turns) == 0 {
+		if len(msgs) == 0 {
+			return nil, msgTurn
+		}
+		// Messages but no turn: one turn of work spanning them.
+		t := model.AgentTurn{Origin: model.OriginSpawn, Prompt: prompt, StartedAt: msgs[0].At, EndedAt: msgs[len(msgs)-1].At}
+		for _, m := range msgs {
+			addAgentMessage(&t, m, unpriced)
+		}
+		return []model.AgentTurn{t}, msgTurn
+	}
+	start := max(p, 0)
+	of := make([]int, len(turns)) // file turn -> agent turn
+	out := []model.AgentTurn{{
+		StartedAt: turns[start].StartedAt,
+		Origin:    model.OriginSpawn,
+		Prompt:    prompt,
+	}}
+	if fromInbox && len(turns[start].Inbox) > 1 {
+		out[0].Inbox = slices.Clone(turns[start].Inbox[1:])
+	}
+	for i, ft := range turns {
+		if i < start {
+			// Copied or relayed context: its tool calls count, its texts do not.
+			addToolCalls(&out[0], ft)
+			continue
+		}
+		if i > start {
+			if ft.Origin == model.OriginContinuation {
+				of[i] = of[i-1]
+			} else {
+				of[i] = len(out)
+				out = append(out, model.AgentTurn{
+					Index:     len(out),
+					StartedAt: ft.StartedAt,
+					Origin:    ft.Origin,
+					Prompt:    ft.UserText,
+					Inbox:     slices.Clone(ft.Inbox),
+				})
+			}
+		}
+		t := &out[of[i]]
+		if ft.EndedAt.After(t.EndedAt) {
+			t.EndedAt = ft.EndedAt
+		}
+		t.Queued = append(t.Queued, ft.Queued...)
+		if ft.FinalText != "" {
+			t.FinalText = ft.FinalText
+		}
+		t.Interrupted = ft.Interrupted
+		addToolCalls(t, ft)
+	}
+	for j, m := range msgs {
+		k := 0
+		switch {
+		case m.Turn != nil && *m.Turn >= 0 && *m.Turn < len(of):
+			k = of[*m.Turn]
+		case !m.At.IsZero():
+			for x := range out {
+				if !out[x].StartedAt.IsZero() && !out[x].StartedAt.After(m.At) {
+					k = x
+				}
+			}
+		}
+		msgTurn[j] = k
+		addAgentMessage(&out[k], m, unpriced)
+	}
+	return out, msgTurn
 }
 
 func firstNonEmpty(ss ...string) string {
@@ -830,4 +936,72 @@ func mergeDiagnostics(d *model.Diagnostics, main *FileResult, ags []agentIn) {
 		add(a.res.Diagnostics)
 	}
 	d.UnpricedModels = unpriced.copy()
+}
+
+// addToolCalls adds a file turn's tool calls to an agent turn.
+func addToolCalls(t *model.AgentTurn, ft model.Turn) {
+	t.ToolCalls += ft.ToolCalls
+	for k, v := range ft.ToolsByName {
+		if t.ToolsByName == nil {
+			t.ToolsByName = make(map[string]int64)
+		}
+		t.ToolsByName[k] += v
+	}
+}
+
+// addAgentMessage counts one message the agent bills in its turn, and its cost unless its
+// model has no price (as Agent.Cost does).
+func addAgentMessage(t *model.AgentTurn, m model.Message, unpriced []string) {
+	t.AssistantMessages++
+	if slices.Contains(unpriced, m.Model) {
+		return
+	}
+	t.Cost.AddMessage(m.Model, m.Tokens, m.USD)
+	if m.Truncated {
+		t.Cost.AddTruncated()
+	}
+}
+
+// resolveOwnInbox is resolveInbox for messages an agent received: an agent does not send to
+// itself.
+func resolveOwnInbox(msgs []model.InboxMessage, agents []model.Agent, self string) {
+	resolveInbox(msgs, agents)
+	for k := range msgs {
+		if msgs[k].AgentID == self {
+			msgs[k].AgentID = ""
+		}
+	}
+}
+
+// fillRootTurns sets each agent turn's RootTurn: for the first turn of an agent the main
+// agent spawned, its spawn turn; otherwise the main turn running when the work started (the
+// last one started at or before it). It stays nil without main turns or a time.
+func fillRootTurns(agents []model.Agent, parent []int, main []model.Turn) {
+	if len(main) == 0 {
+		return
+	}
+	starts := make([]time.Time, len(main))
+	for i, t := range main {
+		starts[i] = t.StartedAt
+		if starts[i].IsZero() && i > 0 {
+			starts[i] = starts[i-1] // keep the search monotonic
+		}
+	}
+	for i := range agents {
+		for k := range agents[i].Turns {
+			t := &agents[i].Turns[k]
+			if k == 0 && parent[i] < 0 && agents[i].SpawnTurn != nil {
+				r := *agents[i].SpawnTurn
+				t.RootTurn = &r
+				continue
+			}
+			if t.StartedAt.IsZero() {
+				continue
+			}
+			r := sort.Search(len(starts), func(x int) bool { return starts[x].After(t.StartedAt) }) - 1
+			if r >= 0 {
+				t.RootTurn = &r
+			}
+		}
+	}
 }

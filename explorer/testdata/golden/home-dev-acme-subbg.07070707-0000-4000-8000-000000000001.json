@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001.jsonl",
@@ -184,6 +184,34 @@
       "toolsByName": {
         "Bash": 1
       },
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-07T10:00:20Z",
+          "endedAt": "2026-09-07T10:00:26Z",
+          "origin": "spawn",
+          "prompt": "Run the audit and report issues.",
+          "finalText": "Audit complete: 2 issues.",
+          "rootTurn": 0,
+          "assistantMessages": 2,
+          "toolCalls": 1,
+          "toolsByName": {
+            "Bash": 1
+          },
+          "cost": {
+            "usd": 0.0092,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 2300,
+                "output": 100,
+                "cacheRead": 3000,
+                "cacheWrite5m": 1200,
+                "usd": 0.0092
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.0092,
         "byModel": {
@@ -227,6 +255,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a07e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0071,
       "input": 2000,
       "output": 60,
@@ -238,6 +267,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a07e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0021,
       "input": 300,
       "output": 40,

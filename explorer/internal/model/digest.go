@@ -30,7 +30,7 @@ type SessionDigest struct {
 	// Source so the session is retried only when its files change.
 	Error string `json:"error,omitempty"`
 
-	Harness    string `json:"harness"`    // "claude" today
+	Harness    string `json:"harness"`    // "claude", "codex"
 	ID         string `json:"id"`         // session id, unique within the harness
 	ProjectKey string `json:"projectKey"` // the harness's storage key for the project
 	Project    string `json:"project"`    // directory the session started in
@@ -140,9 +140,12 @@ type Compaction struct {
 	// Boilerplate marks the parts of Summary that the harness writes into every summary
 	// (fixed sentences around the real text). Search skips them; the summary stays whole.
 	Boilerplate []TextSpan `json:"boilerplate,omitempty"`
-	// Call is what the call that wrote the summary cost: an estimate, since the harness does
+	// Call is what the call that wrote the summary cost: an estimate, for a harness that does
 	// not record that call. Absent when the context size or the model's price is unknown.
 	Call *CompactionCall `json:"call,omitempty"`
+	// MessageID is the billed message of the call that wrote the summary, for a harness that
+	// records it (Codex). That message is in Messages and in the totals like any other.
+	MessageID string `json:"messageId,omitempty"`
 }
 
 // CompactionCall is the estimated cost of a compaction's API call: the whole context as
@@ -249,6 +252,13 @@ type Agent struct {
 	Description string    `json:"description,omitempty"`
 	Model       string    `json:"model,omitempty"`
 
+	// InheritsContext: the agent started with a copy of its parent's conversation rather than
+	// with only its prompt.
+	InheritsContext bool `json:"inheritsContext,omitempty"`
+	// Addressable: the agent could be sent more work after its launch (a teammate), or was
+	// (another agent or the user sent it a message or a task).
+	Addressable bool `json:"addressable,omitempty"`
+
 	ParentAgentID  *string `json:"parentAgentId"` // null = spawned by the main agent
 	SpawnToolUseID string  `json:"spawnToolUseId,omitempty"`
 	SpawnTurn      *int    `json:"spawnTurn,omitempty"`
@@ -272,9 +282,38 @@ type Agent struct {
 	ToolCalls         int64            `json:"toolCalls"`
 	ToolsByName       map[string]int64 `json:"toolsByName,omitempty"`
 	Compactions       []Compaction     `json:"compactions,omitempty"`
+	// Turns are the agent's stretches of work in order: the task it was started with, then
+	// each message or task that set it working again.
+	Turns []AgentTurn `json:"turns,omitempty"`
 
 	Cost       Cost    `json:"cost"`
 	SubtreeUSD float64 `json:"subtreeUSD"` // own + descendants
+}
+
+// AgentTurn is one stretch of work of an agent: from the task or message that set it working
+// to the answer it stopped with. A harness's "keep going" nudges belong to the turn they
+// continue; a fork's copy of its parent's conversation is no turn of its own.
+type AgentTurn struct {
+	Index     int       `json:"index"`
+	StartedAt time.Time `json:"startedAt,omitzero"`
+	EndedAt   time.Time `json:"endedAt,omitzero"`
+	// Origin is "spawn" for the first turn, else who authored the prompt, as in Turn.Origin.
+	Origin TurnOrigin `json:"origin"`
+	// Prompt is what the agent was asked: for the first turn, Agent.Prompt; later, the prompt
+	// as its author wrote it (a delivered message is in Inbox instead, as in Turn.UserText).
+	Prompt      string         `json:"prompt,omitempty"`
+	Inbox       []InboxMessage `json:"inbox,omitempty"`
+	Queued      []QueuedPrompt `json:"queued,omitempty"`
+	FinalText   string         `json:"finalText,omitempty"`
+	Interrupted bool           `json:"interrupted,omitempty"`
+	// RootTurn is the main agent's turn this work belongs to: the one that set it off, when
+	// the harness records that, else the one running when it started.
+	RootTurn *int `json:"rootTurn,omitempty"`
+
+	AssistantMessages int64            `json:"assistantMessages"`
+	ToolCalls         int64            `json:"toolCalls"`
+	ToolsByName       map[string]int64 `json:"toolsByName,omitempty"`
+	Cost              Cost             `json:"cost"`
 }
 
 // WorkflowRun is one run of a workflow script, launched by one tool call. Its agents are
@@ -307,7 +346,9 @@ type Message struct {
 	Model   string    `json:"model"`
 	AgentID string    `json:"agentId,omitempty"` // empty = main agent
 	Turn    *int      `json:"turn,omitempty"`
-	USD     float64   `json:"usd"`
+	// AgentTurn is the index of the owning agent's turn (Agent.Turns) the message belongs to.
+	AgentTurn *int    `json:"agentTurn,omitempty"`
+	USD       float64 `json:"usd"`
 	// Truncated marks a message the harness wrote down before it finished: its output
 	// token count is partial, so USD is a lower bound.
 	Truncated bool `json:"truncated,omitempty"`

@@ -91,7 +91,7 @@
   "resume": "cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001",
   "digest": {
     "schemaVersion": 1,
-    "parserVersion": 7,
+    "parserVersion": 8,
     "source": [
       {
         "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001.jsonl",
@@ -344,6 +344,30 @@
         "finalText": "Tax rules: flat 10 percent.",
         "assistantMessages": 1,
         "toolCalls": 0,
+        "turns": [
+          {
+            "index": 0,
+            "startedAt": "2026-09-16T11:00:15Z",
+            "endedAt": "2026-09-16T11:00:17Z",
+            "origin": "spawn",
+            "prompt": "List the tax rules in billing.ts.",
+            "finalText": "Tax rules: flat 10 percent.",
+            "rootTurn": 1,
+            "assistantMessages": 1,
+            "toolCalls": 0,
+            "cost": {
+              "usd": 0.00475,
+              "byModel": {
+                "claude-haiku-4-5-20251001": {
+                  "input": 3000,
+                  "output": 100,
+                  "cacheWrite5m": 1000,
+                  "usd": 0.00475
+                }
+              }
+            }
+          }
+        ],
         "cost": {
           "usd": 0.00475,
           "byModel": {

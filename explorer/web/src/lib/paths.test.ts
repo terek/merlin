@@ -14,6 +14,7 @@ test('resume command', () => {
   expect(resumeCommand('/home/dev/acme', 'abc-1')).toBe('cd /home/dev/acme && claude --resume abc-1')
   expect(resumeCommand('/home/dev/my proj', 'abc')).toBe("cd '/home/dev/my proj' && claude --resume abc")
   expect(resumeCommand(undefined, 'abc')).toBe('claude --resume abc')
+  expect(resumeCommand('/p', 'abc', 'codex')).toBe('cd /p && codex resume abc')
   expect(shellQuote("it's")).toBe(`'it'\\''s'`)
 })
 

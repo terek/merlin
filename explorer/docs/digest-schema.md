@@ -15,7 +15,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 
 | key | meaning |
 |---|---|
-| `harness` | which coding agent produced the session (`claude` today) |
+| `harness` | which coding agent produced the session: `claude` (Claude Code) or `codex` (Codex CLI) |
 | `id` | session id, unique within the harness |
 
 ## SessionDigest
@@ -27,7 +27,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `source` | every file read, as `SourceFile`; this is the fingerprint |
 | `error` | set on a stub written when building the digest failed; the stub keeps `source` so the session is retried only when its files change |
 | `sourceMissing` | the source files have disappeared; the digest is kept as the ledger |
-| `harness` | harness name, `claude` today |
+| `harness` | harness name, `claude` or `codex` |
 | `id` | session id |
 | `projectKey` | the harness's own storage key for the project |
 | `project` | directory the session started in; the project's identity across harnesses |
@@ -81,7 +81,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | key | meaning |
 |---|---|
 | `sessionId` | the session forked from |
-| `messageUuid` | the record in that session where the fork happened |
+| `messageUuid` | the record in that session where the fork happened (Codex: the id of the last turn the fork copied); empty when the harness does not say |
 
 ## Stats
 
@@ -164,7 +164,8 @@ Spending outside every window was not reported and can only be attributed from t
 | `durationMs` | how long the compaction took |
 | `boilerplate` | the parts of `summary` the harness writes into every summary, as `TextSpan`; search skips them, `summary` itself stays whole; omitted when none were recognised |
 | `summary` | the summary text, whole; it is not a prompt and not a turn |
-| `call` | what the call that wrote the summary cost, as `CompactionCall`: an estimate, since the harness does not record that call; omitted when the context size or the model's price is unknown |
+| `call` | what the call that wrote the summary cost, as `CompactionCall`: an estimate, for a harness that does not record that call (Claude Code); omitted when the context size or the model's price is unknown |
+| `messageId` | the billed message of the call that wrote the summary, for a harness that records it (Codex); that message is in `messages` and in the totals like any other |
 
 ## CompactionCall
 
@@ -226,11 +227,13 @@ A stretch of a text, as UTF-8 byte offsets.
 | key | meaning |
 |---|---|
 | `id` | agent id |
-| `kind` | `subagent`, `teammate`, `fork`, `compact` or `workflow` (an agent of a workflow run: started by the run's script, not by a tool call of its own) |
+| `kind` | `subagent`, `teammate`, `fork`, `compact`, `workflow` (an agent of a workflow run: started by the run's script, not by a tool call of its own), `review` (a code review the harness ran on the user's request, Codex `/review`) or `approval-review` (a call the harness made to judge whether an action needs the user's approval) |
 | `name` | teammate or given name |
 | `agentType` | agent type, e.g. `general-purpose`, `Explore` |
 | `description` | short description from the spawning call |
 | `model` | model the agent ran on |
+| `inheritsContext` | it started with a copy of its parent's conversation rather than with only its prompt (kinds `fork` and `compact`: a compaction call is given the conversation to summarise); omitted when false |
+| `addressable` | it could be sent more work after its launch (kind `teammate`), or was: another agent or the user sent it a message or a task (`inbox` holds one of kind `message` or `assignment`); omitted when false |
 | `parentAgentId` | spawning agent's id; always present, `null` when spawned by the main agent |
 | `spawnToolUseId` | id of the tool call that spawned it |
 | `spawnTurn` | index of the turn that spawned it |
@@ -242,15 +245,41 @@ A stretch of a text, as UTF-8 byte offsets.
 | `startedAt` | time of its first record |
 | `endedAt` | time of its last record |
 | `status` | `completed`, `killed` or `open` (no terminal marker in the files) |
-| `prompt` | its first prompt, complete; when it arrived as a delivered message, that message's text; for a workflow agent, the task its script computed, without the harness's frame |
+| `prompt` | its first prompt, complete (for kind `compact`, the last: the instruction to summarise what came before); when it arrived as a delivered message, that message's text; for a workflow agent, the task its script computed, without the harness's frame |
 | `finalText` | its last assistant text, complete |
 | `inbox` | later prompts it received, as `InboxMessage`, including those that arrived in the middle of a turn; a prompt that is not a delivered message is one entry of kind `message` with no sender |
 | `assistantMessages` | assistant API messages it made |
 | `toolCalls` | tool calls it made |
 | `toolsByName` | tool calls per tool name |
 | `compactions` | its own compactions |
+| `turns` | its stretches of work, as `AgentTurn`, in order: the task it was started with, then each message or task that set it working again |
 | `cost` | its own attributed cost |
 | `subtreeUSD` | own dollars plus all descendants |
+
+## AgentTurn
+
+One stretch of work of an agent: from the task or message that set it working to the answer it
+stopped with. The harness's "keep going" nudges (continuations) belong to the turn they continue.
+What comes before the agent's own prompt (a fork's copy of its parent's conversation, a workflow
+agent's relayed request) is part of the first turn: its tool calls count there, its texts do not.
+The turns' messages, tool calls and costs add up to the agent's.
+
+| key | meaning |
+|---|---|
+| `index` | position among the agent's turns, from 0 |
+| `startedAt` | time of the prompt that started it |
+| `endedAt` | time of its last record |
+| `origin` | `spawn` for the first turn; later, who authored the prompt, as in `Turn.origin` |
+| `prompt` | what it was asked: for the first turn the agent's `prompt`; later, the prompt as its author wrote it (delivered messages are in `inbox`, as with `Turn.userText`) |
+| `inbox` | the messages that started it, as `InboxMessage`; for the first turn, those delivered with the prompt after the first |
+| `queued` | prompts that arrived while it ran, as `QueuedPrompt` |
+| `finalText` | its last assistant text, complete |
+| `interrupted` | it was interrupted |
+| `rootTurn` | the main agent's turn this work belongs to. For the first turn of an agent the main agent spawned, its spawn turn; otherwise the turn that set it off when the harness records it, else the main turn running when it started (the last one started at or before it). Omitted when unknown |
+| `assistantMessages` | API messages the agent billed in it |
+| `toolCalls` | tool calls it made |
+| `toolsByName` | tool calls per tool name |
+| `cost` | attributed cost of its messages |
 
 ## QueuedPrompt
 
@@ -313,7 +342,8 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `at` | time of the message |
 | `model` | model that produced it |
 | `agentId` | agent that made it; omitted for the main agent |
-| `turn` | index of the turn it belongs to, when any |
+| `turn` | index of the turn it belongs to, when any; for an agent's message, the main turn its top-level ancestor was spawned in |
+| `agentTurn` | for an agent's message, the index of the agent's turn (`Agent.turns`) it belongs to |
 | `usd` | attributed dollars |
 | `truncated` | the harness wrote the message down before it finished (its last line has a null `stop_reason`), so its `output` count is partial and `usd` a lower bound; omitted when false |
 

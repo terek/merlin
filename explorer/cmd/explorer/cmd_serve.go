@@ -12,6 +12,7 @@ import (
 	"github.com/terek/merlin/explorer/internal/catalog"
 	"github.com/terek/merlin/explorer/internal/claude"
 	"github.com/terek/merlin/explorer/internal/claude/hooks"
+	"github.com/terek/merlin/explorer/internal/codex"
 	"github.com/terek/merlin/explorer/internal/daemon"
 	"github.com/terek/merlin/explorer/internal/harness"
 	"github.com/terek/merlin/explorer/internal/paths"
@@ -56,6 +57,10 @@ func runServe(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	codexHome, err := paths.CodexHome()
+	if err != nil {
+		return fail(err)
+	}
 	pricer, err := pricing.Load(filepath.Join(home, "config.json"))
 	if err != nil {
 		return fail(err)
@@ -65,7 +70,7 @@ func runServe(args []string) int {
 	}
 	opts := daemon.Options{
 		Home:           home,
-		Harnesses:      []harness.Harness{claude.New(cfg, pricer)},
+		Harnesses:      []harness.Harness{claude.New(cfg, pricer), codex.New(codexHome, pricer)},
 		Port:           *port,
 		Workers:        *workers,
 		RescanInterval: *rescan,

@@ -69,6 +69,8 @@ const KIND_COLOR: Record<string, string> = {
   workflow: 'var(--series-2)',
   fork: 'var(--series-4)',
   compact: 'var(--series-other)',
+  review: 'var(--series-2)',
+  'approval-review': 'var(--series-other)',
 }
 
 /** A compaction's mark: red when its call ran on a cold cache, amber when warm, grey when unknown. */

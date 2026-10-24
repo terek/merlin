@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001.jsonl",
@@ -135,6 +135,7 @@
       "agentType": "reviewer",
       "description": "Review the diff",
       "model": "sonnet",
+      "addressable": true,
       "parentAgentId": null,
       "spawnToolUseId": "toolu_team_01",
       "spawnTurn": 0,
@@ -159,6 +160,65 @@
       "toolsByName": {
         "Bash": 1
       },
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-09T10:00:12Z",
+          "endedAt": "2026-09-09T10:00:18Z",
+          "origin": "spawn",
+          "prompt": "Review the diff in the login branch.",
+          "finalText": "Reviewed: one nit in login.tsx.",
+          "rootTurn": 0,
+          "assistantMessages": 2,
+          "toolCalls": 1,
+          "toolsByName": {
+            "Bash": 1
+          },
+          "cost": {
+            "usd": 0.0092,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 2300,
+                "output": 100,
+                "cacheRead": 3000,
+                "cacheWrite5m": 1200,
+                "usd": 0.0092
+              }
+            }
+          }
+        },
+        {
+          "index": 1,
+          "startedAt": "2026-09-09T10:02:05Z",
+          "endedAt": "2026-09-09T10:02:07Z",
+          "origin": "peer",
+          "inbox": [
+            {
+              "at": "2026-09-09T10:02:05Z",
+              "kind": "message",
+              "from": "team-lead",
+              "summary": "also check tests",
+              "text": "Please also check the tests."
+            }
+          ],
+          "finalText": "Tests look fine.",
+          "rootTurn": 1,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.00185,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 300,
+                "output": 30,
+                "cacheRead": 3500,
+                "cacheWrite5m": 100,
+                "usd": 0.00185
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.01105,
         "byModel": {
@@ -202,6 +262,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "areviewer-09e0c0de00000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0071,
       "input": 2000,
       "output": 60,
@@ -213,6 +274,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "areviewer-09e0c0de00000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0021,
       "input": 300,
       "output": 40,
@@ -236,6 +298,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "areviewer-09e0c0de00000001",
       "turn": 0,
+      "agentTurn": 1,
       "usd": 0.00185,
       "input": 300,
       "output": 30,

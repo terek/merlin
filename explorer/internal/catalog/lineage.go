@@ -29,6 +29,19 @@ func (v *view) lineage(pairs map[pairKey]*pairCount) {
 		}
 		cands[c.idx] = append(cands[c.idx], cand{p, pc})
 	}
+	// A fork marker links the sessions even when they share nothing (a harness that starts a
+	// fork from a summary rather than a copy).
+	for _, c := range v.sessions {
+		f := c.d.Lineage.ForkedFrom
+		if f == nil {
+			continue
+		}
+		p, ok := v.byKey[model.SessionKey{Harness: c.key.Harness, ID: f.SessionID}]
+		if !ok || p == c || slices.ContainsFunc(cands[c.idx], func(x cand) bool { return x.p == p }) {
+			continue
+		}
+		cands[c.idx] = append(cands[c.idx], cand{p, &pairCount{}})
+	}
 
 	best := make([]*pairCount, len(v.sessions))
 	for _, c := range v.sessions {

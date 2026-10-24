@@ -1,13 +1,13 @@
 # Merlin Explorer — working notes for agents
 
-Go program that indexes Claude Code sessions. Start with [PLAN.md](PLAN.md); read
+Go program that indexes Claude Code and Codex sessions. Start with [PLAN.md](PLAN.md); read
 [docs/transcript-format.md](docs/transcript-format.md) before touching anything that
 parses transcripts. The rest of this repository is the old Bun/TS Merlin: reference
 only, never edit it.
 
 **Names.** The project is Merlin Explorer and lives in `explorer/`; the command it builds is
 `merlin` (it replaces the old Merlin binary in releases). Its state is under `~/.merlin`
-(`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `merlin.lock`, `merlin.log` and
+(`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `codex/`, `merlin.lock`, `merlin.log` and
 `config.json` only. The old program kept its own files in the same directory: never read, change
 or remove anything else there.
 
@@ -31,10 +31,11 @@ Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin/explorer`.
   `internal/claude/hooks` only. Do not add others; if you think one is needed, say so in the
   bead and stop short of adding it.
 - **Harness boundary.** Only `internal/claude/**` may know the layout of `~/.claude` or
-  the shape of Claude Code transcripts. `internal/model`, `store`, `catalog`, `engine`,
-  `server` and `harness` are harness-neutral and must not import `internal/claude/*`
-  subpackages; other harnesses (Codex, Pi) will be added beside `internal/claude` later.
-  Storage is per harness: `<MERLIN_HOME>/claude/...`.
+  the shape of Claude Code transcripts, and only `internal/codex/**` that of `~/.codex` and
+  Codex rollouts ([docs/codex-format.md](docs/codex-format.md)). `internal/model`, `store`,
+  `catalog`, `engine`, `server` and `harness` are harness-neutral and must not import
+  `internal/claude/*` or `internal/codex`; other harnesses (Pi) go beside them.
+  Storage is per harness: `<MERLIN_HOME>/claude/...`, `<MERLIN_HOME>/codex/...`.
 - **Parallel work.** Other agents edit other packages in this tree at the same time. If
   `make test` or `make vet` fails in a package you do not own, do not fix it: run the
   checks for your own packages (`go test ./internal/<yours>/...`) and note the failure.
@@ -47,8 +48,8 @@ Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin/explorer`.
   counted, never fatal. Lines can exceed 1 MB — do not use `bufio.Scanner` with its
   default buffer.
 - **Texts are stored whole.** Do not truncate prompts, final texts or summaries.
-- **Tests never touch the real machine.** No reads of `~/.claude`, no writes to
-  `~/.merlin`. Use `t.TempDir()`, `MERLIN_HOME` and `CLAUDE_CONFIG_DIR`. The one
+- **Tests never touch the real machine.** No reads of `~/.claude` or `~/.codex`, no writes to
+  `~/.merlin`. Use `t.TempDir()`, `MERLIN_HOME`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. The one
   exception is the validation bead, which reads `~/.claude` read-only.
 - **Fixtures are synthetic.** Never copy content from a real transcript into `testdata/`
   or into any committed file. Write fixture text by hand.

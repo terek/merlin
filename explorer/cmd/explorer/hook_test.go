@@ -20,7 +20,16 @@ func TestMain(m *testing.M) {
 	if os.Getenv("EXPLORER_TEST_AS_CLI") == "1" {
 		os.Exit(dispatch(os.Args[1:]))
 	}
-	os.Exit(m.Run())
+	// Tests that pass on their own environment must never reach the real ~/.codex: every
+	// child inherits an empty Codex home unless a test names one.
+	dir, err := os.MkdirTemp("", "merlin-codex-*")
+	if err != nil {
+		panic(err)
+	}
+	os.Setenv("CODEX_HOME", dir)
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
 }
 
 func runCLI(t *testing.T, home, stdin string, args ...string) (stdout, stderr string, code int, took time.Duration) {

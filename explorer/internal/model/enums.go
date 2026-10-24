@@ -28,6 +28,8 @@ const (
 	OriginScheduled        TurnOrigin = "scheduled"         // injected by the harness on a schedule
 	OriginSDK              TurnOrigin = "sdk"               // sent by a programmatic client
 	OriginContinuation     TurnOrigin = "continuation"      // harness-issued "keep going"
+	// OriginSpawn is the task an agent was started with (AgentTurn only).
+	OriginSpawn TurnOrigin = "spawn"
 )
 
 // InboxKind says what sort of machine-delivered message an InboxMessage is.
@@ -51,6 +53,11 @@ const (
 	// AgentWorkflow is an agent of a workflow run: started by the workflow's script, not by a
 	// tool call of its own.
 	AgentWorkflow AgentKind = "workflow"
+	// AgentReview is a code review the harness ran on the user's request (Codex /review).
+	AgentReview AgentKind = "review"
+	// AgentApprovalReview is a call the harness made to judge whether an action needs the
+	// user's approval (Codex's automatic approval reviewer).
+	AgentApprovalReview AgentKind = "approval-review"
 )
 
 // AgentStatus is how an agent's life ended, as far as the files show.

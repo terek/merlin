@@ -188,6 +188,27 @@ func TestAssembleTeammate(t *testing.T) { // 09
 	checkSpawned(t, a, 0, 0.0108+0.00132, []string{R}, 0.0108+0.00132+0.01105)
 	checkSpawned(t, a, 1, 0.00166+0.00142, nil, 0.00308)
 	checkTotals(t, a, 0.02625, 7)
+	// The lead's message set the teammate working again: a second turn, in the main turn running then.
+	if !g.Addressable || g.InheritsContext || len(g.Turns) != 2 {
+		t.Fatalf("facets/turns = %v %v %+v", g.Addressable, g.InheritsContext, g.Turns)
+	}
+	first, second := g.Turns[0], g.Turns[1]
+	if first.Origin != model.OriginSpawn || first.Prompt != g.Prompt || first.RootTurn == nil || *first.RootTurn != 0 {
+		t.Errorf("first turn = %+v", first)
+	}
+	if second.Origin != model.OriginPeer || len(second.Inbox) != 1 || second.Inbox[0].From != "team-lead" ||
+		second.RootTurn == nil || *second.RootTurn != 1 {
+		t.Errorf("second turn = %+v", second)
+	}
+	near(t, "turn costs", first.Cost.USD+second.Cost.USD, g.Cost.USD)
+	if first.AssistantMessages+second.AssistantMessages != g.AssistantMessages {
+		t.Errorf("turn messages %d + %d != %d", first.AssistantMessages, second.AssistantMessages, g.AssistantMessages)
+	}
+	for _, m := range a.Messages {
+		if m.AgentID == R && m.AgentTurn == nil {
+			t.Errorf("message %s has no agent turn", m.ID)
+		}
+	}
 }
 
 func TestAssembleForks(t *testing.T) { // 10
@@ -208,6 +229,9 @@ func TestAssembleForks(t *testing.T) { // 10
 	for _, g := range a.Agents {
 		if len(g.Inbox) != 0 {
 			t.Errorf("agent %s inbox = %+v, want none", g.ID, g.Inbox)
+		}
+		if !g.InheritsContext || g.Addressable || len(g.Turns) != 1 || g.Turns[0].Prompt != g.Prompt {
+			t.Errorf("fork %s: facets %v/%v turns %+v", g.ID, g.InheritsContext, g.Addressable, g.Turns)
 		}
 	}
 	checkSpawned(t, a, 0, 0.0108+0.00186, []string{f1, f2, f3}, 0.02101)

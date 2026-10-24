@@ -115,7 +115,7 @@ func doSearch(query, project, since string, limit int, asJSON bool) error {
 			Hits  []hitJSON `json:"hits"`
 		}{Query: query, Total: total, Hits: []hitJSON{}}
 		for _, h := range hits {
-			hj := hitJSON{Hit: h, ID: h.Session.ID, Resume: resumeCommand(projectOf(h.Session), h.Session.ID)}
+			hj := hitJSON{Hit: h, ID: h.Session.ID, Resume: resumeCommand(h.Session.Harness, projectOf(h.Session), h.Session.ID)}
 			for _, c := range h.ContinuedIn {
 				hj.ContinuedID = append(hj.ContinuedID, c.ID)
 			}
@@ -155,7 +155,7 @@ func doSearch(query, project, since string, limit int, asJSON bool) error {
 			}
 			fmt.Printf("    continued in: %s\n", strings.Join(parts, "; "))
 		}
-		fmt.Printf("    %s\n", resumeCommand(projectOf(h.Session), h.Session.ID))
+		fmt.Printf("    %s\n", resumeCommand(h.Session.Harness, projectOf(h.Session), h.Session.ID))
 		if i < len(hits)-1 {
 			fmt.Println()
 		}

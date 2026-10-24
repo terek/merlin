@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "parserVersion": 7,
+  "parserVersion": 8,
   "source": [
     {
       "path": "projects/-home-dev-acme-fork/10101010-0000-4000-8000-000000000001.jsonl",
@@ -124,6 +124,7 @@
       "agentType": "fork",
       "description": "Evaluate sqlite",
       "model": "inherit",
+      "inheritsContext": true,
       "parentAgentId": null,
       "spawnToolUseId": "toolu_fork_01",
       "spawnTurn": 0,
@@ -136,6 +137,31 @@
       "finalText": "sqlite is simple and embedded.",
       "assistantMessages": 2,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-10T10:00:13Z",
+          "endedAt": "2026-09-10T10:00:15Z",
+          "origin": "spawn",
+          "prompt": "Evaluate sqlite.",
+          "finalText": "sqlite is simple and embedded.",
+          "rootTurn": 0,
+          "assistantMessages": 2,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.00525,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 800,
+                "output": 60,
+                "cacheRead": 1500,
+                "cacheWrite5m": 1100,
+                "usd": 0.00525
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.00525,
         "byModel": {
@@ -156,6 +182,7 @@
       "agentType": "fork",
       "description": "Evaluate postgres",
       "model": "inherit",
+      "inheritsContext": true,
       "parentAgentId": null,
       "spawnToolUseId": "toolu_fork_02",
       "spawnTurn": 0,
@@ -168,6 +195,31 @@
       "finalText": "postgres scales and is heavier.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-10T10:00:13Z",
+          "endedAt": "2026-09-10T10:00:15Z",
+          "origin": "spawn",
+          "prompt": "Evaluate postgres.",
+          "finalText": "postgres scales and is heavier.",
+          "rootTurn": 0,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.00155,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 300,
+                "output": 40,
+                "cacheRead": 1500,
+                "cacheWrite5m": 100,
+                "usd": 0.00155
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.00155,
         "byModel": {
@@ -188,6 +240,7 @@
       "agentType": "fork",
       "description": "Evaluate mysql",
       "model": "inherit",
+      "inheritsContext": true,
       "parentAgentId": null,
       "spawnToolUseId": "toolu_fork_03",
       "spawnTurn": 0,
@@ -200,6 +253,31 @@
       "finalText": "mysql is a middle ground.",
       "assistantMessages": 1,
       "toolCalls": 0,
+      "turns": [
+        {
+          "index": 0,
+          "startedAt": "2026-09-10T10:00:13Z",
+          "endedAt": "2026-09-10T10:00:15Z",
+          "origin": "spawn",
+          "prompt": "Evaluate mysql.",
+          "finalText": "mysql is a middle ground.",
+          "rootTurn": 0,
+          "assistantMessages": 1,
+          "toolCalls": 0,
+          "cost": {
+            "usd": 0.00155,
+            "byModel": {
+              "claude-sonnet-5-5": {
+                "input": 300,
+                "output": 40,
+                "cacheRead": 1500,
+                "cacheWrite5m": 100,
+                "usd": 0.00155
+              }
+            }
+          }
+        }
+      ],
       "cost": {
         "usd": 0.00155,
         "byModel": {
@@ -232,6 +310,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a10e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.0037,
       "input": 500,
       "output": 20,
@@ -243,6 +322,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a10e0c0de0000001",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.00155,
       "input": 300,
       "output": 40,
@@ -255,6 +335,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a10e0c0de0000002",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.00155,
       "input": 300,
       "output": 40,
@@ -267,6 +348,7 @@
       "model": "claude-sonnet-5-5",
       "agentId": "a10e0c0de0000003",
       "turn": 0,
+      "agentTurn": 0,
       "usd": 0.00155,
       "input": 300,
       "output": 40,
