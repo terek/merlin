@@ -227,7 +227,8 @@ page draws them: a session and every session forked or continued from it are one
 ```
 
 - **Project rail** (240px, collapsible): "All" and each project from `/api/projects`, most recently
-  active first: short name, session count, cost. Selecting one sets `project` in the URL.
+  active first: short name, session count, cost. A project is a directory: Claude Code and Codex
+  sessions started there are one project. Selecting one sets `project` in the URL.
 - **Filters**: state (`All`, `Running`, `Recent`), kind (`interactive`, `background`, both by
   default), and a since preset (`7d`, `30d`, `all`; default all). They select trees through their
   members (`/api/sessions?by=tree`): a tree is listed when any member matches, and then whole.
@@ -236,7 +237,7 @@ page draws them: a session and every session forked or continued from it are one
   every tree is a single session). It shows **no money**: a tree's cost is the whole tree's, spent
   over many days, so a day sum would overstate the day. A row, two lines, describes the tree
   through its **open** member (the newest leaf, the one to resume):
-  1. state dot (the busiest member's), title, end-state badge, background and "no source" badges,
+  1. state dot (the busiest member's), title, end-state badge, "codex", background and "no source" badges,
      "N sessions" when the tree has several, then right-aligned: short project, branch, the tree's
      last activity, prompts (`humanTurns`) and agents of the open member, the tree's cost (the sum
      of its members' best cost) with the weakest member's flag.
@@ -292,8 +293,10 @@ From top to bottom:
     everything up to the next typed prompt (a **decision**). A ring marks a turn during which a
     prompt was typed (`turn.queued`): it starts no turn and no decision, but it steered that turn;
   - below a line, a bar per piece of agent work, under the turn that launched it, as tall as all
-    it cost (its own sub-agents included), with a tail to the turn its report came in. A sub-agent
-    or fork is one piece; a teammate is one piece per message it was sent; a workflow run
+    it cost (its own sub-agents included), with a tail to the turn its report came in. A piece is
+    one of the agent's turns (`agent.turns`), under its `rootTurn`: a sub-agent or fork has one, an
+    addressable agent (a Claude Code teammate, a Codex agent) one per message or task that set it
+    working again (from a daemon without `turns`: one per message it was sent); a workflow run
     (`digest.workflows`) is one piece with all its agents inside, back where its task notification
     came in. Agents that do not
     overlap share a row;

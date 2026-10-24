@@ -9,15 +9,16 @@ import {
   Users,
   Workflow,
 } from 'lucide-react'
-import type { AgentKind } from '../../api/types'
+import type { Agent } from '../../api/types'
+import { type AgentRole, agentRole, ROLE_LABEL } from '../../lib/agent'
 import { cn } from '../../lib/cn'
 import { firstLine } from '../../lib/paths'
 import { AgentStatusMark, Badge, Bar, ModelName, Money } from '../../ui'
 import { agentLabel, type Row } from './model'
 
-const KIND_ICON: Record<AgentKind, typeof Bot> = {
+const ROLE_ICON: Record<AgentRole, typeof Bot> = {
   subagent: Bot,
-  teammate: Users,
+  addressable: Users,
   fork: GitFork,
   compact: Minimize2,
   workflow: Workflow,
@@ -25,11 +26,19 @@ const KIND_ICON: Record<AgentKind, typeof Bot> = {
   'approval-review': ShieldCheck,
 }
 
-export function KindIcon({ kind, size = 14 }: { kind: AgentKind; size?: number }) {
-  const Icon = KIND_ICON[kind]
+/** The icon of an agent's role (sub-agent, addressable agent, fork, ...). */
+export function KindIcon({
+  agent,
+  size = 14,
+}: {
+  agent: Pick<Agent, 'kind' | 'inheritsContext' | 'addressable'>
+  size?: number
+}) {
+  const role = agentRole(agent)
+  const Icon = ROLE_ICON[role]
   return (
-    <span title={kind} className="inline-flex shrink-0 text-muted">
-      <Icon size={size} aria-label={kind} />
+    <span title={ROLE_LABEL[role]} className="inline-flex shrink-0 text-muted">
+      <Icon size={size} aria-label={ROLE_LABEL[role]} />
     </span>
   )
 }
@@ -128,7 +137,7 @@ export function AgentRow({
           className="min-w-0 flex-1 py-1.5 pr-3 text-left hover:bg-surface-2"
         >
           <span className="flex items-center gap-1.5">
-            <KindIcon kind={first.kind} />
+            <KindIcon agent={first} />
             <span className="min-w-0 flex-1 truncate font-medium">
               {row.run ? row.label : `${row.nodes.length} × ${row.label}`}
             </span>
@@ -163,7 +172,7 @@ export function AgentRow({
         className={cn('min-w-0 flex-1 py-1.5 pr-3 text-left', !selected && 'hover:bg-surface-2')}
       >
         <span className="flex items-center gap-1.5">
-          <KindIcon kind={a.kind} />
+          <KindIcon agent={a} />
           <span className="min-w-0 truncate font-medium">{agentLabel(a)}</span>
           {a.background && <Badge title="ran in the background">bg</Badge>}
           {row.node.orphan && (

@@ -10,5 +10,5 @@ DAY         SESSIONS     COST  REPORTED  ATTRIBUTED
 2026-09-15         1   $0.014    $0.014          $0
 TOTAL              9   $0.237    $0.131      $0.106
 
-Of $0.237: $0.131 (55%) is Claude Code's own reported figure; $0.106 (45%) is recomputed from tokens where it reported nothing.
+Of $0.237: $0.131 (55%) was reported by the harness itself; $0.106 (45%) is recomputed from tokens where it reported nothing.
 Sessions: 1 exact, 0 partial, 7 estimated; plus 1 scripted run, counting any that made no API call  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

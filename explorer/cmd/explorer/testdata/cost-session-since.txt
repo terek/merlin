@@ -8,5 +8,5 @@ ID                                    WHEN             PROJECT    TITLE         
 22222222-0000-4000-8000-000000000001  today 06:00      nest       outer session in the nest project            ≈$0.011        $0      $0.011
 TOTAL                                                             6 sessions                                    $0.092        $0      $0.092
 
-Of $0.092: $0 (0%) is Claude Code's own reported figure; $0.092 (100%) is recomputed from tokens where it reported nothing.
+Of $0.092: $0 (0%) was reported by the harness itself; $0.092 (100%) is recomputed from tokens where it reported nothing.
 Sessions: 0 exact, 0 partial, 6 estimated  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)

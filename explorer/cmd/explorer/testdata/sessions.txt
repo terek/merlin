@@ -39,4 +39,4 @@ DAY         PROJECT  RUNS              COST
 2026-09-15  sdk      1 scripted run  $0.014
 
 34 of 34 sessions
-cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)
+cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside the harness's reported windows)

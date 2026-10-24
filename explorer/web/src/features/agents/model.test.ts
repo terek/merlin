@@ -16,7 +16,7 @@ const agent = (id: string, parent: string | null, extra: Partial<Agent> = {}): A
   toolCalls: 0,
   cost: { usd: 1 },
   subtreeUSD: 1,
-  startedAt: `2026-09-16T10:00:${String(seq++ % 60).padStart(2, '0')}Z`,
+  startedAt: new Date(Date.UTC(2026, 8, 16, 10, 0, seq++)).toISOString(),
   ...extra,
 })
 
@@ -78,9 +78,15 @@ describe('groupSiblings', () => {
     ])
   })
 
-  test('kind separates types; a teammate groups by name', () => {
-    expect(typeKey(agent('a', null, { kind: 'fork' }))).not.toBe(typeKey(agent('a', null)))
-    expect(typeKey(agent('a', null, { kind: 'teammate', agentType: undefined, name: 'scout' }))).toBe('teammate:scout')
+  test('role separates types; a teammate groups by name', () => {
+    expect(typeKey(agent('a', null, { inheritsContext: true }))).not.toBe(typeKey(agent('a', null)))
+    expect(typeKey(agent('a', null, { kind: 'fork' }))).toBe(typeKey(agent('a', null, { inheritsContext: true })))
+    expect(typeKey(agent('a', null, { addressable: true, agentType: undefined, name: 'scout' }))).toBe(
+      'addressable:scout',
+    )
+    expect(typeKey(agent('a', null, { kind: 'teammate', agentType: undefined, name: 'scout' }))).toBe(
+      'addressable:scout',
+    )
   })
 })
 

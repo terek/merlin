@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "parserVersion": 8,
   "source": [
     {
@@ -120,7 +120,7 @@
   "agents": [
     {
       "id": "a10e0c0de0000001",
-      "kind": "fork",
+      "kind": "subagent",
       "agentType": "fork",
       "description": "Evaluate sqlite",
       "model": "inherit",
@@ -178,7 +178,7 @@
     },
     {
       "id": "a10e0c0de0000002",
-      "kind": "fork",
+      "kind": "subagent",
       "agentType": "fork",
       "description": "Evaluate postgres",
       "model": "inherit",
@@ -236,7 +236,7 @@
     },
     {
       "id": "a10e0c0de0000003",
-      "kind": "fork",
+      "kind": "subagent",
       "agentType": "fork",
       "description": "Evaluate mysql",
       "model": "inherit",

@@ -26,15 +26,16 @@ Health of the index, read from the digests and the catalog; nothing is changed.
 
   Index          what is indexed; error stubs (sessions whose digest failed to
                  build) and sessions whose source files are gone
-  Format drift   per version of Claude Code: record types the parser does not
-                 know and lines it could not read. Growth here after a Claude
-                 Code upgrade means the transcript format changed. Only versions
-                 with a finding are listed; --all-versions lists every version
+  Format drift   per version of each harness (Claude Code, Codex): record types
+                 the parser does not know and lines it could not read. Growth
+                 here after an upgrade means the transcript format changed. Only
+                 versions with a finding are listed; --all-versions lists every
+                 version
   Pricing        models seen in transcripts that have no price (their cost is 0)
   Agents         subagents that could not be tied to the call that started them;
                  messages cut short in the transcript (output tokens partial,
                  so attributed cost is a lower bound)
-  Cost           how much of what Claude Code reported the transcripts explain
+  Cost           how much of what the harness reported the transcripts explain
                  (covered / reported): overall, its distribution over sessions,
                  the ten largest gaps in both directions, and sessions with spend
                  outside every reported window. A ratio above 1.0 means a wrong
@@ -44,6 +45,7 @@ doctor prints findings and exits 0; it exits 1 only when it cannot read the inde
 `
 
 type driftRow struct {
+	Harness      string           `json:"harness"`
 	Version      string           `json:"version"`
 	Sessions     int              `json:"sessions"`
 	BadLines     int64            `json:"badLines"`
@@ -198,10 +200,11 @@ func buildDoctor(w *world) doctorReport {
 			versions = []string{"(unknown)"}
 		}
 		for _, v := range versions {
-			row := drift[v]
+			k := d.Harness + " " + v
+			row := drift[k]
 			if row == nil {
-				row = &driftRow{Version: v}
-				drift[v] = row
+				row = &driftRow{Harness: d.Harness, Version: v}
+				drift[k] = row
 			}
 			row.Sessions++
 			row.BadLines += d.Diagnostics.BadLines
@@ -233,7 +236,12 @@ func buildDoctor(w *world) doctorReport {
 	for _, row := range drift {
 		r.Drift = append(r.Drift, *row)
 	}
-	sort.Slice(r.Drift, func(i, j int) bool { return versionLess(r.Drift[i].Version, r.Drift[j].Version) })
+	sort.Slice(r.Drift, func(i, j int) bool {
+		if a, b := r.Drift[i], r.Drift[j]; a.Harness != b.Harness {
+			return a.Harness < b.Harness
+		}
+		return versionLess(r.Drift[i].Version, r.Drift[j].Version)
+	})
 
 	// Cost: covered against reported, per session.
 	var ratios []float64
@@ -356,7 +364,7 @@ func doDoctor(asJSON, allVersions bool) error {
 	}
 	fmt.Fprintln(out)
 
-	section("Format drift  (by Claude Code version that wrote the files; a session spanning versions counts under each)")
+	section("Format drift  (by the harness version that wrote the files; a session spanning versions counts under each)")
 	var rows [][]string
 	clean := 0
 	for _, d := range r.Drift {
@@ -377,7 +385,7 @@ func doDoctor(asJSON, allVersions bool) error {
 		if ut == "" {
 			ut = "-"
 		}
-		rows = append(rows, []string{d.Version, fmt.Sprint(d.Sessions), fmt.Sprint(d.BadLines), ut})
+		rows = append(rows, []string{harnessTitle(d.Harness) + " " + d.Version, fmt.Sprint(d.Sessions), fmt.Sprint(d.BadLines), ut})
 	}
 	switch {
 	case len(r.Drift) == 0:
@@ -429,7 +437,7 @@ func doDoctor(asJSON, allVersions bool) error {
 	if r.WithWindows == 0 {
 		fmt.Fprintln(out, "  no session has a reported cost; every figure is recomputed from tokens")
 	} else {
-		fmt.Fprintf(out, "  %s carry Claude Code's reported cost: %s reported, %s of it explained by transcript messages (covered)\n",
+		fmt.Fprintf(out, "  %s carry a cost their harness reported: %s reported, %s of it explained by transcript messages (covered)\n",
 			plural(r.WithWindows, "session", "sessions"), usd(r.ReportedUSD), usd(r.CoveredUSD))
 		fmt.Fprintf(out, "  covered / reported = %.3f overall; the rest (%s) is calls that are in no transcript\n", r.CoveredRatio, usd(r.ReportedUSD-r.CoveredUSD))
 		fmt.Fprintf(out, "  per session: min %.3f   p10 %.3f   median %.3f   p90 %.3f   max %.3f\n", r.Ratio.Min, r.Ratio.P10, r.Ratio.Median, r.Ratio.P90, r.Ratio.Max)

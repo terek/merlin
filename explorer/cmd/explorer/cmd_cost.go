@@ -26,15 +26,16 @@ What did my sessions cost, subagents included? One table, grouped by --by
 (default project), with a total row.
 
   COST       what the rows add up to: the reported figure plus the attributed one
-  REPORTED   Claude Code's own cost figure, for the stretches of each session it
+  REPORTED   the harness's own cost figure, for the stretches of each session it
              reported on (its "windows"); includes calls that leave no trace in
-             the transcript
+             the transcript. Claude Code reports one; Codex does not
   ATTRIBUTED spend outside every window, recomputed from the transcript tokens at
-             list prices; the estimate used where Claude Code reported nothing
+             list prices; the estimate used where the harness reported nothing
 
-History that a forked or continued session copied from another session is paid
-for once, by the session that has it first. Scripted runs (one-shot 'claude -p'
-calls) are counted in every table; in --by session they are summed per project.
+Sessions of Claude Code and Codex are counted together. History that a forked or
+continued session copied from another session is paid for once, by the session
+that has it first. Scripted runs (one-shot 'claude -p' or 'codex exec' calls) are
+counted in every table; in --by session they are summed per project.
 A row's SESSIONS counts the sessions that spent something in it, so a scripted run
 that made no API call is in no row; the "scripted runs" figure under the table
 counts every run.
@@ -55,6 +56,7 @@ Flags:
 // costRowJSON is one row of the cost table in the JSON output.
 type costRowJSON struct {
 	Key      string `json:"key"`
+	Harness  string `json:"harness,omitempty"` // for a session row
 	Label    string `json:"label,omitempty"`
 	Sessions int    `json:"sessions"`
 	catalog.Money
@@ -129,7 +131,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	if by == "session" {
 		for _, in := range listing.Sessions {
 			c := in.Cost
-			rows = append(rows, costRowJSON{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: string(c.Flag),
+			rows = append(rows, costRowJSON{Key: in.Key.ID, Harness: in.Key.Harness, Label: in.Title, Sessions: 1, Flag: string(c.Flag),
 				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD, Compactions: c.Compactions}})
 		}
 		perProject := map[string]*costRowJSON{}
@@ -260,7 +262,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 					marked(r.TotalUSD, catalog.CostFlag(r.Flag))}, money(r.Money)[1:]...))
 				continue
 			}
-			in, _ := w.cat.Session(model.SessionKey{Harness: claudeHarness, ID: r.Key})
+			in, _ := w.cat.Session(model.SessionKey{Harness: r.Harness, ID: r.Key})
 			title := snip(in.Title, 50)
 			if title == "" {
 				title = "(untitled)"
@@ -314,7 +316,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 
 	fmt.Println()
 	if total.TotalUSD > 0 {
-		fmt.Printf("Of %s: %s (%.0f%%) is Claude Code's own reported figure; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
+		fmt.Printf("Of %s: %s (%.0f%%) was reported by the harness itself; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
 			usd(total.TotalUSD), usd(total.ReportedUSD), 100*total.ReportedUSD/total.TotalUSD, usd(total.AttributedUSD), 100*total.AttributedUSD/total.TotalUSD)
 	}
 	if line := compactionLine(total.Compactions); line != "" {

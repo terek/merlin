@@ -22,12 +22,13 @@ import type {
   Turn,
   WorkflowRun,
 } from '../../api/types'
+import { agentRole } from '../../lib/agent'
 import { turnPrompt } from '../../lib/inbox'
 
 /** What the dollars bought. `reread` is a cache miss: context that had been cached and was written again. */
 export type ClassKey = 'output' | 'read' | 'write' | 'reread' | 'input'
 /** Who spent them. `reread` is taken out of whoever paid it. */
-export type KindKey = 'main' | 'reread' | 'compact' | 'subagent' | 'teammate' | 'fork'
+export type KindKey = 'main' | 'reread' | 'compact' | 'subagent' | 'addressable' | 'fork'
 export type Split = 'kind' | 'class'
 export type Tone = 'series-1' | 'series-2' | 'series-3' | 'series-4' | 'series-5' | 'series-other'
 
@@ -45,7 +46,7 @@ export const KIND_SERIES: SeriesDef<KindKey>[] = [
   { key: 'reread', label: 'Cache miss', color: 'var(--series-5)', tone: 'series-5' },
   { key: 'compact', label: 'Compaction', color: 'var(--series-other)', tone: 'series-other' },
   { key: 'subagent', label: 'Sub-agents', color: 'var(--series-2)', tone: 'series-2' },
-  { key: 'teammate', label: 'Teammates', color: 'var(--series-3)', tone: 'series-3' },
+  { key: 'addressable', label: 'Addressable agents', color: 'var(--series-3)', tone: 'series-3' },
   { key: 'fork', label: 'Forks', color: 'var(--series-4)', tone: 'series-4' },
 ]
 
@@ -231,10 +232,13 @@ export interface Part {
   usd: number
 }
 
-const kindPart = (key: string, usd: number): Part => ({
-  ...(KIND_BY_KEY.get(key === 'workflow' ? 'subagent' : key) ?? KIND_SERIES[0]),
-  usd,
-})
+const kindPart = (key: string, usd: number): Part => ({ ...(KIND_BY_KEY.get(key) ?? KIND_SERIES[0]), usd })
+
+/** The series an agent's spend is drawn in, by its role; workflows and reviews count as sub-agents. */
+export function agentSeries(a: Pick<Agent, 'kind' | 'inheritsContext' | 'addressable'>): KindKey {
+  const r = agentRole(a)
+  return r === 'addressable' || r === 'fork' || r === 'compact' ? r : 'subagent'
+}
 const classPart = (key: string, usd: number): Part => ({ ...(CLASS_BY_KEY.get(key) ?? CLASS_SERIES[0]), usd })
 
 // ---- the model ------------------------------------------------------------------------
@@ -257,6 +261,8 @@ export interface Unit {
   of: number
   /** Turn in which it was launched or sent the message. */
   launch: number
+  /** The turn the digest says this work belongs to (`AgentTurn.rootTurn`), when it says. */
+  root?: number
   /** Turn in which its result arrived (>= launch). */
   ret: number
   /** False when no report is known: the agent was still open, or was killed. */
@@ -426,7 +432,7 @@ export function stepParts(c: Col, split: Split): Part[] {
 /** The pieces of a unit's bar, from the main line outwards. */
 export function unitParts(u: Unit, split: Split): Part[] {
   if (split === 'class') return CLASS_SERIES.map((s) => classPart(s.key, u.bucket.byClass[s.key]))
-  return [kindPart(u.agent.kind, u.bucket.usd - u.bucket.reread), kindPart('reread', u.bucket.reread)]
+  return [kindPart(agentSeries(u.agent), u.bucket.usd - u.bucket.reread), kindPart('reread', u.bucket.reread)]
 }
 
 /**
@@ -446,6 +452,26 @@ export function packRows(rows: Row[]): number {
 }
 
 const runAgentId = (runId: string) => `run:${runId}`
+
+function mkUnit(a: Agent, k: number, startMs: number, asked: string, from?: string): Unit {
+  return {
+    id: `${a.id}#${k}`,
+    agent: a,
+    ordinal: k + 1,
+    of: 1,
+    launch: 0,
+    ret: 0,
+    returned: false,
+    startMs,
+    endMs: startMs,
+    asked,
+    from,
+    bucket: newBucket(),
+    nestedUSD: 0,
+    nested: [],
+    compactions: [],
+  }
+}
 
 /** A workflow run as the agent the session launched: its agents hang under it. */
 function runAgent(r: WorkflowRun): Agent {
@@ -544,30 +570,29 @@ export function buildSpend(detail: SessionDetail): SpendModel {
   const bornAt = (a: Agent, fallback: number) =>
     Number.isFinite(ms(a.startedAt)) ? ms(a.startedAt) : (firstBilled.get(a.id) ?? fallback)
 
-  // ---- units: one per message an agent was sent
+  // ---- units: one per turn of the agent's work (from an older daemon: one per message it was sent)
   const unitsOf = new Map<string, Unit[]>()
+  const byTurns = new Set<string>()
   const rootAgents = agents.filter((a) => rootOf(a) === a && a.kind !== 'compact')
   for (const a of rootAgents) {
+    if (fromMessages && a.turns?.length) {
+      byTurns.add(a.id)
+      unitsOf.set(
+        a.id,
+        a.turns.map((t, k) => {
+          const start = ms(t.startedAt)
+          const asked = t.prompt || (t.inbox ?? []).map((x) => x.text || x.summary || '').join('\n')
+          const u = mkUnit(a, k, Number.isFinite(start) ? start : bornAt(a, Number.NaN), asked, t.inbox?.[0]?.from)
+          u.root = t.rootTurn
+          return u
+        }),
+      )
+      continue
+    }
     const inbox: InboxMessage[] = fromMessages
       ? [...(a.inbox ?? [])].filter((x) => Number.isFinite(ms(x.at))).sort((x, y) => ms(x.at) - ms(y.at))
       : []
-    const mk = (k: number, startMs: number, asked: string, from?: string): Unit => ({
-      id: `${a.id}#${k}`,
-      agent: a,
-      ordinal: k + 1,
-      of: 1,
-      launch: 0,
-      ret: 0,
-      returned: false,
-      startMs,
-      endMs: startMs,
-      asked,
-      from,
-      bucket: newBucket(),
-      nestedUSD: 0,
-      nested: [],
-      compactions: [],
-    })
+    const mk = (k: number, startMs: number, asked: string, from?: string) => mkUnit(a, k, startMs, asked, from)
     unitsOf.set(a.id, [
       mk(0, bornAt(a, Number.NaN), a.prompt ?? ''),
       ...inbox.map((x, k) => mk(k + 1, ms(x.at), x.text || x.summary || '', x.from)),
@@ -602,7 +627,8 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         continue
       }
       // an agent's own sub-agent counts where it was spawned: the unit is atomic
-      const u = unitAt(root, a === root ? at : bornAt(a, at))
+      const own = a === root && byTurns.has(a.id) && m.agentTurn !== undefined
+      const u = own ? unitsOf.get(a.id)?.[m.agentTurn ?? 0] : unitAt(root, a === root ? at : bornAt(a, at))
       if (!u) continue
       addMessage(u.bucket, m, fit, prev)
       u.endMs = Number.isFinite(u.endMs) ? Math.max(u.endMs, at) : at
@@ -685,7 +711,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         const next = kept[k + 1]
         u.ordinal = k + 1
         u.of = kept.length
-        u.launch = k === 0 ? place(a.spawnTurn, u.startMs) : place(undefined, u.startMs)
+        u.launch = place(u.root ?? (k === 0 ? a.spawnTurn : undefined), u.startMs)
         const until = next ? next.startMs : Number.POSITIVE_INFINITY
         const arrivals = named.filter((i) => i >= u.launch && starts[i] >= u.startMs && starts[i] < until)
         let ret = arrivals.length ? arrivals[arrivals.length - 1] : place(undefined, u.endMs)

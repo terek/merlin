@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -58,6 +59,38 @@ func TestProjects(t *testing.T) {
 	}
 	if want := r.cat.Total(catalog.Filter{}).TotalUSD; !near(total, want) {
 		t.Errorf("project costs add up to %v, catalog total %v", total, want)
+	}
+}
+
+func TestProjectsMergeHarnessesByDirectory(t *testing.T) {
+	r := newRig(t)
+	var before ProjectList
+	r.get("/api/projects", &before)
+	// A Codex session started in the directory of an existing Claude project.
+	base := before.Projects[0]
+	d := r.digest(r.cat.List(catalog.Filter{Project: base.Project}, catalog.Liveness{}).Sessions[0].Key.ID)
+	d.Harness, d.ID = "codex", "codex-session"
+	d.Turns, d.Messages, d.Agents, d.Compactions = nil, nil, nil, nil // nothing shared: its own tree
+	r.cat.Upsert(d)
+	var l ProjectList
+	r.get("/api/projects", &l)
+	if len(l.Projects) != len(before.Projects) {
+		t.Fatalf("projects %d, want %d (one per directory)", len(l.Projects), len(before.Projects))
+	}
+	for _, p := range l.Projects {
+		if p.Project != base.Project {
+			continue
+		}
+		if !reflect.DeepEqual(p.Harnesses, []string{"claude", "codex"}) || p.Harness != "claude" || p.Sessions != base.Sessions+1 {
+			t.Errorf("merged project = %+v", p)
+		}
+	}
+	found := false
+	for _, s := range listSessions(t, r, "?project="+url.QueryEscape(base.Project)).Sessions {
+		found = found || s.Key.Harness == "codex"
+	}
+	if !found {
+		t.Error("the project filter must select the Codex session too")
 	}
 }
 

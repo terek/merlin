@@ -152,8 +152,11 @@ type TreeList struct {
 // ProjectSummary is one project of GET /api/projects. Cost is the sum of the best costs of
 // its sessions plus its scripted runs.
 type ProjectSummary struct {
+	// Harness and ProjectKey are those of the project's first harness in name order; a
+	// directory used by several harnesses is one project, and Harnesses lists them all.
 	Harness        string        `json:"harness"`
 	ProjectKey     string        `json:"projectKey"`
+	Harnesses      []string      `json:"harnesses"`
 	Project        string        `json:"project"`
 	Sessions       int           `json:"sessions"`     // interactive and background
 	ScriptedRuns   int           `json:"scriptedRuns"` // counted, never listed

@@ -62,7 +62,10 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 ## GET /api/projects
 
 Projects with session counts, last activity and cost, most recently active first. No parameters.
-`cost` is the sum of the best costs of the project's sessions plus its scripted runs.
+`cost` is the sum of the best costs of the project's sessions plus its scripted runs. A project is
+a directory: sessions of every harness started there are counted together, and `harnesses` lists
+which (`harness` and `projectKey` are those of the first in name order). Filtering `/api/sessions`
+or `/api/cost` by `project` (the directory) selects them all.
 
 ```json
 {
@@ -70,6 +73,7 @@ Projects with session counts, last activity and cost, most recently active first
     {
       "harness": "claude",
       "projectKey": "-home-dev-acme-nest",
+      "harnesses": ["claude"],
       "project": "/home/dev/acme/nest",
       "sessions": 2,
       "scriptedRuns": 0,
@@ -83,6 +87,7 @@ Projects with session counts, last activity and cost, most recently active first
     {
       "harness": "claude",
       "projectKey": "-home-dev-acme-misc",
+      "harnesses": ["claude"],
       "project": "/home/dev/acme/misc",
       "sessions": 1,
       "scriptedRuns": 0,

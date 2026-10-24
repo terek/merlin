@@ -18,7 +18,7 @@ export function flagExplanation(flag: CostFlag | undefined): string {
     case 'partial':
       return 'Partly reported; the rest recomputed from token counts.'
     case 'estimated':
-      return 'Recomputed from token counts; Claude Code reported nothing for this session.'
+      return 'Recomputed from token counts; no figure was reported for this session.'
     default:
       return ''
   }

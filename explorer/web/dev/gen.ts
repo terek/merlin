@@ -419,10 +419,12 @@ function makeAgents(r: Rng, turns: Turn[], n: number, deep: boolean, shape?: (ag
     ] as const)
     const unresolved = !deep && r.chance(0.06)
     const calls = r.int(0, 25)
-    const kind = r.chance(0.1) ? 'teammate' : r.chance(0.08) ? 'fork' : 'subagent'
+    const role = r.chance(0.1) ? 'addressable' : r.chance(0.08) ? 'fork' : 'subagent'
     agents.push({
       id: `a${r.hex(15)}`,
-      kind,
+      kind: 'subagent',
+      addressable: role === 'addressable' || undefined,
+      inheritsContext: role === 'fork' || undefined,
       name: r.chance(0.15) ? r.pick(['scout', 'reviewer', 'tester']) : undefined,
       agentType: r.pick(AGENT_TYPES),
       description: r.pick(SPAWN_REASONS),
@@ -489,6 +491,8 @@ function shapeZoo(agents: Agent[]) {
     a.depth = typeof parent === 'number' ? at(parent).depth + 1 : 1
     a.linkage = 'meta'
     a.kind = 'subagent'
+    a.addressable = undefined
+    a.inheritsContext = undefined
     a.name = undefined
     a.status = 'completed'
     a.background = undefined
@@ -511,8 +515,12 @@ function shapeZoo(agents: Agent[]) {
   set(24, 23, { agentType: 'general-purpose', description: 'Check the changed callers' })
   set(25, 24, { agentType: 'Explore', description: 'Find every caller of the helper' })
   set(26, 25, { agentType: 'Explore', description: 'Read the generated code', status: 'killed', finalText: undefined })
-  set(27, null, { kind: 'teammate', name: 'scout', agentType: 'Explore', description: 'Keeps an eye on the CI runs' })
-  set(28, null, { kind: 'fork', agentType: 'general-purpose', description: 'Try the other approach in parallel' })
+  set(27, null, { addressable: true, name: 'scout', agentType: 'Explore', description: 'Keeps an eye on the CI runs' })
+  set(28, null, {
+    inheritsContext: true,
+    agentType: 'general-purpose',
+    description: 'Try the other approach in parallel',
+  })
   set(29, null, { agentType: 'Plan', description: 'Design the cache layout', status: 'killed', finalText: undefined })
   set(30, null, { agentType: 'Plan', description: 'Never wrote a final answer', status: 'open', finalText: undefined })
   set(31, 'a0000000000orphan', { agentType: 'Explore', description: 'Its parent is not in the list' })

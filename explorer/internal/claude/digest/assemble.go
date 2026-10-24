@@ -523,7 +523,7 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 	if p >= 0 {
 		// A fork replays its parent's context before its own prompt: when the spawn's
 		// input.prompt is a later prompt of the file, that one is the agent's prompt.
-		if ag.Kind == model.AgentFork && sp != nil && sp.Prompt != "" {
+		if isFork(a) && sp != nil && sp.Prompt != "" {
 			for j := p; j < len(turns); j++ {
 				if turns[j].Origin != model.OriginContinuation &&
 					strings.TrimSpace(promptText(&turns[j])) == strings.TrimSpace(sp.Prompt) {
@@ -586,8 +586,8 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 	unpriced := a.res.Diagnostics.UnpricedModels
 	var msgTurn []int
 	ag.Turns, msgTurn = agentTurns(turns, p, ag.Prompt, fromInbox, msgs, unpriced)
-	ag.InheritsContext = ag.Kind == model.AgentFork || ag.Kind == model.AgentCompact
-	ag.Addressable = ag.Kind == model.AgentTeammate || ag.Kind != model.AgentCompact &&
+	ag.InheritsContext = isFork(a) || ag.Kind == model.AgentCompact
+	ag.Addressable = isTeammate(a) || ag.Kind != model.AgentCompact &&
 		slices.ContainsFunc(ag.Inbox, func(m model.InboxMessage) bool {
 			return m.Kind == model.InboxMessageKind || m.Kind == model.InboxAssignment
 		})
@@ -692,17 +692,23 @@ func firstNonEmpty(ss ...string) string {
 }
 
 func agentKind(a agentIn) model.AgentKind {
-	switch m := a.meta; {
+	switch {
 	case runOf(a.dir) != "":
 		return model.AgentWorkflow
-	case m != nil && (m.TeamName != "" || m.TaskKind == "in_process_teammate"):
-		return model.AgentTeammate
-	case m != nil && (m.IsFork || m.AgentType == "fork"):
-		return model.AgentFork
 	case strings.HasPrefix(a.id, "acompact"):
 		return model.AgentCompact
 	}
 	return model.AgentSubagent
+}
+
+// isTeammate: the agent is a member of a team, which others can send messages and tasks.
+func isTeammate(a agentIn) bool {
+	return a.meta != nil && (a.meta.TeamName != "" || a.meta.TaskKind == "in_process_teammate")
+}
+
+// isFork: the agent started with a copy of its parent's conversation.
+func isFork(a agentIn) bool {
+	return a.meta != nil && (a.meta.IsFork || a.meta.AgentType == "fork")
 }
 
 // inboxMessages turns a later prompt of an agent into inbox entries: the messages the

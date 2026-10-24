@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "parserVersion": 8,
   "source": [
     {
@@ -130,7 +130,7 @@
   "agents": [
     {
       "id": "areviewer-09e0c0de00000001",
-      "kind": "teammate",
+      "kind": "subagent",
       "name": "reviewer",
       "agentType": "reviewer",
       "description": "Review the diff",

@@ -5,4 +5,4 @@ ID                                    WHEN             PROJECT  TITLE           
 20202020                              Sep 20 06:00     pricing  estimate the build cost                          1       0  ≈$0.027  clean
 
 4 of 4 sessions
-cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)
+cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside the harness's reported windows)

@@ -70,6 +70,7 @@ export function SessionRow({
         <span className="flex shrink-0 items-center gap-1.5">
           {/* while it runs, the end state only says the last record is not an answer yet */}
           {!isRunning(s.state) && <EndStateBadge endState={s.endState} />}
+          {s.key.harness === 'codex' && <Badge title="A Codex session">codex</Badge>}
           {s.kind === 'background' && (
             <Badge title="A background session: nobody typed into it interactively">background</Badge>
           )}

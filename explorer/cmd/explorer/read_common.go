@@ -24,8 +24,19 @@ import (
 	"github.com/terek/merlin/explorer/internal/store"
 )
 
-// claudeHarness is the only harness today; the registry of live sessions is read for it.
+// claudeHarness is the harness whose registry of live sessions is read (Codex keeps none).
 const claudeHarness = "claude"
+
+// harnessTitle is a harness's product name.
+func harnessTitle(h string) string {
+	switch h {
+	case "claude":
+		return "Claude Code"
+	case "codex":
+		return "Codex"
+	}
+	return h
+}
 
 // world is everything a read command needs: the catalog over all digests, the digests
 // themselves (doctor reads the error stubs), the live registry and the current time.
@@ -440,7 +451,7 @@ func moneyFlag(m catalog.Money) catalog.CostFlag {
 	return catalog.CostExact
 }
 
-const costLegend = "cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)"
+const costLegend = "cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside the harness's reported windows)"
 
 // snip collapses whitespace and cuts to n runes.
 func snip(s string, n int) string {

@@ -4,4 +4,4 @@ ID                                    WHEN             PROJECT  TITLE           
 21212121                              yesterday 06:00  misc     write the changelog                              1       0  ≈$0.011  clean
 
 3 of 8 sessions (--limit 0 for all)
-cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside Claude Code's reported windows)
+cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside the harness's reported windows)

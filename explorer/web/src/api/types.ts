@@ -26,6 +26,7 @@ export type TurnOrigin =
   | 'continuation'
   /** The task an agent was started with (`AgentTurn` only). */
   | 'spawn'
+/** What started an agent. 'teammate' and 'fork' come only from digests of schema 1: see lib/agent.ts agentRole. */
 export type AgentKind = 'subagent' | 'teammate' | 'fork' | 'compact' | 'workflow' | 'review' | 'approval-review'
 export type AgentStatus = 'completed' | 'killed' | 'open'
 export type Linkage = 'meta' | 'tool-result' | 'name' | 'prompt' | 'run' | 'unresolved'
@@ -151,8 +152,11 @@ export interface TreeList {
 }
 
 export interface ProjectSummary {
+  /** The first of `harnesses` in name order; a directory used by several harnesses is one project. */
   harness: string
   projectKey: string
+  /** Absent from an older daemon: read as `[harness]`. */
+  harnesses?: string[]
   project: string
   sessions: number
   scriptedRuns: number

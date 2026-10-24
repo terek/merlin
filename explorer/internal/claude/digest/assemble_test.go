@@ -172,7 +172,7 @@ func TestAssembleTeammate(t *testing.T) { // 09
 	a := assembleFixture(t, sTeam)
 	const R = "areviewer-09e0c0de00000001"
 	checkAgents(t, a, []wantAgent{{
-		id: R, kind: model.AgentTeammate, depth: 0, linkage: model.LinkName, toolUse: "toolu_team_01",
+		id: R, kind: model.AgentSubagent, depth: 0, linkage: model.LinkName, toolUse: "toolu_team_01",
 		spawnTurn: 0, status: model.StatusCompleted, prompt: "Review the diff in the login branch.",
 		final: "Tests look fine.", own: 0.0071 + 0.0021 + 0.00185, sub: 0.01105, model: "sonnet",
 	}})
@@ -216,13 +216,13 @@ func TestAssembleForks(t *testing.T) { // 10
 	const f1, f2, f3 = "a10e0c0de0000001", "a10e0c0de0000002", "a10e0c0de0000003"
 	// msg_fork_ctx_01 (0.0037) is shared by f1 and f2 with the same timestamp: f1 owns it.
 	checkAgents(t, a, []wantAgent{
-		{id: f1, kind: model.AgentFork, depth: 1, linkage: model.LinkMeta, toolUse: "toolu_fork_01", spawnTurn: 0,
+		{id: f1, kind: model.AgentSubagent, depth: 1, linkage: model.LinkMeta, toolUse: "toolu_fork_01", spawnTurn: 0,
 			status: model.StatusCompleted, prompt: "Evaluate sqlite.", final: "sqlite is simple and embedded.",
 			own: 0.0037 + 0.00155, sub: 0.00525, model: "inherit"},
-		{id: f2, kind: model.AgentFork, depth: 1, linkage: model.LinkMeta, toolUse: "toolu_fork_02", spawnTurn: 0,
+		{id: f2, kind: model.AgentSubagent, depth: 1, linkage: model.LinkMeta, toolUse: "toolu_fork_02", spawnTurn: 0,
 			status: model.StatusCompleted, prompt: "Evaluate postgres.", final: "postgres scales and is heavier.",
 			own: 0.00155, sub: 0.00155, model: "inherit"},
-		{id: f3, kind: model.AgentFork, depth: 1, linkage: model.LinkMeta, toolUse: "toolu_fork_03", spawnTurn: 0,
+		{id: f3, kind: model.AgentSubagent, depth: 1, linkage: model.LinkMeta, toolUse: "toolu_fork_03", spawnTurn: 0,
 			status: model.StatusCompleted, prompt: "Evaluate mysql.", final: "mysql is a middle ground.",
 			own: 0.00155, sub: 0.00155, model: "inherit"},
 	})
@@ -527,7 +527,7 @@ func TestAssembleForkLinkage(t *testing.T) {
 	f := fork("aF", 20, transcript.AgentMeta{ToolUseID: "tuF", ParentAgentID: "aP", IsFork: true}, spawn("tuF", 11))
 	a := Assemble(m, []AgentFile{f, p})
 	g := byID(a, "aF")
-	if g.Linkage != model.LinkMeta || g.ParentAgentID == nil || *g.ParentAgentID != "aP" || g.Depth != 2 || g.Kind != model.AgentFork {
+	if g.Linkage != model.LinkMeta || g.ParentAgentID == nil || *g.ParentAgentID != "aP" || g.Depth != 2 || g.Kind != model.AgentSubagent {
 		t.Errorf("fork of agent: %+v", g)
 	}
 	if g.SpawnTurn == nil || *g.SpawnTurn != 1 {

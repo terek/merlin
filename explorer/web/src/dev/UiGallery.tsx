@@ -424,7 +424,7 @@ export function UiGallery() {
           </Card>
           <Card title="EmptyState">
             <EmptyState title="No sessions match">
-              Clear the filters, or wait for Claude Code to write a session.
+              Clear the filters, or wait for Claude Code or Codex to write a session.
             </EmptyState>
           </Card>
           <Card title="ErrorState (API error)" className="col-span-2">

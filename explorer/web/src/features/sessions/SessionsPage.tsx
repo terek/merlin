@@ -315,8 +315,8 @@ function ListView({
             </EmptyState>
           ) : (
             <EmptyState icon={<FolderOpen size={20} />} title="No sessions yet">
-              Merlin lists the sessions it finds under ~/.claude. Start Claude Code in a project and the first one shows
-              up here within a few seconds.
+              Merlin lists the sessions it finds under ~/.claude and ~/.codex. Start Claude Code or Codex in a project
+              and the first one shows up here within a few seconds.
             </EmptyState>
           )
         }

@@ -20,7 +20,17 @@ import { Card, ModelName, SegmentedControl } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
 import { niceTicks } from '../context/chart'
-import { compactionTally, type Part, type Split, stepParts, type Unit, unitParts } from './model'
+import {
+  agentSeries,
+  compactionTally,
+  KIND_SERIES,
+  type KindKey,
+  type Part,
+  type Split,
+  stepParts,
+  type Unit,
+  unitParts,
+} from './model'
 import { type Branch, pathPoints, pathTo, type Tree } from './tree'
 
 /** A turn of a branch. */
@@ -63,15 +73,10 @@ const ROW_MIN = 8
 const ROW_GAP = 9
 const LABEL_H = 11
 const BAND_GAP = 26
-const KIND_COLOR: Record<string, string> = {
-  subagent: 'var(--series-2)',
-  teammate: 'var(--series-3)',
-  workflow: 'var(--series-2)',
-  fork: 'var(--series-4)',
-  compact: 'var(--series-other)',
-  review: 'var(--series-2)',
-  'approval-review': 'var(--series-other)',
-}
+const KIND_COLOR: Record<KindKey, string> = Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<
+  KindKey,
+  string
+>
 
 /** A compaction's mark: red when its call ran on a cold cache, amber when warm, grey when unknown. */
 const markColor = (call: { cache: string } | undefined) =>
@@ -171,7 +176,7 @@ function Readout({
       {u ? (
         <>
           <div className="flex items-center gap-1.5">
-            <KindIcon kind={u.agent.kind} />
+            <KindIcon agent={u.agent} />
             <span className="font-medium">{agentLabel(u.agent)}</span>
             {u.of > 1 && (
               <span className="text-muted">
@@ -609,7 +614,7 @@ export function SpendGraph({
         {/* the connectors: where a unit branches off, and where its report comes back */}
         {m.units.map((u) => {
           const y = g.rowTop[laneOf.get(u.agent.id) ?? 0]
-          const color = KIND_COLOR[u.agent.kind]
+          const color = KIND_COLOR[agentSeries(u.agent)]
           const on = isOn(b, u)
           const xt = tail(u)
           const xl = xc(sx(u.launch))
@@ -719,7 +724,7 @@ export function SpendGraph({
         {/* agents: a row each, a bar per piece of work */}
         {m.rows.map((r) => {
           const y = g.rowTop[r.lane]
-          const color = KIND_COLOR[r.agent.kind]
+          const color = KIND_COLOR[agentSeries(r.agent)]
           const end = Math.max(...r.units.map(reach))
           const next = m.rows
             .filter((o) => o.lane === r.lane && o.first > r.last)

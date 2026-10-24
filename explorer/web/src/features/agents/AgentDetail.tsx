@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Agent } from '../../api/types'
+import { agentRole, ROLE_LABEL } from '../../lib/agent'
 import { formatCount } from '../../lib/format'
 import { inboxLabel } from '../../lib/inbox'
 import { fullTime, parseTime, spanMs, timeOfDay } from '../../lib/time'
@@ -29,6 +30,14 @@ function Time({ at }: { at: string | undefined }) {
   const d = parseTime(at)
   return d ? <time title={fullTime(d)}>{timeOfDay(d)}</time> : <span className="text-faint">{'–'}</span>
 }
+
+const roleTitle = (a: Agent) =>
+  [
+    a.inheritsContext && a.kind !== 'compact' ? "started with a copy of its parent's conversation" : '',
+    a.addressable ? 'could be sent more work after its launch' : '',
+  ]
+    .filter(Boolean)
+    .join('; ') || undefined
 
 const linkLabel = (a: Agent) =>
   a.linkage === 'meta' || a.linkage === 'run'
@@ -69,9 +78,9 @@ export function AgentDetail({
       <header className="flex items-start gap-2">
         <div className="min-w-0 flex-1 space-y-0.5">
           <div className="flex flex-wrap items-center gap-1.5">
-            <KindIcon kind={a.kind} />
+            <KindIcon agent={a} />
             <span className="font-semibold [overflow-wrap:anywhere]">{agentLabel(a)}</span>
-            <Badge>{a.kind}</Badge>
+            <Badge title={roleTitle(a)}>{ROLE_LABEL[agentRole(a)]}</Badge>
             {a.name && a.agentType && <span className="text-sec text-muted">{a.agentType}</span>}
             {a.phase && <Badge title="the phase of the workflow run">{a.phase}</Badge>}
             {a.background && <Badge title="ran in the background">bg</Badge>}

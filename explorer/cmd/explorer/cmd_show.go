@@ -27,7 +27,7 @@ candidates.
 
 Cost block
   best        what the session cost: the figure to add up
-  reported    Claude Code's own figure, summed over its reported windows (one
+  reported    the harness's own figure, summed over its reported windows (one
               window per run of the program); includes calls that leave no
               trace in the transcript
   attributed  recomputed from the transcript tokens, for the messages this
@@ -43,7 +43,7 @@ Cost block
 Timeline
   Turns are numbered from 0, as in the JSON output. Each shows its start, origin
   (human, command, task-notification, ...), cost including the agents it started,
-  the prompt (>) and Claude's final text (<). Turns copied from another session
+  the prompt (>) and the agent's final text (<). Turns copied from another session
   are folded into one line; abandoned turns (on a branch the session rewound
   away from) are marked. Compactions appear between the turns they separate.
 
@@ -172,7 +172,7 @@ func (p *printer) header(d *model.SessionDigest, in catalog.SessionInfo) {
 		kind += " · name " + d.Name
 	}
 	if len(d.HarnessVersions) > 0 {
-		kind += " · Claude Code " + strings.Join(d.HarnessVersions, ", ")
+		kind += " · " + harnessTitle(d.Harness) + " " + strings.Join(d.HarnessVersions, ", ")
 	}
 	p.kv("kind", kind)
 	span := stamp(d.StartedAt) + " → " + stamp(d.LastActivityAt)
@@ -239,17 +239,17 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 	p.printf("\nCost    %s", marked(c.BestUSD, c.Flag))
 	switch c.Flag {
 	case catalog.CostExact:
-		p.printf("   exact: Claude Code's own figure; nothing lies outside its windows\n")
+		p.printf("   exact: %s's own figure; nothing lies outside its windows\n", harnessTitle(in.Key.Harness))
 	case catalog.CostPartial:
-		p.printf("   partial: Claude Code's figure plus %s recomputed for spend outside its windows\n", usd(c.UncoveredUSD))
+		p.printf("   partial: %s's figure plus %s recomputed for spend outside its windows\n", harnessTitle(in.Key.Harness), usd(c.UncoveredUSD))
 	default:
-		p.printf("   estimated: Claude Code reported no figure; recomputed from tokens\n")
+		p.printf("   estimated: %s reported no figure; recomputed from tokens\n", harnessTitle(in.Key.Harness))
 	}
 	row := func(label string, v float64, note string) {
 		p.printf("  %-11s %10s   %s\n", label, usd(v), note)
 	}
 	if len(c.Windows) > 0 {
-		row("reported", c.ReportedUSD, fmt.Sprintf("Claude Code's own figure, %s", plural(len(c.Windows), "window", "windows")))
+		row("reported", c.ReportedUSD, fmt.Sprintf("%s's own figure, %s", harnessTitle(in.Key.Harness), plural(len(c.Windows), "window", "windows")))
 		for i, wd := range c.Windows {
 			if i == 6 {
 				p.printf("  %-11s %10s   … and %d more\n", "", "", len(c.Windows)-6)
@@ -374,7 +374,7 @@ func (p *printer) agents(d *model.SessionDigest) {
 		if a.Description != "" {
 			name += " · " + snip(a.Description, 36)
 		}
-		kind := string(a.Kind)
+		kind := agentRole(*a)
 		if a.Background {
 			kind += " (bg)"
 		}
@@ -711,4 +711,19 @@ func billingName(b model.CallBilling) string {
 		return "plain input"
 	}
 	return string(b)
+}
+
+// agentRole is how an agent is shown: its kind, and for a subagent whether it is a fork
+// (started with its parent's conversation) or addressable (it could be, or was, sent more work).
+func agentRole(a model.Agent) string {
+	if a.Kind != model.AgentSubagent {
+		return string(a.Kind)
+	}
+	switch {
+	case a.InheritsContext:
+		return "fork"
+	case a.Addressable:
+		return "addressable"
+	}
+	return string(a.Kind)
 }

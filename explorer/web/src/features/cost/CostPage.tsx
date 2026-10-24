@@ -386,8 +386,9 @@ function CompactionNote({ buckets }: { buckets: Bucket[] }) {
       )}{' '}
       A compaction sends the whole context once more to write the summary: warm, that is a cache read; after the main
       agent sat idle longer than the cache lifetime, it is read again at full price. Compacting before a long break, or
-      right after coming back while the turn is still cached, is what keeps it cheap. Estimated from the context size;
-      Claude Code does not record the call, so these figures are not in the spend above.
+      right after coming back while the turn is still cached, is what keeps it cheap. Estimated from the context size:
+      Claude Code does not record the call, so these figures are not in the spend above (Codex records it, and its
+      compaction calls are in the spend like any other).
     </p>
   )
 }

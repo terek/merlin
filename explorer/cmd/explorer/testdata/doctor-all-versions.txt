@@ -6,12 +6,12 @@ Index
   missing sources: none
   catalog: 124 distinct messages (13 shared between sessions), 5 lineage links
 
-Format drift  (by Claude Code version that wrote the files; a session spanning versions counts under each)
-  VERSION  SESSIONS  BAD LINES  UNKNOWN RECORD TYPES
-  2.1.71          1          0  -
-  2.1.150         1          0  -
-  2.1.200        31          1  hologram-state×1
-  2.1.280         2          0  -
+Format drift  (by the harness version that wrote the files; a session spanning versions counts under each)
+  VERSION              SESSIONS  BAD LINES  UNKNOWN RECORD TYPES
+  Claude Code 2.1.71          1          0  -
+  Claude Code 2.1.150         1          0  -
+  Claude Code 2.1.200        31          1  hologram-state×1
+  Claude Code 2.1.280         2          0  -
 
 Pricing
   unpriced models (their messages cost $0 until a price is added to config.json):
@@ -22,7 +22,7 @@ Agents
   messages cut short in the transcript: 4 in 2 sessions (1 in agent files); their output tokens are partial, so attributed cost is a lower bound
 
 Cost: reported vs recomputed from the transcripts
-  2 sessions carry Claude Code's reported cost: $0.131 reported, $0.128 of it explained by transcript messages (covered)
+  2 sessions carry a cost their harness reported: $0.131 reported, $0.128 of it explained by transcript messages (covered)
   covered / reported = 0.977 overall; the rest ($0.0030) is calls that are in no transcript
   per session: min 0.892   p10 0.892   median 0.892   p90 0.987   max 0.987
   outside the windows: $0 recomputed in 0 sessions that have windows; 33 sessions have none at all ($0.500, all recomputed)

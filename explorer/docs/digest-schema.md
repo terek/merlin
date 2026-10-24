@@ -227,13 +227,13 @@ A stretch of a text, as UTF-8 byte offsets.
 | key | meaning |
 |---|---|
 | `id` | agent id |
-| `kind` | `subagent`, `teammate`, `fork`, `compact`, `workflow` (an agent of a workflow run: started by the run's script, not by a tool call of its own), `review` (a code review the harness ran on the user's request, Codex `/review`) or `approval-review` (a call the harness made to judge whether an action needs the user's approval) |
+| `kind` | what started it: `subagent` (a tool call of another agent), `compact`, `workflow` (an agent of a workflow run: started by the run's script, not by a tool call of its own), `review` (a code review the harness ran on the user's request, Codex `/review`) or `approval-review` (a call the harness made to judge whether an action needs the user's approval). Schema 1 also had `teammate` and `fork`: read them as `subagent` with `addressable` / `inheritsContext` |
 | `name` | teammate or given name |
 | `agentType` | agent type, e.g. `general-purpose`, `Explore` |
 | `description` | short description from the spawning call |
 | `model` | model the agent ran on |
-| `inheritsContext` | it started with a copy of its parent's conversation rather than with only its prompt (kinds `fork` and `compact`: a compaction call is given the conversation to summarise); omitted when false |
-| `addressable` | it could be sent more work after its launch (kind `teammate`), or was: another agent or the user sent it a message or a task (`inbox` holds one of kind `message` or `assignment`); omitted when false |
+| `inheritsContext` | it started with a copy of its parent's conversation rather than with only its prompt (a fork, and every kind `compact`: a compaction call is given the conversation to summarise); omitted when false |
+| `addressable` | it could be sent more work after its launch (a Claude Code teammate, every Codex subagent), or was: another agent or the user sent it a message or a task (`inbox` holds one of kind `message` or `assignment`); omitted when false |
 | `parentAgentId` | spawning agent's id; always present, `null` when spawned by the main agent |
 | `spawnToolUseId` | id of the tool call that spawned it |
 | `spawnTurn` | index of the turn that spawned it |

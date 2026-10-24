@@ -2,7 +2,10 @@ package model
 
 // SchemaVersion is the version of the digest layout defined in this package. Bump it when
 // a field is removed, renamed or changes meaning (additive fields do not need a bump).
-const SchemaVersion = 1
+//
+// 2: Agent.Kind no longer has teammate and fork; those agents are subagents with
+// Addressable and InheritsContext.
+const SchemaVersion = 2
 
 // SessionKind says how a session was driven.
 type SessionKind string
@@ -42,13 +45,14 @@ const (
 	InboxAssignment  InboxKind = "assignment" // a task was assigned to the receiver
 )
 
-// AgentKind says what sort of sub-agent an Agent is.
+// AgentKind says what started an agent. Whether it inherits its parent's conversation or
+// can be sent more work is in Agent.InheritsContext and Agent.Addressable. (Schema 1 had
+// the kinds "teammate" and "fork" for those.)
 type AgentKind string
 
 const (
+	// AgentSubagent is an agent another agent started with a tool call.
 	AgentSubagent AgentKind = "subagent"
-	AgentTeammate AgentKind = "teammate"
-	AgentFork     AgentKind = "fork"    // subagent that inherits its parent's context
 	AgentCompact  AgentKind = "compact" // the call that wrote a compaction summary
 	// AgentWorkflow is an agent of a workflow run: started by the workflow's script, not by a
 	// tool call of its own.

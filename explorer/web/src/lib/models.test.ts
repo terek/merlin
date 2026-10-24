@@ -11,11 +11,14 @@ test('modelLabel', () => {
   expect(modelLabel('claude-3-haiku-20240307')).toBe('Haiku 3')
   expect(modelLabel('claude-opus-4-1[1m]')).toBe('Opus 4.1')
   expect(modelLabel('haiku')).toBe('Haiku')
+  expect(modelLabel('gpt-6.1-sol')).toBe('GPT-6.1 Sol')
+  expect(modelLabel('gpt-6-luna')).toBe('GPT-6 Luna')
+  expect(modelLabel('gpt-9')).toBe('GPT-9')
 })
 
 test('unknown names are unchanged', () => {
   expect(modelLabel('(overhead)')).toBe('(overhead)')
-  expect(modelLabel('gpt-9')).toBe('gpt-9')
+  expect(modelLabel('codex-auto-review')).toBe('codex-auto-review')
   expect(modelLabel('claude-mystery-7')).toBe('claude-mystery-7')
   expect(modelLabel('')).toBe('')
 })

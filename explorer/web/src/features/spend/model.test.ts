@@ -466,3 +466,62 @@ describe('packRows', () => {
     expect(rows.map((r) => r.lane)).toEqual([0, 1, 0, 1])
   })
 })
+
+describe('agent turns', () => {
+  // A Codex-style agent: launched in turn 0, sent a follow-up from turn 2 (it records that
+  // exactly); its turns say which main turn they belong to, its messages which turn they are in.
+  const turns = [turn(0, 0, 5), turn(1, 10, 12), turn(2, 20, 30)]
+  const messages = [
+    msg(1, { input: 1000 }),
+    msg(2, { input: 2000, output: 10 }, { agentId: 'cx', agentTurn: 0 }),
+    msg(21, { input: 4000, output: 20 }, { agentId: 'cx', agentTurn: 1 }),
+    msg(22, { input: 8000 }, { agentId: 'cx', agentTurn: 1 }),
+  ]
+  const cx = agent('cx', {
+    spawnTurn: 0,
+    addressable: true,
+    startedAt: at(2),
+    endedAt: at(23),
+    turns: [
+      {
+        index: 0,
+        origin: 'spawn',
+        prompt: 'part one',
+        startedAt: at(2),
+        endedAt: at(3),
+        rootTurn: 0,
+        assistantMessages: 1,
+        toolCalls: 0,
+        cost: { usd: 0 },
+      },
+      {
+        index: 1,
+        origin: 'peer',
+        startedAt: at(21),
+        endedAt: at(23),
+        rootTurn: 2,
+        inbox: [{ at: at(20), kind: 'assignment', text: 'part two' }],
+        assistantMessages: 2,
+        toolCalls: 0,
+        cost: { usd: 0 },
+      },
+    ],
+  })
+  const m = buildSpend(detail(turns, messages, [cx]))
+  const unit = (id: string) => m.units.find((u) => u.id === id)
+
+  test('one unit per agent turn, launched in its root turn, billed by agentTurn', () => {
+    expect(m.units.map((u) => [u.id, u.launch])).toEqual([
+      ['cx#0', 0],
+      ['cx#1', 2],
+    ])
+    expect(unit('cx#0')?.bucket.usd).toBeCloseTo(messages[1].usd, 10)
+    expect(unit('cx#1')?.bucket.usd).toBeCloseTo(messages[2].usd + messages[3].usd, 10)
+    expect([unit('cx#0')?.asked, unit('cx#1')?.asked]).toEqual(['part one', 'part two'])
+  })
+
+  test('an addressable agent is drawn in its own series', () => {
+    const u = unit('cx#1')
+    expect(u && unitParts(u, 'kind')[0].key).toBe('addressable')
+  })
+})

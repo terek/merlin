@@ -16,6 +16,7 @@ import { AgentDetail } from '../agents/AgentDetail'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
 import {
+  agentSeries,
   type Bucket,
   CLASS_SERIES,
   type Col,
@@ -232,7 +233,7 @@ export function DecisionPanel({
                 className={row(u.id === selectedUnitId)}
               >
                 <span className="flex items-center gap-1.5 font-mono text-muted">
-                  <KindIcon kind={u.agent.kind} />
+                  <KindIcon agent={u.agent} />
                   turn {u.launch}
                 </span>
                 <span className="min-w-0 truncate">
@@ -406,7 +407,7 @@ function UnitList({
                 onClick={() => onSelectUnit(on ? null : u.id)}
                 className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-sec ${on ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
               >
-                <KindIcon kind={u.agent.kind} />
+                <KindIcon agent={u.agent} />
                 <span className="shrink-0 font-medium">{agentLabel(u.agent)}</span>
                 <span className="min-w-0 flex-1 truncate text-muted">
                   {firstLine(unwrapMachineText(u.asked).body) || u.agent.description}
@@ -433,8 +434,7 @@ function UnitList({
   )
 }
 
-const toneOf = (u: Unit) =>
-  u.agent.kind === 'teammate' ? 'series-3' : u.agent.kind === 'fork' ? 'series-4' : ('series-2' as const)
+const toneOf = (u: Unit) => KIND_SERIES.find((s) => s.key === agentSeries(u.agent))?.tone ?? 'series-2'
 
 /** One piece of agent work: what it was asked, what it cost and why, then the agent. */
 function UnitDetail({
@@ -458,7 +458,7 @@ function UnitDetail({
       <div className="grid gap-6 p-3 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <KindIcon kind={a.kind} />
+            <KindIcon agent={a} />
             <span className="font-semibold">{agentLabel(a)}</span>
             {u.of > 1 && (
               <span className="text-sec text-muted">

@@ -94,7 +94,7 @@ export function ProjectRail({
                     name={<ProjectName path={p.project} />}
                     count={p.sessions}
                     usd={p.cost.totalUSD}
-                    title={p.project}
+                    title={(p.harnesses ?? [p.harness]).length > 1 ? `${p.project} (Claude Code and Codex)` : p.project}
                   />
                 ))}
               </ul>

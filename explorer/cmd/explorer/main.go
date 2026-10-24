@@ -1,4 +1,4 @@
-// Command merlin (Merlin Explorer) indexes Claude Code sessions.
+// Command merlin (Merlin Explorer) indexes Claude Code and Codex sessions.
 package main
 
 import (

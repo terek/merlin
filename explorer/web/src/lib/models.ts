@@ -7,8 +7,10 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 const NEW_STYLE = /^claude-(fable|opus|sonnet|haiku)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(?:\[[^\]]*\])?$/
 const OLD_STYLE = /^claude-(\d+)(?:-(\d{1,2}))?-(fable|opus|sonnet|haiku)(?:-\d{8})?(?:\[[^\]]*\])?$/
 
+const GPT = /^gpt-(\d+(?:\.\d+)?)(?:-([a-z]+))?$/
+
 /**
- * "claude-fable-5-1" -> "Fable 5.1", "claude-haiku-4-5-20251001" -> "Haiku 4.5",
+ * "claude-fable-5-1" -> "Fable 5.1", "gpt-6.1-sol" -> "GPT-6.1 Sol", "claude-haiku-4-5-20251001" -> "Haiku 4.5",
  * "claude-3-5-sonnet-20241022" -> "Sonnet 3.5", a bare family alias ("haiku") -> "Haiku".
  * Anything else, "(overhead)" included, is returned unchanged.
  */
@@ -18,5 +20,7 @@ export function modelLabel(name: string): string {
   const o = OLD_STYLE.exec(name)
   if (o) return `${cap(o[3])} ${o[1]}${o[2] ? `.${o[2]}` : ''}`
   if (FAMILIES.has(name)) return cap(name)
+  const g = GPT.exec(name)
+  if (g) return `GPT-${g[1]}${g[2] ? ` ${cap(g[2])}` : ''}`
   return name
 }

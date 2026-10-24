@@ -2,6 +2,7 @@
 // are visible. Pure, so it is tested; the components only draw what this returns.
 
 import type { Agent, WorkflowRun } from '../../api/types'
+import { agentRole } from '../../lib/agent'
 import type { AgentNode } from '../../lib/tree'
 
 /** More than this many consecutive siblings of one type are shown as one expandable line. */
@@ -56,11 +57,11 @@ export function treeDepth(forest: readonly AgentNode[]): number {
   return max
 }
 
-/** What makes two siblings "of one type": the kind and the agent type (or name for a teammate). */
+/** What makes two siblings "of one type": the role and the agent type (or name, for a teammate). */
 export function typeKey(a: Agent): string {
   // the agents of one workflow run belong together whatever their type
   if (a.kind === 'workflow') return `workflow:${a.runId ?? ''}`
-  return `${a.kind}:${a.agentType ?? a.name ?? ''}`
+  return `${agentRole(a)}:${a.agentType ?? a.name ?? ''}`
 }
 
 export function agentLabel(a: Agent): string {

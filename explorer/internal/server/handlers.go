@@ -46,8 +46,23 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := ProjectList{Projects: []ProjectSummary{}}
+	// One project per directory: the harnesses' project files for it are merged (they come
+	// ordered by harness, so the first harness names the project's key).
+	byDir := map[string]int{}
 	for _, pf := range cat.ProjectFiles() {
-		p := ProjectSummary{Harness: pf.Harness, ProjectKey: pf.ProjectKey, Project: pf.Project, Sessions: len(pf.Sessions)}
+		dir := pf.Project
+		if dir == "" {
+			dir = pf.Harness + "/" + pf.ProjectKey
+		}
+		i, ok := byDir[dir]
+		if !ok {
+			i = len(out.Projects)
+			byDir[dir] = i
+			out.Projects = append(out.Projects, ProjectSummary{Harness: pf.Harness, ProjectKey: pf.ProjectKey, Project: pf.Project})
+		}
+		p := &out.Projects[i]
+		p.Harnesses = append(p.Harnesses, pf.Harness)
+		p.Sessions += len(pf.Sessions)
 		for _, s := range pf.Sessions {
 			p.Cost.ReportedUSD += s.Cost.ReportedUSD
 			p.Cost.AttributedUSD += s.Cost.UncoveredUSD
@@ -62,7 +77,6 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 			p.Cost.AttributedUSD += l.AttributedUSD
 			p.Cost.TotalUSD += l.TotalUSD
 		}
-		out.Projects = append(out.Projects, p)
 	}
 	sort.SliceStable(out.Projects, func(i, j int) bool {
 		return out.Projects[i].LastActivityAt.After(out.Projects[j].LastActivityAt)

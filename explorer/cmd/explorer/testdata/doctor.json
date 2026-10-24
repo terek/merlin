@@ -9,16 +9,19 @@
   "errorStubs": [],
   "drift": [
     {
+      "harness": "claude",
       "version": "2.1.71",
       "sessions": 1,
       "badLines": 0
     },
     {
+      "harness": "claude",
       "version": "2.1.150",
       "sessions": 1,
       "badLines": 0
     },
     {
+      "harness": "claude",
       "version": "2.1.200",
       "sessions": 31,
       "badLines": 1,
@@ -27,6 +30,7 @@
       }
     },
     {
+      "harness": "claude",
       "version": "2.1.280",
       "sessions": 2,
       "badLines": 0
@@ -36,10 +40,7 @@
     "claude-nova-9-9": 1
   },
   "unresolvedAgents": 4,
-  "unresolvedAgentsIn": [
-    "11111111-0000-4000-8000-000000000001",
-    "12121212-0000-4000-8000-000000000001"
-  ],
+  "unresolvedAgentsIn": ["11111111-0000-4000-8000-000000000001", "12121212-0000-4000-8000-000000000001"],
   "truncatedMessages": 4,
   "truncatedSessions": 2,
   "truncatedAgentMessages": 1,
