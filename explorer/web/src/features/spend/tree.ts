@@ -1,7 +1,7 @@
 // A session and the sessions forked or continued from it are one tree: a trunk, and a branch
 // wherever another session took a copy of the conversation and went its own way. Every branch is
 // a session's own turns (the copied ones stay with the session that paid for them), with its
-// steps and its agent work. Pure; SpendGraph.tsx draws it.
+// steps and its agent work. Pure; timeline.ts lays it out in time.
 
 import type { LinkKind, SessionDetail, SessionKey } from '../../api/types'
 import { sessionTitle } from '../../lib/session'
@@ -21,26 +21,15 @@ export interface Branch {
   depth: number
   /** Its own turns (indexes into `model.cols`), in order. */
   own: number[]
-  /** Slot on the shared turn axis of each turn; undefined for a turn copied from the parent. */
-  slot: (number | undefined)[]
-  /** Turn index at each slot it occupies. */
-  colAt: Map<number, number>
-  /** First and last slot; `first > last` when it has no turn of its own. */
-  first: number
-  last: number
 }
 
 export interface Tree {
   branches: Branch[]
-  /** Width of the shared turn axis. */
-  slots: number
   /** Own spend of every branch: nothing is counted twice. */
   total: number
   byKind: Part[]
   byClass: Part[]
   rereads: Reread[]
-  maxStep: number
-  maxUnit: number
   fromMessages: boolean
 }
 
@@ -53,8 +42,7 @@ export function shortTitle(title: string, max = 64): string {
 const same = (a: SessionKey, b: SessionKey) => a.harness === b.harness && a.id === b.id
 
 /**
- * Lays the sessions of one family out as a tree. A branch starts in the slot after the last turn
- * it copied from its parent, so that two forks taken at the same point start under each other.
+ * Puts the sessions of one family in tree order.
  * `details` may come in any order and may lack members (one that failed to load): a session whose
  * parent is missing becomes a trunk of its own. The result is depth first, so that a branch is
  * drawn right under the session it left.
@@ -78,14 +66,6 @@ export function buildTree(details: readonly SessionDetail[]): Tree {
     const link = detail.lineage.parent
     const parent = link ? branches.find((b) => same(b.key, link.parent)) : undefined
     const own = model.cols.filter((c) => !c.inherited).map((c) => c.index)
-    // the slot of the parent's last copied turn; a copy of a turn the parent itself copied starts with the parent
-    const after = parent && link ? (parent.slot[link.atTurn] ?? parent.first - 1) : -1
-    const slot: (number | undefined)[] = model.cols.map(() => undefined)
-    const colAt = new Map<number, number>()
-    own.forEach((i, k) => {
-      slot[i] = after + 1 + k
-      colAt.set(after + 1 + k, i)
-    })
     branches.push({
       index: branches.length,
       key: detail.summary.key,
@@ -96,10 +76,6 @@ export function buildTree(details: readonly SessionDetail[]): Tree {
       kind: parent ? link?.kind : undefined,
       depth: parent ? parent.depth + 1 : 0,
       own,
-      slot,
-      colAt,
-      first: after + 1,
-      last: after + own.length,
     })
   }
 
@@ -113,60 +89,12 @@ export function buildTree(details: readonly SessionDetail[]): Tree {
 
   return {
     branches,
-    slots: Math.max(1, ...branches.map((b) => b.last + 1)),
     total: branches.reduce((a, b) => a + b.model.total, 0),
     byKind: sum(KIND_SERIES, (m) => m.byKind),
     byClass: sum(CLASS_SERIES, (m) => m.byClass),
     rereads: branches.flatMap((b) => b.model.rereads),
-    maxStep: Math.max(0, ...branches.map((b) => b.model.maxStep)),
-    maxUnit: Math.max(0, ...branches.map((b) => b.model.maxUnit)),
     fromMessages: branches.every((b) => b.model.fromMessages),
   }
-}
-
-/** The branches from the trunk down to `index`, in that order. */
-export function pathTo(tree: Tree, index: number): Branch[] {
-  const out: Branch[] = []
-  let cur: Branch | undefined = tree.branches[index]
-  while (cur) {
-    out.unshift(cur)
-    cur = cur.parent !== undefined ? tree.branches[cur.parent] : undefined
-  }
-  return out
-}
-
-/** A point of the context line along a path. */
-export interface PathPoint {
-  slot: number
-  branch: number
-  col: number
-  tokens?: number
-  rereadTokens: number
-}
-
-/**
- * The turns a session's context went through: each ancestor's own turns up to where the next
- * branch left it, then the branch's own.
- */
-export function pathPoints(tree: Tree, index: number): PathPoint[] {
-  const path = pathTo(tree, index)
-  const out: PathPoint[] = []
-  path.forEach((b, k) => {
-    const next = path[k + 1]
-    for (const i of b.own) {
-      const slot = b.slot[i] as number
-      if (next && slot >= next.first) break
-      const c = b.model.cols[i]
-      out.push({
-        slot,
-        branch: b.index,
-        col: i,
-        tokens: typeof c.turn.contextTokens === 'number' ? c.turn.contextTokens : undefined,
-        rereadTokens: c.mainRereadTokens,
-      })
-    }
-  })
-  return out
 }
 
 /** A decision with the branch it was made on. */

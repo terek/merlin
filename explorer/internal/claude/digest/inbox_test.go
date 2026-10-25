@@ -113,6 +113,23 @@ func TestDelivered(t *testing.T) {
 			ok: true,
 		},
 		{
+			name: "notifications that woke a finished agent, behind the harness's preamble",
+			text: "[SYSTEM NOTIFICATION - NOT USER INPUT]\nThis is an automated event, not a message from the user.\n\n" +
+				"<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor event: \"run\"</summary>\n<event>[Monitor expired.]</event>\n</task-notification>\n\n" +
+				"<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor event: \"run\"</summary>\n<event>Results written</event>\nA closing line.\n</task-notification>",
+			want: []model.InboxMessage{
+				{At: at, Kind: model.InboxTask, TaskID: "m1", Summary: `Monitor event: "run"`, Text: "[Monitor expired.]"},
+				{At: at, Kind: model.InboxTask, TaskID: "m1", Summary: `Monitor event: "run"`, Text: "Results written"},
+			},
+			ok: true,
+		},
+		{
+			name: "a message to a finished agent from the one that launched it",
+			text: "The coordinator sent a message while you were working:\nThanks. Now run it on mobile.\n",
+			rest: "Thanks. Now run it on mobile.",
+			ok:   true,
+		},
+		{
 			name: "a plain notice is not a message",
 			text: `2 background agents were stopped by the user: "a", "b".`,
 			rest: `2 background agents were stopped by the user: "a", "b".`,
@@ -151,6 +168,28 @@ func TestPeerPromptBecomesInbox(t *testing.T) {
 	}
 	if res.Turns[1].UserText != "thanks" || res.Turns[1].Inbox != nil {
 		t.Errorf("typed turn = %+v", res.Turns[1])
+	}
+}
+
+// A message that reaches a finished agent is written as a meta record with an origin: it
+// starts a turn. A meta record without an origin (a skill's body) still starts none.
+func TestMetaPromptWithOriginStartsTurn(t *testing.T) {
+	p := prompt("u2", "a1", 2, "The coordinator sent a message while you were working:\nNow on mobile.")
+	p["isMeta"] = true
+	p["origin"] = L{"kind": "coordinator"}
+	skill := prompt("u3", "a2", 4, "Base directory for this skill: /skills/x")
+	skill["isMeta"] = true
+	delete(skill, "origin")
+	res := reduce(t, prompt("u1", "", 0, "build it"),
+		assistant("a1", "u1", 1, "msg_1", usage(10, 5), text("Built.")),
+		p,
+		assistant("a2", "u2", 3, "msg_2", usage(10, 5), text("Done on mobile.")),
+		skill)
+	if len(res.Turns) != 2 {
+		t.Fatalf("turns = %+v", res.Turns)
+	}
+	if got := res.Turns[1]; got.Origin != model.OriginPeer || got.UserText != "Now on mobile." || got.Inbox != nil {
+		t.Errorf("message turn = %+v", got)
 	}
 }
 

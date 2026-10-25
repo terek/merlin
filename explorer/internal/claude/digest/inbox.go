@@ -16,11 +16,17 @@ import (
 //     <teammate-message> elements, and a fixed paragraph telling the model how to treat peer
 //     messages. The body of an element is text, or a JSON object when the harness itself
 //     speaks (a teammate went idle, a task was assigned).
-//   - A background task reporting: one <task-notification> element with child elements.
+//   - A background task reporting: one or more <task-notification> elements with child
+//     elements; when delivered to an agent after it finished, behind a paragraph telling the
+//     model that this is not user input.
+//   - A message to an agent after it finished, from the agent that launched it or from the
+//     user: an intro line and the text.
 //
 // delivered takes such a prompt apart so that nothing downstream has to know the markup.
 const (
 	peerIntro = "Another Claude session sent a message:"
+	// systemPreamble opens the paragraph in front of task notifications delivered to an agent.
+	systemPreamble = "[SYSTEM NOTIFICATION - NOT USER INPUT]"
 	// peerTrailer is the stable beginning of the paragraph that closes every peer prompt;
 	// the wording after it is not relied on.
 	peerTrailer = "This came from another Claude session"
@@ -31,7 +37,8 @@ var (
 	// markup in running text does not end the element early.
 	reTeammateMsg     = regexp.MustCompile(`(?ms)^<teammate-message\b([^>]*)>$(.*?)^</teammate-message>$`)
 	reCrossSessionMsg = regexp.MustCompile(`(?ms)^<cross-session-message\b([^>]*)>$(.*?)^</cross-session-message>$`)
-	reTaskNote        = regexp.MustCompile(`(?s)^\s*<task-notification>(.*)</task-notification>\s*$`)
+	// "<" and ">" are entity-escaped in the children, so the first closing tag ends the element.
+	reTaskNote = regexp.MustCompile(`(?s)<task-notification>(.*?)</task-notification>`)
 	reAttr            = regexp.MustCompile(`([a-z_]+)="([^"]*)"`)
 	entities          = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&apos;", "'", "&amp;", "&")
 )
@@ -41,14 +48,36 @@ var (
 // nothing). ok is false when the text has none of the known shapes; the text then stays as
 // it is.
 func delivered(text string, at time.Time) (msgs []model.InboxMessage, rest string, ok bool) {
-	if m := reTaskNote.FindStringSubmatch(text); m != nil {
-		if msg, ok := taskMessage(m[1], at); ok {
-			return []model.InboxMessage{msg}, "", true
+	t := strings.TrimLeft(text, " \t\r\n")
+	if strings.HasPrefix(t, systemPreamble) {
+		if i := strings.Index(t, "<task-notification>"); i >= 0 {
+			t = t[i:]
 		}
-		return nil, text, false
+	}
+	if strings.HasPrefix(t, "<task-notification>") {
+		var left strings.Builder
+		last := 0
+		for _, f := range reTaskNote.FindAllStringSubmatchIndex(t, -1) {
+			msg, ok := taskMessage(t[f[2]:f[3]], at)
+			if !ok {
+				return nil, text, false
+			}
+			msgs = append(msgs, msg)
+			left.WriteString(t[last:f[0]])
+			last = f[1]
+		}
+		if len(msgs) == 0 {
+			return nil, text, false
+		}
+		left.WriteString(t[last:])
+		return msgs, strings.TrimSpace(left.String()), true
+	}
+	for _, intro := range agentIntros {
+		if body, found := strings.CutPrefix(t, intro); found {
+			return nil, strings.TrimSpace(body), true
+		}
 	}
 
-	t := strings.TrimLeft(text, " \t\r\n")
 	t = strings.TrimPrefix(t, peerIntro)
 	for _, shape := range []struct {
 		re   *regexp.Regexp
@@ -129,6 +158,12 @@ func peerMessage(from, summary, body string, at time.Time) model.InboxMessage {
 		}
 	}
 	return msg
+}
+
+// agentIntros open a message that reached an agent after it finished; the text follows.
+var agentIntros = []string{
+	"The coordinator sent a message while you were working:",
+	"The user sent a new message while you were working:",
 }
 
 var (

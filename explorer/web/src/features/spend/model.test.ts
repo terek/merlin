@@ -9,13 +9,13 @@ import {
   missCause,
   missSummary,
   missText,
-  packRows,
   promptLine,
-  type Row,
+  reportWhere,
   rereadTokens,
   stepParts,
   topDecisions,
   turnAt,
+  turnList,
   unitParts,
 } from './model'
 
@@ -204,6 +204,16 @@ describe('promptLine', () => {
     expect(
       promptLine({ userText: '', inbox: [{ at: at(0), kind: 'idle', from: 'builder', status: 'available' }] }),
     ).toBe('builder idle')
+    // an agent that finished more than once: the same summary each time, a report of its own
+    const done = (text: string) =>
+      promptLine({
+        userText: '',
+        inbox: [{ at: at(0), kind: 'task', status: 'completed', summary: 'Agent "build" finished', text }],
+      })
+    expect(done('## Report\n\nall green')).toBe('task completed: Agent "build" finished · Report')
+    expect(done('A stale notice; nothing to do.')).toBe(
+      'task completed: Agent "build" finished · A stale notice; nothing to do.',
+    )
   })
 })
 
@@ -276,7 +286,6 @@ describe('buildSpend', () => {
     expect(m.cols[1].usd).toBeCloseTo(messages[4].usd, 10)
     expect(m.cols[2].step.usd).toBeCloseTo(messages[8].usd, 10)
     expect(m.cols[2].compact.usd).toBeCloseTo(messages[7].usd, 10)
-    expect(m.maxStep).toBeCloseTo(m.cols[3].usd, 10)
   })
 
   test('a sub-agent is one unit with its own sub-agents inside, launched and back in the same turn', () => {
@@ -302,15 +311,13 @@ describe('buildSpend', () => {
     expect(m.cols[0].launched.map((u) => u.id)).toEqual(['sub#0', 'mate#0'])
     expect(m.cols[1].arrived.map((u) => u.id)).toEqual(['mate#0'])
     expect(m.cols[1].launched.map((u) => u.id)).toEqual(['mate#1'])
-    expect(m.maxUnit).toBeCloseTo(messages[3].usd, 10)
   })
 
-  test('rows: one per agent the main session launched, side by side while they overlap', () => {
-    expect(m.rows.map((r) => [r.agent.id, r.lane, r.first, r.last])).toEqual([
-      ['sub', 0, 0, 0],
-      ['mate', 1, 0, 2],
+  test('rows: one per agent the main session launched, with its pieces of work', () => {
+    expect(m.rows.map((r) => [r.agent.id, r.units.map((u) => u.id)])).toEqual([
+      ['sub', ['sub#0']],
+      ['mate', ['mate#0', 'mate#1']],
     ])
-    expect(m.laneCount).toBe(2)
   })
 
   test('a cache miss is its own part, with the gap and what a read would have cost', () => {
@@ -326,7 +333,6 @@ describe('buildSpend', () => {
     expect(parts.reread).toBeCloseTo(r.usd, 10)
     expect(parts.main).toBeCloseTo(m.cols[3].usd - r.usd, 10)
     expect(m.cols[3].step.byClass.reread).toBeCloseTo(r.usd, 10)
-    expect(m.cols[3].mainRereadTokens).toBe(53_000)
     expect(m.cols[3].step.tokens.write).toBe(1000)
     expect(m.cols[3].idleMs).toBe(35 * 60_000)
     expect(CLASS_SERIES.map((s) => s.key)).toContain('reread')
@@ -353,7 +359,9 @@ describe('buildSpend', () => {
     expect(items.filter((x) => x.kind === 'step').map((x) => x.kind === 'step' && x.col.index)).toHaveLength(3)
     expect(items.filter((x) => x.kind === 'unit')).toHaveLength(3)
     expect(sum(items)).toBeCloseTo(a.usd, 10)
-    expect(items.map((x) => x.usd)).toEqual([...items.map((x) => x.usd)].sort((p, q) => q - p))
+    // in time order: a step, then what it launched
+    const times = items.map((x) => (x.kind === 'step' ? Date.parse(x.col.turn.startedAt ?? '') : x.unit.startMs))
+    expect(times).toEqual([...times].sort((p, q) => p - q))
     expect(decisionItems(m, b).map((x) => x.kind)).toEqual(['step'])
   })
 
@@ -517,22 +525,6 @@ describe("compactions of an agent's own conversation", () => {
   })
 })
 
-describe('packRows', () => {
-  const row = (id: string, first: number, last: number): Row => ({
-    agent: agent(id),
-    lane: 0,
-    first,
-    last,
-    units: [],
-    usd: 0,
-  })
-  test('agents that do not overlap share a row', () => {
-    const rows = [row('a', 0, 3), row('b', 2, 5), row('c', 4, 6), row('d', 6, 7)]
-    expect(packRows(rows)).toBe(2)
-    expect(rows.map((r) => r.lane)).toEqual([0, 1, 0, 1])
-  })
-})
-
 describe('agent turns', () => {
   // A Codex-style agent: launched in turn 0, sent a follow-up from turn 2 (it records that
   // exactly); its turns say which main turn they belong to, its messages which turn they are in.
@@ -589,5 +581,35 @@ describe('agent turns', () => {
   test('an addressable agent is drawn in its own series', () => {
     const u = unit('cx#1')
     expect(u && unitParts(u, 'kind')[0].key).toBe('addressable')
+  })
+})
+
+describe('an agent that reported more than once', () => {
+  // a background agent launched in turn 0 finishes three times (woken again after it reported): each
+  // report starts a turn of the main agent
+  const done = (index: number, min: number) =>
+    turn(index, min, min + 1, {
+      origin: 'task-notification',
+      userText: '',
+      inbox: [{ at: at(min), kind: 'task', agentId: 'bg', status: 'completed', summary: 'Agent "bg" finished' }],
+    })
+  const m = buildSpend(
+    detail(
+      [turn(0, 0, 1), done(1, 5), done(2, 8), turn(3, 9, 10), done(4, 12)],
+      [msg(0, { output: 10 }), msg(2, { output: 10 }, { agentId: 'bg' }), msg(11, { output: 10 }, { agentId: 'bg' })],
+      [agent('bg', { background: true, spawnTurn: 0, startedAt: at(1), endedAt: at(12) })],
+    ),
+  )
+  const u = m.units[0]
+
+  test('every turn a report of it came in is known, and arrived there', () => {
+    expect([u.launch, u.ret, u.reports]).toEqual([0, 4, [1, 2, 4]])
+    expect(m.cols.map((c) => c.arrived.map((x) => x.id))).toEqual([[], ['bg#0'], ['bg#0'], [], ['bg#0']])
+  })
+
+  test('in words', () => {
+    expect(reportWhere(u)).toBe('3 reports, turns 1, 2 and 4')
+    expect(turnList([5, 6, 7])).toBe('turns 5 to 7')
+    expect(turnList([3])).toBe('turn 3')
   })
 })

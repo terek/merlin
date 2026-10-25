@@ -97,13 +97,29 @@ differs between lines of the same message in 15k cases.)
 |---|---|
 | array containing `tool_result` (+ envelope `toolUseResult`) | tool output — not a prompt (22k) |
 | string, or array of `text`/`image` | a prompt or an injected message (6.4k) |
-| `isMeta: true` | harness-injected (caveats, skill bodies) — not a prompt |
+| `isMeta: true`, no `origin` | harness-injected (caveats, skill bodies) — not a prompt |
+| `isMeta: true` with `origin` | a delivered prompt that starts a turn (below) |
 | `isCompactSummary: true` | compaction summary (§6) — not a prompt |
+
+Delivered prompts written as `isMeta` records with an `origin` (79 in the corpus,
+2026-10-25), all after the previous turn ended:
+
+- agent files: `coordinator` ("The coordinator sent a message while you were working:" and the
+  text: the agent that launched it used SendMessage after it had finished, 31), `human` ("The
+  user sent a new message while you were working:", 10), `task-notification` (a
+  "[SYSTEM NOTIFICATION - NOT USER INPUT]" paragraph, then one or more `<task-notification>`
+  elements: the agent's own Monitor or background command woke it after it reported, 9);
+- main files: `peer` (a cross-session message, §4a, 17), `auto-continuation` ("Your claude.ai
+  usage limit has reset", 2).
+
+Before parser 10 these were dropped, so their cost went to the turn before and an agent's later
+work was one turn with its first. The intro lines and the preamble are framing; the digest keeps
+the text after them.
 
 Who authored a prompt:
 
 - Newer versions carry `origin: {kind}` — `human`, `task-notification`, `peer`,
-  `auto-continuation` — plus `promptSource` (`typed`, `queued`, `suggestion_accepted`,
+  `coordinator` (classified as `peer`), `auto-continuation` — plus `promptSource` (`typed`, `queued`, `suggestion_accepted`,
   `sdk`, `system`) and `turnOrigin`.
 - Older versions carry nothing; classify by text prefix:
   - `<task-notification>` — a background agent finished; not typed by the user

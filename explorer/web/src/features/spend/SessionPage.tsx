@@ -56,14 +56,15 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
 
   const pin = (p: Pin | null) => {
     setPinned(p)
-    // a piece of agent work stays open on the turn that launched it and the one its report came in
+    // a piece of agent work stays open on the turn that launched it and the ones its reports came in
     const u = unitOf(unit)
-    if (!p || !unit || !u || p.branch !== unit.branch || (u.launch !== p.col && u.ret !== p.col)) setUnit(null)
+    if (!p || !unit || !u || p.branch !== unit.branch || (u.launch !== p.col && !u.reports.includes(p.col)))
+      setUnit(null)
   }
   const selectUnit = (r: UnitRef | null) => {
     setUnit(r)
     const u = unitOf(r)
-    if (r && u && !(pinned?.branch === r.branch && (pinned.col === u.launch || pinned.col === u.ret)))
+    if (r && u && !(pinned?.branch === r.branch && (pinned.col === u.launch || u.reports.includes(pinned.col))))
       setPinned({ branch: r.branch, col: u.launch })
   }
 

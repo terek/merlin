@@ -30,14 +30,17 @@ const ROLE_ICON: Record<AgentRole, typeof Bot> = {
 export function KindIcon({
   agent,
   size = 14,
+  color,
 }: {
   agent: Pick<Agent, 'kind' | 'inheritsContext' | 'addressable'>
   size?: number
+  /** A colour for the icon (its kind's, where a chart colours kinds); muted by default. */
+  color?: string
 }) {
   const role = agentRole(agent)
   const Icon = ROLE_ICON[role]
   return (
-    <span title={ROLE_LABEL[role]} className="inline-flex shrink-0 text-muted">
+    <span title={ROLE_LABEL[role]} className={`inline-flex shrink-0 ${color ? '' : 'text-muted'}`} style={{ color }}>
       <Icon size={size} aria-label={ROLE_LABEL[role]} />
     </span>
   )

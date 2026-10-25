@@ -1,9 +1,9 @@
 // Under the spend graph: the decision the pinned turn belongs to (its total and everything it paid
 // for, ranked), the pinned turn (what was asked, what the main agent spent on it, the work it
 // handed to agents and the reports that came in), the selected piece of agent work, and, always,
-// the decisions that cost the most.
+// the decisions that cost the most. Each wears the graph's mark for what it opens (marks.tsx).
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import type { Compaction, QueuedPrompt } from '../../api/types'
 import { callLine, tallyLine, warmLine } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
@@ -15,6 +15,7 @@ import { Bar, Card, Clamp, IconButton, ModelName, Money, OriginBadge, PlainText,
 import { AgentDetail } from '../agents/AgentDetail'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
+import { BracketMark, DECISION_TINT, kindColor, Notch, PinMark, TURN_TINT, unitBox } from './marks'
 import {
   agentSeries,
   type Bucket,
@@ -26,6 +27,7 @@ import {
   KIND_SERIES,
   missText,
   type Reread,
+  reportWhere,
   type SpendModel,
   stepParts,
   type Unit,
@@ -63,9 +65,9 @@ export function TopDecisions({ tree, pinned, onPin }: { tree: Tree; pinned: Pin 
                 type="button"
                 aria-pressed={on}
                 onClick={() => onPin({ branch: branch.index, col: Math.max(x.start, branch.own[0] ?? x.start) })}
-                className={`grid w-full grid-cols-[6.5rem_5rem_9rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-1.5 text-left ${on ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
+                className={`grid w-full grid-cols-[6.5rem_5rem_9rem_minmax(0,1fr)_auto] items-center gap-3 px-3 py-1.5 text-left ${on ? `shadow-[inset_0_3px_0_var(--accent)] ${DECISION_TINT}` : 'hover:bg-surface-2'}`}
               >
-                <span className="font-mono text-sec text-muted">
+                <span className={`font-mono text-sec ${on ? 'text-accent' : 'text-muted'}`}>
                   {x.end > x.start ? `turns ${x.start}–${x.end}` : `turn ${x.start}`}
                 </span>
                 <Money usd={x.usd} className="text-right" />
@@ -101,7 +103,7 @@ export function TopDecisions({ tree, pinned, onPin }: { tree: Tree; pinned: Pin 
 
 /**
  * The decision the pinned turn belongs to: everything between a typed prompt and the next one,
- * with what it paid for, most expensive first. Nothing for a decision that is a single step.
+ * with what it paid for in time order. Nothing for a decision that is a single step.
  */
 export function DecisionPanel({
   model,
@@ -130,13 +132,17 @@ export function DecisionPanel({
   const from = parseTime(first.turn.startedAt)
   const to = parseTime(own[own.length - 1].turn.endedAt)
   const span = from && to ? to.getTime() - from.getTime() : 0
-  const max = items[0].usd
-  const row = (on: boolean) =>
-    `grid w-full grid-cols-[5rem_minmax(0,1fr)_auto_6rem_4.5rem] items-center gap-3 px-3 py-1 text-left text-sec ${on ? 'bg-accent-soft' : 'hover:bg-surface-2'}`
+  const max = Math.max(...items.map((x) => x.usd))
+  // a pinned step is tinted like the pinned turn, a selected piece of work boxed like it is in the graph
+  const row = (tint: boolean) =>
+    `relative grid w-full grid-cols-[5rem_minmax(0,1fr)_auto_6rem_4.5rem] items-center gap-3 px-3 py-1 text-left text-sec ${tint ? TURN_TINT : 'hover:bg-surface-2'}`
   return (
     <Card
+      className="border-t-[3px] border-t-accent"
+      headerClassName={DECISION_TINT}
       title={
         <span className="flex flex-wrap items-center gap-2">
+          <BracketMark />
           {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
           <span>{own.length > 1 ? `Turns ${first.index} to ${dec.end}` : `Turn ${first.index}`}</span>
           <Money usd={dec.usd} />
@@ -225,16 +231,19 @@ export function DecisionPanel({
             )
           }
           const u = x.unit
+          const on = u.id === selectedUnitId
           return (
             <li key={`u${u.id}`}>
               <button
                 type="button"
-                aria-pressed={u.id === selectedUnitId}
+                aria-pressed={on}
                 onClick={() => onSelectUnit(u.id)}
-                className={row(u.id === selectedUnitId)}
+                className={row(false)}
+                style={on ? unitBox(u.agent) : undefined}
               >
+                {on && <Notch agent={u.agent} />}
                 <span className="flex items-center gap-1.5 font-mono text-muted">
-                  <KindIcon agent={u.agent} />
+                  <KindIcon agent={u.agent} color={kindColor(u.agent)} />
                   turn {u.launch}
                 </span>
                 <span className="min-w-0 truncate">
@@ -244,7 +253,7 @@ export function DecisionPanel({
                   </span>
                 </span>
                 <span className="flex items-center gap-2 text-meta text-faint">
-                  {u.returned ? (u.ret === u.launch ? 'back in the same turn' : `back in turn ${u.ret}`) : 'no report'}
+                  {reportWhere(u)}
                   {u.agent.model && <ModelName name={u.agent.model} />}
                 </span>
                 <Bar
@@ -408,9 +417,11 @@ function UnitList({
                 type="button"
                 aria-pressed={on}
                 onClick={() => onSelectUnit(on ? null : u.id)}
-                className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-sec ${on ? 'bg-accent-soft' : 'hover:bg-surface-2'}`}
+                className={`relative flex w-full items-center gap-1.5 px-2 py-1 text-left text-sec ${on ? '' : 'hover:bg-surface-2'}`}
+                style={on ? unitBox(u.agent) : undefined}
               >
-                <KindIcon agent={u.agent} />
+                {on && <Notch agent={u.agent} />}
+                <KindIcon agent={u.agent} color={kindColor(u.agent)} />
                 <span className="shrink-0 font-medium">{agentLabel(u.agent)}</span>
                 <span className="min-w-0 flex-1 truncate text-muted">
                   {firstLine(unwrapMachineText(u.asked).body) || u.agent.description}
@@ -458,30 +469,44 @@ function UnitDetail({
   const a = u.agent
   return (
     <div className="-mx-3 -mb-3 mt-4 border-t border-line">
+      {/* the title bar is the piece of work's box in the graph */}
+      <div className="relative flex min-h-9 flex-wrap items-center gap-2 px-3 py-1.5" style={unitBox(a)}>
+        <Notch agent={a} />
+        <KindIcon agent={a} color={kindColor(a)} />
+        <span className="font-semibold">{agentLabel(a)}</span>
+        {u.of > 1 && (
+          <span className="text-sec text-muted">
+            piece {u.ordinal} of {u.of}
+          </span>
+        )}
+        <Money usd={u.bucket.usd} className="font-semibold" />
+        {a.model && <ModelName name={a.model} className="text-sec text-muted" />}
+      </div>
       <div className="grid gap-6 p-3 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
         <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <KindIcon agent={a} />
-            <span className="font-semibold">{agentLabel(a)}</span>
-            {u.of > 1 && (
-              <span className="text-sec text-muted">
-                piece {u.ordinal} of {u.of}
-              </span>
-            )}
-            <Money usd={u.bucket.usd} className="font-semibold" />
-            {a.model && <ModelName name={a.model} className="text-sec text-muted" />}
-          </div>
           <p className="text-sec text-muted">
-            {u.ordinal === 1 ? 'Launched' : `Sent a message${u.from ? ` by ${u.from}` : ''}`} in{' '}
+            {u.ordinal === 1
+              ? 'Launched'
+              : u.woken
+                ? 'Woken by its own background work, after it had reported,'
+                : `Sent a message${u.from ? ` by ${u.from}` : ''}`}{' '}
+            in{' '}
             <button type="button" onClick={() => onPin(u.launch)} className="text-accent hover:underline">
               turn {u.launch}
             </button>
             {u.returned ? (
               <>
-                ; its report came in{' '}
-                <button type="button" onClick={() => onPin(u.ret)} className="text-accent hover:underline">
-                  turn {u.ret}
-                </button>
+                {u.reports.length > 1
+                  ? `; it reported ${u.reports.length} times, in turns `
+                  : '; its report came in turn '}
+                {u.reports.map((r, k) => (
+                  <Fragment key={r}>
+                    {k > 0 && (k === u.reports.length - 1 ? ' and ' : ', ')}
+                    <button type="button" onClick={() => onPin(r)} className="text-accent hover:underline">
+                      {r}
+                    </button>
+                  </Fragment>
+                ))}
               </>
             ) : (
               '; no report came back'
@@ -564,8 +589,10 @@ export function TurnInspector({
 
   return (
     <Card
+      headerClassName={`rounded-t-card ${TURN_TINT}`}
       title={
         <span className="flex flex-wrap items-center gap-2">
+          <PinMark />
           {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
           <span>Turn {col.index}</span>
           <Money usd={col.usd} title="what the main agent spent in this turn" />
@@ -654,7 +681,7 @@ export function TurnInspector({
                 total={Math.max(launchedUSD, col.usd)}
                 selectedUnitId={selectedUnitId}
                 onSelectUnit={onSelectUnit}
-                where={(u) => (u.returned ? (u.ret === u.launch ? 'back in this turn' : `back in turn ${u.ret}`) : '')}
+                where={(u) => (u.returned ? reportWhere(u, 'this turn') : '')}
               />
             </div>
           )}

@@ -10,6 +10,7 @@ export function Card({
   actions,
   children,
   className,
+  headerClassName,
   bodyClassName,
   flush,
 }: {
@@ -17,6 +18,8 @@ export function Card({
   actions?: ReactNode
   children: ReactNode
   className?: string
+  /** Extra classes for the title bar (a tint that ties the card to what it opens). */
+  headerClassName?: string
   bodyClassName?: string
   /** No padding around the body (a table that runs edge to edge). */
   flush?: boolean
@@ -24,7 +27,12 @@ export function Card({
   return (
     <section className={cn('rounded-card border border-line bg-surface', className)}>
       {(title || actions) && (
-        <header className="flex min-h-9 items-center justify-between gap-3 border-b border-line px-3 py-1.5">
+        <header
+          className={cn(
+            'flex min-h-9 items-center justify-between gap-3 border-b border-line px-3 py-1.5',
+            headerClassName,
+          )}
+        >
           <h2 className="text-body font-semibold">{title}</h2>
           {actions && <div className="flex items-center gap-2">{actions}</div>}
         </header>

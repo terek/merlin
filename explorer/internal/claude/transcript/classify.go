@@ -24,11 +24,15 @@ func (r *Record) IsToolResult() bool {
 }
 
 // IsPrompt reports whether the record is a user record that is a prompt or an injected
-// message: not a tool result, not isMeta, not isCompactSummary, and not the echoed output
-// of a local command (see IsLocalOutput). A bare interruption marker is still a prompt by
-// this test; see SplitInterruption.
+// message: not a tool result, not isCompactSummary, not the echoed output of a local command
+// (see IsLocalOutput), and not isMeta unless it names an origin (a message or notification
+// that woke a finished agent, a message from another session; format notes §4). A bare
+// interruption marker is still a prompt by this test; see SplitInterruption.
 func (r *Record) IsPrompt() bool {
-	if r.Type != TypeUser || r.IsMeta || r.IsCompactSummary || r.IsToolResult() {
+	if r.Type != TypeUser || r.IsCompactSummary || r.IsToolResult() {
+		return false
+	}
+	if r.IsMeta && (r.Origin == nil || r.Origin.Kind == "") {
 		return false
 	}
 	return !IsLocalOutput(r.PromptText())
@@ -75,7 +79,7 @@ const (
 
 // PromptOrigin classifies who authored a prompt record.
 //
-// Order of evidence: (1) a non-human origin.kind (task-notification, peer,
+// Order of evidence: (1) a non-human origin.kind (task-notification, peer or coordinator,
 // auto-continuation); (2) turnOrigin "scheduled"; (3) the text prefix, which identifies
 // slash commands, "!" shell input and task notifications even when origin says "human";
 // (4) promptSource: "sdk" -> sdk, "system" -> continuation (injected by the harness; in
@@ -90,7 +94,7 @@ func (r *Record) PromptOrigin() model.TurnOrigin {
 	switch kind {
 	case "task-notification":
 		return model.OriginTaskNotification
-	case "peer":
+	case "peer", "coordinator":
 		return model.OriginPeer
 	case "auto-continuation":
 		return model.OriginContinuation

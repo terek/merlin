@@ -164,7 +164,8 @@ export interface Reread {
 
 const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
 
-const promptTokens = (m: Message) => (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
+export const promptTokens = (m: Message) =>
+  (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
 
 /** Prompt tokens billed above the cache-read price: uncached input and cache writes. */
 const billedInFull = (m: Message) => (m.input ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
@@ -233,7 +234,7 @@ export interface Bucket {
   messages: number
 }
 
-const newBucket = (): Bucket => ({
+export const newBucket = (): Bucket => ({
   usd: 0,
   reread: 0,
   byClass: zeroClass(),
@@ -242,7 +243,7 @@ const newBucket = (): Bucket => ({
   messages: 0,
 })
 
-function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | undefined): void {
+export function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | undefined): void {
   const written = (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
   const raw = {
     input: fit.input * (m.input ?? 0),
@@ -332,8 +333,13 @@ export interface Unit {
   launch: number
   /** The turn the digest says this work belongs to (`AgentTurn.rootTurn`), when it says. */
   root?: number
-  /** Turn in which its result arrived (>= launch). */
+  /** Turn in which its result arrived (>= launch): the last of `reports`. */
   ret: number
+  /**
+   * Every turn that carried a report from it, in order: more than one where it finished, was woken
+   * (by a message, or by its own background work) and finished again. Empty without a report.
+   */
+  reports: number[]
   /** False when no report is known: the agent was still open, or was killed. */
   returned: boolean
   startMs: number
@@ -342,6 +348,8 @@ export interface Unit {
   asked: string
   /** Who sent the later message, when known. */
   from?: string
+  /** Nobody sent it: a notification from the agent's own background work woke it after it reported. */
+  woken: boolean
   bucket: Bucket
   /** Its own sub-agents: their dollars (inside `bucket.usd`) and who they were. */
   nestedUSD: number
@@ -370,8 +378,6 @@ export interface Col {
   launched: Unit[]
   /** Units whose result arrived in this turn. */
   arrived: Unit[]
-  /** Tokens the main agent wrote again in this turn (the bar on the context track). */
-  mainRereadTokens: number
   /** Time between the end of the previous turn and the start of this one. */
   idleMs?: number
   /** Index of the decision it belongs to. */
@@ -405,13 +411,9 @@ export interface Decision {
   agentCompactions: Compaction[]
 }
 
-/** An agent the main session launched: a row under the main line. */
+/** An agent the main session launched, with its pieces of work. */
 export interface Row {
   agent: Agent
-  /** Row number, from 0. Agents that do not overlap share a row. */
-  lane: number
-  first: number
-  last: number
   units: Unit[]
   usd: number
 }
@@ -420,7 +422,6 @@ export interface SpendModel {
   cols: Col[]
   units: Unit[]
   rows: Row[]
-  laneCount: number
   decisions: Decision[]
   /** This session's own spend: steps plus units, inherited turns left out. */
   total: number
@@ -435,9 +436,6 @@ export interface SpendModel {
   byClass: Part[]
   rereads: Reread[]
   inheritedUSD: number
-  /** The largest step and the largest unit: the scale. */
-  maxStep: number
-  maxUnit: number
   /** False when the daemon sent no messages: no token classes, no cache misses, one unit per agent. */
   fromMessages: boolean
   agentsById: Map<string, Agent>
@@ -480,7 +478,32 @@ export function promptLine(t: Pick<Turn, 'userText' | 'command' | 'inbox'>): str
     .filter(Boolean)
   const head = lines[0] ?? ''
   const line = head.endsWith(':') && lines[1] ? `${head} ${lines[1]}` : head
-  return (u.label ? (line ? `${u.label}: ${line}` : u.label) : line) || t.command || ''
+  // an agent's report: the harness words its summary the same each time the agent finishes, so the
+  // report's own first line goes after it
+  const inbox = t.inbox ?? []
+  const report =
+    inbox.length === 1 && inbox[0].kind === 'task' && inbox[0].summary
+      ? (inbox[0].text ?? '')
+          .split('\n')
+          .map((l) => l.replace(/^#+\s*/, '').trim())
+          .find(Boolean)
+      : undefined
+  const said = u.label ? (line ? `${u.label}: ${line}` : u.label) : line
+  return (report && said ? `${said} · ${report}` : said) || t.command || ''
+}
+
+/** Turns in words: "turn 7", "turns 5 to 10" for a run, "turns 5, 7 and 9". */
+export function turnList(list: number[]): string {
+  if (list.length === 1) return `turn ${list[0]}`
+  if (list.every((x, k) => k === 0 || x === list[k - 1] + 1)) return `turns ${list[0]} to ${list[list.length - 1]}`
+  return `turns ${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
+}
+
+/** Where a unit's report came in, from the turn `here` (its launch, unless given). */
+export function reportWhere(u: Unit, here = 'the same turn'): string {
+  if (!u.returned) return 'no report'
+  if (u.reports.length > 1) return `${u.reports.length} reports, ${turnList(u.reports)}`
+  return u.ret === u.launch ? `back in ${here}` : `back in turn ${u.ret}`
 }
 
 /** A person typed this turn. Anything else (a report, a notification, a schedule) follows from an earlier one. */
@@ -504,22 +527,6 @@ export function unitParts(u: Unit, split: Split): Part[] {
   return [kindPart(agentSeries(u.agent), u.bucket.usd - u.bucket.reread), kindPart('reread', u.bucket.reread)]
 }
 
-/**
- * Gives each agent a row: the first row that is free from its first turn on, earlier agents
- * first, so that a row reads left to right. Returns the number of rows.
- */
-export function packRows(rows: Row[]): number {
-  const ends: number[] = []
-  const order = rows.map((r, i) => ({ r, i })).sort((a, b) => a.r.first - b.r.first || a.i - b.i)
-  for (const { r } of order) {
-    let lane = ends.findIndex((end) => end < r.first)
-    if (lane < 0) lane = ends.length
-    ends[lane] = r.last
-    r.lane = lane
-  }
-  return ends.length
-}
-
 const runAgentId = (runId: string) => `run:${runId}`
 
 function mkUnit(a: Agent, k: number, startMs: number, asked: string, from?: string): Unit {
@@ -530,11 +537,13 @@ function mkUnit(a: Agent, k: number, startMs: number, asked: string, from?: stri
     of: 1,
     launch: 0,
     ret: 0,
+    reports: [],
     returned: false,
     startMs,
     endMs: startMs,
     asked,
     from,
+    woken: false,
     bucket: newBucket(),
     nestedUSD: 0,
     nested: [],
@@ -615,7 +624,6 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     usd: 0,
     launched: [],
     arrived: [],
-    mainRereadTokens: 0,
     decision: 0,
     compactions: (d.compactions ?? []).filter((c) => c.turn === i),
     typedWhileRunning: (turn.queued ?? []).filter((q) => q.origin === 'human' || q.origin === 'command').length,
@@ -657,6 +665,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
           const asked = t.prompt || (t.inbox ?? []).map((x) => x.text || x.summary || '').join('\n')
           const u = mkUnit(a, k, Number.isFinite(start) ? start : bornAt(a, Number.NaN), asked, t.inbox?.[0]?.from)
           u.root = t.rootTurn
+          u.woken = k > 0 && t.origin === 'task-notification'
           return u
         }),
       )
@@ -695,9 +704,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       if (!a || !root || (root === a && a.kind === 'compact')) {
         // the main agent, a compaction call, or an agent the digest does not list
         const c = cols[place(a ? (a.spawnTurn ?? m.turn) : m.turn, at)]
-        const before = c.step.tokens.reread
         addMessage(a ? c.compact : c.step, m, fit, prev)
-        if (!m.agentId) c.mainRereadTokens += c.step.tokens.reread - before
         continue
       }
       // an agent's own sub-agent counts where it was spawned: the unit is atomic
@@ -793,25 +800,22 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         // a background agent's result comes in with the notification that follows
         if (!arrivals.length && a.background && cols[ret + 1]?.turn.origin === 'task-notification') ret++
         u.ret = Math.max(u.launch, ret)
+        u.reports = arrivals.length ? arrivals : u.returned ? [u.ret] : []
         cols[u.launch].launched.push(u)
         // work launched in a turn copied from the parent session is the parent's
         if (cols[u.launch].inherited) return
         units.push(u)
-        if (u.returned) cols[u.ret].arrived.push(u)
+        for (const i of u.reports) cols[i].arrived.push(u)
       })
       const mine = kept.filter((u) => !cols[u.launch].inherited)
       if (mine.length === 0) continue
       rows.push({
         agent: a,
-        lane: 0,
-        first: Math.min(...mine.map((u) => u.launch)),
-        last: Math.max(...mine.map((u) => u.ret)),
         units: mine,
         usd: mine.reduce((s, u) => s + u.bucket.usd, 0),
       })
     }
   }
-  const laneCount = packRows(rows)
 
   // ---- decisions and totals
   const decisions: Decision[] = []
@@ -819,7 +823,6 @@ export function buildSpend(detail: SessionDetail): SpendModel {
   const classes = zeroClass()
   const rereads: Reread[] = []
   let inheritedUSD = 0
-  let maxStep = 0
   for (const c of cols) {
     c.usd = c.step.usd + c.compact.usd
     if (c.index > 0) {
@@ -856,7 +859,6 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       inheritedUSD += c.usd + launchedUSD
       continue
     }
-    maxStep = Math.max(maxStep, c.usd)
     dec.stepsUSD += c.usd
     dec.unitsUSD += launchedUSD
     dec.units += c.launched.length
@@ -887,7 +889,6 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     cols,
     units,
     rows,
-    laneCount,
     decisions,
     total: stepsUSD + unitsUSD,
     compactions: cols.flatMap((c) => (c.inherited ? [] : c.compactions)),
@@ -898,8 +899,6 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     byClass: CLASS_SERIES.map((s) => classPart(s.key, classes[s.key])).filter((p) => p.usd > 0),
     rereads,
     inheritedUSD,
-    maxStep,
-    maxUnit: units.reduce((m, u) => Math.max(m, u.bucket.usd), 0),
     fromMessages,
     agentsById,
   }
@@ -908,16 +907,17 @@ export function buildSpend(detail: SessionDetail): SpendModel {
 /** One thing a decision paid for: a step of the main agent, or a piece of agent work. */
 export type DecisionItem = { kind: 'step'; col: Col; usd: number } | { kind: 'unit'; unit: Unit; usd: number }
 
-/** What a decision paid for, most expensive first: the steps of its turns and the units launched in them. */
+/** What a decision paid for, in time order: each step of its turns, then the units launched in it. */
 export function decisionItems(model: SpendModel, dec: Decision): DecisionItem[] {
   const out: DecisionItem[] = []
   for (let i = dec.start; i <= dec.end; i++) {
     const c = model.cols[i]
     if (!c || c.inherited) continue
     if (c.usd > 0) out.push({ kind: 'step', col: c, usd: c.usd })
-    for (const u of c.launched) out.push({ kind: 'unit', unit: u, usd: u.bucket.usd })
+    for (const u of [...c.launched].sort((a, b) => a.startMs - b.startMs))
+      out.push({ kind: 'unit', unit: u, usd: u.bucket.usd })
   }
-  return out.sort((a, b) => b.usd - a.usd)
+  return out
 }
 
 /** The `n` most expensive decisions, most expensive first. */

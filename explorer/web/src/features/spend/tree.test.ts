@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Message, SessionDetail, Turn } from '../../api/types'
-import { buildTree, pathPoints, pathTo, shortTitle, topTreeDecisions } from './tree'
+import { buildTree, shortTitle, topTreeDecisions } from './tree'
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 1, 10, min)).toISOString()
 
@@ -73,36 +73,14 @@ describe('buildTree', () => {
     ])
   })
 
-  test('a branch has only its own turns, starting in the slot after the last one it copied', () => {
-    const [t, ba, bc, bb] = tree.branches
-    expect([t.first, t.last, t.own]).toEqual([0, 3, [0, 1, 2, 3]])
-    expect([ba.first, ba.last, ba.own]).toEqual([2, 3, [2, 3]])
-    expect(ba.slot).toEqual([undefined, undefined, 2, 3])
-    expect([bb.first, bb.last, bb.own]).toEqual([3, 3, [3]])
-    // own turns 0 and 3 of C follow A's last slot, in order
-    expect([bc.first, bc.last, bc.own]).toEqual([4, 5, [0, 3]])
-    expect(bc.colAt.get(5)).toBe(3)
-    expect(tree.slots).toBe(6)
+  test('a branch has only its own turns', () => {
+    expect(tree.branches.map((x) => x.own)).toEqual([[0, 1, 2, 3], [2, 3], [0, 3], [3]])
   })
 
   test("nothing is counted twice: the total is every branch's own spend", () => {
     expect(tree.branches.map((x) => x.model.total)).toEqual([10, 30, 11, 7])
     expect(tree.total).toBe(58)
     expect(tree.byKind.map((p) => [p.key, p.usd])).toEqual([['main', 58]])
-    expect(tree.maxStep).toBe(20)
-  })
-
-  test('the context path runs along each ancestor up to where the next branch left it', () => {
-    expect(pathTo(tree, 2).map((x) => x.key.id)).toEqual(['t', 'a', 'c'])
-    expect(pathPoints(tree, 2).map((p) => [p.slot, p.branch, p.col, p.tokens])).toEqual([
-      [0, 0, 0, 1000],
-      [1, 0, 1, 2000],
-      [2, 1, 2, 3000],
-      [3, 1, 3, 4000],
-      [4, 2, 0, 1000],
-      [5, 2, 3, 4000],
-    ])
-    expect(pathPoints(tree, 0)).toHaveLength(4)
   })
 
   test('decisions are ranked over the whole tree, and a fork starts one of its own', () => {
@@ -116,7 +94,7 @@ describe('buildTree', () => {
 
   test('a session whose parent did not load is a trunk of its own', () => {
     const alone = buildTree([a])
-    expect(alone.branches.map((x) => [x.parent, x.first, x.last])).toEqual([[undefined, 0, 1]])
+    expect(alone.branches.map((x) => [x.parent, x.depth, x.own])).toEqual([[undefined, 0, [2, 3]]])
   })
 })
 

@@ -441,7 +441,7 @@ func (b *Builder) user(r *transcript.Record, ts time.Time, pos int) {
 		n.Turn, n.At = len(b.turns), ts
 		b.notes = append(b.notes, n)
 	}
-	if origin == model.OriginPeer || origin == model.OriginTaskNotification {
+	if origin == model.OriginPeer || origin == model.OriginTaskNotification || r.IsMeta {
 		// The harness wraps what was delivered in markup of its own; store the messages.
 		if msgs, rest, ok := delivered(text, ts); ok {
 			t.inbox, t.userText = msgs, rest

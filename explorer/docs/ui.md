@@ -275,48 +275,93 @@ From top to bottom:
   files are gone or the digest could not be built.
 - **Resume** box: `cd <cwd> && claude --resume <id>` with a copy button; when the session is not a
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
-- **Spend graph** (`SpendGraph.tsx`), one turn axis for the whole tree:
-  - context along the path from the root to the session in focus, with compactions, and the
-    context billed again in full (a **cache miss**) as a bar on its turn. A miss is the part of an
-    agent's previous prompt that its next message did not read from the cache: written to it again
-    (Claude Code) or charged as plain input (Codex, whose cache has no writes). Each miss has a
-    cause: idle longer than the cache lifetime (5 minutes, or an hour after one-hour writes; for
-    Codex, whose cache has no fixed lifetime, the same 5 minutes), a model switch, fast mode turned
-    on or off (fast calls do not share the cache), or no visible cause;
-  - a **compaction** is a mark after the turn it followed, on the context track and on its
-    session's line: solid red when its call ran on a cold cache, labelled with the cost and the
-    idle gap; dashed amber when warm; grey when the digest has no figure. Above the graph, one line
-    adds them up for the tree, with what a warm cache every time would have cost. For Claude Code
-    the figure (`compaction.call`) is an estimate (the harness does not record the call), cold
-    means idle longer than the cache lifetime, and it is in no figure on the page; for Codex it is
-    the recorded call (`compaction.messageId`), cold when less than half the context came from the
-    cache, and already in the figures;
-  - one line per session: the root at the top, each other session on a line of its own under its
-    parent, starting at the turn after the last one it copied, with only its own turns. Forks and
-    continuations are drawn the same way; nothing is merged across session ids;
-  - above a line, a bar per turn: what the main agent spent in it, split by who (main agent, cache
-    miss, compaction) or by token class;
-  - on the line, a dot for every prompt a person typed, and over it a bracket with the total of
-    everything up to the next typed prompt (a **decision**). A ring marks a turn during which a
-    prompt was typed (`turn.queued`): it starts no turn and no decision, but it steered that turn;
-  - below a line, a bar per piece of agent work, under the turn that launched it, as tall as all
-    it cost (its own sub-agents included), with a tail to the turn its report came in. A piece is
-    one of the agent's turns (`agent.turns`), under its `rootTurn`: a sub-agent or fork has one, an
-    addressable agent (a Claude Code teammate, a Codex agent) one per message or task that set it
-    working again (from a daemon without `turns`: one per message it was sent); a workflow run
-    (`digest.workflows`) is one piece with all its agents inside, back where its task notification
-    came in. Agents that do not
-    overlap share a row;
-  - one dollar scale for every bar; hover reads a turn or a piece of work above the plot, arrow
-    keys move, a click pins. A pinned turn tints its decision's turns.
+- **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
+  bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
+  by when it happened. A legend split by who or by token class, a line adding up the compactions, and
+  a readout above the plot of the turn or piece of work under the cursor.
+  - stretches longer than 10 minutes in which nothing ran (no call, no turn, no piece of agent work)
+    are squeezed into a narrow grey **break** labelled with its length; with more than 12 such
+    pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
+    last thing that ran in it (the harness may close a turn hours later, when the session is left);
+  - a **row** per session's main agent and per agent it launched, in the tree's order. Above its
+    baseline, the context every call of the agent was sent with (prompt tokens), as a step area, on one
+    token scale for every row: a row is as tall as its largest context needs, so the rows that were
+    expensive to carry are visibly fat. Solid and dotted say whether the agent was making calls: the
+    area stops at the end of every turn (on a main row) or piece of work (on an agent's row), however
+    short the wait for the next message, and inside one where it paused longer than 5 minutes (the
+    cache going cold); a dotted line then holds its context at the level it will be read again at.
+    The dotted line is strong while the turn or piece of work still runs, waiting on a tool or an
+    agent, and faint between a main agent's turns, waiting for a message; under it, the context
+    carried over the pause is tinted lightly (8%) in the row's colour, so that the context's path
+    reads unbroken. An agent's dotted line between two pieces is as strong as within one (it joins
+    them, as a main agent's line joins its turns); hover there reads "held, waiting for a message N
+    min". A turn whose first call came more than 5 minutes after its prompt (a failed prompt sent
+    again) starts its area at that call. A one-shot sub-agent has a single piece of work, so this never shows on its row. An agent's own sub-agents are thin lines on its row;
+  - below the baseline, what the row spent in each slot of time (a round length, at least 4 px wide),
+    on one dollar scale for every row, split like the legend. A row pays for its agent's calls, its
+    sub-agents' calls and, for a main row, the compaction calls;
+  - a diamond is a **cache miss**, on the call that missed: the part of an agent's previous prompt
+    that its next message did not read from the cache, written to it again (Claude Code) or charged
+    as plain input (Codex, whose cache has no writes). Each miss has a cause: idle longer than the
+    cache lifetime (5 minutes, or an hour after one-hour writes; for Codex, whose cache has no fixed
+    lifetime, the same 5 minutes), a model switch, fast mode turned on or off (fast calls do not
+    share the cache), or no visible cause;
+  - a vertical mark is a **compaction**, from its context before down to the baseline: solid red
+    when its call ran on a cold cache, dashed amber when warm, grey when the digest has no figure.
+    The line above the graph adds them up for the tree, with what a warm cache every time would have
+    cost. For Claude Code the figure (`compaction.call`) is an estimate (the harness does not record
+    the call), cold means idle longer than the cache lifetime, and it is in no figure on the page;
+    for Codex it is the recorded call (`compaction.messageId`), cold when less than half the context
+    came from the cache, and already in the figures;
+  - on a main row each **turn** is a thick stretch of the baseline from its start to its end, with a
+    tick where it starts (the baseline is thin where no turn runs). A turn starts at
+    `turn.startedAt` and ends at the last thing that ran in it (a call of the main agent or of any
+    agent, or a piece of work starting or ending) up to the harness's `endedAt` and before the next
+    turn starts;
+  - a main row has a dot for every prompt a person typed and over it a bracket with the total of
+    everything up to the next typed prompt (a **decision**), a ring for a turn during which a prompt
+    was typed (`turn.queued`: it starts no turn and no decision, but it steered that turn), and the
+    turn numbers where they fit. A forked or continued session has a main row of its own with only
+    its own turns, starting with a line from its parent's row; nothing is merged across session ids;
+  - each **piece of agent work** is a box from its start to its last call, in its kind's colour: a
+    sub-agent solid, a fork with a notch, a workflow dashed, an addressable agent with its run number
+    and a dashed lifeline along its baseline. A piece is one of the agent's turns (`agent.turns`): a
+    sub-agent or fork has one, an addressable agent (a Claude Code teammate, a Codex agent) one per
+    message or task that set it working again (from a daemon without `turns`: one per message it was
+    sent); a workflow run (`digest.workflows`) is one piece with all its agents inside. An agent's
+    first box carries its name. Agents are packed into rows by their whole life (an addressable agent
+    keeps its row over its pauses); the gutter names the agent, or counts the kinds sharing the row,
+    with its spend and peak context;
+  - the line from the row that sent a piece of work (the main row, or the sender its inbox names;
+    none for work the agent's own background tasks woke after it reported) and a dashed line to each
+    turn a report of it came in are drawn only for the work in focus: hovered, selected, or launched
+    or reported in the turn under the cursor or pinned. An agent's turns are its pieces of work: a
+    message from the agent that launched it, or a notification that wakes it after it finished, starts
+    a new one (the harness writes these as `isMeta` records with an `origin`);
+  - hover reads the clock, the context of the row under the pointer and the slot's spend; between
+    two turns it reads "between turns 0 and 1: main agent idle 38 min" and pins nothing. A click
+    pins the turn or selects the piece of work; arrow keys move by turn.
+- **What is pinned, in the graph and below it**: each panel under the graph wears the graph's mark
+  for what it opens (`marks.tsx`), so that the two can be matched at a glance:
+  - the pinned turn's **decision**: its bracket turns into a thick accent line, and its turns are
+    lightly tinted across the session's rows. The decision panel has the same thick line along its
+    top, its title bar the same light tint, and a small bracket before its title; in "Your most
+    expensive decisions" the decision's row has that line and tint too;
+  - the **pinned turn**: tinted on its row with a marker over it. The turn card's title bar has the
+    tint and the marker; in the decision panel, its step is tinted;
+  - the **selected piece of work**: its box is outlined in its kind's colour. Under the turn card it
+    opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
+    fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
+    colour.
 - **Decision panel**: the pinned turn's decision, its total split by who, then every step and every
-  piece of agent work in it, most expensive first, and the compactions after its turns. A decision is only "everything between two typed
-  prompts": work an earlier prompt asked for is counted where it ran, and the page says so rather
-  than claiming the prompt caused it.
+  piece of agent work in it, most expensive first, and the compactions after its turns. A decision
+  is only "everything between two typed prompts": work an earlier prompt asked for is counted where
+  it ran, and the page says so rather than claiming the prompt caused it.
 - **Turn card**: the pinned turn's prompt (machine-delivered messages parsed, `lib/inbox.ts`), the
-  prompts typed or delivered while it ran, the reply, the compaction after it (`lib/compaction.ts`), what the main agent paid for by token class, its cache misses in words, the work launched
-  in it and the reports that came in; a selected piece of work opens under it with what it was
-  asked, what it paid for and the agent's detail (`features/agents/AgentDetail`).
+  prompts typed or delivered while it ran, the reply, the compaction after it (`lib/compaction.ts`),
+  what the main agent paid for by token class, its cache misses in words, the work launched in it
+  and the reports that came in; a selected piece of work opens under it with what it was asked,
+  what it paid for and the agent's detail (`features/agents/AgentDetail`).
 - **Your most expensive decisions**: the top ten of the tree, always shown; a click pins the
   decision and scrolls back to the graph.
 - **Sessions in this tree** (more than one member): title, relation, time, cost, "resume here" on
@@ -329,7 +374,9 @@ and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harne
 here.
 
 The previous page (a timeline of every turn with Cost, Agents and Context cards in a side panel)
-was retired and deleted on 2026-10-03; it is in the git history before that date.
+was retired and deleted on 2026-10-03; it is in the git history before that date. The turn view of the spend graph (the sessions' turns across, agent work as bars under the
+turn that launched it, the context along the path to the session in focus) was replaced by the time
+view and deleted on 2026-10-25.
 
 ## 10. Cost page (`/cost`)
 
