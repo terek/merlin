@@ -32,9 +32,12 @@ merlin serve
 Open http://127.0.0.1:7433/. The first start:
 
 - indexes your sessions from `~/.claude` into `~/.merlin` (read-only on `~/.claude`);
-- adds five hook entries (SessionStart, UserPromptSubmit, Stop, SubagentStop, SessionEnd) to
-  `~/.claude/settings.json`, keeping a backup next to it, so live sessions show up at once.
-  `merlin serve --no-hooks` skips this; the page then updates on a periodic rescan.
+- leaves `~/.claude/settings.json` alone; the page follows sessions as their files change.
+
+For live sessions to show up at once, `merlin hooks install` adds five hook entries
+(SessionStart, UserPromptSubmit, Stop, SubagentStop, SessionEnd) to `~/.claude/settings.json`,
+keeping a backup next to it. From then on `merlin serve` keeps them pointing at the current
+binary (`--no-hooks` skips that); `merlin hooks uninstall` removes them.
 
 The server listens on 127.0.0.1 only.
 

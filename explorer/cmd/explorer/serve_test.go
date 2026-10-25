@@ -185,22 +185,51 @@ func TestServeProcess(t *testing.T) {
 	}
 }
 
-func TestServeInstallsHooksIntoConfigDirOnly(t *testing.T) {
+// A new install gets no hooks: serve leaves settings.json alone until they are asked for.
+func TestServeDoesNotAddHooks(t *testing.T) {
 	home := t.TempDir()
 	cfg := copyTree(t, fixtures.ClaudeDir())
 	p := startServe(t, home, cfg)
+	if code := p.terminate(t); code != 0 {
+		t.Errorf("exit code = %d", code)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "settings.json")); !os.IsNotExist(err) {
+		t.Errorf("serve wrote settings.json: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "claude", "hooks", "notify.sh")); !os.IsNotExist(err) {
+		t.Errorf("serve wrote notify.sh: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(home, "merlin.log")); !strings.Contains(string(b), "merlin hooks install") {
+		t.Errorf("log does not say how to add the hooks:\n%s", b)
+	}
+}
+
+// Once hooks are installed, serve keeps them, in the config dir only, pointing at itself.
+func TestServeRefreshesInstalledHooks(t *testing.T) {
+	home := t.TempDir()
+	cfg := copyTree(t, fixtures.ClaudeDir())
+	install := exec.Command(binary(t), "hooks", "install")
+	install.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+	if out, err := install.CombinedOutput(); err != nil {
+		t.Fatalf("hooks install: %v\n%s", err, out)
+	}
+	script := filepath.Join(home, "claude", "hooks", "notify.sh")
+	if err := os.Remove(script); err != nil {
+		t.Fatal(err)
+	}
+	p := startServe(t, home, cfg)
+	if code := p.terminate(t); code != 0 {
+		t.Errorf("exit code = %d", code)
+	}
 	b, err := os.ReadFile(filepath.Join(cfg, "settings.json"))
 	if err != nil {
-		t.Fatalf("settings.json not written in the temp config dir: %v", err)
+		t.Fatalf("settings.json: %v", err)
 	}
 	if !strings.Contains(string(b), "/claude/hooks/notify.sh") || !strings.Contains(string(b), home) {
 		t.Errorf("settings.json lacks the hook for this home:\n%s", b)
 	}
-	if _, err := os.Stat(filepath.Join(home, "claude", "hooks", "notify.sh")); err != nil {
-		t.Errorf("notify.sh: %v", err)
-	}
-	if code := p.terminate(t); code != 0 {
-		t.Errorf("exit code = %d", code)
+	if _, err := os.Stat(script); err != nil {
+		t.Errorf("notify.sh was not written again: %v", err)
 	}
 }
 
@@ -251,18 +280,13 @@ func TestServeSharesTheHomeWithTheEarlierProgram(t *testing.T) {
 		t.Errorf("exit code = %d", code)
 	}
 
-	// Its entries were added beside the earlier program's, which are still there, once each.
+	// The earlier program's entries are not this program's: settings.json is untouched.
 	settings, err := os.ReadFile(filepath.Join(cfg, "settings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, cmd := range []string{"~/.merlin/hooks/session-start.sh", "~/.merlin/hooks/session-end.sh"} {
-		if n := strings.Count(string(settings), cmd); n != 1 {
-			t.Errorf("%s appears %d times in settings.json, want 1", cmd, n)
-		}
-	}
-	if !strings.Contains(string(settings), "/claude/hooks/notify.sh") {
-		t.Errorf("settings.json lacks this program's hook:\n%s", settings)
+	if string(settings) != earlierHooks {
+		t.Errorf("settings.json changed:\n%s", settings)
 	}
 
 	for rel, body := range earlier {
@@ -284,10 +308,6 @@ func TestServeSharesTheHomeWithTheEarlierProgram(t *testing.T) {
 		if !own[e.Name()] && !theirs[e.Name()] {
 			t.Errorf("serve created %s in the home", e.Name())
 		}
-	}
-	// Its hook script lives under its own directory, not in the earlier program's hooks/.
-	if _, err := os.Stat(filepath.Join(home, "claude", "hooks", "notify.sh")); err != nil {
-		t.Errorf("notify.sh: %v", err)
 	}
 	if names, _ := os.ReadDir(filepath.Join(home, "hooks")); len(names) != 2 {
 		t.Errorf("the earlier program's hooks directory changed: %v", names)

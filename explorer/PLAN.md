@@ -295,8 +295,9 @@ chain must never mark history as abandoned.
 
 ### Hooks
 
-`merlin serve` installs hooks on start (`--no-hooks` to skip); `merlin hooks
-install | uninstall | status` does it explicitly.
+Hooks are opt-in: `merlin hooks install | uninstall | status`. `merlin serve` adds none on a
+new install; once any of its entries is present it refreshes the set on start (`--no-hooks`
+to skip).
 
 - Events: `SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `SessionEnd`.
 - Command: `~/.merlin/claude/hooks/notify.sh`, which runs `merlin hook` if the binary still

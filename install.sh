@@ -4,7 +4,7 @@
 #
 # Detects your OS/arch, downloads the matching binary from the latest GitHub release,
 # verifies its SHA-256 and installs it as `merlin`. It starts nothing and does not
-# touch ~/.claude: `merlin serve` adds its Claude Code hooks when you first run it.
+# touch ~/.claude: Claude Code hooks are added only by `merlin hooks install`.
 #
 # Knobs (env vars):
 #   MERLIN_VERSION       pin a version, e.g. 0.2.0   (default: latest release)
@@ -153,8 +153,8 @@ main() {
   info ""
   ok "Done. Nothing was started and ~/.claude was not touched."
   info "  Next:  ${BOLD}merlin serve${RST}   then open ${BOLD}http://127.0.0.1:7433/${RST}"
-  info "  The first start adds five hook entries to ~/.claude/settings.json (a backup is kept)."
-  info "  To skip that, run ${BOLD}merlin serve --no-hooks${RST}; to remove them later: ${BOLD}merlin hooks uninstall${RST}."
+  info "  For live updates, ${BOLD}merlin hooks install${RST} adds five hook entries to ~/.claude/settings.json"
+  info "  (a backup is kept); ${BOLD}merlin hooks uninstall${RST} removes them."
 }
 
 main "$@"

@@ -33,7 +33,7 @@ func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	port := fs.Int("port", 0, "TCP port on 127.0.0.1 (default: \"port\" in config.json, else 7433)")
-	noHooks := fs.Bool("no-hooks", false, "do not install the Claude Code hooks")
+	noHooks := fs.Bool("no-hooks", false, "do not refresh the Claude Code hooks")
 	rescan := fs.Duration("rescan", daemon.DefaultRescanInterval, "full rescan interval")
 	debounce := fs.Duration("debounce", daemon.DefaultDebounce, "at most one build per live session per this")
 	workers := fs.Int("workers", 0, "concurrent builders (default: number of CPUs)")
@@ -78,8 +78,22 @@ func runServe(args []string) int {
 		Version:        version,
 	}
 	if !*noHooks {
+		// Hooks are opt-in (merlin hooks install). Once any of them is there, serve keeps
+		// the set complete and pointing at this binary.
 		opts.InstallHooks = func() (string, error) {
-			res, err := hooks.Install(hooks.Config{ClaudeConfigDir: cfg, ExplorerHome: home})
+			hc := hooks.Config{ClaudeConfigDir: cfg, ExplorerHome: home}
+			sts, err := hooks.Status(hc)
+			if err != nil {
+				return "", err
+			}
+			present := false
+			for _, s := range sts {
+				present = present || s.State != hooks.Missing
+			}
+			if !present {
+				return "hooks not installed (merlin hooks install adds them for live updates)", nil
+			}
+			res, err := hooks.Install(hc)
 			if err != nil {
 				return "", err
 			}
