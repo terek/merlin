@@ -48,7 +48,8 @@ func (m *Money) add(reported, attributed float64) {
 	m.TotalUSD += reported + attributed
 }
 
-// CompactionTally sums the estimated cost of compaction calls (model.CompactionCall).
+// CompactionTally sums the estimated cost of compaction calls (model.CompactionCall); a
+// recorded call (Compaction.MessageID) is a message like any other and is not tallied.
 // A call inside a reported window is already part of ReportedUSD, as overhead; one
 // outside every window (UncoveredUSD) is in no total at all, since the harness never
 // wrote it down. WarmUSD is what the same calls would have cost had the cache been warm

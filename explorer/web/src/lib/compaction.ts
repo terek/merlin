@@ -1,7 +1,8 @@
-// How a compaction's cost reads. The call that writes the summary is not in the transcript, so
-// its cost is an estimate from the context size and the price table; it is never part of a
-// recomputed total. A cold call read its whole context again at full price because the main
-// agent had been idle longer than the cache lifetime.
+// How a compaction's cost reads. Claude Code does not record the call that writes the summary,
+// so its cost is an estimate from the context size and the price table, never part of a
+// recomputed total, and cold means the agent had been idle longer than the cache lifetime.
+// Codex records the call (the compaction has a `messageId`): its cost is that message's, in the
+// totals, and cold means most of the context was not read from the cache.
 
 import type { CompactionCall, CompactionTally } from '../api/types'
 import { formatDuration, formatMoney } from './format'
@@ -25,23 +26,38 @@ function billingText(billing: string): string {
   }
 }
 
-/** One line for a compaction's call: the estimate, and for a cold one why and what warm would have cost. */
-export function callLine(call: CompactionCall): string {
-  if (call.cache !== 'cold') return `call ~${formatMoney(call.usd)}, cache warm`
-  return `call ~${formatMoney(call.usd)}: cold cache after ${idleText(call.idleMs)} idle, the context was read again at the ${billingText(call.billing)} price; warm it would have cost ~${formatMoney(call.warmUSD)}`
+/** "~" before an estimate, nothing before a recorded figure. */
+export const approx = (recorded: boolean) => (recorded ? '' : '~')
+
+/**
+ * One line for a compaction's call: its cost, and for a cold one why and what warm would have
+ * cost. `recorded` when the harness recorded the call rather than it being estimated.
+ */
+export function callLine(call: CompactionCall, recorded = false): string {
+  const a = approx(recorded)
+  if (call.cache !== 'cold') return `call ${a}${formatMoney(call.usd)}, cache warm`
+  const why = recorded ? `cold cache (${idleText(call.idleMs)} idle)` : `cold cache after ${idleText(call.idleMs)} idle`
+  return `call ${a}${formatMoney(call.usd)}: ${why}, the context was read again at the ${billingText(call.billing)} price; warm it would have cost ${a}${formatMoney(call.warmUSD)}`
 }
 
 /** The extra a cold call cost over a warm one; 0 for a warm call. */
 export const coldExtra = (call: CompactionCall) => (call.cache === 'cold' ? Math.max(0, call.usd - call.warmUSD) : 0)
 
+/** A tally that may count recorded calls: then `recorded` of its `calls` are not estimates. */
+type Tally = CompactionTally & { recorded?: number }
+
+/** "~" unless every call of the tally was recorded. */
+const tallyApprox = (t: Tally) => approx(t.calls > 0 && t.recorded === t.calls)
+
 /** The headline of a tally: "~$126 for 81 compactions, 34 cold". */
-export function tallyLine(t: CompactionTally): string {
+export function tallyLine(t: Tally): string {
   const n = `${t.calls} ${t.calls === 1 ? 'compaction' : 'compactions'}`
-  return t.cold > 0 ? `~${formatMoney(t.usd)} for ${n}, ${t.cold} cold` : `~${formatMoney(t.usd)} for ${n}`
+  const usd = `${tallyApprox(t)}${formatMoney(t.usd)}`
+  return t.cold > 0 ? `${usd} for ${n}, ${t.cold} cold` : `${usd} for ${n}`
 }
 
 /** What the tally would have been with a warm cache every time, when that differs. */
-export function warmLine(t: CompactionTally): string {
+export function warmLine(t: Tally): string {
   if (t.cold === 0) return ''
-  return `with a warm cache every time: ~${formatMoney(t.warmUSD)}`
+  return `with a warm cache every time: ${tallyApprox(t)}${formatMoney(t.warmUSD)}`
 }

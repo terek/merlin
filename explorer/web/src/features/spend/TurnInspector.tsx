@@ -24,6 +24,7 @@ import {
   type Decision,
   decisionItems,
   KIND_SERIES,
+  missText,
   type Reread,
   type SpendModel,
   stepParts,
@@ -271,7 +272,7 @@ function CompactionTallyLine({ list, inAgents }: { list: Compaction[]; inAgents:
       {inAgents > 0 && `, ${inAgents} of them inside agent work`}
       {t.cold > 0 && ` (${warmLine(t)})`}
       {t.unknown > 0 && t.calls > 0 && `, ${t.unknown} without an estimate`}
-      {t.calls > 0 ? '. Estimated; not in this total.' : '.'}
+      {t.calls === 0 ? '.' : t.recorded === t.calls ? '. Recorded; in this total.' : '. Estimated; not in this total.'}
     </p>
   )
 }
@@ -291,9 +292,13 @@ function CompactionLine({
       {cp.trigger && ` (${cp.trigger})`}
       {cp.preTokens !== undefined &&
         `, ${formatTokens(cp.preTokens)}${cp.postTokens !== undefined ? ` → ${formatTokens(cp.postTokens)}` : ''} tokens`}
-      {cp.call ? `: ${callLine(cp.call)}. ` : '. '}
+      {cp.call ? `: ${callLine(cp.call, !!cp.messageId)}. ` : '. '}
       <span className="text-muted">
-        {cp.call ? 'An estimate, not in the figures above.' : 'No estimate of its call.'}
+        {!cp.call
+          ? 'No estimate of its call.'
+          : cp.messageId
+            ? 'Recorded; in the figures above.'
+            : 'An estimate, not in the figures above.'}
       </span>
     </p>
   )
@@ -366,11 +371,9 @@ function Misses({ rereads, model }: { rereads: Reread[]; model: SpendModel }) {
         const who = r.agentId ? model.agentsById.get(r.agentId) : undefined
         return (
           <p key={`${r.agentId ?? ''}${r.at}`} className="mt-1.5 text-sec text-muted">
-            {who ? `${agentLabel(who)} wrote` : 'The main agent wrote'} {formatTokens(r.tokens)} tokens of context to
-            the cache again
-            {r.gapMs !== undefined && `, ${formatDuration(r.gapMs)} after its last message`}
-            {r.expired ? ' (the cache had expired)' : ' (too soon for the cache to have expired)'}:{' '}
-            <Money usd={r.usd} />, against <Money usd={r.cachedUSD} dim /> had it been read from the cache.
+            {who ? agentLabel(who) : 'The main agent'} paid in full again for {formatTokens(r.tokens)} tokens of context
+            it had cached, {missText(r)}: <Money usd={r.usd} />, against <Money usd={r.cachedUSD} dim /> had it been
+            read from the cache.
           </p>
         )
       })}

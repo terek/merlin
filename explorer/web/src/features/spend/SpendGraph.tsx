@@ -12,7 +12,7 @@
 //
 // Every bar is on one dollar scale, and nothing is accumulated.
 import { type KeyboardEvent, type PointerEvent, type RefObject, useEffect, useMemo, useRef, useState } from 'react'
-import { callLine, idleText, tallyLine, warmLine } from '../../lib/compaction'
+import { approx, callLine, idleText, tallyLine, warmLine } from '../../lib/compaction'
 import { formatCount, formatDuration, formatMoney, formatPercent, formatTokens, plural } from '../../lib/format'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
@@ -25,6 +25,8 @@ import {
   compactionTally,
   KIND_SERIES,
   type KindKey,
+  missSummary,
+  missText,
   type Part,
   type Split,
   stepParts,
@@ -197,7 +199,7 @@ function Readout({
               >
                 compacted {plural(u.compactions.length, 'time')}
                 {u.compactions.some((x) => x.compaction.call)
-                  ? ` (~${formatMoney(u.compactions.reduce((s, x) => s + (x.compaction.call?.usd ?? 0), 0))})`
+                  ? ` (${approx(u.compactions.every((x) => x.compaction.messageId))}${formatMoney(u.compactions.reduce((s, x) => s + (x.compaction.call?.usd ?? 0), 0))})`
                   : ''}
               </span>
             )}
@@ -216,14 +218,13 @@ function Readout({
             <Chips parts={stepParts(c, split)} />
             {c.step.rereads.map((r) => (
               <span key={r.at} className="text-muted">
-                cache miss: {formatTokens(r.tokens)} written again
-                {r.expired && r.gapMs !== undefined ? ` after ${formatDuration(r.gapMs)}` : ''}, cached it would have
-                cost {formatMoney(r.cachedUSD)}
+                cache miss: {formatTokens(r.tokens)} billed again {missText(r)}, cached it would have cost{' '}
+                {formatMoney(r.cachedUSD)}
               </span>
             ))}
             {c.compactions.map((cp) => (
               <span key={cp.at} className={cp.call?.cache === 'cold' ? 'text-bad' : 'text-muted'}>
-                compacted after it{cp.call ? `: ${callLine(cp.call)}` : ' (no estimate of its call)'}
+                compacted after it{cp.call ? `: ${callLine(cp.call, !!cp.messageId)}` : ' (no estimate of its call)'}
               </span>
             ))}
             {c.typedWhileRunning > 0 && (
@@ -364,6 +365,7 @@ export function SpendGraph({
               pre: c.preTokens,
               trigger: c.trigger,
               call: c.call,
+              recorded: !!c.messageId,
               key: `${b.index}/${c.at}`,
             },
           ]
@@ -394,7 +396,6 @@ export function SpendGraph({
   const isOn = (b: Branch, u: Unit) =>
     (hoverUnit?.branch === b.index && hoverUnit.id === u.id) ||
     (selectedUnit?.branch === b.index && selectedUnit.id === u.id)
-  const expired = tree.rereads.filter((r) => r.expired).length
 
   const at = (clientX: number, clientY: number, el: HTMLElement): Pin | null => {
     const r = el.getBoundingClientRect()
@@ -669,7 +670,8 @@ export function SpendGraph({
                     strokeWidth={3}
                     paintOrder="stroke"
                   >
-                    ~{formatMoney(cp.call.usd)}
+                    {approx(!!cp.messageId)}
+                    {formatMoney(cp.call.usd)}
                     {cold ? ` cold, ${idleText(cp.call.idleMs)} idle` : ''}
                   </text>
                 )}
@@ -872,9 +874,11 @@ export function SpendGraph({
           )}
           <span className="text-muted">
             {compactions.unknown > 0 && compactions.calls > 0 && `${compactions.unknown} more without an estimate. `}
-            {compactions.calls > 0
-              ? 'Estimated, since the harness does not record the call; not in any figure on this page.'
-              : 'The harness recorded no estimate of their calls.'}
+            {compactions.calls === 0
+              ? 'The harness recorded no estimate of their calls.'
+              : compactions.recorded === compactions.calls
+                ? 'Recorded by the harness; already in the figures on this page.'
+                : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
           </span>
         </p>
       )}
@@ -946,7 +950,7 @@ export function SpendGraph({
               <path d={ctxLine} fill="none" stroke="var(--accent)" strokeWidth={1.5} strokeLinejoin="round" />
               {marks.map((m) => (
                 <g key={m.key}>
-                  <title>{`compaction after turn ${m.turn}${m.trigger ? ` (${m.trigger})` : ''}${m.call ? `: ${callLine(m.call)}` : ''}`}</title>
+                  <title>{`compaction after turn ${m.turn}${m.trigger ? ` (${m.trigger})` : ''}${m.call ? `: ${callLine(m.call, m.recorded)}` : ''}`}</title>
                   <line
                     x1={xc(m.slot)}
                     x2={xc(m.slot)}
@@ -1017,7 +1021,7 @@ export function SpendGraph({
         agent's bar is a compaction of that agent's own conversation. Dollars are recomputed from token counts
         {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
         {tree.rereads.length > 0 &&
-          ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was written again): ${expired} after the cache had expired, ${tree.rereads.length - expired} sooner.`}
+          ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}
       </p>
     </Card>
   )

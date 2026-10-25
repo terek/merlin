@@ -141,17 +141,19 @@ type Compaction struct {
 	// (fixed sentences around the real text). Search skips them; the summary stays whole.
 	Boilerplate []TextSpan `json:"boilerplate,omitempty"`
 	// Call is what the call that wrote the summary cost: an estimate, for a harness that does
-	// not record that call. Absent when the context size or the model's price is unknown.
+	// not record that call (Claude Code), or the recorded call itself when MessageID is set
+	// (Codex). Absent when the context size or the model's price is unknown.
 	Call *CompactionCall `json:"call,omitempty"`
 	// MessageID is the billed message of the call that wrote the summary, for a harness that
 	// records it (Codex). That message is in Messages and in the totals like any other.
 	MessageID string `json:"messageId,omitempty"`
 }
 
-// CompactionCall is the estimated cost of a compaction's API call: the whole context as
-// input, the summary as output. It is never part of a recomputed total. Cold means the
-// main agent's previous call was older than the cache lifetime, so the context was read
-// again at full price instead of from the cache.
+// CompactionCall is the cost of a compaction's API call: the whole context as input, the
+// summary as output. An estimate is never part of a recomputed total; a recorded call
+// (Compaction.MessageID set) is, as its message. Cold means the context was read again at
+// full price instead of from the cache: estimated from the idle time and the cache
+// lifetime, or seen in the recorded call's cached tokens.
 type CompactionCall struct {
 	Model string `json:"model"`
 	// IdleMs is the time since the main agent's previous API call.
@@ -352,6 +354,9 @@ type Message struct {
 	// Truncated marks a message the harness wrote down before it finished: its output
 	// token count is partial, so USD is a lower bound.
 	Truncated bool `json:"truncated,omitempty"`
+	// Fast marks a call made in fast mode (Claude's fast speed, Codex's priority tier). The
+	// prompt cache is not shared between fast and standard calls.
+	Fast bool `json:"fast,omitempty"`
 	Tokens
 }
 

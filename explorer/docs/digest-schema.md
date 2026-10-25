@@ -164,25 +164,29 @@ Spending outside every window was not reported and can only be attributed from t
 | `durationMs` | how long the compaction took |
 | `boilerplate` | the parts of `summary` the harness writes into every summary, as `TextSpan`; search skips them, `summary` itself stays whole; omitted when none were recognised |
 | `summary` | the summary text, whole; it is not a prompt and not a turn |
-| `call` | what the call that wrote the summary cost, as `CompactionCall`: an estimate, for a harness that does not record that call (Claude Code); omitted when the context size or the model's price is unknown |
+| `call` | what the call that wrote the summary cost, as `CompactionCall`: an estimate, for a harness that does not record that call (Claude Code), or a description of the recorded call when `messageId` is set (Codex); omitted when the context size or the model's price is unknown |
 | `messageId` | the billed message of the call that wrote the summary, for a harness that records it (Codex); that message is in `messages` and in the totals like any other |
 
 ## CompactionCall
 
-The estimated cost of a compaction's API call: the whole context as input, the summary as
-output. It is never part of a recomputed total (`cost`, `turns[].cost`). Inside a reported
-window it is part of what the harness reported, as overhead; outside, it is in no figure at
-all. Validated against Claude Code's own totals (format notes §6a).
+The cost of a compaction's API call: the whole context as input, the summary as output.
+
+- **Estimated** (Claude Code, `messageId` absent): never part of a recomputed total (`cost`,
+  `turns[].cost`). Inside a reported window it is part of what the harness reported, as
+  overhead; outside, it is in no figure at all. Validated against Claude Code's own totals
+  (format notes §6a).
+- **Recorded** (Codex, `messageId` set): the figures are that message's, which is in the totals
+  like any other. `cache` is `cold` when less than half of the context came from the cache.
 
 | key | meaning |
 |---|---|
 | `model` | the model of the main agent's previous call, which the compaction uses |
-| `idleMs` | time since the main agent's previous API call |
-| `cache` | `warm` (the previous call was within the cache lifetime: the context was read from the cache) or `cold` (it was older: the context was read again at full price) |
-| `billing` | how the context was charged: `cache-read`; for a cold call `input` (Claude Code 2.1.269 and later) or `cache-write-1h` / `cache-write-5m` (earlier versions, at the lifetime in use) |
+| `idleMs` | time since the agent's previous API call |
+| `cache` | `warm` (the context was read from the cache) or `cold` (it was read again at full price); estimated from `idleMs` and the cache lifetime, or seen in the recorded call |
+| `billing` | how the context was charged: `cache-read`; for a cold call `input` (Codex; Claude Code 2.1.269 and later) or `cache-write-1h` / `cache-write-5m` (earlier Claude Code versions, at the lifetime in use) |
 | `inputTokens` | the context size before the compaction (`preTokens`) |
-| `outputTokens` | the summary's length in tokens, from its length in characters |
-| `usd` | the estimate |
+| `outputTokens` | the summary in tokens: from its length in characters, or recorded |
+| `usd` | the estimate, or the recorded message's cost |
 | `warmUSD` | what the same call would have cost had the cache been warm |
 
 ## TextSpan
@@ -346,6 +350,7 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `agentTurn` | for an agent's message, the index of the agent's turn (`Agent.turns`) it belongs to |
 | `usd` | attributed dollars |
 | `truncated` | the harness wrote the message down before it finished (its last line has a null `stop_reason`), so its `output` count is partial and `usd` a lower bound; omitted when false |
+| `fast` | the call was made in fast mode (Claude Code's fast speed, Codex's `priority` service tier); the prompt cache is not shared between fast and standard calls; omitted when false |
 
 ## Diagnostics
 

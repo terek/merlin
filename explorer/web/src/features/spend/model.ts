@@ -23,9 +23,11 @@ import type {
   WorkflowRun,
 } from '../../api/types'
 import { agentRole } from '../../lib/agent'
+import { idleText } from '../../lib/compaction'
+import { formatDuration } from '../../lib/format'
 import { turnPrompt } from '../../lib/inbox'
 
-/** What the dollars bought. `reread` is a cache miss: context that had been cached and was written again. */
+/** What the dollars bought. `reread` is a cache miss: context that had been cached and was billed again in full. */
 export type ClassKey = 'output' | 'read' | 'write' | 'reread' | 'input'
 /** Who spent them. `reread` is taken out of whoever paid it. */
 export type KindKey = 'main' | 'reread' | 'compact' | 'subagent' | 'addressable' | 'fork'
@@ -77,24 +79,28 @@ const W1H = 2
 const weighted = (m: Message) =>
   (m.input ?? 0) + OUT * (m.output ?? 0) + W5M * (m.cacheWrite5m ?? 0) + W1H * (m.cacheWrite1h ?? 0)
 
+/** Which prices a message was billed at: its model's, in fast mode or not (fast scales every rate). */
+export const fitKey = (m: Pick<Message, 'model' | 'fast'>) => (m.fast ? `${m.model}|fast` : m.model)
+
 /**
- * The two prices of each model, fitted to its messages by least squares: usd = input * A + read * B,
- * where A is the tokens billed at a multiple of the input price and B the tokens read from the
- * cache. The web side has no price table; the fit recovers what the daemon priced with. When the
- * messages cannot separate the two (one message, or no cache reads), a read costs a tenth of input.
+ * The two prices of each model (apart for its fast mode, keyed by fitKey), fitted to its messages
+ * by least squares: usd = input * A + read * B, where A is the tokens billed at a multiple of the
+ * input price and B the tokens read from the cache. The web side has no price table; the fit
+ * recovers what the daemon priced with. When the messages cannot separate the two (one message, or
+ * no cache reads), a read costs a tenth of input.
  */
 export function fitPrices(messages: readonly Message[]): Map<string, Fit> {
   const sums = new Map<string, { aa: number; ab: number; bb: number; au: number; bu: number }>()
   for (const m of messages) {
     const a = weighted(m)
     const b = m.cacheRead ?? 0
-    const s = sums.get(m.model) ?? { aa: 0, ab: 0, bb: 0, au: 0, bu: 0 }
+    const s = sums.get(fitKey(m)) ?? { aa: 0, ab: 0, bb: 0, au: 0, bu: 0 }
     s.aa += a * a
     s.ab += a * b
     s.bb += b * b
     s.au += a * m.usd
     s.bu += b * m.usd
-    sums.set(m.model, s)
+    sums.set(fitKey(m), s)
   }
   const out = new Map<string, Fit>()
   for (const [model, s] of sums) {
@@ -124,37 +130,94 @@ const TTL_1H = 60 * 60_000
 /** A miss counts only from this many tokens, and only when it is at least half of what was cached. */
 export const REREAD_MIN_TOKENS = 5000
 
-/** One message that wrote again what the previous message of the same agent had left in the cache. */
+/**
+ * Why a cache miss happened: the agent was idle longer than the cache keeps an entry, it switched
+ * model, it switched fast mode on or off (fast calls do not share the cache with standard ones),
+ * or none of these (a cache that evicted early, or routed the call elsewhere).
+ */
+export type MissCause = 'idle' | 'model' | 'fast' | 'unexplained'
+
+/**
+ * One message that billed again in full what the previous message of the same agent had left in
+ * the cache: written to the cache again (Claude) or charged as plain input (Codex, whose cache has
+ * no writes).
+ */
 export interface Reread {
   /** Omitted for the main agent. */
   agentId?: string
   model: string
   at: string
-  /** Tokens written again. */
+  /** Tokens billed again. */
   tokens: number
-  /** What writing them cost. */
+  /** What they cost. */
   usd: number
   /** What reading them from the cache would have cost. */
   cachedUSD: number
-  /** Time since the agent's previous message on this model. */
+  /** Time since the agent's previous message. */
   gapMs?: number
-  /** The gap is longer than the cache keeps an entry (5 minutes, or an hour for 1-hour writes). */
-  expired: boolean
+  cause: MissCause
+  /** The message was made in fast mode. */
+  fast: boolean
+  /** For a model switch, the model before it. */
+  fromModel?: string
 }
+
+const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
 
 const promptTokens = (m: Message) => (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
 
+/** Prompt tokens billed above the cache-read price: uncached input and cache writes. */
+const billedInFull = (m: Message) => (m.input ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
+
 /**
- * Tokens of `m` that were in the cache after `prev` (the same agent's previous message on the
- * same model) and were written again instead of read. 0 unless it is a real miss: a normal message
- * reads the whole previous prompt and writes only what is new.
+ * Tokens of `m` that were in the cache after `prev` (the same agent's previous message) and were
+ * billed in full instead of read: written again, or charged as input by a cache without writes.
+ * 0 unless it is a real miss: a normal message reads the whole previous prompt and pays in full
+ * only for what is new.
  */
 export function rereadTokens(prev: Message | undefined, m: Message): number {
   if (!prev) return 0
   const cached = promptTokens(prev)
-  const written = (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
-  const again = Math.min(written, Math.max(0, cached - (m.cacheRead ?? 0)))
+  const again = Math.min(billedInFull(m), Math.max(0, cached - (m.cacheRead ?? 0)))
   return again >= REREAD_MIN_TOKENS && again >= 0.5 * cached ? again : 0
+}
+
+/** Why `m` missed the cache `prev` had left: see MissCause. */
+export function missCause(prev: Message, m: Message): MissCause {
+  if (prev.model !== m.model) return 'model'
+  if (!!prev.fast !== !!m.fast) return 'fast'
+  const gap = ms(m.at) - ms(prev.at)
+  return Number.isFinite(gap) && gap >= ((m.cacheWrite1h ?? 0) > 0 ? TTL_1H : TTL_5M) ? 'idle' : 'unexplained'
+}
+
+/** The misses counted by cause: "2 after idle time, 1 on a model switch". */
+export function missSummary(rereads: readonly Reread[]): string {
+  const n = (c: MissCause) => rereads.filter((r) => r.cause === c).length
+  const parts: [number, string][] = [
+    [n('idle'), 'after idle time'],
+    [n('model'), 'on a model switch'],
+    [n('fast'), 'on turning fast mode on or off'],
+    [n('unexplained'), 'with no visible cause'],
+  ]
+  return parts
+    .filter(([k]) => k > 0)
+    .map(([k, t]) => `${k} ${t}`)
+    .join(', ')
+}
+
+/** How a miss reads after "cache miss": "after 14h idle", "on a switch from …", … */
+export function missText(r: Reread): string {
+  const gap = r.gapMs !== undefined ? formatDuration(r.gapMs) : undefined
+  switch (r.cause) {
+    case 'idle':
+      return r.gapMs !== undefined ? `after ${idleText(r.gapMs)} idle` : 'after the cache had expired'
+    case 'model':
+      return r.fromModel ? `on a switch from ${r.fromModel}` : 'on a model switch'
+    case 'fast':
+      return r.fast ? 'on turning fast mode on' : 'on turning fast mode off'
+    default:
+      return gap ? `only ${gap} after the last call, with no visible cause` : 'with no visible cause'
+  }
 }
 
 // ---- buckets --------------------------------------------------------------------------
@@ -179,8 +242,6 @@ const newBucket = (): Bucket => ({
   messages: 0,
 })
 
-const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
-
 function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | undefined): void {
   const written = (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
   const raw = {
@@ -193,23 +254,29 @@ function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | undefined):
   // the message's own figure is the truth (fast mode doubles it): the fit only splits it
   const k = sum > 0 ? m.usd / sum : 0
   const again = rereadTokens(prev, m)
-  const rereadUSD = written > 0 ? raw.write * k * (again / written) : 0
+  // a miss is taken from the cache writes first, then from the uncached input
+  const fromWrite = Math.min(again, written)
+  const fromInput = again - fromWrite
+  const writeMiss = written > 0 ? raw.write * k * (fromWrite / written) : 0
+  const inputMiss = (m.input ?? 0) > 0 ? raw.input * k * (fromInput / (m.input ?? 0)) : 0
+  const rereadUSD = writeMiss + inputMiss
   b.usd += m.usd
   b.messages++
   b.reread += rereadUSD
-  b.byClass.input += raw.input * k
+  b.byClass.input += raw.input * k - inputMiss
   // a message the fit cannot split (no tokens, or an unpriced model) is all "output"
   b.byClass.output += sum > 0 ? raw.output * k : m.usd
   b.byClass.read += raw.read * k
-  b.byClass.write += raw.write * k - rereadUSD
+  b.byClass.write += raw.write * k - writeMiss
   b.byClass.reread += rereadUSD
-  b.tokens.input += m.input ?? 0
+  b.tokens.input += (m.input ?? 0) - fromInput
   b.tokens.output += m.output ?? 0
   b.tokens.read += m.cacheRead ?? 0
-  b.tokens.write += written - again
+  b.tokens.write += written - fromWrite
   b.tokens.reread += again
-  if (again > 0) {
-    const gap = prev ? ms(m.at) - ms(prev.at) : Number.NaN
+  if (prev && again > 0) {
+    const gap = ms(m.at) - ms(prev.at)
+    const cause = missCause(prev, m)
     b.rereads.push({
       agentId: m.agentId,
       model: m.model,
@@ -218,7 +285,9 @@ function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | undefined):
       usd: rereadUSD,
       cachedUSD: fit.read * again * k,
       gapMs: Number.isFinite(gap) ? gap : undefined,
-      expired: Number.isFinite(gap) && gap >= ((m.cacheWrite1h ?? 0) > 0 ? TTL_1H : TTL_5M),
+      cause,
+      fast: !!m.fast,
+      ...(cause === 'model' ? { fromModel: prev.model } : {}),
     })
   }
 }
@@ -498,15 +567,19 @@ function runAgent(r: WorkflowRun): Agent {
   }
 }
 
-/** What a set of compactions adds up to, as estimated: only those that carry a call. */
-export function compactionTally(list: readonly Compaction[]): CompactionTally & { unknown: number } {
-  const t = { calls: 0, cold: 0, usd: 0, warmUSD: 0, uncoveredUSD: 0, unknown: 0 }
+/**
+ * What a set of compactions adds up to: only those that carry a call. `recorded` of them are
+ * calls the harness recorded (in the totals already), the rest estimates (in no total).
+ */
+export function compactionTally(list: readonly Compaction[]): CompactionTally & { unknown: number; recorded: number } {
+  const t = { calls: 0, cold: 0, usd: 0, warmUSD: 0, uncoveredUSD: 0, unknown: 0, recorded: 0 }
   for (const c of list) {
     if (!c.call) {
       t.unknown++
       continue
     }
     t.calls++
+    if (c.messageId) t.recorded++
     if (c.call.cache === 'cold') t.cold++
     t.usd += c.call.usd
     t.warmUSD += c.call.warmUSD
@@ -609,12 +682,13 @@ export function buildSpend(detail: SessionDetail): SpendModel {
   // ---- the messages
   if (fromMessages && n > 0) {
     const fits = fitPrices(messages)
+    // each agent's previous message that read or wrote a prompt (not a synthetic one)
     const last = new Map<string, Message>()
     for (const m of messages) {
-      const fit = fits.get(m.model) ?? { input: 0, read: 0 }
-      const key = `${m.agentId ?? ''}|${m.model}`
+      const fit = fits.get(fitKey(m)) ?? { input: 0, read: 0 }
+      const key = m.agentId ?? ''
       const prev = last.get(key)
-      last.set(key, m)
+      if (promptTokens(m) > 0) last.set(key, m)
       const at = ms(m.at)
       const a = m.agentId ? agentsById.get(m.agentId) : undefined
       const root = a ? rootOf(a) : undefined

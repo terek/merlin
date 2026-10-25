@@ -33,6 +33,16 @@ describe('compaction cost text', () => {
     expect(tallyLine({ ...t, calls: 1, cold: 0 })).toBe('~$126 for 1 compaction')
     expect(warmLine({ ...t, cold: 0 })).toBe('')
   })
+  test('a recorded call (Codex) is not an estimate', () => {
+    expect(callLine(cold, true)).toBe(
+      `call $5.02: cold cache (${idleText(31_380_000)} idle), the context was read again at the plain input price; warm it would have cost $0.40`,
+    )
+    expect(callLine(warm, true)).toBe('call $0.40, cache warm')
+    const t = { calls: 2, cold: 1, usd: 5.42, warmUSD: 0.8, uncoveredUSD: 0, recorded: 2 }
+    expect(tallyLine(t)).toBe('$5.42 for 2 compactions, 1 cold')
+    expect(warmLine(t)).toBe('with a warm cache every time: $0.80')
+    expect(tallyLine({ ...t, recorded: 1 })).toBe('~$5.42 for 2 compactions, 1 cold')
+  })
 })
 
 function formatDurationLike(ms: number): string {

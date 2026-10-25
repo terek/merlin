@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 2
+const ParserVersion = 3
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -252,19 +252,49 @@ func mainTurn(tr *turnRec, index int) model.Turn {
 
 // compaction turns a compacted record into a Compaction. A compaction in a turn the user
 // started without typing anything (/compact) is manual; one in the middle of other work
-// is automatic.
+// is automatic. Its call is recorded: Call describes that message, cold when less than
+// half of the context came from the cache.
 func (b *builder) compaction(t *thread, k compactRec, turn int, turns []turnRec) model.Compaction {
 	c := model.Compaction{At: k.At, Turn: turn, MessageID: k.ResponseID, Trigger: model.TriggerAuto}
 	if k.Turn >= 0 && k.Turn < len(turns) && len(turns[k.Turn].Users) == 0 {
 		c.Trigger = model.TriggerManual
 	}
-	for _, u := range t.Usage {
-		if u.ResponseID == k.ResponseID {
-			c.PreTokens = u.Usage.Input
-			break
+	for i, u := range t.Usage {
+		if u.ResponseID != k.ResponseID {
+			continue
 		}
+		c.PreTokens = u.Usage.Input
+		c.Call = b.compactionCall(u, t.Usage[:i])
+		break
 	}
 	return c
+}
+
+// compactionCall describes a compaction's recorded call; nil when its model is unpriced
+// or nothing was called before it (no idle time to tell).
+func (b *builder) compactionCall(u usageRec, before []usageRec) *model.CompactionCall {
+	m := b.price(u)
+	if b.unpriced[u.Model] || len(before) == 0 {
+		return nil
+	}
+	call := &model.CompactionCall{
+		Model:        u.Model,
+		IdleMs:       u.At.Sub(before[len(before)-1].At).Milliseconds(),
+		Cache:        model.CacheWarm,
+		Billing:      model.BillingCacheRead,
+		InputTokens:  u.Usage.Input,
+		OutputTokens: u.Usage.Output,
+		USD:          m.USD,
+		WarmUSD:      m.USD,
+	}
+	if 2*u.Usage.Cached < u.Usage.Input {
+		call.Cache, call.Billing = model.CacheCold, model.BillingInput
+		warm := model.Tokens{CacheRead: u.Usage.Input, Output: u.Usage.Output}
+		if mc, ok := b.pricer.Cost(u.Model, warm, m.Fast); ok {
+			call.WarmUSD = mc.USD
+		}
+	}
+	return call
 }
 
 func epoch(cs []model.Compaction, at time.Time) int {
@@ -620,8 +650,8 @@ func originOf(m model.InboxMessage) model.TurnOrigin {
 // price turns one usage record into a billed message.
 func (b *builder) price(u usageRec) model.Message {
 	tok := model.Tokens{Input: max(u.Usage.Input-u.Usage.Cached, 0), CacheRead: u.Usage.Cached, Output: u.Usage.Output}
-	m := model.Message{ID: u.ResponseID, At: u.At, Model: u.Model, Tokens: tok}
-	mc, ok := b.pricer.Cost(u.Model, tok, u.Tier == "priority")
+	m := model.Message{ID: u.ResponseID, At: u.At, Model: u.Model, Fast: u.Tier == "priority", Tokens: tok}
+	mc, ok := b.pricer.Cost(u.Model, tok, m.Fast)
 	if !ok {
 		b.unpriced[u.Model] = true
 		return m

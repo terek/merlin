@@ -557,9 +557,10 @@ func (v *view) costs() {
 		}
 		c.OwnMessages = len(s.own)
 		// Compaction calls: the session's own (a copied compaction belongs to the session
-		// that made it) and its agents'.
+		// that made it) and its agents'. Only estimates: a recorded call (MessageID) is a
+		// message, already in the totals.
 		addCall := func(cp *model.Compaction) {
-			if cp.Call == nil {
+			if cp.Call == nil || cp.MessageID != "" {
 				return
 			}
 			t := tally(cp.Call, covered(s.windows, cp.At) >= 0)

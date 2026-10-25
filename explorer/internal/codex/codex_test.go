@@ -280,8 +280,13 @@ func TestBuildTree(t *testing.T) {
 		t.Fatalf("compactions = %+v", d.Compactions)
 	}
 	c := d.Compactions[0]
-	if c.Turn != 1 || c.Trigger != model.TriggerManual || c.MessageID != "resp-compact" || c.PreTokens != 3000 || c.Call != nil {
+	if c.Turn != 1 || c.Trigger != model.TriggerManual || c.MessageID != "resp-compact" || c.PreTokens != 3000 {
 		t.Errorf("compaction = %+v", c)
+	}
+	// 2900 of 3000 cached: warm, 10 s after the previous call, its cost the message's.
+	if call := c.Call; call == nil || call.Cache != model.CacheWarm || call.Billing != model.BillingCacheRead || call.IdleMs != 10000 ||
+		call.InputTokens != 3000 || call.OutputTokens != 300 || !near(call.USD, (100+290+3000)/1e6) || call.WarmUSD != call.USD {
+		t.Errorf("compaction call = %+v", c.Call)
 	}
 
 	// Messages: tokens split into uncached input, cached input and output; priced per model.
@@ -299,7 +304,10 @@ func TestBuildTree(t *testing.T) {
 	if !near(m.USD, (400+60+500)/1e6) {
 		t.Errorf("resp-r1a usd = %v", m.USD)
 	}
-	if fast := byID["resp-r3"]; fast.Model != "m" || !near(fast.USD, 2*(500+100)/1e6) {
+	if byID["resp-r1a"].Fast {
+		t.Error("default tier is not fast")
+	}
+	if fast := byID["resp-r3"]; fast.Model != "m" || !fast.Fast || !near(fast.USD, 2*(500+100)/1e6) {
 		t.Errorf("priority tier must price as fast: %+v", fast)
 	}
 	if a := byID["resp-a1"]; a.AgentID != "A" || a.Model != "m2" || a.AgentTurn == nil || *a.AgentTurn != 0 || a.Turn == nil || *a.Turn != 0 {
@@ -461,6 +469,27 @@ func TestExecSessionIsScripted(t *testing.T) {
 	}
 	if !reflect.DeepEqual(d.Diagnostics.UnpricedModels, []string{"unknown-model"}) || d.Cost.USD != 0 || len(d.Messages) != 1 {
 		t.Errorf("unpriced: %+v cost %v", d.Diagnostics, d.Cost)
+	}
+}
+
+func TestColdCompaction(t *testing.T) {
+	home := t.TempDir()
+	newRollout(t).meta("C", "C", "cli", nil).
+		start(1, "c1", "", "user").ctx(1, "c1", "m", nil).user(1, "Go.", 0).usage(2, "resp-c1", "c1", 5000, 0, 10).done(3, "c1").
+		start(3600, "c2", "", "").ctx(3600, "c2", "m", nil).
+		usage(3610, "resp-cc", "c2", 5100, 1000, 200).
+		add(3610, "compacted", map[string]any{"compaction_response_id": "resp-cc", "window_number": 1}).
+		done(3611, "c2").
+		write(home, "rollout-2026-10-01T09-00-00-C.jsonl")
+	d := build(t, home, "C")
+	if len(d.Compactions) != 1 || d.Compactions[0].Call == nil {
+		t.Fatalf("compactions = %+v", d.Compactions)
+	}
+	call := d.Compactions[0].Call
+	// 1000 of 5100 cached: cold, billed as input; warm would have read all 5100 from the cache.
+	if call.Cache != model.CacheCold || call.Billing != model.BillingInput || call.IdleMs != 3608000 ||
+		!near(call.USD, (4100+100+2000)/1e6) || !near(call.WarmUSD, (510+2000)/1e6) {
+		t.Errorf("call = %+v", call)
 	}
 }
 

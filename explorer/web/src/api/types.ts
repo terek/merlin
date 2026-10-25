@@ -348,9 +348,13 @@ export interface Compaction {
  * Never part of a recomputed total. Cold: the main agent's previous call was older than the cache
  * lifetime, so the context was read again at full price.
  */
+/**
+ * A compaction's call: an estimate (Claude Code), or the recorded call when the compaction has a
+ * `messageId` (Codex), whose message is in the totals.
+ */
 export interface CompactionCall {
   model: string
-  /** Since the main agent's previous API call. */
+  /** Since the agent's previous API call. */
   idleMs: number
   cache: 'warm' | 'cold'
   /** How the context was charged: cache-read, input, cache-write-1h, cache-write-5m. */
@@ -537,6 +541,8 @@ export interface Message extends Tokens {
   usd: number
   /** Written down before it finished: output tokens are a partial count. */
   truncated?: boolean
+  /** Made in fast mode; fast and standard calls do not share the prompt cache. */
+  fast?: boolean
 }
 
 export interface Diagnostics {

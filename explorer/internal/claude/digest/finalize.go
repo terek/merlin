@@ -108,7 +108,7 @@ func (b *Builder) priceMessages(res *FileResult) []*billedMsg {
 		turn := m.turn
 		res.Messages = append(res.Messages, model.Message{
 			ID: m.id, At: m.firstTS, Model: name, Turn: &turn, USD: mc.USD, Tokens: tok,
-			Truncated: m.truncated(),
+			Truncated: m.truncated(), Fast: m.usage.IsFast(),
 		})
 		billed[i] = &billedMsg{st: m, cost: mc, ok: ok}
 	}

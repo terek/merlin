@@ -277,13 +277,20 @@ From top to bottom:
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx`), one turn axis for the whole tree:
   - context along the path from the root to the session in focus, with compactions, and the
-    context written to the cache again (a cache miss) as a bar on its turn;
+    context billed again in full (a **cache miss**) as a bar on its turn. A miss is the part of an
+    agent's previous prompt that its next message did not read from the cache: written to it again
+    (Claude Code) or charged as plain input (Codex, whose cache has no writes). Each miss has a
+    cause: idle longer than the cache lifetime (5 minutes, or an hour after one-hour writes; for
+    Codex, whose cache has no fixed lifetime, the same 5 minutes), a model switch, fast mode turned
+    on or off (fast calls do not share the cache), or no visible cause;
   - a **compaction** is a mark after the turn it followed, on the context track and on its
-    session's line: solid red when its call ran on a cold cache (the main agent had been idle longer
-    than the cache lifetime), labelled with the estimated cost and the idle gap; dashed amber when
-    warm; grey when the digest has no estimate. Above the graph, one line adds them up for the tree,
-    with what a warm cache every time would have cost. The estimate (`compaction.call`, the
-    harness does not record the call) is in no figure on the page;
+    session's line: solid red when its call ran on a cold cache, labelled with the cost and the
+    idle gap; dashed amber when warm; grey when the digest has no figure. Above the graph, one line
+    adds them up for the tree, with what a warm cache every time would have cost. For Claude Code
+    the figure (`compaction.call`) is an estimate (the harness does not record the call), cold
+    means idle longer than the cache lifetime, and it is in no figure on the page; for Codex it is
+    the recorded call (`compaction.messageId`), cold when less than half the context came from the
+    cache, and already in the figures;
   - one line per session: the root at the top, each other session on a line of its own under its
     parent, starting at the turn after the last one it copied, with only its own turns. Forks and
     continuations are drawn the same way; nothing is merged across session ids;

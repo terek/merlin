@@ -6,6 +6,9 @@ import {
   compactionTally,
   decisionItems,
   fitPrices,
+  missCause,
+  missSummary,
+  missText,
   packRows,
   promptLine,
   type Row,
@@ -103,6 +106,68 @@ describe('rereadTokens', () => {
   })
   test('the first message of an agent has nothing to miss', () => {
     expect(rereadTokens(undefined, msg(1, { cacheWrite5m: 80_000 }))).toBe(0)
+  })
+  // Codex: no cache writes; a miss is the cached context charged as plain input
+  const codexPrev = msg(0, { input: 500, cacheRead: 41_500 })
+  test('a cache without writes: a warm call reads the previous prompt, pays input for what is new', () => {
+    expect(rereadTokens(codexPrev, msg(1, { input: 900, cacheRead: 41_984 }))).toBe(0)
+  })
+  test('a cache without writes: a miss is the previous prompt charged as input', () => {
+    expect(rereadTokens(codexPrev, msg(1, { input: 31_000, cacheRead: 12_032 }))).toBe(29_968)
+  })
+})
+
+describe('missCause', () => {
+  const prev = msg(0, { input: 500, cacheRead: 40_000 })
+  test('a model switch, a fast-mode switch, idle time, or no visible cause', () => {
+    expect(missCause(prev, msg(1, { input: 40_000 }, { model: 'model-b' }))).toBe('model')
+    expect(missCause(prev, msg(1, { input: 40_000 }, { fast: true }))).toBe('fast')
+    expect(missCause(prev, msg(5, { input: 40_000 }))).toBe('idle')
+    expect(missCause(prev, msg(1, { input: 40_000 }))).toBe('unexplained')
+  })
+  test('an hour-long cache write keeps the entry for an hour', () => {
+    expect(missCause(prev, msg(30, { cacheWrite1h: 40_000 }))).toBe('unexplained')
+    expect(missCause(prev, msg(60, { cacheWrite1h: 40_000 }))).toBe('idle')
+  })
+})
+
+describe('cache misses without cache writes (Codex)', () => {
+  // turn 0: two calls, the second warm; turn 1, a minute later: fast mode on, the context
+  // charged as input; turn 2: the same agent switches model, then misses with no visible cause
+  const messages = [
+    msg(0, { input: 30_000, output: 100 }, { turn: 0 }),
+    msg(0, { input: 600, cacheRead: 29_952, output: 100 }, { turn: 0 }),
+    msg(
+      1,
+      { input: 30_700, cacheRead: 0, output: 100 },
+      { turn: 1, fast: true, usd: 2 * price({ input: 30_700, output: 100 }) },
+    ),
+    msg(2, { input: 30_900, output: 100 }, { turn: 2, model: 'model-b', fast: true }),
+    msg(2, { input: 25_000, cacheRead: 6_000, output: 100 }, { turn: 2, model: 'model-b', fast: true }),
+  ]
+  const m = buildSpend(detail([turn(0, 0, 0), turn(1, 1, 1), turn(2, 2, 2)], messages))
+  test('each miss has its cause', () => {
+    expect(m.rereads.map((r) => [r.tokens, r.cause, r.fromModel])).toEqual([
+      [30_552, 'fast', undefined],
+      [30_700, 'model', 'model-a'],
+      [24_900, 'unexplained', undefined],
+    ])
+    expect(missText(m.rereads[0])).toBe('on turning fast mode on')
+    expect(missText(m.rereads[1])).toBe('on a switch from model-a')
+    expect(missText(m.rereads[2])).toMatch(/^only .* after the last call, with no visible cause$/)
+    expect(missSummary(m.rereads)).toBe(
+      '1 on a model switch, 1 on turning fast mode on or off, 1 with no visible cause',
+    )
+  })
+  test("a miss is taken out of the uncached input, at the call's own price (fast doubles it)", () => {
+    const c = m.cols[1].step
+    expect(c.tokens.reread).toBe(30_552)
+    expect(c.tokens.input).toBe(30_700 - 30_552)
+    expect(c.tokens.write).toBe(0)
+    expect(c.byClass.reread).toBeCloseTo(2 * 30_552 * IN, 10)
+    expect(c.byClass.input).toBeCloseTo(2 * (30_700 - 30_552) * IN, 10)
+    expect(m.rereads[0].cachedUSD).toBeCloseTo(2 * 30_552 * READ, 10)
+    expect(c.usd).toBeCloseTo(messages[2].usd, 10)
   })
 })
 
@@ -252,7 +317,8 @@ describe('buildSpend', () => {
     expect(m.rereads).toHaveLength(1)
     const r = m.rereads[0]
     expect(r.tokens).toBe(53_000)
-    expect(r.expired).toBe(true)
+    expect(r.cause).toBe('idle')
+    expect(missText(r)).toBe('after 35 min idle')
     expect(r.gapMs).toBe(35 * 60_000)
     expect(r.usd).toBeCloseTo(53_000 * 1.25 * IN, 10)
     expect(r.cachedUSD).toBeCloseTo(53_000 * READ, 10)
@@ -380,7 +446,7 @@ describe('workflows, compactions and prompts typed while a turn ran', () => {
     expect(m.compactions).toHaveLength(3)
     expect(m.decisions.map((x) => x.compactions.length)).toEqual([2, 1])
     const t = compactionTally(m.compactions)
-    expect([t.calls, t.cold, t.unknown]).toEqual([2, 1, 1])
+    expect([t.calls, t.cold, t.unknown, t.recorded]).toEqual([2, 1, 1, 0])
     expect(t.usd).toBeCloseTo(2.4, 10)
     expect(t.warmUSD).toBeCloseTo(0.9, 10)
     expect(m.total).toBeCloseTo(sum(messages), 10)

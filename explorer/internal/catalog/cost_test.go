@@ -501,9 +501,11 @@ func TestCompactionCallsTallied(t *testing.T) {
 	d := syn("claude", "aaaaaaaa-0000-4000-8000-000000000001", "p", 0, 300, []model.Turn{{Index: 0}, {Index: 1}},
 		msgSpec{"m1", 10, 1, 0}, msgSpec{"m2", 200, 2, 1})
 	d.Compactions = []model.Compaction{
-		{At: at(20), Turn: 0, PreTokens: 100, Call: call(model.CacheWarm, 0.3, 0.3)},   // inside the window
-		{At: at(250), Turn: 1, PreTokens: 100, Call: call(model.CacheCold, 5, 0.4)},    // outside
-		{At: at(260), Turn: 1, PreTokens: 100},                                         // no estimate
+		{At: at(20), Turn: 0, PreTokens: 100, Call: call(model.CacheWarm, 0.3, 0.3)}, // inside the window
+		{At: at(250), Turn: 1, PreTokens: 100, Call: call(model.CacheCold, 5, 0.4)},  // outside
+		{At: at(260), Turn: 1, PreTokens: 100},                                       // no estimate
+		// a recorded call is a message already in the totals: not tallied
+		{At: at(270), Turn: 1, PreTokens: 100, MessageID: "m2", Call: call(model.CacheCold, 9, 1)},
 	}
 	d.Agents = []model.Agent{{ID: "a1", Compactions: []model.Compaction{{At: at(30), Call: call(model.CacheCold, 2, 0.2)}}}}
 	withWindows(d, model.ReportedWindow{From: at(0), To: at(100), TotalUSD: 1.5})
