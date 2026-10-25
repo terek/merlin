@@ -39,6 +39,12 @@ For live sessions to show up at once, `merlin hooks install` adds five hook entr
 keeping a backup next to it. From then on `merlin serve` keeps them pointing at the current
 binary (`--no-hooks` skips that); `merlin hooks uninstall` removes them.
 
+`merlin hooks install codex` does the same for Codex, in `~/.codex/hooks.json` (`CODEX_HOME`).
+Codex runs a new hook only once you trust it: open `/hooks` in Codex and trust the five merlin
+entries. Trust is kept across reinstalls and upgrades, as the entries do not change.
+`merlin hooks status` shows both harnesses, including whether Codex trusts its entries;
+`merlin hooks uninstall codex` removes them (`all` acts on both).
+
 The server listens on 127.0.0.1 only.
 
 ## The UI
@@ -55,8 +61,8 @@ The server listens on 127.0.0.1 only.
 merlin cost [--by B] [--since D]          cost rollups
 merlin doctor                             format drift, unpriced models, attributed vs reported
 merlin help                               show this help
-merlin hook                               called by Claude Code
-merlin hooks install|uninstall|status     manage Claude Code hooks
+merlin hook [codex]                       called by Claude Code or Codex
+merlin hooks <action> [harness]           install|uninstall|status hooks: claude (default), codex or all
 merlin scan                               index once and exit
 merlin search <terms...>                  matching turns with the resume command
 merlin serve [--port 7433] [--no-hooks]   daemon: index, follow, serve

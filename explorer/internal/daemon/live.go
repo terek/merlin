@@ -48,8 +48,8 @@ func (d *Daemon) liveLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case body := <-d.hookCh:
-			d.onHook(ls, body)
+		case msg := <-d.hookCh:
+			d.onHook(ls, msg)
 		case <-t.C:
 			d.poll(ls)
 		}
@@ -69,9 +69,19 @@ func (ls *liveSet) entry(h harness.Harness, ref harness.SessionRef) *liveEntry {
 	return e
 }
 
-func (d *Daemon) onHook(ls *liveSet, body []byte) {
+// hookMsg is one /hook notification. harness, when set, names the only harness to offer
+// it to; otherwise the harnesses are asked in order and the first that claims it wins.
+type hookMsg struct {
+	harness string
+	body    []byte
+}
+
+func (d *Daemon) onHook(ls *liveSet, msg hookMsg) {
 	for _, h := range d.opts.Harnesses {
-		ev, ok := h.ParseHook(body)
+		if msg.harness != "" && h.Name() != msg.harness {
+			continue
+		}
+		ev, ok := h.ParseHook(msg.body)
 		if !ok {
 			continue
 		}

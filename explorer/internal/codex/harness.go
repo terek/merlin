@@ -1,7 +1,9 @@
 package codex
 
 import (
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	"github.com/terek/merlin/explorer/internal/harness"
 	"github.com/terek/merlin/explorer/internal/model"
@@ -78,5 +80,36 @@ func (h *Harness) Locate(ref harness.SessionRef) (harness.Session, bool, error) 
 // that this package reads; recent file changes decide.
 func (h *Harness) LiveSessions() ([]harness.SessionRef, error) { return nil, nil }
 
-// ParseHook implements harness.Harness. Codex hooks are not installed.
-func (h *Harness) ParseHook(body []byte) (harness.HookEvent, bool) { return harness.HookEvent{}, false }
+// ParseHook implements harness.Harness for the hooks internal/codex/hooks installs. The
+// session is the tree that holds the thread named by session_id or transcript_path (a
+// subagent's hook names its own thread); a thread not on disk yet is taken as a root, whose
+// id is the session's. Stop and SessionEnd are rest points; SessionEnd also ends it.
+func (h *Harness) ParseHook(body []byte) (harness.HookEvent, bool) {
+	var p struct {
+		SessionID      string `json:"session_id"`
+		TranscriptPath string `json:"transcript_path"`
+		EventName      string `json:"hook_event_name"`
+	}
+	if json.Unmarshal(body, &p) != nil || p.EventName == "" || p.SessionID == "" ||
+		filepath.Base(p.SessionID) != p.SessionID {
+		return harness.HookEvent{}, false
+	}
+	ref := harness.SessionRef{ID: p.SessionID}
+	if srcs, _, err := h.metas.scan(h.home); err == nil {
+	find:
+		for _, s := range srcs {
+			for _, f := range s.Files {
+				if f.Thread == p.SessionID || (p.TranscriptPath != "" && f.Path == p.TranscriptPath) {
+					ref = harness.SessionRef{ID: s.ID, ProjectKey: s.ProjectKey}
+					break find
+				}
+			}
+		}
+	}
+	return harness.HookEvent{
+		Name:  p.EventName,
+		Ref:   ref,
+		Final: p.EventName == "Stop" || p.EventName == "SessionEnd",
+		Ended: p.EventName == "SessionEnd",
+	}, true
+}

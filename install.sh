@@ -154,7 +154,8 @@ main() {
   ok "Done. Nothing was started and ~/.claude was not touched."
   info "  Next:  ${BOLD}merlin serve${RST}   then open ${BOLD}http://127.0.0.1:7433/${RST}"
   info "  For live updates, ${BOLD}merlin hooks install${RST} adds five hook entries to ~/.claude/settings.json"
-  info "  (a backup is kept); ${BOLD}merlin hooks uninstall${RST} removes them."
+  info "  (a backup is kept; ${BOLD}merlin hooks install codex${RST} does the same for Codex);"
+  info "  ${BOLD}merlin hooks uninstall${RST} removes them."
 }
 
 main "$@"

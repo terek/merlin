@@ -313,3 +313,66 @@ func TestServeSharesTheHomeWithTheEarlierProgram(t *testing.T) {
 		t.Errorf("the earlier program's hooks directory changed: %v", names)
 	}
 }
+
+// merlin hooks install codex edits hooks.json in CODEX_HOME only; serve then keeps those
+// hooks and adds none for Claude Code; uninstall removes them.
+func TestHooksForCodex(t *testing.T) {
+	home := t.TempDir()
+	cfg := copyTree(t, fixtures.ClaudeDir())
+	codexHome := t.TempDir()
+	t.Setenv("CODEX_HOME", codexHome)
+	hooksCLI := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command(binary(t), append([]string{"hooks"}, args...)...)
+		cmd.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("hooks %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	hooksJSON := filepath.Join(codexHome, "hooks.json")
+	script := filepath.Join(home, "codex", "hooks", "notify.sh")
+
+	out := hooksCLI("install", "codex")
+	if !strings.Contains(out, "codex: installed 5 hooks in "+hooksJSON) || !strings.Contains(out, "/hooks") {
+		t.Errorf("install output:\n%s", out)
+	}
+	if b, err := os.ReadFile(hooksJSON); err != nil || strings.Count(string(b), "/codex/hooks/notify.sh") != 5 {
+		t.Errorf("hooks.json: %v\n%s", err, b)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "settings.json")); !os.IsNotExist(err) {
+		t.Errorf("installing for Codex touched settings.json: %v", err)
+	}
+
+	out = hooksCLI("status")
+	if !strings.Contains(out, "claude (") || !strings.Contains(out, "codex ("+hooksJSON+")") ||
+		strings.Count(out, "not trusted yet") != 5 {
+		t.Errorf("status output:\n%s", out)
+	}
+
+	if err := os.Remove(script); err != nil {
+		t.Fatal(err)
+	}
+	p := startServe(t, home, cfg)
+	if code := p.terminate(t); code != 0 {
+		t.Errorf("exit code = %d", code)
+	}
+	if _, err := os.Stat(script); err != nil {
+		t.Errorf("serve did not write the Codex notify.sh again: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "settings.json")); !os.IsNotExist(err) {
+		t.Errorf("serve added Claude Code hooks: %v", err)
+	}
+
+	out = hooksCLI("uninstall", "codex")
+	if !strings.Contains(out, "codex: removed 5 hooks") {
+		t.Errorf("uninstall output:\n%s", out)
+	}
+	if b, _ := os.ReadFile(hooksJSON); strings.Contains(string(b), "notify.sh") {
+		t.Errorf("hooks.json still has entries:\n%s", b)
+	}
+	if _, err := os.Stat(script); !os.IsNotExist(err) {
+		t.Errorf("notify.sh left: %v", err)
+	}
+}

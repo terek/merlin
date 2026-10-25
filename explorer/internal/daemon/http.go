@@ -12,7 +12,7 @@ const maxHookBody = 1 << 20
 
 // handleHook accepts a hook notification and answers at once: the work happens later, on
 // the live loop. Anything it cannot use is accepted and ignored; a hook must never make
-// Claude Code wait or fail.
+// the harness wait or fail. ?harness=<name> offers it to that harness only.
 func (d *Daemon) handleHook(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r.RemoteAddr) {
 		http.Error(w, "loopback only", http.StatusForbidden)
@@ -26,7 +26,7 @@ func (d *Daemon) handleHook(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(io.LimitReader(r.Body, maxHookBody))
 	d.hooksSeen.Add(1)
 	select {
-	case d.hookCh <- body:
+	case d.hookCh <- hookMsg{harness: r.URL.Query().Get("harness"), body: body}:
 	default:
 		d.hooksDropped.Add(1) // a rescan catches up
 	}

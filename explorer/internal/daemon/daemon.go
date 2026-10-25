@@ -70,7 +70,7 @@ type Daemon struct {
 	logMu sync.Mutex
 	logW  io.Writer // file + stderr once the log is open
 
-	hookCh chan []byte // /hook bodies for the live loop; a full channel drops (hints only)
+	hookCh chan hookMsg // /hook bodies for the live loop; a full channel drops (hints only)
 
 	discMu     sync.Mutex
 	discovered []discovered // sessions seen by the last reconciles, for the live loop
@@ -113,7 +113,7 @@ func New(opts Options) (*Daemon, error) {
 		opts:   opts,
 		mux:    http.NewServeMux(),
 		ready:  make(chan struct{}),
-		hookCh: make(chan []byte, 256),
+		hookCh: make(chan hookMsg, 256),
 		logW:   opts.Stderr,
 	}
 	d.mux.HandleFunc("/hook", d.handleHook)

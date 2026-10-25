@@ -2,12 +2,14 @@ package hooks
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +30,13 @@ const fixture = "{\n" +
 	"   },\n" +
 	"\t\"permissions\": {\"allow\": [\"Bash(ls)\"]}\n" +
 	"}"
+
+func quote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 func setup(t *testing.T, settings *string) Config {
 	t.Helper()
@@ -135,20 +144,20 @@ func TestInstallTwiceEqualsOnce(t *testing.T) {
 }
 
 func TestPartialInstallAddsOnlyMissing(t *testing.T) {
-	s := fixture
-	cfg := setup(t, &s)
-	if _, err := Install(cfg); err != nil {
+	cfg := setup(t, nil)
+	partial := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":` + quote(cfg.ScriptPath()) + `,"timeout":2}]}]}}`
+	if err := os.WriteFile(cfg.SettingsPath(), []byte(partial), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	full := read(t, cfg.SettingsPath())
-	// Remove only the Stop entry by hand-built uninstall of one event is not
-	// exposed; emulate by editing the string.
-	doc, removed, err := removeEntries(full)
-	if err != nil || len(removed) != len(Events) {
-		t.Fatalf("%v %v", removed, err)
+	res, err := Install(cfg)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if doc != fixture {
-		t.Fatal("removeEntries did not restore")
+	if len(res.Events) != len(Events)-1 || slices.Contains(res.Events, "Stop") {
+		t.Errorf("added %v", res.Events)
+	}
+	if n := strings.Count(read(t, cfg.SettingsPath()), cfg.ScriptPath()); n != len(Events) {
+		t.Errorf("%d entries, want %d", n, len(Events))
 	}
 }
 

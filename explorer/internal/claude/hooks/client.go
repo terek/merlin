@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -25,6 +26,12 @@ func Port(explorerHome string) int { return configPort(explorerHome) }
 // endpoint on 127.0.0.1:port, all within timeout. It returns an error for
 // anything that went wrong; the caller is expected to ignore it.
 func Notify(stdin io.Reader, port int, timeout time.Duration) error {
+	return NotifyFor("", stdin, port, timeout)
+}
+
+// NotifyFor is Notify for another harness's hooks: the daemon offers the event to the
+// harness of that name only. An empty name is Notify.
+func NotifyFor(harness string, stdin io.Reader, port int, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -51,8 +58,11 @@ func Notify(stdin io.Reader, port int, timeout time.Duration) error {
 		return fmt.Errorf("stdin is not JSON")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		fmt.Sprintf("http://127.0.0.1:%d/hook", port), bytes.NewReader(body))
+	target := fmt.Sprintf("http://127.0.0.1:%d/hook", port)
+	if harness != "" {
+		target += "?harness=" + url.QueryEscape(harness)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

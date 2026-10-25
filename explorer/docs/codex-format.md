@@ -106,6 +106,25 @@ own `token_usage_record`, so its cost is recorded, in the totals, and named by
 encrypted. A compaction in a turn nobody typed into (`/compact`) is `manual`; one inside other
 work is taken as `auto` (not yet observed).
 
+## Hooks
+
+What `internal/codex/hooks` writes and reads, checked against Codex 0.164's own `hooks/list`
+(app server) on a scratch `CODEX_HOME`.
+
+- User hooks live in `$CODEX_HOME/hooks.json` (or inline `[hooks]` in `config.toml`; Codex
+  merges both and warns). Same shape as Claude Code's: `{"hooks": {"<Event>": [{"matcher",
+  "hooks": [{"type": "command", "command", "timeout"}]}]}}`, timeout in seconds (`SessionEnd`
+  is capped at 3). Hooks are on by default (`[features] hooks = false` turns them off).
+- Stdin: `session_id`, `transcript_path` (nullable), `cwd`, `hook_event_name`, `model`, and per
+  event `turn_id`, `prompt`, `source`, `agent_id`, `agent_transcript_path`, `reason`, ….
+  SessionStart stdout becomes developer context, so the hook prints nothing.
+- **Trust.** A new or changed non-managed command hook is skipped until the user trusts it in
+  `/hooks`. Codex records it in `config.toml` as `[hooks.state."<hooks.json path>:<event in
+  snake_case>:<group index>:<handler index>"]` with `trusted_hash = "sha256:…"` (the hash of the
+  entry, not of the script it runs) and `enabled = false` when disabled. Merlin's entries run a
+  fixed script path, so trust survives reinstalls and binary upgrades. Merlin never writes
+  `config.toml`; `merlin hooks status` reads it.
+
 ## Not recorded
 
 - Approval decisions: only the policy, the command prefixes approved for the session and the

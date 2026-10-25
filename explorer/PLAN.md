@@ -295,9 +295,11 @@ chain must never mark history as abandoned.
 
 ### Hooks
 
-Hooks are opt-in: `merlin hooks install | uninstall | status`. `merlin serve` adds none on a
-new install; once any of its entries is present it refreshes the set on start (`--no-hooks`
-to skip).
+Hooks are opt-in: `merlin hooks install | uninstall | status [claude|codex|all]` (install and
+uninstall default to Claude Code, status shows both). `merlin serve` adds none on a new
+install; once any of a harness's entries is present it refreshes that harness's set on start
+(`--no-hooks` to skip). The JSON editing is shared (`internal/hookfile`): Claude Code's
+`settings.json` and Codex's `hooks.json` have the same `hooks` shape.
 
 - Events: `SessionStart`, `UserPromptSubmit`, `Stop`, `SubagentStop`, `SessionEnd`.
 - Command: `~/.merlin/claude/hooks/notify.sh`, which runs `merlin hook` if the binary still
@@ -307,6 +309,12 @@ to skip).
   timeout. Daemon not running → drop it; the next scan catches up.
 - `settings.json` is edited surgically (existing entries, order and formatting kept),
   idempotently, with a timestamped backup. The existing Merlin hooks are left alone.
+- Codex: the same events in `$CODEX_HOME/hooks.json`, running `~/.merlin/codex/hooks/notify.sh`,
+  which runs `merlin hook codex`; that POSTs to `/hook?harness=codex`, and the daemon offers a
+  hook that names a harness to that harness only (unnamed ones go to each in turn, as before).
+  Codex skips a new or changed hook until the user trusts it in `/hooks`, recorded in
+  `config.toml` under `[hooks.state."<hooks.json>:<event>:<group>:<handler>"]`; Merlin never
+  writes that file, and `status` reads it to report untrusted or disabled entries.
 
 ## 7. Catalog (in memory)
 
@@ -356,8 +364,8 @@ merlin sessions [--project P] [--kind interactive|background] [--since 7d]
 merlin show <session-id>                  turns, agent tree, compactions, cost
 merlin search <terms…>                    matching turns with the resume command
 merlin cost [--by project|day|model|session] [--since …]
-merlin hooks install|uninstall|status
-merlin hook                               called by Claude Code
+merlin hooks install|uninstall|status [claude|codex|all]
+merlin hook [codex]                       called by Claude Code or Codex
 merlin doctor                             format drift, unpriced models, attributed vs reported
 ```
 

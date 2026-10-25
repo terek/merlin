@@ -197,9 +197,11 @@ func (r *rig) appendLine(n int) int64 {
 	return fi.Size()
 }
 
-func (r *rig) hook(body string) int {
+func (r *rig) hook(body string) int { return r.hookAt("/hook", body) }
+
+func (r *rig) hookAt(path, body string) int {
 	r.t.Helper()
-	resp, err := http.Post("http://"+r.d.Addr()+"/hook", "application/json", strings.NewReader(body))
+	resp, err := http.Post("http://"+r.d.Addr()+path, "application/json", strings.NewReader(body))
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -292,6 +294,22 @@ func TestStopHookIsImmediate(t *testing.T) {
 	want = r.appendLine(2)
 	r.hook(r.stopHook())
 	eventually(t, "second Stop", func() bool { return r.storedSize() == want })
+}
+
+// A hook that names its harness is offered to that harness only: a Claude Code body sent as
+// another harness's does nothing.
+func TestHookNamesItsHarness(t *testing.T) {
+	r := newRig(t, "", "", nil)
+	r.start()
+	eventually(t, "initial index", r.indexed)
+	want := r.appendLine(1)
+	r.hookAt("/hook?harness=codex", r.stopHook())
+	time.Sleep(100 * time.Millisecond)
+	if r.storedSize() == want {
+		t.Fatal("a hook for another harness updated a Claude Code session")
+	}
+	r.hookAt("/hook?harness=claude", r.stopHook())
+	eventually(t, "digest follows Stop", func() bool { return r.storedSize() == want })
 }
 
 func TestSubagentStopWithSessionIDOnly(t *testing.T) {

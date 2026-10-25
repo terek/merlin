@@ -1,18 +1,18 @@
-package hooks
+package hookfile
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/tidwall/gjson"
 )
 
 // item is one member of a JSON object or element of a JSON array, located by
 // byte offsets in the document. For object members start is the key's first
-// byte; for array elements it is the value's first byte.
+// byte; for array elements it is the value's first byte. val is the value's
+// first byte in both cases.
 type item struct {
-	key        string
-	start, end int
+	key             string
+	start, val, end int
 }
 
 func isWS(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
@@ -46,13 +46,16 @@ func scan(doc string, open int) ([]item, error) {
 				return nil, fmt.Errorf("bad object key at offset %d", pos)
 			}
 			kend := valueEnd(doc, pos)
-			it.key = gjson.Parse(doc[pos:kend]).String()
+			if err := json.Unmarshal([]byte(doc[pos:kend]), &it.key); err != nil {
+				return nil, fmt.Errorf("bad object key at offset %d", pos)
+			}
 			pos = skipWS(doc, kend)
 			if pos >= len(doc) || doc[pos] != ':' {
 				return nil, fmt.Errorf("missing colon at offset %d", pos)
 			}
 			pos = skipWS(doc, pos+1)
 		}
+		it.val = pos
 		it.end = valueEnd(doc, pos)
 		if it.end <= pos {
 			return nil, fmt.Errorf("bad value at offset %d", pos)
@@ -63,6 +66,37 @@ func scan(doc string, open int) ([]item, error) {
 			pos++
 		}
 	}
+}
+
+// member returns the offset of the value of key in the object at doc[open]: the first
+// member with that key, as JSON decoders differ on duplicates. ok is false when doc[open]
+// is not an object or has no such member.
+func member(doc string, open int, key string) (int, bool, error) {
+	if open < 0 || open >= len(doc) || doc[open] != '{' {
+		return 0, false, nil
+	}
+	items, err := scan(doc, open)
+	if err != nil {
+		return 0, false, err
+	}
+	for _, it := range items {
+		if it.key == key {
+			return it.val, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+// stringAt decodes the JSON string that starts at doc[pos]; ok is false for any other value.
+func stringAt(doc string, pos int) (string, bool) {
+	if pos >= len(doc) || doc[pos] != '"' {
+		return "", false
+	}
+	var s string
+	if json.Unmarshal([]byte(doc[pos:valueEnd(doc, pos)]), &s) != nil {
+		return "", false
+	}
+	return s, true
 }
 
 // appendItem inserts text (a member `"k":v` or an element) as the last item of
@@ -107,7 +141,7 @@ func removeItem(doc string, open, idx int) (string, error) {
 
 // rootOpen returns the offset of the document's top-level '{'.
 func rootOpen(doc string) (int, error) {
-	if !gjson.Valid(doc) {
+	if !json.Valid([]byte(doc)) {
 		return 0, fmt.Errorf("not valid JSON")
 	}
 	i := skipWS(doc, 0)
