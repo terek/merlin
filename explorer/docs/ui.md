@@ -318,20 +318,24 @@ From top to bottom:
     `turn.startedAt` and ends at the last thing that ran in it (a call of the main agent or of any
     agent, or a piece of work starting or ending) up to the harness's `endedAt` and before the next
     turn starts;
-  - a main row has a dot for every prompt a person typed and over it a bracket with the total of
-    everything up to the next typed prompt (a **decision**), a ring for a turn during which a prompt
-    was typed (`turn.queued`: it starts no turn and no decision, but it steered that turn), and the
+  - a main row has a dot on its baseline for every prompt a person typed: at the start of the turn
+    it began, or hollow where it was typed while a turn ran (`turn.queued`: it starts no turn and no
+    decision, but it steered that turn). From each typed prompt that starts a turn, a bracket rises
+    and runs over the row with the total of everything up to the next one (a **decision**); and the
     turn numbers where they fit. A forked or continued session has a main row of its own with only
     its own turns, starting with a line from its parent's row; nothing is merged across session ids;
-  - each **piece of agent work** is a box from its start to its last call, in its kind's colour: a
-    sub-agent solid, a fork with a notch, a workflow dashed, an addressable agent with its run number
-    and a dashed lifeline along its baseline. A piece is one of the agent's turns (`agent.turns`): a
-    sub-agent or fork has one, an addressable agent (a Claude Code teammate, a Codex agent) one per
-    message or task that set it working again (from a daemon without `turns`: one per message it was
-    sent); a workflow run (`digest.workflows`) is one piece with all its agents inside. An agent's
-    first box carries its name. Agents are packed into rows by their whole life (an addressable agent
-    keeps its row over its pauses); the gutter names the agent, or counts the kinds sharing the row,
-    with its spend and peak context;
+  - an agent's work is one light frame, in its kind's colour, from the start of its first **piece
+    of agent work** to the last call of its last: its start down to the baseline, its top, and a short
+    stem at its end, like a decision's bracket turned round (no fill, so the context tint under it
+    reads alone; its pieces show in the context, an area while they run, dotted between them). A
+    sub-agent solid, a fork with a notch, a workflow dashed, an addressable agent with a dashed
+    lifeline along its baseline. The frame carries the agent's name and spend. A piece is one of the
+    agent's turns (`agent.turns`): a sub-agent or fork has one, an addressable agent (a Claude Code
+    teammate, a Codex agent) one per message or task that set it working again (from a daemon without
+    `turns`: one per message it was sent); a workflow run (`digest.workflows`) is one piece with all
+    its agents inside. Agents are packed into rows by their whole life (an addressable agent keeps
+    its row over its pauses). The rows have no labels: the plot takes the full width, with only the
+    context scale to its left, and each agent is named on its frame;
   - the line from the row that sent a piece of work (the main row, or the sender its inbox names;
     none for work the agent's own background tasks woke after it reported) and a dashed line to each
     turn a report of it came in are drawn only for the work in focus: hovered, selected, or launched
@@ -349,7 +353,7 @@ From top to bottom:
     expensive decisions" the decision's row has that line and tint too;
   - the **pinned turn**: tinted on its row with a marker over it. The turn card's title bar has the
     tint and the marker; in the decision panel, its step is tinted;
-  - the **selected piece of work**: its box is outlined in its kind's colour. Under the turn card it
+  - the **selected piece of work**: its frame's top is drawn heavy over it. Under the turn card it
     opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
     fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
     colour.

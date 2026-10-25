@@ -86,8 +86,8 @@ function Readout({
   if (!at && !unit) {
     return (
       <div className="min-h-[4.5rem] text-sec text-faint">
-        Hover, or press ← →, to read a turn; hover a box to read what an agent was given. Click pins it and opens it
-        below.
+        Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click pins it
+        and opens it below.
       </div>
     )
   }
@@ -96,9 +96,37 @@ function Readout({
   const dec = b.model.decisions[c.decision]
   const launchedUSD = c.launched.reduce((s, u) => s + u.bucket.usd, 0)
   const u = unit?.unit
+  const notes = [
+    ...c.step.rereads.map((r) => ({
+      key: `r${r.at}`,
+      cls: 'text-muted',
+      text: `cache miss: ${formatTokens(r.tokens)} billed again ${missText(r)}, cached it would have cost ${formatMoney(r.cachedUSD)}`,
+    })),
+    ...c.compactions.map((cp) => ({
+      key: `c${cp.at}`,
+      cls: cp.call?.cache === 'cold' ? 'text-bad' : 'text-muted',
+      text: `compacted after it${cp.call ? `: ${callLine(cp.call, !!cp.messageId)}` : ' (no estimate of its call)'}`,
+    })),
+    ...(c.typedWhileRunning > 0
+      ? [{ key: 'typed', cls: 'text-muted', text: `${plural(c.typedWhileRunning, 'prompt')} typed while it ran` }]
+      : []),
+    ...(c.arrived.length > 0
+      ? [
+          {
+            key: 'arrived',
+            cls: 'text-muted',
+            text: `report from ${c.arrived
+              .slice(0, 3)
+              .map((x) => agentLabel(x.agent))
+              .join(', ')}${c.arrived.length > 3 ? ` and ${c.arrived.length - 3} more` : ''}`,
+          },
+        ]
+      : []),
+  ]
   return (
+    // one line each, so that what is under the pointer never moves the graph
     <div className="min-h-[4.5rem] space-y-0.5 text-sec" aria-live="polite">
-      <div className="flex flex-wrap items-baseline gap-x-3">
+      <div className="flex items-baseline gap-x-3 overflow-hidden whitespace-nowrap">
         {tree.branches.length > 1 && <span className="max-w-64 truncate font-medium">{b.title}</span>}
         <span className="font-mono">turn {c.index}</span>
         <span title="what the main agent spent in this turn">
@@ -127,7 +155,7 @@ function Readout({
       </div>
       {u ? (
         <>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
             <KindIcon agent={u.agent} color={kindColor(u.agent)} />
             <span className="font-medium">{agentLabel(u.agent)}</span>
             {u.of > 1 && (
@@ -166,30 +194,15 @@ function Readout({
       ) : (
         <>
           <div className="truncate text-muted">{c.prompt || '(no prompt text)'}</div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <div className="flex items-center gap-x-3 overflow-hidden whitespace-nowrap">
             <Chips parts={stepParts(c, split)} />
-            {c.step.rereads.map((r) => (
-              <span key={r.at} className="text-muted">
-                cache miss: {formatTokens(r.tokens)} billed again {missText(r)}, cached it would have cost{' '}
-                {formatMoney(r.cachedUSD)}
-              </span>
-            ))}
-            {c.compactions.map((cp) => (
-              <span key={cp.at} className={cp.call?.cache === 'cold' ? 'text-bad' : 'text-muted'}>
-                compacted after it{cp.call ? `: ${callLine(cp.call, !!cp.messageId)}` : ' (no estimate of its call)'}
-              </span>
-            ))}
-            {c.typedWhileRunning > 0 && (
-              <span className="text-muted">{plural(c.typedWhileRunning, 'prompt')} typed while it ran</span>
-            )}
-            {c.arrived.length > 0 && (
-              <span className="text-muted">
-                report from{' '}
-                {c.arrived
-                  .slice(0, 3)
-                  .map((x) => agentLabel(x.agent))
-                  .join(', ')}
-                {c.arrived.length > 3 && ` and ${c.arrived.length - 3} more`}
+            {notes.length > 0 && (
+              <span className="min-w-0 flex-1 truncate" title={notes.map((n) => n.text).join('\n')}>
+                {notes.map((n) => (
+                  <span key={n.key} className={`mr-3 ${n.cls}`}>
+                    {n.text}
+                  </span>
+                ))}
               </span>
             )}
           </div>
@@ -327,11 +340,12 @@ export function SpendGraph({
         session or an agent it launched: above its line, the context each call was sent with (one scale for every row,
         so the tall ones are the expensive ones to carry), dotted where the agent held it over a pause (faint while a
         main agent waited for a message), with the context it carried lightly tinted; below it, what the row spent in
-        each slot of time, on one dollar scale. A box is one piece of agent work, with a line from the row that sent it
-        (none when its own background work woke it) and a dashed one to each turn its report came in; an addressable
-        agent keeps a row of its own, one-shot agents share rows. A dot is a prompt you typed, and the bracket over it
-        totals everything up to your next one. A diamond is a cache miss, a red mark a compaction on a cold cache, an
-        amber dashed one on a warm cache. Dollars are recomputed from token counts
+        each slot of time, on one dollar scale. A light frame spans an agent's work; each piece of it has a line from
+        the row that sent it (none when its own background work woke it) and a dashed one to each turn its report came
+        in; an addressable agent keeps a row of its own, one-shot agents share rows. A dot is a message you sent (hollow
+        if typed while a turn ran), and the bracket rising from it totals everything up to your next one. A diamond is a
+        cache miss, a red mark a compaction on a cold cache, an amber dashed one on a warm cache. Dollars are recomputed
+        from token counts
         {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
         {tree.rereads.length > 0 &&
           ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}

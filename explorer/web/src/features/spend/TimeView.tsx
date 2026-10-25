@@ -9,17 +9,16 @@
 //              light tint under it (the context carried); the area always stops at the end of a turn
 //              or a piece of work
 //   marks      a diamond is a cache miss, a vertical mark a compaction (red on a cold cache)
-//   main rows  each turn a thick stretch of the baseline, a dot for every prompt a person typed, a
-//              bracket with the total over each decision
-//   agents     a box for each piece of work, joined to the row that sent it (launch) and to the turn
-//              each of its reports came in (dashed); an addressable agent keeps a row of its own, the others
-//              share rows when they do not overlap
+//   main rows  each turn a thick stretch of the baseline; a dot for every prompt a person typed (hollow
+//              if typed while a turn ran); a bracket with the total over each decision, its start reaching
+//              down to the dot
+//   agents     one light frame over an agent's work (its start down to the baseline, its top, a stem
+//              at its end), each piece of work joined to the row that sent it (launch) and to the turn each of its reports came in (dashed); an addressable
+//              agent keeps a row of its own, the others share rows when they do not overlap
 //   breaks     time in which nothing ran is squeezed into a narrow band, with its length on the axis
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
-import type { Agent } from '../../api/types'
 import { callLine, idleText } from '../../lib/compaction'
-import { formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
-import { KindIcon } from '../agents/AgentRow'
+import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { niceTicks } from '../context/chart'
 import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
 import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, type Unit } from './model'
@@ -42,7 +41,8 @@ import {
 import type { Tree } from './tree'
 import { useWidth } from './useWidth'
 
-const LABEL_W = 172
+/** Room left of the plot for the context scale. */
+const LABEL_W = 34
 const MR = 12
 const AXIS_H = 24
 const BRACKET_H = 20
@@ -54,7 +54,6 @@ const CTX_MIN = 12
 const SPEND_FULL = 40
 const SPEND_MIN = 5
 const ROW_GAP = 10
-const ROW_MIN = 26
 const BRANCH_GAP = 20
 /** A spend bar is at least this wide. */
 const SLOT_PX = 4
@@ -75,14 +74,6 @@ const markColor = (call: { cache: string } | undefined) =>
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const day = (t: number) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' })
-
-/** What a lane's agent is, in a few words. */
-function kindWord(l: Lane): string {
-  if (l.main) return 'main agent'
-  const a = l.agent
-  if (a?.kind === 'workflow') return 'workflow'
-  return l.kind === 'addressable' ? 'addressable agent' : l.kind === 'fork' ? 'fork' : 'sub-agent'
-}
 
 /** The last point at or before `t`. */
 function pointAt(points: readonly Point[], t: number): Point | undefined {
@@ -201,8 +192,7 @@ export function TimePlot({
     const peak = Math.max(...row.lanes.map((l) => l.peak))
     const ctxH = Math.max(CTX_MIN, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
     const maxS = Math.max(0, ...[...slots[i].values()].map((s) => s.total))
-    // tall enough for its label's two lines
-    const spendH = Math.max(SPEND_MIN, Math.ceil(maxS * kUsd) + 2, ROW_MIN - ctxH) + (row.main ? TURNS_H : 0)
+    const spendH = Math.max(SPEND_MIN, Math.ceil(maxS * kUsd) + 2) + (row.main ? TURNS_H : 0)
     layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })
     y = top + ctxH + spendH
   })
@@ -324,43 +314,57 @@ export function TimePlot({
             .map((u) => ({ t0: u.startMs, t1: Math.max(u.startMs, u.endMs) }))
     return (
       <g key={l.key}>
-        {/* pieces of agent work */}
-        {l.units.map((u) => {
-          const [a, b] = uX(u)
-          const on = isOn(l, u)
-          // the name on its first piece of work, the run on the others
-          const label = u === l.units[0] ? l.title : `${u.ordinal}`
-          const cost = formatMoney(u.bucket.usd)
-          const text =
-            b - a >= (label.length + cost.length + 2) * 5.6 + 6
-              ? `${label}${label ? ' · ' : ''}${cost}`
-              : b - a >= label.length * 5.6 + 6
-                ? label
-                : ''
-          return (
-            <g key={u.id}>
-              <rect
-                x={a}
-                y={top}
-                width={b - a}
-                height={g.base - top}
-                rx={3}
-                fill={color}
-                fillOpacity={on ? 0.14 : 0.05}
-                stroke={color}
-                strokeOpacity={on ? 1 : 0.55}
-                strokeWidth={on ? 2 : 1}
-                strokeDasharray={l.agent?.kind === 'workflow' ? '4 2' : undefined}
-              />
-              {l.kind === 'fork' && <path d={`M${f1(a)} ${top}h7l-7 7z`} fill={color} />}
-              {text && (
-                <text x={a + (l.kind === 'fork' ? 9 : 4)} y={top + 10} fontSize={9.5} fill="var(--muted)">
-                  {text}
-                </text>
-              )}
-            </g>
-          )
-        })}
+        {/* the agent's work: one light frame over all of it, as over a decision (its start down to the
+            baseline, its top, a stem at its end), with its top heavier over the piece hovered or selected */}
+        {l.units.length > 0 &&
+          (() => {
+            const xs = l.units.map(uX)
+            const a = Math.min(...xs.map(([x]) => x))
+            const b = Math.max(...xs.map(([, x]) => x))
+            const dash = l.agent?.kind === 'workflow' ? '4 2' : undefined
+            const label = l.title
+            const cost = formatMoney(l.usd)
+            const room = b - a - (l.kind === 'fork' ? 9 : 4) - 4
+            const text =
+              room >= (label.length + cost.length + 3) * 5.6
+                ? `${label}${label ? ' · ' : ''}${cost}`
+                : room >= label.length * 5.6
+                  ? label
+                  : ''
+            return (
+              <g>
+                <path
+                  d={`M${f1(a)} ${g.base}V${top}H${f1(b)}V${top + 4}`}
+                  fill="none"
+                  stroke={color}
+                  strokeOpacity={0.55}
+                  strokeWidth={1}
+                  strokeDasharray={dash}
+                />
+                {l.units.map(
+                  (u, k) =>
+                    isOn(l, u) && (
+                      <line
+                        key={u.id}
+                        x1={xs[k][0]}
+                        x2={xs[k][1]}
+                        y1={top}
+                        y2={top}
+                        stroke={color}
+                        strokeWidth={3}
+                        strokeDasharray={dash}
+                      />
+                    ),
+                )}
+                {l.kind === 'fork' && <path d={`M${f1(a)} ${top}h7l-7 7z`} fill={color} />}
+                {text && (
+                  <text x={a + (l.kind === 'fork' ? 9 : 4)} y={top + 10} fontSize={9.5} fill="var(--muted)">
+                    {text}
+                  </text>
+                )}
+              </g>
+            )
+          })()}
         {/* the context: an area while the agent works, dotted while it holds it over a pause */}
         {runs.map((run, i) => (
           <g key={run[0].t}>
@@ -488,7 +492,7 @@ export function TimePlot({
             return (
               <g key={dec.index} pointerEvents="none">
                 <path
-                  d={`M${f1(xa)} ${yy + 3}V${yy}H${f1(xb)}V${yy + 3}`}
+                  d={`M${f1(axis.x(s0.t0))} ${g.base}V${yy}H${f1(xb)}V${yy + 3}`}
                   fill="none"
                   stroke={held ? 'var(--accent)' : on ? 'var(--text)' : 'var(--faint)'}
                   strokeWidth={held ? 3 : 1}
@@ -563,7 +567,7 @@ export function TimePlot({
           stroke={main ? 'var(--faint)' : 'var(--line)'}
           strokeWidth={1}
         />
-        {/* a main row's turns: a dot for a typed prompt, a ring for one typed while a turn ran, and its number */}
+        {/* a main row's turns, and their numbers */}
         {main?.turns.map((s) => {
           const x = axis.x(s.t0)
           const label = x - lastTurnX >= String(s.col.index).length * 5.5 + 6
@@ -573,12 +577,6 @@ export function TimePlot({
             <g key={s.col.index} pointerEvents="none">
               <line x1={x + 0.75} x2={xe} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--text)" strokeWidth={3} />
               <line x1={x} x2={x} y1={g.base - 4} y2={g.base + 5} stroke="var(--text)" strokeWidth={1} />
-              {s.col.human && (
-                <circle cx={x} cy={g.base} r={2.6} fill="var(--text)" stroke="var(--surface)" strokeWidth={1} />
-              )}
-              {s.col.typedWhileRunning > 0 && (
-                <circle cx={x} cy={g.base} r={4.6} fill="none" stroke="var(--text)" strokeWidth={1} />
-              )}
               {label && (
                 <text x={x} y={turnsY} textAnchor="middle" fontSize={9} fill="var(--faint)">
                   {s.col.index}
@@ -587,6 +585,32 @@ export function TimePlot({
             </g>
           )
         })}
+        {/* a person's messages: a dot on the baseline, hollow for one typed while a turn ran */}
+        {main?.turns.flatMap((s) =>
+          [
+            ...(s.col.human ? [{ t: s.t0, queued: false }] : []),
+            // typed while the turn ran: it starts no turn, but it steered this one
+            ...(s.col.turn.queued ?? [])
+              .filter((q) => q.origin === 'human' || q.origin === 'command')
+              .map((q) => ({ t: ms(q.at), queued: true })),
+          ]
+            .filter((m) => Number.isFinite(m.t))
+            .map((m) => {
+              const x = axis.x(m.t)
+              return (
+                <g key={`m${m.t}`} pointerEvents="none">
+                  <circle
+                    cx={x}
+                    cy={g.base}
+                    r={2.8}
+                    fill={m.queued ? 'var(--surface)' : 'var(--text)'}
+                    stroke={m.queued ? 'var(--text)' : 'var(--surface)'}
+                    strokeWidth={m.queued ? 1.25 : 1}
+                  />
+                </g>
+              )
+            }),
+        )}
       </g>
     )
   }
@@ -765,58 +789,12 @@ export function TimePlot({
   })()
   const betweenText = (p: { after: TurnSpan; next?: TurnSpan }) =>
     p.next
-      ? `between turns ${p.after.col.index} and ${p.next.col.index}: main agent idle ${idleText(p.next.t0 - p.after.t1)}`
+      ? `between turns ${p.after.col.index} and ${p.next.col.index}: main agent idle ${idleText(p.next.t0 - p.after.t1)}${p.next.col.human ? ', waiting for you' : ''}`
       : `after turn ${p.after.col.index}`
-
-  const label = (g: Layout) => {
-    const ls = g.row.lanes
-    const usd = ls.reduce((s, l) => s + l.usd, 0)
-    const peak = Math.max(...ls.map((l) => l.peak))
-    const one = ls.length === 1 ? ls[0] : undefined
-    const b = tree.branches[g.row.branch]
-    const kinds = new Map<string, number>()
-    for (const l of ls) kinds.set(kindWord(l), (kinds.get(kindWord(l)) ?? 0) + 1)
-    const title = one
-      ? one.main
-        ? tree.branches.length > 1
-          ? b.title
-          : 'Main agent'
-        : one.title
-      : [...kinds].map(([w, n]) => plural(n, w)).join(', ')
-    return (
-      <div
-        key={`l${ls[0].key}`}
-        className="pointer-events-none absolute left-0 overflow-hidden pr-1 text-meta leading-tight"
-        style={{ top: g.top + (g.row.main ? BRACKET_H - 2 : 0), width: LABEL_W - 36 }}
-      >
-        <div className={`flex items-center gap-1 truncate ${g.row.main ? 'font-semibold' : 'font-medium'}`}>
-          {one?.agent && <KindIcon agent={one.agent} size={12} color={COLOR[one.kind]} />}
-          {!one?.agent && !g.row.main && (
-            <span
-              aria-hidden
-              className="inline-block size-2 shrink-0 rounded-[2px]"
-              style={{ background: COLOR[ls[0].kind] }}
-            />
-          )}
-          <span className="truncate">{title}</span>
-        </div>
-        <div className="truncate text-muted">
-          <span className="font-mono">{formatMoney(usd)}</span>
-          {peak > 0 && <span> · peak {formatTokens(peak)}</span>}
-        </div>
-        {one && !one.main && g.ctxH + g.spendH >= 40 && (
-          <div className="truncate text-faint">
-            {kindWord(one)}
-            {one.agent?.model ? ` · ${shortModel(one.agent)}` : ''}
-          </div>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div>
-      <div className="flex min-h-5 flex-wrap items-baseline gap-x-3 text-sec text-muted">
+      <div className="flex min-h-5 items-baseline gap-x-3 overflow-hidden whitespace-nowrap text-sec text-muted">
         {under ? (
           <>
             <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
@@ -934,7 +912,6 @@ export function TimePlot({
             </g>
           )}
         </svg>
-        {layout.map(label)}
       </div>
     </div>
   )
@@ -947,9 +924,4 @@ function gapText(ms: number): string {
   const h = Math.floor(m / 60)
   if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`
-}
-
-/** claude-sonnet-5-20260901 -> sonnet-5 */
-function shortModel(a: Agent): string {
-  return (a.model ?? '').replace(/^claude-/, '').replace(/-\d{8}$/, '')
 }
