@@ -135,6 +135,14 @@ One component, `<Money>`, renders every dollar figure, so the rules hold everywh
   *exact* "reported by Claude Code for the whole session"; *partial* "partly reported; the rest
   recomputed from token counts"; *estimated* "recomputed from token counts; Claude Code reported
   nothing for this session".
+- **Lower bound.** A figure that is only a floor is prefixed with `≥` (in place of `~`), and the
+  tooltip says why: messages cut short in the transcript (partial output tokens, mostly sub-agent
+  messages) or messages on a model without a price (counted as $0). A session's best cost is one
+  when its `lowerBound` is set (unpriced messages only); an agent's attributed cost when its
+  `truncatedMessages` or `unpricedMessages` is non-zero; a cost-page total when `backing.lowerBound` is.
+- **Estimate.** A figure that includes the estimated output of sub-agent messages cut short
+  (`Message.estimatedUSD`) is prefixed with `~` and the tooltip says how much: the spend graph's
+  units and the session header. The overhead bands are what remains after the estimates.
 - The two sources are never blended into one unlabeled number below the session level: a per-turn
   or per-agent figure is always attributed (from tokens) and is labelled so once per panel, not on
   every row.
@@ -237,7 +245,8 @@ page draws them: a session and every session forked or continued from it are one
   every tree is a single session). It shows **no money**: a tree's cost is the whole tree's, spent
   over many days, so a day sum would overstate the day. A row, two lines, describes the tree
   through its **open** member (the newest leaf, the one to resume):
-  1. state dot (the busiest member's), title, end-state badge, "codex", background and "no source" badges,
+  1. state dot (the busiest member's), title, end-state badge, "codex", the PR badge ("PR #12", "3 PRs":
+     every member's PRs once; the tooltip lists the URLs), background and "no source" badges,
      "N sessions" when the tree has several, then right-aligned: short project, branch, the tree's
      last activity, prompts (`humanTurns`) and agents of the open member, the tree's cost (the sum
      of its members' best cost) with the weakest member's flag.
@@ -268,7 +277,8 @@ messages' token counts with prices fitted per model (the web has no price table)
 
 From top to bottom:
 
-- **Header**: state, title, end state; project, branch, started, last activity, wall time, id; the
+- **Header**: state, title, end state; project, branch, started, last activity, wall time, id, then
+  a link per PR the session opened or linked (`#12`, opens in a new tab); the
   tree's total (Claude Code's figure for every member) and this session's own share; prompts,
   turns, agents, tool calls, lines added and removed; "fork of" / "continued in" links; a line when
   the messages add up to a different figure than Claude Code reported. Banners when the transcript
@@ -306,6 +316,9 @@ From top to bottom:
     cache lifetime (5 minutes, or an hour after one-hour writes; for Codex, whose cache has no fixed
     lifetime, the same 5 minutes), a model switch, fast mode turned on or off (fast calls do not
     share the cache), or no visible cause;
+  - a piece of agent work that the agent's own background work started after it had reported (an
+    expired watch waking it; `turns[].origin` task-notification after the first) has no line from a
+    sender; the note under the graph counts these wake-ups and their dollars, as work nobody asked for;
   - a vertical mark is a **compaction**, from its context before down to the baseline: solid red
     when its call ran on a cold cache, dashed amber when warm, grey when the digest has no figure.
     The line above the graph adds them up for the tree, with what a warm cache every time would have
@@ -314,8 +327,9 @@ From top to bottom:
     for Codex it is the recorded call (`compaction.messageId`), cold when less than half the context
     came from the cache, and already in the figures;
   - under a session's last row, a hatched band over each **reported window** whose figure is more
-    than its messages add up to (`cost.windows[].overheadUSD`): what the harness reported and no
-    message explains, labelled with its dollars and on no scale, since it belongs to the whole window
+    than its messages add up to (`cost.windows[].overheadUSD`, less the window's `estimatedUSD` and
+    `rateDiffUSD`, which the messages and the harness's other rates explain): what the harness
+    reported and no message explains, labelled with its dollars and on no scale, since it belongs to the whole window
     and not to a slot, turn or agent in it. Hover reads the window's reported and covered figures. The
     legend's "Not explained by messages" entry adds the bands up, and the legend's percentages are
     of messages plus overhead, which is the header's figure;

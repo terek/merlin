@@ -495,11 +495,15 @@ func covered(ws []model.ReportedWindow, t time.Time) int {
 		return -1
 	}
 	for i, w := range ws {
-		if !t.Before(w.From.Add(-coverSlack)) && !t.After(w.To.Add(coverSlack)) {
+		if inWindow(w, t) {
 			return i
 		}
 	}
 	return -1
+}
+
+func inWindow(w model.ReportedWindow, t time.Time) bool {
+	return !t.IsZero() && !t.Before(w.From.Add(-coverSlack)) && !t.After(w.To.Add(coverSlack))
 }
 
 type dayAmount struct {
@@ -511,7 +515,8 @@ type dayAmount struct {
 //
 // bestCost is the one place that defines a session's best cost: the reported total of the
 // windows the session owns, plus the attributed cost of the messages it owns that lie
-// outside every one of those windows. Adjust here if the definition changes; the rollups
+// outside every one of those windows and the estimated output those of them that are
+// truncated are missing. Adjust here if the definition changes; the rollups
 // are built from the same numbers, so they follow.
 func (v *view) costs() {
 	for _, s := range v.sessions {
@@ -529,6 +534,7 @@ func (v *view) costs() {
 		sums := make(map[key]float64)
 		perWin := make([][]dayAmount, len(s.windows))
 		coveredBy := make([]float64, len(s.windows))
+		estBy := make([]float64, len(s.windows))
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)
 			k := key{v.day(m.At), m.Model, wi >= 0}
@@ -540,12 +546,19 @@ func (v *view) costs() {
 			if m.Truncated {
 				c.TruncatedMessages++
 			}
+			if m.Unpriced {
+				c.UnpricedMessages++
+			}
 			if wi < 0 {
 				c.UncoveredUSD += m.USD
+				c.EstimatedUncoveredUSD += m.EstimatedUSD
+				sums[k] += m.EstimatedUSD
+				c.LowerBound = c.LowerBound || m.Unpriced
 				continue
 			}
 			c.CoveredUSD += m.USD
 			coveredBy[wi] += m.USD
+			estBy[wi] += m.EstimatedUSD
 			days := perWin[wi]
 			if n := len(days); n > 0 && days[n-1].day == k.day {
 				days[n-1].usd += m.USD
@@ -597,6 +610,18 @@ func (v *view) costs() {
 			c.ReportedUSD += w.TotalUSD
 			over := w.TotalUSD - coveredBy[wi]
 			c.Windows[wi].CoveredUSD, c.Windows[wi].OverheadUSD = coveredBy[wi], over
+			c.RateDiffUSD += w.RateDiffUSD
+			// Inside a window the estimates explain part of the overhead, never more of it
+			// than the rate difference leaves: past that they are scaled down.
+			if e := estBy[wi]; e > 0 {
+				capped := min(e, max(over-w.RateDiffUSD, 0))
+				c.Windows[wi].EstimatedUSD = capped
+				if capped < e {
+					scale := capped / e
+					c.Windows[wi].EstimateScale = &scale
+				}
+				c.EstimatedCoveredUSD += capped
+			}
 			switch {
 			case over == 0:
 			case coveredBy[wi] > 0:
@@ -642,5 +667,19 @@ func (v *view) costs() {
 }
 
 // bestCost is the best cost of a session: the reported total of its windows plus the
-// attributed cost of the owned messages outside every window.
-func bestCost(c *SessionCost) float64 { return c.ReportedUSD + c.UncoveredUSD }
+// attributed and estimated cost of the owned messages outside every window.
+func bestCost(c *SessionCost) float64 { return c.ReportedUSD + c.UncoveredUSD + c.EstimatedUncoveredUSD }
+
+// EstimateScale is the share of the EstimatedUSD of a message at t that the session's cost
+// counts: below 1 inside a window whose overhead caps its estimates, else 1.
+func (c *SessionCost) EstimateScale(t time.Time) float64 {
+	for _, w := range c.Windows {
+		if inWindow(w.ReportedWindow, t) {
+			if w.EstimateScale != nil {
+				return *w.EstimateScale
+			}
+			return 1
+		}
+	}
+	return 1
+}

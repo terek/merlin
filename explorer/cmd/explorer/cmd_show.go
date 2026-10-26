@@ -202,6 +202,13 @@ func (p *printer) header(d *model.SessionDigest, in catalog.SessionInfo) {
 	if d.Stats.LinesAdded > 0 || d.Stats.LinesRemoved > 0 {
 		p.kv("lines", fmt.Sprintf("+%d −%d", d.Stats.LinesAdded, d.Stats.LinesRemoved))
 	}
+	for i, pr := range d.PRs {
+		k := ""
+		if i == 0 {
+			k = "PRs"
+		}
+		p.kv(k, pr.URL)
+	}
 	if l := in.Parent; l != nil {
 		verb := "continues"
 		if l.Kind == catalog.LinkFork {
@@ -263,9 +270,27 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 		attributed = fmt.Sprintf("at least; recomputed from tokens, %s cut short in the transcript", plural(c.TruncatedMessages, "message", "messages"))
 	}
 	row("attributed", c.OwnUSD, attributed)
+	if est := c.EstimatedCoveredUSD + c.EstimatedUncoveredUSD; est > 0 {
+		row("estimated", est, "output the agent messages cut short are missing, estimated per message")
+	}
 	if len(c.Windows) > 0 {
-		row("overhead", c.OverheadUSD, "reported but not in the transcript (inside windows)")
-		row("outside", c.UncoveredUSD, "outside every window, recomputed; added to the total")
+		overhead := "reported but not in the transcript (inside windows)"
+		var parts []string
+		if c.RateDiffUSD != 0 {
+			parts = append(parts, fmt.Sprintf("%s Claude Code's other rates", usd(c.RateDiffUSD)))
+		}
+		if c.EstimatedCoveredUSD > 0 {
+			parts = append(parts, fmt.Sprintf("%s the estimate", usd(c.EstimatedCoveredUSD)))
+		}
+		if len(parts) > 0 {
+			overhead += "; of it " + strings.Join(parts, ", ")
+		}
+		row("overhead", c.OverheadUSD, overhead)
+		outside := "outside every window, recomputed; added to the total"
+		if c.EstimatedUncoveredUSD > 0 {
+			outside = "outside every window, recomputed and estimated; added to the total"
+		}
+		row("outside", c.UncoveredUSD+c.EstimatedUncoveredUSD, outside)
 	}
 	if c.InheritedUSD > 0 || c.InheritedMessages > 0 {
 		var from []string

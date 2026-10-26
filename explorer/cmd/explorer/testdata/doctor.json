@@ -56,7 +56,7 @@
     "OverheadClamped": 0,
     "ReportedUSD": 0.1311,
     "CoveredUSD": 0.1281,
-    "BestUSD": 0.6307100000000001,
+    "BestUSD": 0.63751,
     "SessionsUncover": 0,
     "SessionsEstimate": 33
   },
@@ -93,6 +93,6 @@
   ],
   "largestGapsTranscriptAbove": [],
   "uncoveredUSD": 0,
-  "estimatedUSD": 0.49961000000000017,
+  "estimatedUSD": 0.5064100000000001,
   "largestSpendOutsideWindows": []
 }

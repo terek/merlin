@@ -12,6 +12,8 @@ import { fullTime, parseTime, relTime } from '../lib/time'
  * zero is a faint `$0`. `flag` adds the marker (`~` estimated, `+est` partial) and a tooltip that
  * explains it; without a flag the tooltip is the full figure. Never pass a flag for a figure
  * that is not session level (a turn or an agent is attributed: say so once per panel).
+ * `lowerBound` (from lowerBoundNote) writes `≥` in place of `~` and adds the reason to the tooltip;
+ * `estimate` (from estimateNote) writes `~` and adds what was estimated.
  */
 export function Money({
   usd,
@@ -19,6 +21,8 @@ export function Money({
   dim,
   className,
   title,
+  lowerBound,
+  estimate,
 }: {
   usd: number
   flag?: CostFlag
@@ -27,11 +31,24 @@ export function Money({
   className?: string
   /** Replaces the default tooltip. */
   title?: string
+  /** Why the figure is only a lower bound; '' or absent when it is not. */
+  lowerBound?: string
+  /** What part of the figure is estimated; '' or absent when none is. */
+  estimate?: string
 }) {
-  const { prefix, suffix } = flagMarkers(flag)
-  const zero = usd === 0
-  const explain = flagExplanation(flag)
-  const tip = title ?? (explain ? `${formatMoneyFull(usd)}\n${explain}` : formatMoneyFull(usd))
+  const markers = flagMarkers(flag)
+  const prefix = lowerBound ? '≥' : estimate ? '~' : markers.prefix
+  const suffix = markers.suffix
+  const zero = usd === 0 && !lowerBound
+  const notes = [lowerBound, estimate].filter(Boolean).join('\n')
+  const explain = [flagExplanation(flag), notes].filter(Boolean).join('\n')
+  const tip = title
+    ? notes
+      ? `${title}\n${notes}`
+      : title
+    : explain
+      ? `${formatMoneyFull(usd)}\n${explain}`
+      : formatMoneyFull(usd)
   return (
     <span
       className={cn('font-mono whitespace-nowrap', zero ? 'text-faint' : dim ? 'text-muted' : 'text-fg', className)}

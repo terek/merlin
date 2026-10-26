@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Agent } from '../../api/types'
 import { agentRole, ROLE_LABEL } from '../../lib/agent'
+import { lowerBoundNote } from '../../lib/cost'
 import { formatCount } from '../../lib/format'
 import { ENCRYPTED, inboxLabel } from '../../lib/inbox'
 import { fullTime, parseTime, spanMs, timeOfDay } from '../../lib/time'
@@ -278,7 +279,13 @@ export function AgentDetail({
           </table>
         )}
         <p className="mt-1 text-meta text-faint">
-          own <Money usd={a.cost.usd} dim className="text-meta" />
+          own{' '}
+          <Money
+            usd={a.cost.usd}
+            lowerBound={lowerBoundNote(a.cost.truncatedMessages, a.cost.unpricedMessages)}
+            dim
+            className="text-meta"
+          />
           {subtreeUSD - a.cost.usd >= 0.005 && (
             <>
               , with descendants <Money usd={subtreeUSD} dim className="text-meta" />

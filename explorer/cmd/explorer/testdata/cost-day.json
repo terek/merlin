@@ -116,9 +116,9 @@
     {
       "key": "2026-09-06",
       "sessions": 1,
-      "totalUSD": 0.02132,
+      "totalUSD": 0.02812,
       "reportedUSD": 0,
-      "attributedUSD": 0.02132
+      "attributedUSD": 0.02812
     },
     {
       "key": "2026-09-05",
@@ -164,9 +164,9 @@
     }
   ],
   "total": {
-    "totalUSD": 0.6307099999999998,
+    "totalUSD": 0.6375099999999999,
     "reportedUSD": 0.1311,
-    "attributedUSD": 0.49961000000000017,
+    "attributedUSD": 0.5064100000000002,
     "compactions": {
       "calls": 3,
       "cold": 0,

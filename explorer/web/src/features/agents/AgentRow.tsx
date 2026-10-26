@@ -12,6 +12,7 @@ import {
 import type { Agent } from '../../api/types'
 import { type AgentRole, agentRole, ROLE_LABEL } from '../../lib/agent'
 import { cn } from '../../lib/cn'
+import { lowerBoundNote } from '../../lib/cost'
 import { firstLine } from '../../lib/paths'
 import { AgentStatusMark, Badge, Bar, ModelName, Money } from '../../ui'
 import { agentLabel, type Row } from './model'
@@ -148,7 +149,11 @@ export function AgentRow({
               <Badge tone={row.run.status === 'open' ? undefined : 'bad'}>{row.run.status}</Badge>
             )}
             {row.stats.killed > 0 && <Badge tone="bad">{row.stats.killed} killed</Badge>}
-            <Money usd={row.stats.usd} className={heavy ? 'font-semibold' : undefined} />
+            <Money
+              usd={row.stats.usd}
+              lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced)}
+              className={heavy ? 'font-semibold' : undefined}
+            />
           </span>
           <span className="block truncate text-sec text-muted">{row.subtitle}</span>
           {bar}
@@ -188,6 +193,7 @@ export function AgentRow({
           <span className="ml-auto pl-1">
             <Money
               usd={row.stats.usd}
+              lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced)}
               className={heavy ? 'font-semibold' : undefined}
               title={hasKids ? 'with all its descendants' : undefined}
             />
@@ -198,7 +204,13 @@ export function AgentRow({
           {a.model && <ModelName name={a.model} className="shrink-0 text-meta text-faint" />}
           {hasOwnDiff && (
             <span className="shrink-0 text-meta text-faint" title="the agent's own cost, descendants not included">
-              own <Money usd={a.cost.usd} dim className="text-meta" />
+              own{' '}
+              <Money
+                usd={a.cost.usd}
+                lowerBound={lowerBoundNote(a.cost.truncatedMessages, a.cost.unpricedMessages)}
+                dim
+                className="text-meta"
+              />
             </span>
           )}
         </span>

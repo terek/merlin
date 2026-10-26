@@ -185,6 +185,7 @@ func TestReadCommandSnapshots(t *testing.T) {
 		{name: "show-teammate", args: []string{"show", team}},
 		{name: "show-fork-agents", args: []string{"show", forks}},
 		{name: "show-linkage", args: []string{"show", linkage}},
+		{name: "show-pr-links", args: []string{"show", "21212121"}},
 		{name: "show-orphan", args: []string{"show", orphan}},
 		{name: "show-continuation-parent", args: []string{"show", contA}},
 		{name: "show-continuation-child", args: []string{"show", contB}},

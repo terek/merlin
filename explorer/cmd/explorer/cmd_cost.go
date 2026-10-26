@@ -132,7 +132,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 		for _, in := range listing.Sessions {
 			c := in.Cost
 			rows = append(rows, costRowJSON{Key: in.Key.ID, Harness: in.Key.Harness, Label: in.Title, Sessions: 1, Flag: string(c.Flag),
-				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD, Compactions: c.Compactions}})
+				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD + c.EstimatedUncoveredUSD, Compactions: c.Compactions}})
 		}
 		perProject := map[string]*costRowJSON{}
 		var order []string

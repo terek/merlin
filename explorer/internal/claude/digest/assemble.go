@@ -193,7 +193,12 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 
 	// Messages and cost.
 	if main != nil {
-		asm.Messages = append(asm.Messages, main.Messages...)
+		for _, m := range main.Messages {
+			// Only agent messages are written down at stream start; a main-agent message
+			// with a null stop_reason was cut short by an interrupt, and billed as written.
+			m.EstimatedUSD = 0
+			asm.Messages = append(asm.Messages, m)
+		}
 		asm.Cost.Add(main.Cost)
 	}
 	for i, a := range ags {
@@ -594,6 +599,7 @@ func buildAgent(a agentIn, l link, parent int, spawns []spawnRef, msgs []model.M
 	for _, m := range msgs {
 		ag.AssistantMessages++
 		if slices.Contains(unpriced, m.Model) {
+			ag.Cost.AddUnpriced()
 			continue
 		}
 		ag.Cost.AddMessage(m.Model, m.Tokens, m.USD)
@@ -960,6 +966,7 @@ func addToolCalls(t *model.AgentTurn, ft model.Turn) {
 func addAgentMessage(t *model.AgentTurn, m model.Message, unpriced []string) {
 	t.AssistantMessages++
 	if slices.Contains(unpriced, m.Model) {
+		t.Cost.AddUnpriced()
 		return
 	}
 	t.Cost.AddMessage(m.Model, m.Tokens, m.USD)

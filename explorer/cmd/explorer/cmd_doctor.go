@@ -121,7 +121,11 @@ type doctorReport struct {
 	ReportedUSD  float64 `json:"reportedUSD"`
 	CoveredUSD   float64 `json:"coveredUSD"`
 	CoveredRatio float64 `json:"coveredRatio"`
-	Ratio        struct {
+	// RateDiffUSD and CoveredEstimateUSD are the parts of reported - covered that the
+	// harness's other rates and the estimated output of truncated messages explain.
+	RateDiffUSD        float64 `json:"rateDiffUSD,omitempty"`
+	CoveredEstimateUSD float64 `json:"coveredEstimateUSD,omitempty"`
+	Ratio              struct {
 		Min    float64 `json:"min"`
 		P10    float64 `json:"p10"`
 		Median float64 `json:"median"`
@@ -266,6 +270,8 @@ func buildDoctor(w *world) doctorReport {
 		r.WithWindows++
 		r.ReportedUSD += c.ReportedUSD
 		r.CoveredUSD += c.CoveredUSD
+		r.RateDiffUSD += c.RateDiffUSD
+		r.CoveredEstimateUSD += c.EstimatedCoveredUSD
 		g := gapRow{ID: d.ID, Title: in.Title, Project: in.Project, ReportedBy: c.ReportedUSD, CoveredUSD: c.CoveredUSD,
 			GapUSD: c.ReportedUSD - c.CoveredUSD, Ratio: c.CoveredUSD / c.ReportedUSD}
 		gaps = append(gaps, g)
@@ -439,7 +445,13 @@ func doDoctor(asJSON, allVersions bool) error {
 	} else {
 		fmt.Fprintf(out, "  %s carry a cost their harness reported: %s reported, %s of it explained by transcript messages (covered)\n",
 			plural(r.WithWindows, "session", "sessions"), usd(r.ReportedUSD), usd(r.CoveredUSD))
-		fmt.Fprintf(out, "  covered / reported = %.3f overall; the rest (%s) is calls that are in no transcript\n", r.CoveredRatio, usd(r.ReportedUSD-r.CoveredUSD))
+		rest := r.ReportedUSD - r.CoveredUSD
+		if r.RateDiffUSD == 0 && r.CoveredEstimateUSD == 0 {
+			fmt.Fprintf(out, "  covered / reported = %.3f overall; the rest (%s) is calls that are in no transcript\n", r.CoveredRatio, usd(rest))
+		} else {
+			fmt.Fprintf(out, "  covered / reported = %.3f overall; of the rest (%s), %s is the harness charging other rates than Merlin's table, %s the estimated output of truncated messages, %s calls that are in no transcript\n",
+				r.CoveredRatio, usd(rest), usd(r.RateDiffUSD), usd(r.CoveredEstimateUSD), usd(rest-r.RateDiffUSD-r.CoveredEstimateUSD))
+		}
 		fmt.Fprintf(out, "  per session: min %.3f   p10 %.3f   median %.3f   p90 %.3f   max %.3f\n", r.Ratio.Min, r.Ratio.P10, r.Ratio.Median, r.Ratio.P90, r.Ratio.Max)
 	}
 	fmt.Fprintf(out, "  outside the windows: %s recomputed in %s that have windows; %s have none at all (%s, all recomputed)\n",

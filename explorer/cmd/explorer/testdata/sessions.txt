@@ -24,7 +24,7 @@ ID                                    WHEN             PROJECT             TITLE
 09090909                              Sep 9 06:02      team                ask the reviewer to check the diff               2       1   ≈$0.026  clean
 08080808                              Sep 8 06:00      subnest             survey the repo with helpers                     1       2   ≈$0.026  clean
 07070707                              Sep 7 06:02      subbg               run the slow audit in the background             3       1   ≈$0.024  clean
-06060606                              Sep 6 06:00      subsync             find where logins are validated                  1       1   ≈$0.021  clean
+06060606                              Sep 6 06:00      subsync             find where logins are validated                  1       1   ≈$0.028  clean
 05050505-0000-4000-8000-000000000001  Sep 5 06:00      s05-compaction      set up the database layer                        4       0   ≈$0.018  clean
 05050505-0000-4000-8000-000000000004  Sep 5 06:00      s05-compaction      audit every module                               1       1   ≈$0.022  clean
 05050505-0000-4000-8000-000000000003  Sep 5 06:00      s05-compaction      add a cache layer                                2       0   ≈$0.012  clean

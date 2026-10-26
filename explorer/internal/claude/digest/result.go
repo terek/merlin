@@ -57,6 +57,8 @@ type FileResult struct {
 	CostStates []CostStateRecord
 	// Recaps are Claude Code's away_summary records.
 	Recaps []model.Recap
+	// PRs are the pr-link records in file order, repeats included.
+	PRs []model.PRLink
 
 	// Cwds, GitBranches, Versions, Entrypoints and SessionKinds are the unique values of
 	// the corresponding envelope fields over all records, in first-appearance order. A

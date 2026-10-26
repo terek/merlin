@@ -1,7 +1,7 @@
 // Cost logic behind <Money> and the cost panels.
 
 import type { CostBacking, CostFlag, SessionCost, SessionDigest } from '../api/types'
-import { formatCount } from './format'
+import { formatCount, formatMoney, plural } from './format'
 
 /** The marker written with a figure: prefix "~" (estimated), suffix "+est" (partial), none (exact). */
 export function flagMarkers(flag: CostFlag | undefined): { prefix: string; suffix: string } {
@@ -24,6 +24,40 @@ export function flagExplanation(flag: CostFlag | undefined): string {
   }
 }
 
+/**
+ * Why a figure is only a lower bound (the `lowerBound` of <Money>): messages written down before
+ * they finished (partial output tokens; mostly sub-agent messages) and messages on a model without
+ * a price (counted as $0). '' when there are none.
+ */
+export function lowerBoundNote(truncated = 0, unpriced = 0): string {
+  const parts: string[] = []
+  if (truncated > 0) parts.push(`${plural(truncated, 'message')} cut short in the transcript (partial output tokens)`)
+  if (unpriced > 0) parts.push(`${plural(unpriced, 'message')} on a model without a price (counted as $0)`)
+  return parts.length ? `A lower bound: ${parts.join(', ')}.` : ''
+}
+
+/**
+ * lowerBoundNote for the best cost of one or several sessions: only those flagged `lowerBound` count,
+ * and only for their unpriced messages (a truncated message's missing output is estimated in it).
+ */
+export function sessionsLowerBound(costs: readonly Pick<SessionCost, 'lowerBound' | 'unpricedMessages'>[]): string {
+  let unpriced = 0
+  for (const c of costs) if (c.lowerBound) unpriced += c.unpricedMessages ?? 0
+  return lowerBoundNote(0, unpriced)
+}
+
+/** An estimated amount: `~$1.20`, but `<$0.01` alone (the `<` says enough). */
+export function approxMoney(usd: number): string {
+  const s = formatMoney(usd)
+  return s.startsWith('<') ? s : `~${s}`
+}
+
+/** The `estimate` of <Money> for a figure that includes the estimated output of truncated messages; '' for none. */
+export function estimateNote(estimatedUSD: number, truncated: number): string {
+  if (estimatedUSD < 0.00005) return ''
+  return `Includes ${approxMoney(estimatedUSD)} estimated for the output of ${plural(truncated, 'message')} cut short in the transcript.`
+}
+
 export interface CostSegment {
   key: 'reported' | 'attributed' | 'overhead'
   label: string
@@ -37,10 +71,16 @@ export interface CostSegment {
  * reported windows. They add up to `bestUSD`.
  */
 export function sessionCostSegments(cost: SessionCost): CostSegment[] {
+  // the estimates and Claude Code's other rates explain part of the overhead
+  const explained = (cost.estimatedCoveredUSD ?? 0) + (cost.rateDiffUSD ?? 0)
   return [
-    { key: 'reported', label: 'Reported, matched to messages', usd: cost.coveredUSD },
-    { key: 'overhead', label: 'Reported, not explained by messages (overhead)', usd: cost.overheadUSD },
-    { key: 'attributed', label: 'Recomputed from tokens, outside reported windows', usd: cost.uncoveredUSD },
+    { key: 'reported', label: 'Reported, matched to messages', usd: cost.coveredUSD + explained },
+    { key: 'overhead', label: 'Reported, not explained by messages (overhead)', usd: cost.overheadUSD - explained },
+    {
+      key: 'attributed',
+      label: 'Recomputed from tokens, outside reported windows',
+      usd: cost.uncoveredUSD + (cost.estimatedUncoveredUSD ?? 0),
+    },
   ]
 }
 
@@ -64,7 +104,15 @@ export function backingSentence(b: CostBacking): string {
   if (b.partial) parts.push(lead(b.partial, 'partial'))
   if (b.estimated) parts.push(lead(b.estimated, 'estimated'))
   if (b.scriptedRuns) parts.push(`${formatCount(b.scriptedRuns)} scripted run${b.scriptedRuns === 1 ? '' : 's'}`)
-  return parts.length ? parts.join(', ') : 'no sessions'
+  if (!parts.length) return 'no sessions'
+  const out = parts.join(', ')
+  return b.lowerBound ? `${out}; ${formatCount(b.lowerBound)} only a lower bound` : out
+}
+
+/** The `lowerBound` of a total over a cost table's sessions; '' when none of them is a lower bound. */
+export function backingLowerBound(b: CostBacking): string {
+  if (!b.lowerBound) return ''
+  return `A lower bound: ${plural(b.lowerBound, 'session')} include messages on a model without a price (counted as $0).`
 }
 
 /** The weakest flag of several (estimated < partial < exact); undefined for none. */

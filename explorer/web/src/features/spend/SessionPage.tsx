@@ -12,6 +12,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { get, isApiError } from '../../api/client'
 import { queryKeys, useSession } from '../../api/queries'
 import type { Candidate, SessionDetail, SessionKey } from '../../api/types'
+import { sessionsLowerBound } from '../../lib/cost'
 import { useDocumentTitle } from '../../lib/hooks'
 import { sessionPath } from '../../lib/paths'
 import { sessionTitle } from '../../lib/session'
@@ -98,6 +99,13 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
           sessions: tree.branches.length,
           bestUSD: details.reduce((n, d) => n + d.cost.bestUSD, 0),
           messagesUSD: tree.total,
+          lowerBound: sessionsLowerBound(details.map((d) => d.cost)),
+          truncated: details.reduce((n, d) => n + (d.cost.truncatedMessages ?? 0), 0),
+          rateDiff: details.reduce((n, d) => n + (d.cost.rateDiffUSD ?? 0), 0),
+          estimated: details.reduce(
+            (n, d) => n + (d.cost.estimatedCoveredUSD ?? 0) + (d.cost.estimatedUncoveredUSD ?? 0),
+            0,
+          ),
         }}
       />
       {missing > 0 && (

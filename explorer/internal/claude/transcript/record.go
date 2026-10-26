@@ -22,6 +22,7 @@ const (
 	TypeCostState      = "cost-state"
 	TypeRelocated      = "relocated"
 	TypeForkContextRef = "fork-context-ref"
+	TypePRLink         = "pr-link"
 )
 
 // System record subtypes.
@@ -40,16 +41,20 @@ var knownIgnored = map[string]bool{
 	"agent-color": true,
 }
 
+// knownOpaque are record types we recognise but never decode past their type: they are
+// large and hold request contents, prompts and local permission rules (format notes §7).
+var knownOpaque = map[string]bool{"api-request": true, "api-request-blob": true, "api-request-shape": true}
+
 // IsKnownType reports whether t is a record type this package knows about, including
 // types that are recognised only to be ignored (file-history-*, artifact-*, ...).
 func IsKnownType(t string) bool {
 	switch t {
 	case TypeUser, TypeAssistant, TypeSystem, TypeAttachment, TypeProgress, TypeAITitle,
 		TypeCustomTitle, TypeAgentName, TypeLastPrompt, TypeCostState, TypeRelocated,
-		TypeForkContextRef:
+		TypeForkContextRef, TypePRLink:
 		return true
 	}
-	return knownIgnored[t] || strings.HasPrefix(t, "file-history-") || strings.HasPrefix(t, "artifact-")
+	return knownIgnored[t] || knownOpaque[t] || strings.HasPrefix(t, "file-history-") || strings.HasPrefix(t, "artifact-")
 }
 
 // ForkedFrom is the envelope marker on records copied in by an explicit fork.
@@ -131,8 +136,8 @@ var ErrNotObject = errors.New("transcript: line is not a JSON object")
 
 // Decode decodes one transcript line. It returns an error only for lines that are not a
 // JSON object (including invalid JSON); callers count those as bad lines. The line is
-// copied, so the caller may reuse its buffer. A record of an unknown type has only Type
-// and Raw set.
+// copied, so the caller may reuse its buffer. A record of an unknown or opaque type has
+// only Type and Raw set.
 func Decode(line []byte) (*Record, error) {
 	line = bytes.TrimSpace(line)
 	if len(line) == 0 || line[0] != '{' {
@@ -147,7 +152,7 @@ func Decode(line []byte) (*Record, error) {
 		return nil, err
 	}
 	r := &Record{Raw: raw}
-	if !IsKnownType(head.Type) {
+	if !IsKnownType(head.Type) || knownOpaque[head.Type] {
 		r.Type = head.Type
 		return r, nil
 	}

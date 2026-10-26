@@ -7,12 +7,13 @@ import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
 import type { TreeSummary } from '../../api/types'
 import { cn } from '../../lib/cn'
+import { sessionsLowerBound } from '../../lib/cost'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { isRunning, keyString, promptCount, sessionTitle } from '../../lib/session'
 import { Badge, EndStateBadge, Money, ProjectName, RelTime, StateDot } from '../../ui'
-import { openMember, treeFlag, treeState } from './model'
-import { SessionRow } from './SessionRow'
+import { openMember, treeFlag, treePRs, treeState } from './model'
+import { PRBadge, SessionRow } from './SessionRow'
 
 export function TreeRow({
   tree,
@@ -72,6 +73,7 @@ export function TreeRow({
             <span className="flex shrink-0 items-center gap-1.5">
               {!isRunning(s.state) && <EndStateBadge endState={s.endState} />}
               {s.key.harness === 'codex' && <Badge title="A Codex session">codex</Badge>}
+              <PRBadge prs={treePRs(tree)} />
               {s.kind === 'background' && (
                 <Badge title="A background session: nobody typed into it interactively">background</Badge>
               )}
@@ -120,7 +122,12 @@ export function TreeRow({
                 )}
               </span>
               <span title={many ? `The ${tree.sessions.length} sessions of this tree together` : undefined}>
-                <Money usd={tree.bestUSD} flag={treeFlag(tree)} className="inline-block w-20 text-right" />
+                <Money
+                  usd={tree.bestUSD}
+                  flag={treeFlag(tree)}
+                  lowerBound={sessionsLowerBound(tree.sessions.map((m) => m.cost))}
+                  className="inline-block w-20 text-right"
+                />
               </span>
             </span>
           </div>

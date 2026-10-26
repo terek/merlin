@@ -48,8 +48,10 @@ and is not used.
 
 Prices are OpenAI's standard API rates (`internal/pricing/prices.json`): a call in fast mode
 (`service_tier: priority`) costs 2× every rate, and a call with more than 272K input tokens is
-billed at the model's long-context rate in full. `codex-auto-review` is not on OpenAI's price
-list and stays unpriced (`diagnostics.unpricedModels`).
+billed at the model's long-context rate in full. `codex-auto-review` (the approval reviewer) is
+not on OpenAI's price list; it is priced as `gpt-6-luna`, reportedly the model behind it, as an
+API-equivalent estimate (status `assumed`). Auto-review checks are free on ChatGPT-subscription
+sign-ins from about 2026-10-06, so for those accounts its cost is notional.
 
 ## Session trees
 

@@ -535,3 +535,51 @@ func TestCompactionCallsTallied(t *testing.T) {
 		t.Errorf("rows = %+v", rows)
 	}
 }
+
+// Estimates of truncated messages: inside a window they explain its overhead up to all of
+// it, scaled down past that; outside every window they are added to the best cost.
+func TestTruncatedEstimates(t *testing.T) {
+	d := syn("claude", "aaaaaaaa-0000-4000-8000-000000000002", "p", 0, 300, []model.Turn{{Index: 0}},
+		msgSpec{"m1", 10, 1, 0}, msgSpec{"m2", 150, 1, 0}, msgSpec{"m3", 160, 0.5, 0}, msgSpec{"m4", 300, 1, 0})
+	for i, e := range []float64{0.5, 0.8, 0.4, 0.25} {
+		d.Messages[i].Truncated, d.Messages[i].EstimatedUSD = true, e
+	}
+	// window A: overhead 1 takes the 0.5 whole; window B: overhead 0.4 caps the 1.2 at a third
+	withWindows(d, window(0, 100, 2), window(120, 200, 1.9))
+	c := New()
+	c.Upsert(d)
+	in, _ := c.Session(d.Key())
+	cc := in.Cost
+	if !near(cc.EstimatedCoveredUSD, 0.9) || !near(cc.EstimatedUncoveredUSD, 0.25) || !near(cc.BestUSD, 3.9+1+0.25) || cc.LowerBound {
+		t.Errorf("cost = %+v", cc)
+	}
+	w := cc.Windows
+	if !near(w[0].EstimatedUSD, 0.5) || w[0].EstimateScale != nil || !near(w[1].EstimatedUSD, 0.4) || w[1].EstimateScale == nil || !near(*w[1].EstimateScale, 1.0/3) {
+		t.Errorf("windows = %+v", w)
+	}
+	if !near(cc.EstimateScale(at(10)), 1) || !near(cc.EstimateScale(at(150)), 1.0/3) || !near(cc.EstimateScale(at(300)), 1) {
+		t.Error("EstimateScale")
+	}
+	if total := c.Total(Filter{}); !near(total.TotalUSD, cc.BestUSD) || !near(total.AttributedUSD, 1.25) {
+		t.Errorf("total = %+v", total)
+	}
+}
+
+// A window's rate difference is not missing calls: the estimates only fill what it leaves.
+func TestRateDiffBeforeEstimates(t *testing.T) {
+	d := syn("claude", "aaaaaaaa-0000-4000-8000-000000000003", "p", 0, 100, []model.Turn{{Index: 0}}, msgSpec{"m1", 10, 1, 0})
+	d.Messages[0].Truncated, d.Messages[0].EstimatedUSD = true, 0.5
+	w := window(0, 100, 2) // overhead 1, of which 0.8 is the rate difference
+	w.RateDiffUSD = 0.8
+	withWindows(d, w)
+	c := New()
+	c.Upsert(d)
+	in, _ := c.Session(d.Key())
+	cc := in.Cost
+	if !near(cc.RateDiffUSD, 0.8) || !near(cc.EstimatedCoveredUSD, 0.2) || !near(cc.OverheadUSD, 1) || !near(cc.BestUSD, 2) {
+		t.Errorf("cost = %+v", cc)
+	}
+	if s := cc.Windows[0].EstimateScale; s == nil || !near(*s, 0.4) {
+		t.Errorf("scale = %v", s)
+	}
+}

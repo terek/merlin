@@ -43,6 +43,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `lastActivityAt` | time of the last record |
 | `endState` | how the last turn ended: `clean`, `interrupted`, `mid-turn`, `unknown` |
 | `recaps` | the harness's own "where things stand" notes, as `Recap` |
+| `prs` | the pull requests the session created or linked, as `PRLink`: each once, at its first link, ordered by time then URL (Claude Code `pr-link` records, main transcript only) |
 | `lineage` | explicit fork and copy markers, as `Lineage` |
 | `stats` | whole-session counters, as `Stats` |
 | `cost` | attributed cost of the session including all agents, as `Cost` |
@@ -68,6 +69,15 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 |---|---|
 | `at` | when the recap was written |
 | `text` | the recap, whole |
+
+## PRLink
+
+| key | meaning |
+|---|---|
+| `at` | when the session first linked it |
+| `number` | the PR number; omitted when unknown |
+| `url` | the PR's URL |
+| `repository` | `owner/name` as the harness wrote it; omitted when absent |
 
 ## Lineage
 
@@ -104,6 +114,7 @@ Recomputed from token usage with the price table.
 | `usd` | total dollars |
 | `byModel` | per model, as `ModelCost` |
 | `truncatedMessages` | how many of the summed messages are `truncated` (see `Message`); when non-zero, `usd` is a lower bound |
+| `unpricedMessages` | how many messages are `unpriced` (see `Message`); they are not in `usd` or `byModel`, so when non-zero `usd` is a lower bound |
 
 ## ModelCost
 
@@ -137,6 +148,7 @@ Spending outside every window was not reported and can only be attributed from t
 | `to` | timestamp of the last record before the counter was last written |
 | `totalUSD` | the harness's total for this run |
 | `byModel` | per model, as `ReportedModel` |
+| `rateDiffUSD` | `totalUSD` minus the reported tokens priced with Merlin's table, over the models it prices: what the harness charged at other rates (an older price in its own table, say), not calls missing from the transcript. The 1-hour cache writes are taken as the window's messages' own, the rest as 5-minute (side calls), and fast mode is carried over as in the messages. Negative when the harness charged less; omitted when 0 |
 
 ## ReportedModel
 
@@ -353,6 +365,8 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `agentTurn` | for an agent's message, the index of the agent's turn (`Agent.turns`) it belongs to |
 | `usd` | attributed dollars |
 | `truncated` | the harness wrote the message down before it finished (its last line has a null `stop_reason`), so its `output` count is partial and `usd` a lower bound; omitted when false |
+| `estimatedUSD` | on a `truncated` sub-agent message: the expected cost of the output tokens missing from its count (680 tokens at the model's prices, docs/validation.md cause A); not in `usd`. Omitted when 0, always on main-agent messages |
+| `unpriced` | the model has no price (it is in `diagnostics.unpricedModels`): `usd` is 0 although the tokens were billed; omitted when false |
 | `fast` | the call was made in fast mode (Claude Code's fast speed, Codex's `priority` service tier); the prompt cache is not shared between fast and standard calls; omitted when false |
 
 ## Diagnostics

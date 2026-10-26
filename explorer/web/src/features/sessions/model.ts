@@ -4,6 +4,7 @@
 import type {
   CostFlag,
   Hit,
+  PRLink,
   ScriptedLine,
   SessionFilters,
   SessionKey,
@@ -93,6 +94,12 @@ export function treeState(t: TreeSummary): State {
 const FLAG_RANK: Record<CostFlag, number> = { exact: 0, partial: 1, estimated: 2 }
 
 /** How well a tree's cost is backed: the weakest of its members. */
+/** The PRs of every session of a tree, each once, in member order. */
+export function treePRs(t: TreeSummary): PRLink[] {
+  const seen = new Set<string>()
+  return t.sessions.flatMap((s) => s.prs ?? []).filter((p) => !seen.has(p.url) && !!seen.add(p.url))
+}
+
 export function treeFlag(t: TreeSummary): CostFlag {
   return t.sessions.reduce<CostFlag>((f, s) => (FLAG_RANK[s.cost.flag] > FLAG_RANK[f] ? s.cost.flag : f), 'exact')
 }

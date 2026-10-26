@@ -656,3 +656,26 @@ func TestHostileText(t *testing.T) {
 		}
 	}
 }
+
+// Messages in a window whose overhead caps the estimates carry their scaled share; the
+// digest's own slice is left alone.
+func TestScaleEstimates(t *testing.T) {
+	t0 := time.Date(2026, 9, 16, 10, 0, 0, 0, time.UTC)
+	third := 1.0 / 3
+	c := catalog.SessionCost{Windows: []catalog.WindowCost{{
+		ReportedWindow: model.ReportedWindow{From: t0, To: t0.Add(time.Hour)}, EstimateScale: &third,
+	}}}
+	msgs := []model.Message{
+		{ID: "in", At: t0.Add(time.Minute), EstimatedUSD: 0.9},
+		{ID: "out", At: t0.Add(2 * time.Hour), EstimatedUSD: 0.5},
+		{ID: "none", At: t0.Add(time.Minute)},
+	}
+	got := scaleEstimates(msgs, &c)
+	if math.Abs(got[0].EstimatedUSD-0.3) > 1e-9 || got[1].EstimatedUSD != 0.5 || got[2].EstimatedUSD != 0 || msgs[0].EstimatedUSD != 0.9 {
+		t.Errorf("got %+v, input %+v", got, msgs)
+	}
+	c.Windows[0].EstimateScale = nil
+	if got := scaleEstimates(msgs, &c); &got[0] != &msgs[0] {
+		t.Error("copied without a change")
+	}
+}

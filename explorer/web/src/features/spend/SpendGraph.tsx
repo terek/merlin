@@ -174,7 +174,10 @@ function Readout({
                 {u.ordinal} of {u.of}
               </span>
             )}
-            <span className="font-mono font-semibold">{formatMoney(u.bucket.usd)}</span>
+            <span className="font-mono font-semibold">
+              {u.bucket.unpriced > 0 ? '≥' : u.bucket.estimated > 0 ? '~' : ''}
+              {formatMoney(u.bucket.usd)}
+            </span>
             {u.agent.model && <ModelName name={u.agent.model} className="text-meta text-faint" />}
             <span className="text-muted">
               launched in turn {u.launch}
@@ -376,6 +379,8 @@ export function SpendGraph({
         {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
         {tree.rereads.length > 0 &&
           ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}
+        {tree.wakeups.count > 0 &&
+          ` ${plural(tree.wakeups.count, 'piece')} of agent work nobody asked for: an agent woken by its own background work (an expired watch, say) after it had reported, ${formatMoney(tree.wakeups.usd)}.`}
       </p>
     </Card>
   )

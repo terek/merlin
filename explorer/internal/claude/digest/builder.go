@@ -115,6 +115,7 @@ type Builder struct {
 	aiTitle      string
 	customTitle  string
 	agentName    string
+	prs          []model.PRLink
 	lastPrompt   string
 	lastLeaf     string
 
@@ -249,6 +250,10 @@ func (b *Builder) Apply(r *transcript.Record) {
 		b.cwds.add(r.RelocatedCwd())
 		if c := r.RelocatedCwd(); c != "" {
 			b.lastCwd = c
+		}
+	case transcript.TypePRLink:
+		if l, ok := r.PRLink(); ok {
+			b.prs = append(b.prs, model.PRLink{At: ts, Number: l.Number, URL: l.URL, Repository: l.Repository})
 		}
 	case transcript.TypeForkContextRef:
 		if f, ok := r.ForkContextRef(); ok {

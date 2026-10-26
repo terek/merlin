@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 11,
+  "parserVersion": 15,
   "source": [
     {
       "path": "projects/-home-dev-acme-subsync/06060606-0000-4000-8000-000000000001.jsonl",
@@ -196,6 +196,7 @@
       "agentTurn": 0,
       "usd": 0.0021,
       "truncated": true,
+      "estimatedUSD": 0.0068000000000000005,
       "input": 300,
       "output": 40,
       "cacheRead": 3000,

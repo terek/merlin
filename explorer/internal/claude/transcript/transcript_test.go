@@ -215,6 +215,27 @@ func TestDecodeEveryRecordType(t *testing.T) {
 				t.Fatal("file-history-* is known")
 			}
 		}},
+		{"pr-link", `{"type":"pr-link","sessionId":"s1","prNumber":7,"prUrl":"https://example.test/o/r/pull/7","prRepository":"o/r","timestamp":"2026-10-01T10:00:00Z"}`, func(t *testing.T, r *Record) {
+			l, ok := r.PRLink()
+			if !r.Known() || r.SessionID != "s1" || !ok || l != (PRLink{Number: 7, URL: "https://example.test/o/r/pull/7", Repository: "o/r"}) {
+				t.Fatalf("%+v %+v", r.Envelope, l)
+			}
+		}},
+		{"api-request is opaque", `{"type":"api-request","sessionId":"s1","id":"q1","timestamp":"2026-10-01T10:00:00Z","version":"9.9.9","querySource":"agent:custom:x","agentId":"a1","params":{"model":"m"},"keep":2,"tail":["h1"],"base":null}`, func(t *testing.T, r *Record) {
+			if !r.Known() || !reflect.DeepEqual(r.Envelope, Envelope{Type: "api-request"}) || len(r.Raw) == 0 {
+				t.Fatalf("%+v", r.Envelope)
+			}
+		}},
+		{"api-request-blob is opaque", `{"type":"api-request-blob","sessionId":"s1","hash":"h1","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}`, func(t *testing.T, r *Record) {
+			if !r.Known() || !reflect.DeepEqual(r.Envelope, Envelope{Type: "api-request-blob"}) {
+				t.Fatalf("%+v", r.Envelope)
+			}
+		}},
+		{"api-request-shape is opaque", `{"type":"api-request-shape","sessionId":"s1","shapeHash":"sh","timestamp":"2026-10-01T10:00:00Z","version":"9.9.9","shape":{"system":[],"tools":[]}}`, func(t *testing.T, r *Record) {
+			if !r.Known() || !reflect.DeepEqual(r.Envelope, Envelope{Type: "api-request-shape"}) {
+				t.Fatalf("%+v", r.Envelope)
+			}
+		}},
 		{"attachment", `{"type":"attachment","uuid":"at1","parentUuid":"u1","attachment":{"type":"hook_success"}}`, func(t *testing.T, r *Record) {
 			if !r.Known() || r.UUID != "at1" || r.ParentUUID != "u1" {
 				t.Fatal()

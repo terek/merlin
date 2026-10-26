@@ -468,7 +468,8 @@ func TestExecSessionIsScripted(t *testing.T) {
 	if d.Kind != model.KindSDK || d.Turns[0].Origin != model.OriginSDK || d.Title != "One shot." {
 		t.Errorf("kind %s origin %s title %q", d.Kind, d.Turns[0].Origin, d.Title)
 	}
-	if !reflect.DeepEqual(d.Diagnostics.UnpricedModels, []string{"unknown-model"}) || d.Cost.USD != 0 || len(d.Messages) != 1 {
+	if !reflect.DeepEqual(d.Diagnostics.UnpricedModels, []string{"unknown-model"}) || d.Cost.USD != 0 || len(d.Messages) != 1 ||
+		!d.Messages[0].Unpriced || d.Cost.UnpricedMessages != 1 || d.Turns[0].Cost.UnpricedMessages != 1 {
 		t.Errorf("unpriced: %+v cost %v", d.Diagnostics, d.Cost)
 	}
 }

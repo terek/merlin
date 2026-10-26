@@ -23,7 +23,7 @@ Cost: reported vs recomputed from the transcripts
   2 sessions carry a cost their harness reported: $0.131 reported, $0.128 of it explained by transcript messages (covered)
   covered / reported = 0.977 overall; the rest ($0.0030) is calls that are in no transcript
   per session: min 0.892   p10 0.892   median 0.892   p90 0.987   max 0.987
-  outside the windows: $0 recomputed in 0 sessions that have windows; 33 sessions have none at all ($0.500, all recomputed)
+  outside the windows: $0 recomputed in 0 sessions that have windows; 33 sessions have none at all ($0.506, all recomputed)
 
   Largest gaps, reported above the transcripts (calls missing from them):
     ID        PROJECT    TITLE                    REPORTED  COVERED      GAP  RATIO

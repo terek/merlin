@@ -211,7 +211,7 @@ func (h *Harness) buildFollowed(src discover.Source, st *sessionState) (*model.S
 		keep[path] = true
 		return h.reduceFollowed(st, path, &c)
 	}
-	d, err := digest.BuildSessionFrom(src, reduce)
+	d, err := digest.BuildSessionFrom(src, h.pricer, reduce)
 	h.inc.end(src.ID, st, keep, c.appended > 0, err != nil)
 	h.inc.full.Add(c.full)
 	h.inc.appended.Add(c.appended)

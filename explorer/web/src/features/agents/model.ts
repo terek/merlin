@@ -20,6 +20,9 @@ export interface SubtreeStats {
   killed: number
   /** Agents without a terminal marker in the subtree, the node included. */
   open: number
+  /** Messages cut short in the transcript, and messages on a model without a price, in the subtree. */
+  truncated: number
+  unpriced: number
 }
 
 /** Sums per node, computed from the tree rather than trusted from `agent.subtreeUSD` (orphans, broken cycles). */
@@ -31,6 +34,8 @@ export function subtreeStats(forest: readonly AgentNode[]): Map<string, SubtreeS
       count: 1,
       killed: n.agent.status === 'killed' ? 1 : 0,
       open: n.agent.status === 'open' ? 1 : 0,
+      truncated: n.agent.cost.truncatedMessages ?? 0,
+      unpriced: n.agent.cost.unpricedMessages ?? 0,
     }
     for (const c of n.children) {
       const t = walk(c)
@@ -38,6 +43,8 @@ export function subtreeStats(forest: readonly AgentNode[]): Map<string, SubtreeS
       s.count += t.count
       s.killed += t.killed
       s.open += t.open
+      s.truncated += t.truncated
+      s.unpriced += t.unpriced
     }
     out.set(n.agent.id, s)
     return s
@@ -157,13 +164,15 @@ export function visibleRows(
         continue
       }
       const open = overrides.get(e.id) ?? false
-      const sum: SubtreeStats = { usd: 0, count: 0, killed: 0, open: 0 }
+      const sum: SubtreeStats = { usd: 0, count: 0, killed: 0, open: 0, truncated: 0, unpriced: 0 }
       for (const n of e.nodes) {
         const s = stats.get(n.agent.id) as SubtreeStats
         sum.usd += s.usd
         sum.count += s.count
         sum.killed += s.killed
         sum.open += s.open
+        sum.truncated += s.truncated
+        sum.unpriced += s.unpriced
       }
       const group = groupText(e.nodes, runs)
       rows.push({ kind: 'group', key: e.id, level, open, nodes: e.nodes, ...group, stats: sum })

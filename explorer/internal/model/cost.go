@@ -32,12 +32,17 @@ type Cost struct {
 	// (see Message.Truncated). Their output tokens are a partial count, so USD is a lower
 	// bound whenever this is non-zero.
 	TruncatedMessages int64 `json:"truncatedMessages,omitempty"`
+	// UnpricedMessages is how many messages were billed on a model the price table does not
+	// know (see Message.Unpriced). They are not in USD or ByModel, so USD is a lower bound
+	// whenever this is non-zero.
+	UnpricedMessages int64 `json:"unpricedMessages,omitempty"`
 }
 
 // Add adds other into c. It is safe on a zero Cost.
 func (c *Cost) Add(other Cost) {
 	c.USD += other.USD
 	c.TruncatedMessages += other.TruncatedMessages
+	c.UnpricedMessages += other.UnpricedMessages
 	for m, oc := range other.ByModel {
 		c.addModel(m, oc)
 	}
@@ -52,6 +57,9 @@ func (c *Cost) AddMessage(model string, tokens Tokens, usd float64) {
 
 // AddTruncated counts one message, already added with AddMessage, that was cut short.
 func (c *Cost) AddTruncated() { c.TruncatedMessages++ }
+
+// AddUnpriced counts one message whose model has no price; it is not added with AddMessage.
+func (c *Cost) AddUnpriced() { c.UnpricedMessages++ }
 
 func (c *Cost) addModel(model string, add ModelCost) {
 	if c.ByModel == nil {

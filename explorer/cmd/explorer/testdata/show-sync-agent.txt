@@ -6,8 +6,9 @@ find where logins are validated
   when       Sep 6 06:00 → Sep 6 06:00  (18s)
   turns      1 turn · 4 assistant messages · 2 tool calls · 1 agent
 
-Cost    ≈$0.021   estimated: Claude Code reported no figure; recomputed from tokens
+Cost    ≈$0.028   estimated: Claude Code reported no figure; recomputed from tokens
   attributed      $0.021   at least; recomputed from tokens, 1 message cut short in the transcript
+  estimated      $0.0068   output the agent messages cut short are missing, estimated per message
 
   by model
   MODEL       ATTRIBUTED

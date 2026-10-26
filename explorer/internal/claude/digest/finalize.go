@@ -28,6 +28,7 @@ func (b *Builder) Result() *FileResult {
 		AgentsKilled:    slices.Clone(b.killed),
 		CostStates:      slices.Clone(b.costStates),
 		Recaps:          slices.Clone(b.recaps),
+		PRs:             slices.Clone(b.prs),
 		ForkContextRefs: slices.Clone(b.forkRefs),
 		AITitle:         b.aiTitle,
 		CustomTitle:     b.customTitle,
@@ -99,16 +100,25 @@ func (b *Builder) priceMessages(res *FileResult) []*billedMsg {
 		if !ok {
 			unpriced.add(name)
 			mc = model.ModelCost{Tokens: tok}
+			res.Cost.AddUnpriced()
 		} else {
 			res.Cost.AddMessage(name, mc.Tokens, mc.USD)
 			if m.truncated() {
 				res.Cost.AddTruncated()
 			}
 		}
+		var est float64
+		if ok && m.truncated() {
+			full := tok
+			full.Output += truncatedOutputTokens
+			if fc, ok := b.pricer.Cost(name, full, m.usage.IsFast()); ok {
+				est = fc.USD - mc.USD
+			}
+		}
 		turn := m.turn
 		res.Messages = append(res.Messages, model.Message{
 			ID: m.id, At: m.firstTS, Model: name, Turn: &turn, USD: mc.USD, Tokens: tok,
-			Truncated: m.truncated(), Fast: m.usage.IsFast(),
+			Truncated: m.truncated(), EstimatedUSD: est, Unpriced: !ok, Fast: m.usage.IsFast(),
 		})
 		billed[i] = &billedMsg{st: m, cost: mc, ok: ok}
 	}
@@ -148,6 +158,8 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 				if bm.st.truncated() {
 					t.Cost.AddTruncated()
 				}
+			} else {
+				t.Cost.AddUnpriced()
 			}
 			for _, tu := range bm.st.tools {
 				t.ToolCalls++
@@ -167,6 +179,12 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 		res.Turns[i] = t
 	}
 }
+
+// truncatedOutputTokens is the expected number of output tokens missing from a truncated
+// agent message's count (Assemble drops the estimate on main-agent messages): across the validation history the output gap per session regressed on the
+// number of truncated messages with a slope of 667 to 688 tokens per message, R² 0.97
+// (docs/validation.md, cause A).
+const truncatedOutputTokens = 680
 
 // truncated reports a message whose last line has a null stop_reason: Claude Code wrote the
 // line before the response finished, so output_tokens is the count at that moment (median

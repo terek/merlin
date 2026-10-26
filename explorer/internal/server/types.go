@@ -51,6 +51,10 @@ type CostBrief struct {
 	UncoveredUSD float64          `json:"uncoveredUSD"`
 	OverheadUSD  float64          `json:"overheadUSD"`
 	InheritedUSD float64          `json:"inheritedUSD"`
+	// LowerBound, TruncatedMessages and UnpricedMessages are catalog.SessionCost's.
+	LowerBound        bool `json:"lowerBound,omitempty"`
+	TruncatedMessages int  `json:"truncatedMessages,omitempty"`
+	UnpricedMessages  int  `json:"unpricedMessages,omitempty"`
 }
 
 // LineageBrief is the lineage of a session as the list shows it.
@@ -93,6 +97,8 @@ type SessionSummary struct {
 	// omitted when there is none. Both texts are previews (see Preview).
 	LastPrompt *PromptPreview `json:"lastPrompt,omitempty"`
 	Recap      *RecapPreview  `json:"recap,omitempty"`
+	// PRs are the pull requests the session created or linked (Digest.PRs).
+	PRs []model.PRLink `json:"prs,omitempty"`
 	Cost       CostBrief      `json:"cost"`
 	Lineage    LineageBrief   `json:"lineage"`
 }
@@ -230,6 +236,11 @@ type CostRow struct {
 	Label    string           `json:"label,omitempty"`
 	Sessions int              `json:"sessions"`
 	Flag     catalog.CostFlag `json:"flag,omitempty"`
+	// LowerBound, TruncatedMessages and UnpricedMessages are the session's
+	// (catalog.SessionCost), on by=session rows only.
+	LowerBound        bool `json:"lowerBound,omitempty"`
+	TruncatedMessages int  `json:"truncatedMessages,omitempty"`
+	UnpricedMessages  int  `json:"unpricedMessages,omitempty"`
 	// Harness, Project and LastActivityAt are set for by=session rows (a scripted row has
 	// only Project), so that a row can be shown and linked without a second request.
 	Harness        string    `json:"harness,omitempty"`
@@ -253,6 +264,8 @@ type CostBacking struct {
 	Partial      int `json:"partial"`
 	Estimated    int `json:"estimated"`
 	ScriptedRuns int `json:"scriptedRuns"`
+	// LowerBound counts the sessions, of any flag, whose best cost is a lower bound.
+	LowerBound int `json:"lowerBound,omitempty"`
 }
 
 // CostTable is the body of GET /api/cost.

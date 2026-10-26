@@ -8,7 +8,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCost, useProjects } from '../../api/queries'
 import type { CompactionTally, CostRow, CostTable } from '../../api/types'
 import { tallyLine, warmLine } from '../../lib/compaction'
-import { backingSentence } from '../../lib/cost'
+import { backingLowerBound, backingSentence, sessionsLowerBound } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
@@ -249,7 +249,7 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
               <div>
                 <div className="text-sec text-muted">{caption}</div>
                 <div className="text-page" data-testid="total">
-                  <Money usd={totalUSD} />
+                  <Money usd={totalUSD} lowerBound={backingLowerBound(d.backing)} />
                 </div>
               </div>
               <div className="min-w-0 space-y-1.5">
@@ -551,7 +551,7 @@ function TopSessions({ query }: { query: CutQuery }) {
             header: 'Cost',
             align: 'right',
             width: '110px',
-            cell: (r) => <Money usd={r.totalUSD} flag={r.flag} />,
+            cell: (r) => <Money usd={r.totalUSD} flag={r.flag} lowerBound={sessionsLowerBound([r])} />,
           },
         ]
         return (

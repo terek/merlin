@@ -1,14 +1,15 @@
 // The parts of the Session page around the spend tree: the header, the resume command, the
 // banners, the family list and the parser's diagnostics.
-import { GitBranch, TriangleAlert } from 'lucide-react'
+import { GitBranch, GitPullRequest, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
 import type { SessionDetail } from '../../api/types'
 import { cn } from '../../lib/cn'
+import { approxMoney } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
-import { isRunning, promptCount, sameKey, sessionTitle } from '../../lib/session'
+import { isRunning, prName, promptCount, sameKey, sessionTitle } from '../../lib/session'
 import { fullTime, parseTime, spanMs } from '../../lib/time'
 import { Badge, Card, CopyButton, Duration, EndStateBadge, Id, Money, ProjectName, RelTime, StateDot } from '../../ui'
 import { diagnosticsLines, familyRows, resumeInfo } from './session'
@@ -36,6 +37,14 @@ export interface TreeStats {
   bestUSD: number
   /** What the messages on the page add up to. */
   messagesUSD: number
+  /** lowerBoundNote of the sessions' best costs ('' when none is a lower bound). */
+  lowerBound: string
+  /** Messages on the page cut short in the transcript (partial output tokens). */
+  truncated: number
+  /** The estimated output of those of them that are sub-agent messages; in messagesUSD. */
+  estimated: number
+  /** What Claude Code charged at other rates than Merlin's table (SessionCost.rateDiffUSD). */
+  rateDiff: number
 }
 
 export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: TreeStats }) {
@@ -85,11 +94,29 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
         </span>
         <Dot />
         <Id value={summary.key.id} full className="text-faint" />
+        {summary.prs?.map((pr) => (
+          <a
+            key={pr.url}
+            href={pr.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 whitespace-nowrap"
+            title={`${pr.repository ? `${pr.repository} ` : ''}${pr.url}`}
+          >
+            <GitPullRequest size={12} aria-hidden />
+            {prName(pr)}
+          </a>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sec">
         <span className="whitespace-nowrap">
-          <Money usd={best} flag={multi ? undefined : summary.cost.flag} className="font-semibold" />{' '}
+          <Money
+            usd={best}
+            flag={multi ? undefined : summary.cost.flag}
+            lowerBound={tree.lowerBound}
+            className="font-semibold"
+          />{' '}
           <span className="text-muted">
             {multi ? `for the ${tree.sessions} sessions of this tree` : 'total'}
             {multi && (
@@ -150,7 +177,22 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
         <p className="text-sec text-muted">
           Claude Code reported {formatMoney(Math.abs(best - tree.messagesUSD))}{' '}
           {best > tree.messagesUSD ? 'more' : 'less'} than the messages on this page add up to (
-          {formatMoney(tree.messagesUSD)}){best > tree.messagesUSD ? ': the hatched bands under the graph.' : '.'}
+          {formatMoney(tree.messagesUSD)})
+          {best <= tree.messagesUSD
+            ? '.'
+            : Math.abs(tree.rateDiff) >= 0.005
+              ? `; ${formatMoney(tree.rateDiff)} of it is Claude Code charging other rates than Merlin's table (an older price), the rest the hatched bands under the graph.`
+              : ': the hatched bands under the graph.'}
+        </p>
+      )}
+      {tree.estimated > 0 && (
+        <p className="text-sec text-muted">
+          The messages include {approxMoney(tree.estimated)} estimated for the output of sub-agent messages the
+          transcript cut short (
+          {tree.truncated === 1
+            ? 'one was written down before it finished'
+            : `${formatCount(tree.truncated)} were written down before they finished`}
+          ).
         </p>
       )}
     </header>

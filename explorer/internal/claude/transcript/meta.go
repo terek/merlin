@@ -109,6 +109,22 @@ func (r *Record) LastPrompt() (prompt, leafUUID string, ok bool) {
 	return v.LastPrompt, v.LeafUUID, true
 }
 
+// PRLink is a pull request the session created or linked (a pr-link record).
+type PRLink struct {
+	Number     int64  `json:"prNumber"`
+	URL        string `json:"prUrl"`
+	Repository string `json:"prRepository"`
+}
+
+// PRLink returns the fields of a pr-link record; ok is false when it has no URL.
+func (r *Record) PRLink() (PRLink, bool) {
+	var v PRLink
+	if r.Type != TypePRLink || !r.decode(&v) || v.URL == "" {
+		return PRLink{}, false
+	}
+	return v, true
+}
+
 // AwaySummary returns the recap text of a system/away_summary record.
 func (r *Record) AwaySummary() (text string, ok bool) {
 	if r.Type != TypeSystem || r.Subtype != SubtypeAwaySummary {

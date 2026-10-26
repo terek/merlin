@@ -180,6 +180,12 @@ func TestCodexModels(t *testing.T) {
 	if _, ok := tab.Cost("gpt-6-luna", model.Tokens{Input: 1}, false); !ok {
 		t.Error("gpt-6-luna unpriced")
 	}
+	// The approval reviewer is priced as gpt-6-luna.
+	tok := model.Tokens{Input: 3000, CacheRead: 40000, Output: 800}
+	luna, _ := tab.Cost("gpt-6-luna", tok, false)
+	if rev, ok := tab.Cost("codex-auto-review", tok, false); !ok || rev.USD != luna.USD {
+		t.Errorf("codex-auto-review: %v %v, want %v", ok, rev.USD, luna.USD)
+	}
 }
 
 func TestFable5Verified(t *testing.T) {

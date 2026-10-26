@@ -3,11 +3,12 @@
 import { Bot, MessageSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
-import type { SessionSummary } from '../../api/types'
+import type { PRLink, SessionSummary } from '../../api/types'
 import { cn } from '../../lib/cn'
+import { sessionsLowerBound } from '../../lib/cost'
 import { plural } from '../../lib/format'
 import { sessionPath, shortId } from '../../lib/paths'
-import { isRunning, promptCount, sessionTitle } from '../../lib/session'
+import { isRunning, prBadge, promptCount, sessionTitle } from '../../lib/session'
 import { Badge, EndStateBadge, Money, ProjectName, RelTime, StateDot } from '../../ui'
 import type { Row } from './model'
 
@@ -71,6 +72,7 @@ export function SessionRow({
           {/* while it runs, the end state only says the last record is not an answer yet */}
           {!isRunning(s.state) && <EndStateBadge endState={s.endState} />}
           {s.key.harness === 'codex' && <Badge title="A Codex session">codex</Badge>}
+          <PRBadge prs={s.prs} />
           {s.kind === 'background' && (
             <Badge title="A background session: nobody typed into it interactively">background</Badge>
           )}
@@ -113,7 +115,12 @@ export function SessionRow({
               </>
             )}
           </span>
-          <Money usd={s.cost.bestUSD} flag={s.cost.flag} className="w-20 text-right" />
+          <Money
+            usd={s.cost.bestUSD}
+            flag={s.cost.flag}
+            lowerBound={sessionsLowerBound([s.cost])}
+            className="w-20 text-right"
+          />
         </span>
       </div>
       <div
@@ -130,4 +137,10 @@ export function SessionRow({
       </div>
     </Link>
   )
+}
+
+/** The pull requests a session (or a tree) opened or linked; the tooltip lists them. Not a link: the row is one. */
+export function PRBadge({ prs }: { prs: readonly PRLink[] | undefined }) {
+  if (!prs?.length) return null
+  return <Badge title={`Pull requests opened or linked:\n${prs.map((p) => p.url).join('\n')}`}>{prBadge(prs)}</Badge>
 }

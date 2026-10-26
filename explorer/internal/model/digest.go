@@ -49,6 +49,7 @@ type SessionDigest struct {
 	EndState       EndState    `json:"endState,omitempty"`
 
 	Recaps   []Recap   `json:"recaps,omitempty"`
+	PRs      []PRLink  `json:"prs,omitempty"`
 	Lineage  Lineage   `json:"lineage"`
 	Stats    Stats     `json:"stats"`
 	Cost     Cost      `json:"cost"`
@@ -70,6 +71,14 @@ func (d *SessionDigest) Key() SessionKey { return SessionKey{Harness: d.Harness,
 type Recap struct {
 	At   time.Time `json:"at"`
 	Text string    `json:"text"`
+}
+
+// PRLink is a pull request the session created or linked. At is when it was first linked.
+type PRLink struct {
+	At         time.Time `json:"at,omitzero"`
+	Number     int64     `json:"number,omitempty"`
+	URL        string    `json:"url"`
+	Repository string    `json:"repository,omitempty"`
 }
 
 // ForkRef names the point in another session that this session was forked from.
@@ -116,6 +125,10 @@ type ReportedWindow struct {
 	To       time.Time                `json:"to"`
 	TotalUSD float64                  `json:"totalUSD"`
 	ByModel  map[string]ReportedModel `json:"byModel,omitempty"`
+	// RateDiffUSD is TotalUSD minus the reported tokens priced with Merlin's table (models
+	// it prices only): spend the harness charged at other rates than Merlin's, not calls
+	// missing from the transcript. Negative when the harness charged less.
+	RateDiffUSD float64 `json:"rateDiffUSD,omitempty"`
 }
 
 // Reported is the cost the harness itself reported. It is never blended with Cost: it
@@ -361,6 +374,12 @@ type Message struct {
 	// Truncated marks a message the harness wrote down before it finished: its output
 	// token count is partial, so USD is a lower bound.
 	Truncated bool `json:"truncated,omitempty"`
+	// EstimatedUSD, on a truncated message, is the expected cost of the output tokens missing
+	// from its count (a fixed per-message estimate at the model's prices). It is not in USD.
+	EstimatedUSD float64 `json:"estimatedUSD,omitempty"`
+	// Unpriced marks a message whose model the price table does not know: USD is 0 although
+	// its tokens were billed.
+	Unpriced bool `json:"unpriced,omitempty"`
 	// Fast marks a call made in fast mode (Claude's fast speed, Codex's priority tier). The
 	// prompt cache is not shared between fast and standard calls.
 	Fast bool `json:"fast,omitempty"`

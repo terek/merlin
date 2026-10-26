@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 11,
+  "parserVersion": 15,
   "source": [
     {
       "path": "projects/-home-dev-acme-pricing/20202020-0000-4000-8000-000000000001.jsonl",
@@ -50,7 +50,8 @@
         "output": 50,
         "usd": 0.0015
       }
-    }
+    },
+    "unpricedMessages": 1
   },
   "turns": [
     {
@@ -82,7 +83,8 @@
             "output": 50,
             "usd": 0.0015
           }
-        }
+        },
+        "unpricedMessages": 1
       },
       "costWithAgents": 0.0267
     }
@@ -116,6 +118,7 @@
       "model": "claude-nova-9-9",
       "turn": 0,
       "usd": 0,
+      "unpriced": true,
       "input": 1000,
       "output": 100
     },

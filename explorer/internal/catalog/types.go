@@ -92,7 +92,7 @@ type Inherited struct {
 // SessionCost is every cost figure of one session. BestUSD is the one to show and to sum;
 // the function that computes it is bestCost in build.go.
 type SessionCost struct {
-	// BestUSD = ReportedUSD + UncoveredUSD.
+	// BestUSD = ReportedUSD + UncoveredUSD + EstimatedUncoveredUSD.
 	BestUSD float64  `json:"bestUSD"`
 	Flag    CostFlag `json:"flag"`
 
@@ -112,6 +112,17 @@ type SessionCost struct {
 	// agents or turns.
 	OverheadUSD float64 `json:"overheadUSD"`
 
+	// The estimated output truncated messages are missing (Message.EstimatedUSD).
+	// EstimatedCoveredUSD is the part inside the windows, capped per window at its overhead:
+	// it explains that much of OverheadUSD. EstimatedUncoveredUSD is the part outside every
+	// window, which BestUSD includes.
+	EstimatedCoveredUSD   float64 `json:"estimatedCoveredUSD,omitempty"`
+	EstimatedUncoveredUSD float64 `json:"estimatedUncoveredUSD,omitempty"`
+	// RateDiffUSD sums the windows' RateDiffUSD: the part of OverheadUSD that is the harness
+	// charging other rates than Merlin's table, not calls missing from the transcript. So
+	// OverheadUSD - EstimatedCoveredUSD - RateDiffUSD is what nothing explains.
+	RateDiffUSD float64 `json:"rateDiffUSD,omitempty"`
+
 	// InheritedUSD is the attributed cost of messages in this session's files that
 	// another session owns, split by owner.
 	InheritedUSD  float64     `json:"inheritedUSD"`
@@ -123,6 +134,12 @@ type SessionCost struct {
 	// they finished (Message.Truncated): their output tokens are partial, so OwnUSD and
 	// the part of the best cost recomputed from tokens are lower bounds when it is non-zero.
 	TruncatedMessages int `json:"truncatedMessages,omitempty"`
+	// UnpricedMessages is how many of the owned messages were billed on a model with no
+	// price (Message.Unpriced): they count $0 in OwnUSD.
+	UnpricedMessages int `json:"unpricedMessages,omitempty"`
+	// LowerBound: BestUSD is a lower bound, because an unpriced message lies outside every
+	// reported window (inside one, the reported total already covers it).
+	LowerBound bool `json:"lowerBound,omitempty"`
 	// Compactions is the estimated cost of the session's compaction calls, main agent and
 	// sub-agents; see CompactionTally.
 	Compactions CompactionTally `json:"compactions,omitzero"`
@@ -137,6 +154,11 @@ type WindowCost struct {
 	// message explains, negative when the messages add up to more. Not clamped, so the
 	// windows add up to ReportedUSD - CoveredUSD.
 	OverheadUSD float64 `json:"overheadUSD"`
+	// EstimatedUSD is the estimated output of the window's truncated messages, capped at
+	// OverheadUSD - RateDiffUSD (never below 0): the part of the overhead it explains. EstimateScale is set
+	// when the cap applies: the share of each message's EstimatedUSD that is counted.
+	EstimatedUSD  float64  `json:"estimatedUSD,omitempty"`
+	EstimateScale *float64 `json:"estimateScale,omitempty"`
 }
 
 // LinkKind says whether a child session took over from its parent or branched off it.

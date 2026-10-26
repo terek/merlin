@@ -1392,6 +1392,21 @@ function costState(k: string, f: F, hidden: boolean, suffix: Record<string, stri
   const f = mk(21, 'misc')
   f.user('write the changelog')
   f.asst('msg_misc_01', [T('Changelog written')], u(1000, 50, 0, 0, 2000))
+  // PRs the session opened: #12 is linked twice, the digest keeps it once at its first link
+  const pr = (n: number) => ({
+    type: 'pr-link',
+    prNumber: n,
+    prUrl: `https://git.example.test/acme/misc/pull/${n}`,
+    prRepository: 'acme/misc',
+    timestamp: f.now(),
+  })
+  f.meta(pr(12))
+  f.adv()
+  f.meta(pr(13))
+  f.adv()
+  f.meta(pr(12))
+  // a request record: recognised, never decoded (no figure changes)
+  f.meta({ type: 'api-request', id: 'req-misc-01', timestamp: f.now(), querySource: 'repl_main_thread', keep: 0, tail: [] })
   f.turnEnd(3000, 2)
   const p = f.dir
   RAW.set(
@@ -1914,7 +1929,7 @@ ${B('19')}
 ${B('20')}
 `)
   L.push(`### 21 non-transcript files
-Project \`${keyOf('misc')}\` holds one real session \`${d(21)}\` plus files a scan must ignore: \`notes.jsonl\` (basename not a uuid, though its first line looks like a user record), \`vercel-plugin/skill-injections.jsonl\`,
+Project \`${keyOf('misc')}\` holds one real session \`${d(21)}\` (with three \`pr-link\` records, PR 12 linked twice, and one \`api-request\`) plus files a scan must ignore: \`notes.jsonl\` (basename not a uuid, though its first line looks like a user record), \`vercel-plugin/skill-injections.jsonl\`,
 \`sessions-index.json\`, \`memory/MEMORY.md\`.
 
 ${B('21')}

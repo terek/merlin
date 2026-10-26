@@ -53,6 +53,10 @@ export interface CostBrief {
   uncoveredUSD: number
   overheadUSD: number
   inheritedUSD: number
+  /** bestUSD is a lower bound: an unpriced message lies outside every reported window. */
+  lowerBound?: boolean
+  truncatedMessages?: number
+  unpricedMessages?: number
 }
 
 export interface LineageBrief {
@@ -74,6 +78,15 @@ export interface LastPrompt {
   at: string
   text: string
   truncated: boolean
+}
+
+/** A pull request the session created or linked; `at` is its first link. */
+export interface PRLink {
+  at?: string
+  number?: number
+  url: string
+  /** `owner/name`, as the harness wrote it. */
+  repository?: string
 }
 
 /** The harness's own "where things stand" note, as a preview. */
@@ -107,6 +120,8 @@ export interface SessionSummary {
   humanTurns?: number
   lastPrompt?: LastPrompt
   recap?: RecapPreview
+  /** Pull requests the session created or linked, each once, oldest first. */
+  prs?: PRLink[]
 }
 
 export interface ScriptedLine {
@@ -231,6 +246,12 @@ export interface ReportedWindow {
   coveredUSD?: number
   /** totalUSD - coveredUSD, not clamped: what the harness reported in the window that no message explains. */
   overheadUSD?: number
+  /** Estimated output of the window's truncated messages, capped at overheadUSD: the part of it they explain. */
+  estimatedUSD?: number
+  /** Set when the cap applies: the share of each message's estimatedUSD that is counted. */
+  estimateScale?: number
+  /** totalUSD minus the reported tokens at Merlin's prices: the harness charging other rates, not missing calls. */
+  rateDiffUSD?: number
 }
 
 export interface Inherited {
@@ -246,6 +267,10 @@ export interface SessionCost {
   reportedUSD: number
   /** Owned messages cut short in the transcript (their attributed cost is a lower bound). */
   truncatedMessages?: number
+  /** Owned messages billed on a model without a price; they count $0. */
+  unpricedMessages?: number
+  /** bestUSD is a lower bound: an unpriced message lies outside every reported window. */
+  lowerBound?: boolean
   /** The session's compaction calls, estimated; see CompactionTally. */
   compactions?: CompactionTally
   windows?: ReportedWindow[]
@@ -255,6 +280,12 @@ export interface SessionCost {
   uncoveredUSD: number
   /** reportedUSD - coveredUSD (>= 0): reported spend no transcript message explains. */
   overheadUSD: number
+  /** Estimated output of truncated messages inside the windows (capped): it explains that much of overheadUSD. */
+  estimatedCoveredUSD?: number
+  /** Estimated output of truncated messages outside every window; in bestUSD. */
+  estimatedUncoveredUSD?: number
+  /** The windows' rateDiffUSD: the part of overheadUSD that is the harness charging other rates than Merlin's table. */
+  rateDiffUSD?: number
   inheritedUSD: number
   inheritedFrom?: Inherited[]
   ownMessages: number
@@ -322,6 +353,8 @@ export interface Cost {
   byModel?: Record<string, ModelCost>
   /** Messages cut short in the transcript: their output tokens are a partial count, so usd is a lower bound. */
   truncatedMessages?: number
+  /** Messages on a model without a price: not in usd or byModel, so usd is a lower bound. */
+  unpricedMessages?: number
 }
 
 export interface Reported {
@@ -551,6 +584,10 @@ export interface Message extends Tokens {
   usd: number
   /** Written down before it finished: output tokens are a partial count. */
   truncated?: boolean
+  /** On a truncated sub-agent message: the expected cost of its missing output (already scaled to the window's cap); not in usd. */
+  estimatedUSD?: number
+  /** Its model has no price: usd is 0 although the tokens were billed. */
+  unpriced?: boolean
   /** Made in fast mode; fast and standard calls do not share the prompt cache. */
   fast?: boolean
 }
@@ -584,6 +621,7 @@ export interface SessionDigest {
   lastActivityAt?: string
   endState?: EndState
   recaps?: Recap[]
+  prs?: PRLink[]
   lineage: DigestLineage
   stats: Stats
   cost: Cost
@@ -640,6 +678,10 @@ export interface CostRow extends Money {
   sessions: number
   /** Set for by=session rows. */
   flag?: CostFlag
+  /** by=session rows: the session's lowerBound, truncatedMessages and unpricedMessages (SessionCost). */
+  lowerBound?: boolean
+  truncatedMessages?: number
+  unpricedMessages?: number
   /** by=session rows: the session's harness, project and last activity (a scripted row has only project). */
   harness?: string
   project?: string
@@ -653,6 +695,8 @@ export interface CostBacking {
   partial: number
   estimated: number
   scriptedRuns: number
+  /** Sessions, of any flag, whose best cost is a lower bound. */
+  lowerBound?: number
 }
 
 export interface CostTable {

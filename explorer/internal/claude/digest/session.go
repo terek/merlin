@@ -2,6 +2,8 @@ package digest
 
 import (
 	"fmt"
+	"maps"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -16,7 +18,7 @@ import (
 // the Builder, in Assemble or in the transcript package would change a digest built from
 // the same files: the engine rebuilds every digest whose parserVersion differs. A change of
 // the embedded price table counts too, as the stored costs are not repriced otherwise.
-const ParserVersion = 11
+const ParserVersion = 15
 
 // BuildSession reads the files of one discovered session and returns its complete digest.
 //
@@ -25,7 +27,7 @@ const ParserVersion = 11
 // means a file could not be read; the engine then writes an error stub that keeps
 // src.Fingerprint as its source.
 func BuildSession(src discover.Source, pricer Pricer) (*model.SessionDigest, error) {
-	return BuildSessionFrom(src, func(path string) (*FileResult, error) { return readFileResult(path, pricer) })
+	return BuildSessionFrom(src, pricer, func(path string) (*FileResult, error) { return readFileResult(path, pricer) })
 }
 
 // FileReducer returns the reduction of one transcript file as it is now. BuildSessionFrom
@@ -34,7 +36,8 @@ func BuildSession(src discover.Source, pricer Pricer) (*model.SessionDigest, err
 type FileReducer func(path string) (*FileResult, error)
 
 // BuildSessionFrom is BuildSession with the per-file reduction supplied by the caller.
-func BuildSessionFrom(src discover.Source, reduce FileReducer) (*model.SessionDigest, error) {
+// pricer must be the one the reductions price with.
+func BuildSessionFrom(src discover.Source, pricer Pricer, reduce FileReducer) (*model.SessionDigest, error) {
 	d := &model.SessionDigest{
 		SchemaVersion: model.SchemaVersion,
 		ParserVersion: ParserVersion,
@@ -92,6 +95,7 @@ func BuildSessionFrom(src discover.Source, reduce FileReducer) (*model.SessionDi
 	fillTitle(d, main)
 	fillLineage(d, main, all)
 	d.Reported, d.Stats.LinesAdded, d.Stats.LinesRemoved = reported(main)
+	rateDiffs(d, pricer)
 	fillStats(d)
 	return d, nil
 }
@@ -169,9 +173,33 @@ func fillDescriptive(d *model.SessionDigest, main *FileResult, all []*FileResult
 		d.EndState = main.EndState
 		d.Recaps = slices.Clone(main.Recaps)
 		sort.SliceStable(d.Recaps, func(i, j int) bool { return d.Recaps[i].At.Before(d.Recaps[j].At) })
+		d.PRs = uniquePRs(main.PRs)
 	} else {
 		d.EndState = model.EndUnknown
 	}
+}
+
+// uniquePRs keeps each PR once, at its first link, ordered by time then URL.
+func uniquePRs(links []model.PRLink) []model.PRLink {
+	first := map[string]int{}
+	var out []model.PRLink
+	for _, l := range links {
+		if i, ok := first[l.URL]; ok {
+			if l.At.Before(out[i].At) {
+				out[i].At = l.At
+			}
+			continue
+		}
+		first[l.URL] = len(out)
+		out = append(out, l)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if !out[i].At.Equal(out[j].At) {
+			return out[i].At.Before(out[j].At)
+		}
+		return out[i].URL < out[j].URL
+	})
+	return out
 }
 
 // fillTitle picks the title: the last custom title, else the last AI title, else the first
@@ -294,6 +322,72 @@ func reported(main *FileResult) (rep *model.Reported, added, removed int64) {
 		removed += w.removed
 	}
 	return rep, added, removed
+}
+
+// windowSlack widens a reported window when matching messages to it, as the catalog does.
+const windowSlack = time.Second
+
+// rateDiffs sets each reported window's RateDiffUSD: what Claude Code reported for it minus
+// the tokens it reported priced with Merlin's table, over the models the table knows. A
+// rate Claude Code charged differently (an old price in its own table) shows here instead
+// of as calls missing from the transcript.
+//
+// The reported tokens do not say which cache writes were 5-minute and which 1-hour, nor
+// which calls ran in fast mode: the 1-hour writes are those of the session's messages of
+// the model in the window, the rest 5-minute. The priced tokens at standard rates are scaled by the messages' own cost over
+// their cost at standard rates, which carries the fast-mode share over.
+func rateDiffs(d *model.SessionDigest, pricer Pricer) {
+	if d.Reported == nil || pricer == nil {
+		return
+	}
+	for wi := range d.Reported.Windows {
+		w := &d.Reported.Windows[wi]
+		type acc struct {
+			tok      model.Tokens
+			usd, std float64
+		}
+		in := map[string]*acc{}
+		for _, m := range d.Messages {
+			if m.At.Before(w.From.Add(-windowSlack)) || m.At.After(w.To.Add(windowSlack)) {
+				continue
+			}
+			a := in[m.Model]
+			if a == nil {
+				a = &acc{}
+				in[m.Model] = a
+			}
+			a.tok.Add(m.Tokens)
+			a.usd += m.USD
+			if s, ok := pricer.Cost(m.Model, m.Tokens, false); ok {
+				a.std += s.USD
+			}
+		}
+		var diff float64
+		for _, name := range slices.Sorted(maps.Keys(w.ByModel)) {
+			r := w.ByModel[name]
+			a := in[name]
+			if a == nil {
+				a = &acc{}
+			}
+			tok := model.Tokens{Input: r.InputTokens, Output: r.OutputTokens, CacheRead: r.CacheReadTokens}
+			// 1-hour writes are the messages' own; the writes no message shows are the
+			// harness's side calls, which write the 5-minute cache (on the history up to
+			// 2026-10-27 this leaves every model but Sonnet 5.5 within ±$2 over all windows,
+			// where splitting them as the messages do left Fable 5.1 at -$11.6)
+			tok.CacheWrite1h = min(a.tok.CacheWrite1h, r.CacheCreationTokens)
+			tok.CacheWrite5m = r.CacheCreationTokens - tok.CacheWrite1h
+			p, ok := pricer.Cost(name, tok, false)
+			if !ok {
+				continue
+			}
+			priced := p.USD
+			if a.std > 0 {
+				priced *= a.usd / a.std
+			}
+			diff += r.USD - priced
+		}
+		w.RateDiffUSD = math.Round(diff*1e9) / 1e9 // float noise is no difference
+	}
 }
 
 // fillStats counts turns, messages and tool calls over the main agent and every sub-agent.

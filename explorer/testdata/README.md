@@ -378,7 +378,7 @@ Turn 2 ("add a header") starts 2026-09-18 23:59:30 local and ends 2026-09-19 00:
 - **total 20: $0.0267**
 
 ### 21 non-transcript files
-Project `-home-dev-acme-misc` holds one real session `21212121-0000-4000-8000-000000000001` plus files a scan must ignore: `notes.jsonl` (basename not a uuid, though its first line looks like a user record), `vercel-plugin/skill-injections.jsonl`,
+Project `-home-dev-acme-misc` holds one real session `21212121-0000-4000-8000-000000000001` (with three `pr-link` records, PR 12 linked twice, and one `api-request`) plus files a scan must ignore: `notes.jsonl` (basename not a uuid, though its first line looks like a user record), `vercel-plugin/skill-injections.jsonl`,
 `sessions-index.json`, `memory/MEMORY.md`.
 
 - `msg_misc_01` (claude-sonnet-5-5): 1000 in x $2/M = $0.002 + 50 out x $10/M = $0.0005 + 2000 cache-write-1h x $4/M = $0.008 = **$0.0105**

@@ -423,3 +423,26 @@ func TestTruncatedMessagesCounted(t *testing.T) {
 		t.Errorf("02: truncated = %d, want 0", in.Cost.TruncatedMessages)
 	}
 }
+
+// An unpriced message outside every reported window makes the best cost a lower bound
+// (scenario 20's unknown model); a truncated agent message gets an estimate instead (06), a
+// truncated main-agent message none (04, interrupted).
+func TestLowerBound(t *testing.T) {
+	c := fixtureCatalog(t)
+	for _, tc := range []struct {
+		s, f     string
+		lower    bool
+		unpriced int
+	}{{"06", "01", false, 0}, {"20", "01", true, 1}, {"02", "01", false, 0}} {
+		in, _ := c.Session(sid(tc.s, tc.f))
+		if in.Cost.LowerBound != tc.lower || in.Cost.UnpricedMessages != tc.unpriced {
+			t.Errorf("%s: lowerBound %v unpriced %d, want %v %d", tc.s, in.Cost.LowerBound, in.Cost.UnpricedMessages, tc.lower, tc.unpriced)
+		}
+	}
+	if in, _ := c.Session(sid("06", "01")); in.Cost.EstimatedUncoveredUSD <= 0 {
+		t.Errorf("06: no estimate: %+v", in.Cost)
+	}
+	if in, _ := c.Session(sid("04", "01")); in.Cost.TruncatedMessages == 0 || in.Cost.EstimatedUncoveredUSD != 0 {
+		t.Errorf("04: truncated %d estimate %v", in.Cost.TruncatedMessages, in.Cost.EstimatedUncoveredUSD)
+	}
+}

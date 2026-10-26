@@ -23,14 +23,31 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 - **Cost.** `bestUSD` is the figure to show and to sum. `flag` says how it is backed:
   `exact` (the harness reported it for the whole session), `partial` (reported, but some owned
   spend lies outside the reported windows and is recomputed from tokens), `estimated` (nothing
-  reported; recomputed from tokens). `reportedUSD` + `uncoveredUSD` = `bestUSD`. `overheadUSD`
-  is spend the harness reported that no transcript message explains; it is a session-level figure
-  and is never spread over agents or turns. `inheritedUSD` is history copied from another session
-  that the other session already paid for; it is not in `bestUSD`.
+  reported; recomputed from tokens). `reportedUSD` + `uncoveredUSD` + `estimatedUncoveredUSD` =
+  `bestUSD`. `overheadUSD` is spend the harness reported that no transcript message explains; it
+  is a session-level figure and is never spread over agents or turns, except through the
+  estimates below. `inheritedUSD` is history copied from another session that the other session
+  already paid for; it is not in `bestUSD`.
   `truncatedMessages` (omitted when 0) counts the owned messages the harness wrote down before
   they finished (null `stop_reason` on the last line; mostly sub-agent messages): their output
   tokens are partial, so the recomputed part of the cost is a lower bound when it is non-zero.
   The per-agent counts are in the detail's `digest.agents[].cost.truncatedMessages`.
+  **Rate differences.** `windows[].rateDiffUSD` (from the digest) is the part of a window's
+  overhead that is the harness charging other rates than Merlin's table, not missing calls;
+  `rateDiffUSD` sums it over the windows.
+  **Estimates.** A truncated sub-agent message carries `estimatedUSD`, the expected cost of its
+  missing output. Inside a window the estimates explain part of the overhead:
+  `windows[].estimatedUSD` is their sum capped at the window's `overheadUSD` minus its
+  `rateDiffUSD`, and
+  `windows[].estimateScale` (set only when the cap applies) is the share of each message's estimate
+  counted; `estimatedCoveredUSD` sums them over the windows. Outside every window they are added to
+  `bestUSD` as `estimatedUncoveredUSD`, and `/api/cost` counts them as attributed. With
+  `?messages=1` each message's `estimatedUSD` is already scaled, so the messages add up to these
+  figures.
+  `unpricedMessages` (omitted when 0) counts the owned messages billed on a model with no price;
+  they count $0. `lowerBound` (omitted when false) says `bestUSD` itself is a lower bound: an
+  unpriced message lies outside every reported window (inside one, the reported total covers it). All three are in the session list's `cost` and on `/api/cost?by=session`
+  rows too; `/api/cost`'s `backing.lowerBound` counts the sessions with `lowerBound`.
 - **Dates and times** given as parameters are an RFC 3339 time or a date (`2026-09-16`, local
   midnight). A date-only `until` includes that whole day.
 - **Errors.** Every non-2xx body has this shape:
@@ -227,9 +244,9 @@ valid with `by=tree`.
 }
 ```
 
-### Previews: `humanTurns`, `lastPrompt`, `recap`
+### Previews: `humanTurns`, `lastPrompt`, `recap`, `prs`
 
-Every summary (list row, `session-updated` event, `summary` of the detail) carries three more
+Every summary (list row, `session-updated` event, `summary` of the detail) carries four more
 fields so that a list can show what a session is about without loading it:
 
 - `humanTurns` (int): the digest's `stats.humanTurns`, the turns a person typed: prompts and
@@ -239,6 +256,8 @@ fields so that a list can show what a session is about without loading it:
   abandoned; when every human turn is abandoned, the last human turn. `turn` is the turn index
   (`digest.turns[turn]` in the detail), `at` its start. Omitted when the session has no human turn.
 - `recap` `{at, text, truncated}`: the last recap. Omitted when the session has none.
+- `prs` `[{at, number, url, repository}]`: the pull requests the session created or linked, the
+  digest's `prs`. Omitted when there are none.
 
 `text` in both is a **preview**, and this is the one place the API shortens a text: runs of
 whitespace are collapsed to one space, the text is trimmed, and it is cut to 300 runes (at a rune

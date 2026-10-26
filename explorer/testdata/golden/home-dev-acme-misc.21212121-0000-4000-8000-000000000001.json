@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 11,
+  "parserVersion": 15,
   "source": [
     {
       "path": "projects/-home-dev-acme-misc/21212121-0000-4000-8000-000000000001.jsonl",
@@ -25,8 +25,22 @@
   "kind": "interactive",
   "title": "write the changelog",
   "startedAt": "2026-09-21T10:00:00Z",
-  "lastActivityAt": "2026-09-21T10:00:04Z",
+  "lastActivityAt": "2026-09-21T10:00:08Z",
   "endState": "clean",
+  "prs": [
+    {
+      "at": "2026-09-21T10:00:04Z",
+      "number": 12,
+      "url": "https://git.example.test/acme/misc/pull/12",
+      "repository": "acme/misc"
+    },
+    {
+      "at": "2026-09-21T10:00:06Z",
+      "number": 13,
+      "url": "https://git.example.test/acme/misc/pull/13",
+      "repository": "acme/misc"
+    }
+  ],
   "lineage": {},
   "stats": {
     "humanTurns": 1,
@@ -51,7 +65,7 @@
       "epoch": 0,
       "uuid": "21010000-0000-4000-9000-000000000001",
       "startedAt": "2026-09-21T10:00:00Z",
-      "endedAt": "2026-09-21T10:00:04Z",
+      "endedAt": "2026-09-21T10:00:08Z",
       "durationMs": 3000,
       "origin": "human",
       "userText": "write the changelog",

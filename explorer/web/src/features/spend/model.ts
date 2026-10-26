@@ -232,6 +232,11 @@ export interface Bucket {
   tokens: Record<ClassKey, number>
   rereads: Reread[]
   messages: number
+  /** Messages cut short in the transcript; their estimated missing output is in usd and byClass.output, and in `estimated`. */
+  truncated: number
+  estimated: number
+  /** Messages on a model without a price: usd is a lower bound. */
+  unpriced: number
 }
 
 export const newBucket = (): Bucket => ({
@@ -241,6 +246,9 @@ export const newBucket = (): Bucket => ({
   tokens: zeroClass(),
   rereads: [],
   messages: 0,
+  truncated: 0,
+  estimated: 0,
+  unpriced: 0,
 })
 
 export function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | undefined): void {
@@ -261,8 +269,13 @@ export function addMessage(b: Bucket, m: Message, fit: Fit, prev: Message | unde
   const writeMiss = written > 0 ? raw.write * k * (fromWrite / written) : 0
   const inputMiss = (m.input ?? 0) > 0 ? raw.input * k * (fromInput / (m.input ?? 0)) : 0
   const rereadUSD = writeMiss + inputMiss
-  b.usd += m.usd
+  const est = m.estimatedUSD ?? 0
+  b.usd += m.usd + est
   b.messages++
+  if (m.truncated) b.truncated++
+  if (m.unpriced) b.unpriced++
+  b.estimated += est
+  b.byClass.output += est
   b.reread += rereadUSD
   b.byClass.input += raw.input * k - inputMiss
   // a message the fit cannot split (no tokens, or an unpriced model) is all "output"

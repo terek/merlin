@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import type { Compaction, QueuedPrompt } from '../../api/types'
 import { callLine, tallyLine, warmLine } from '../../lib/compaction'
+import { estimateNote, lowerBoundNote } from '../../lib/cost'
 import { formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
 import { inboxSummary, turnPrompt } from '../../lib/inbox'
 import { firstLine } from '../../lib/paths'
@@ -439,7 +440,12 @@ function UnitList({
                     ]}
                   />
                 </span>
-                <Money usd={u.bucket.usd} className="w-14 shrink-0 text-right" />
+                <Money
+                  usd={u.bucket.usd}
+                  lowerBound={lowerBoundNote(0, u.bucket.unpriced)}
+                  estimate={estimateNote(u.bucket.estimated, u.bucket.truncated)}
+                  className="w-14 shrink-0 text-right"
+                />
               </button>
             </li>
           )
@@ -479,7 +485,12 @@ function UnitDetail({
             piece {u.ordinal} of {u.of}
           </span>
         )}
-        <Money usd={u.bucket.usd} className="font-semibold" />
+        <Money
+          usd={u.bucket.usd}
+          lowerBound={lowerBoundNote(0, u.bucket.unpriced)}
+          estimate={estimateNote(u.bucket.estimated, u.bucket.truncated)}
+          className="font-semibold"
+        />
         {a.model && <ModelName name={a.model} className="text-sec text-muted" />}
       </div>
       <div className="grid gap-6 p-3 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">

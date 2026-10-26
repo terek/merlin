@@ -88,6 +88,25 @@ differs between lines of the same message in 15k cases.)
 - `output_tokens` already includes thinking tokens.
 - Context size at a given message = `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`.
 - `stop_reason`: `tool_use`, `end_turn`, `stop_sequence`, or `null` on non-final lines.
+- **Sub-agent messages are sometimes written at stream start only**: the message's only (or
+  last) line has `stop_reason: null` and `output_tokens` is the count at that moment
+  (median 3). Input and cache counts are complete. Share of agent messages per version, one
+  machine's whole history (2026-10-26): 100% on 2.1.50 and 2.1.52; 1% to 29% from 2.1.63 to
+  2.1.245; **57% to 78% from 2.1.246 to 2.1.263**; 41% on 2.1.265, 7% to 10% on 2.1.266 to
+  2.1.268, 0% to 2% from 2.1.269; 0 of 663 on 2.1.309 and 2.1.310. Main-agent messages: 7
+  in the whole history. Another machine reported ~79% on 2.1.280 and all on 2.1.303 and
+  2.1.304, so it may depend on how the agents run. 98% of the truncated messages are followed
+  by more messages of the same agent: they are not an interrupted last answer.
+  The final usage is written nowhere else (checked 2026-10-26): not in the Agent tool's
+  `toolUseResult`, task notifications, `api-request` records, the agent's `.meta.json`, or
+  `~/.claude/stats-cache.json` and `usage-data/session-meta/` (totals derived from the same
+  transcripts). So the output cost of those messages is a floor; the digest counts them as
+  `truncatedMessages` (validation.md, cause A) and gives each truncated sub-agent message an
+  `estimatedUSD` for 680 more output tokens (the regression slope there). A main-agent message
+  with a null `stop_reason` was interrupted and gets none.
+- `requestRef` (2.1.302 on, string): the `id` of the `api-request` record in the same file
+  that the message answers (98% resolve). It joins a billed message to its request's model,
+  effort, thinking mode and cache TTLs.
 
 ## 4. User records
 
@@ -350,6 +369,33 @@ transcript ($0.30 median here).
 | `system/turn_duration` `{durationMs, messageCount}` | end-of-turn marker |
 | `system/agents_killed`, `system/api_error`, `system/model_refusal_fallback` | events |
 | `queue-operation`, `mode`, `permission-mode`, `atis-latch`, `bridge-session`, `file-history-*`, `frame-link`, `artifact-*`, `agent-setting`, `agent-color` | ignore |
+| `pr-link` `{sessionId, prNumber, prUrl, prRepository, timestamp}` | a PR the session created or linked (2.1.280 on; main transcripts). Several per session, possibly the same PR again: the digest's `prs` keeps each once |
+| `api-request`, `api-request-blob`, `api-request-shape` | the requests Claude Code sent (2.1.300 on; main and sub-agent files). Recognised but never decoded past `type`, see below |
+
+**`api-request*` records** (2.1.300 on) carry no usage and no cost; none of them changes a
+figure. Structure, keys only:
+
+- `api-request` `{sessionId, id, timestamp, version, querySource, shapeHash, agentId?,
+  params: {model, betas[], max_tokens, thinking: {type, display}, context_management:
+  {edits[]: {type, keep}}, output_config: {effort}, safeguards?[]: {type,
+  classifier_context}}, keep, tail[], base, cacheControl[]: {path[], value: {type, ttl,
+  scope?}}, requestDigest}`. One per API request. `querySource` is `repl_main_thread` or
+  `agent:custom:<agent type>` (then `agentId` is set). A delta encoding: the request is
+  request `base` (an earlier `api-request` id in the same file, or null), its first `keep`
+  messages, then the `api-request-blob`s whose hashes `tail` lists (about half resolve in the
+  same file). `id` matches no assistant message id, `requestId` or uuid; the assistant record's
+  `requestRef` names it (§3).
+- `api-request-blob` `{sessionId, hash, message: {role, content[]}}` (no `version`): a
+  content-addressed request message, full prompt text included. Content blocks are `text`,
+  `thinking`, `tool_use`, `tool_result` and `tool_addition` (not seen in normal messages).
+- `api-request-shape` `{sessionId, shapeHash, timestamp, version, shape: {system[]: {type,
+  text}, tools[]: {name, description, input_schema, eager_input_streaming}}}`: the system
+  prompt and tool definitions, written once per distinct shape.
+
+Keep them out of the digest: they are large, blobs hold the full prompts, and
+`safeguards[].classifier_context` holds local paths, permission rules, git state and the
+user's identity. Small derived counters (requests per agent, effort, cache TTL per
+breakpoint) would be safe.
 
 `attachment` records (hook results, reminders, environment, file edits) make up half of
 all lines. Ignore them.
@@ -365,7 +411,7 @@ all lines. Ignore them.
 | `claude-opus-5-5` | 4 | 20 | 0.20 | verified |
 | `claude-opus-5` | 5 | 25 | 0.50 | verified |
 | `claude-opus-4-8`, `-4-7`, `-4-6` | 5 | 25 | 0.50 | cache read assumed |
-| `claude-sonnet-5-5` | 2 | 10 | 0.10 | verified against `cost-state` from Claude Code 2.1.302; 2.1.289 and earlier reported it at 0.20, so their windows show the difference as overhead |
+| `claude-sonnet-5-5` | 2 | 10 | 0.10 | verified against `cost-state` from Claude Code 2.1.302; 2.1.289 and earlier reported it at 0.20: the digest prices each window's reported tokens with this table and keeps the difference as the window's `rateDiffUSD`, apart from the overhead |
 | `claude-sonnet-5` | 2 | 10 | 0.20 | verified |
 | `claude-sonnet-4-6` | 3 | 15 | 0.30 | cache read assumed |
 | `claude-haiku-4-5-20251001` | 1 | 5 | 0.10 | verified (input/output) |

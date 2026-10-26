@@ -12,6 +12,16 @@
       "flag": "exact"
     },
     {
+      "key": "06060606-0000-4000-8000-000000000001",
+      "harness": "claude",
+      "label": "find where logins are validated",
+      "sessions": 1,
+      "totalUSD": 0.02812,
+      "reportedUSD": 0,
+      "attributedUSD": 0.02812,
+      "flag": "estimated"
+    },
+    {
       "key": "20202020-0000-4000-8000-000000000001",
       "harness": "claude",
       "label": "estimate the build cost",
@@ -76,16 +86,6 @@
         "warmUSD": 0.01764,
         "uncoveredUSD": 0.01764
       },
-      "flag": "estimated"
-    },
-    {
-      "key": "06060606-0000-4000-8000-000000000001",
-      "harness": "claude",
-      "label": "find where logins are validated",
-      "sessions": 1,
-      "totalUSD": 0.02132,
-      "reportedUSD": 0,
-      "attributedUSD": 0.02132,
       "flag": "estimated"
     },
     {
@@ -366,9 +366,9 @@
     }
   ],
   "total": {
-    "totalUSD": 0.6307100000000002,
+    "totalUSD": 0.6375100000000002,
     "reportedUSD": 0.1311,
-    "attributedUSD": 0.49960999999999994,
+    "attributedUSD": 0.50641,
     "compactions": {
       "calls": 3,
       "cold": 0,

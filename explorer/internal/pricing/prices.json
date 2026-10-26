@@ -97,6 +97,14 @@
       "status": "verified",
       "note": "OpenAI API pricing page, standard tier, read 2026-10-24; fast mode (priority) is 2x"
     },
+    "codex-auto-review": {
+      "input": 0.1,
+      "output": 0.5,
+      "cacheRead": 0.01,
+      "long": { "above": 272000, "input": 0.2, "output": 0.75, "cacheRead": 0.02 },
+      "status": "assumed",
+      "note": "Codex's approval reviewer; not on OpenAI's price list. Priced as gpt-6-luna (reportedly the model behind it) as an API-equivalent estimate; free on ChatGPT-subscription sign-ins since about 2026-10-06"
+    },
     "gpt-6-astra": {
       "input": 10,
       "output": 50,

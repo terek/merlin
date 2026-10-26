@@ -15,6 +15,7 @@ import {
   showsScripted,
   sinceDate,
   treeFlag,
+  treePRs,
   treeState,
   writeFilters,
 } from './model'
@@ -220,4 +221,14 @@ describe('search hits', () => {
     expect(m.get('claude/s1')).toBe('Fix login')
     expect(m.get('claude/s2')).toBeUndefined()
   })
+})
+
+test('a tree lists the PRs of its sessions once', () => {
+  const pr = (n: number) => ({ number: n, url: `u${n}` })
+  const t = tree([
+    session('a', '2026-09-16T10:00:00Z', { prs: [pr(1), pr(2)] }),
+    session('b', '2026-09-16T11:00:00Z', { prs: [pr(2), pr(3)] }),
+  ])
+  expect(treePRs(t).map((p) => p.number)).toEqual([1, 2, 3])
+  expect(treePRs(tree([session('c', '2026-09-16T10:00:00Z')]))).toEqual([])
 })

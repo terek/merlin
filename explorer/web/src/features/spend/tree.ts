@@ -5,7 +5,16 @@
 
 import type { LinkKind, SessionDetail, SessionKey } from '../../api/types'
 import { sessionTitle } from '../../lib/session'
-import { buildSpend, CLASS_SERIES, type Decision, KIND_SERIES, type Part, type Reread, type SpendModel } from './model'
+import {
+  buildSpend,
+  CLASS_SERIES,
+  type Decision,
+  KIND_SERIES,
+  type Part,
+  type Reread,
+  type SpendModel,
+  type Unit,
+} from './model'
 
 /** One session of the tree. */
 export interface Branch {
@@ -35,6 +44,8 @@ export interface Overhead {
   usd: number
   reportedUSD: number
   coveredUSD: number
+  /** What the harness charged at other rates than Merlin's table (an older price): not missing calls. */
+  rateDiffUSD: number
 }
 
 export interface Tree {
@@ -46,6 +57,8 @@ export interface Tree {
   byKind: Part[]
   byClass: Part[]
   rereads: Reread[]
+  /** Agents woken by their own background work after they had reported (an expired watch, say): pieces nobody asked for. */
+  wakeups: { count: number; usd: number }
   fromMessages: boolean
 }
 
@@ -107,12 +120,23 @@ export function buildTree(details: readonly SessionDetail[]): Tree {
   return {
     branches,
     total: branches.reduce((a, b) => a + b.model.total, 0),
-    overheadUSD: branches.reduce((a, b) => a + b.detail.cost.overheadUSD, 0),
+    overheadUSD: branches.reduce(
+      (a, b) =>
+        a + b.detail.cost.overheadUSD - (b.detail.cost.estimatedCoveredUSD ?? 0) - (b.detail.cost.rateDiffUSD ?? 0),
+      0,
+    ),
     byKind: sum(KIND_SERIES, (m) => m.byKind),
     byClass: sum(CLASS_SERIES, (m) => m.byClass),
     rereads: branches.flatMap((b) => b.model.rereads),
+    wakeups: wakeupsOf(branches.flatMap((b) => b.model.units)),
     fromMessages: branches.every((b) => b.model.fromMessages),
   }
+}
+
+/** The pieces of agent work its own background work started after it had reported. */
+export function wakeupsOf(units: readonly Unit[]): { count: number; usd: number } {
+  const woken = units.filter((u) => u.woken)
+  return { count: woken.length, usd: woken.reduce((a, u) => a + u.bucket.usd, 0) }
 }
 
 /** The windows of a session with overhead worth a cent; none from a daemon that does not split it by window. */
@@ -120,14 +144,19 @@ function overheadOf(d: SessionDetail): Overhead[] {
   return (d.cost.windows ?? []).flatMap((w) => {
     const t0 = Date.parse(w.from)
     const t1 = Date.parse(w.to)
-    if (w.overheadUSD === undefined || w.overheadUSD < 0.005 || !Number.isFinite(t0)) return []
+    // the estimated output of truncated messages explains part of it (their messages carry it),
+    // and so does the harness charging other rates than Merlin's table
+    const rateDiffUSD = w.rateDiffUSD ?? 0
+    const usd = (w.overheadUSD ?? 0) - (w.estimatedUSD ?? 0) - rateDiffUSD
+    if (w.overheadUSD === undefined || usd < 0.005 || !Number.isFinite(t0)) return []
     return [
       {
         t0,
         t1: Number.isFinite(t1) ? Math.max(t0, t1) : t0,
-        usd: w.overheadUSD,
+        usd,
         reportedUSD: w.totalUSD,
-        coveredUSD: w.coveredUSD ?? 0,
+        coveredUSD: (w.coveredUSD ?? 0) + (w.estimatedUSD ?? 0),
+        rateDiffUSD,
       },
     ]
   })

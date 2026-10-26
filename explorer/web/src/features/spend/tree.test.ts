@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Message, SessionDetail, Turn } from '../../api/types'
-import { buildTree, shortTitle, topTreeDecisions } from './tree'
+import type { Unit } from './model'
+import { buildTree, shortTitle, topTreeDecisions, wakeupsOf } from './tree'
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 1, 10, min)).toISOString()
 
@@ -123,12 +124,38 @@ describe('overhead', () => {
 
   test('a window that reported more than its messages is a band of its own', () => {
     expect(tree.branches[0].overhead).toEqual([
-      { t0: Date.parse(at(0)), t1: Date.parse(at(3)), usd: 2, reportedUSD: 12, coveredUSD: 10 },
+      { t0: Date.parse(at(0)), t1: Date.parse(at(3)), usd: 2, reportedUSD: 12, coveredUSD: 10, rateDiffUSD: 0 },
     ])
+  })
+
+  test('the estimates and the harness charging other rates come out of a band', () => {
+    const t = buildTree([
+      {
+        ...base,
+        cost: {
+          overheadUSD: 2,
+          estimatedCoveredUSD: 0.5,
+          rateDiffUSD: 1,
+          windows: [
+            { from: at(0), to: at(3), totalUSD: 12, coveredUSD: 10, overheadUSD: 2, estimatedUSD: 0.5, rateDiffUSD: 1 },
+          ],
+        },
+      } as unknown as SessionDetail,
+    ])
+    expect(t.branches[0].overhead).toEqual([
+      { t0: Date.parse(at(0)), t1: Date.parse(at(3)), usd: 0.5, reportedUSD: 12, coveredUSD: 10.5, rateDiffUSD: 1 },
+    ])
+    expect(t.overheadUSD).toBe(0.5)
   })
 
   test('with the messages it adds up to what the harness reported', () => {
     expect(tree.total).toBe(10)
     expect(tree.overheadUSD).toBe(2)
   })
+})
+
+test('pieces of agent work started by its own background work after it reported are counted', () => {
+  const unit = (woken: boolean, usd: number) => ({ woken, bucket: { usd } }) as unknown as Unit
+  expect(wakeupsOf([unit(false, 5), unit(true, 0.25), unit(true, 0.5)])).toEqual({ count: 2, usd: 0.75 })
+  expect(wakeupsOf([])).toEqual({ count: 0, usd: 0 })
 })

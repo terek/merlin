@@ -88,7 +88,7 @@
       "title": "write the changelog",
       "kind": "interactive",
       "startedAt": "2026-09-21T10:00:00Z",
-      "lastActivityAt": "2026-09-21T10:00:04Z",
+      "lastActivityAt": "2026-09-21T10:00:08Z",
       "endState": "clean",
       "turns": 1,
       "cost": {
@@ -139,7 +139,9 @@
         "overheadUSD": 0,
         "inheritedUSD": 0,
         "ownMessages": 4,
-        "inheritedMessages": 0
+        "inheritedMessages": 0,
+        "unpricedMessages": 1,
+        "lowerBound": true
       },
       "firstOwnTurn": 0,
       "root": {
@@ -1219,13 +1221,14 @@
       "endState": "clean",
       "turns": 1,
       "cost": {
-        "bestUSD": 0.02132,
+        "bestUSD": 0.02812,
         "flag": "estimated",
         "reportedUSD": 0,
         "ownUSD": 0.02132,
         "coveredUSD": 0,
         "uncoveredUSD": 0.02132,
         "overheadUSD": 0,
+        "estimatedUncoveredUSD": 0.0068000000000000005,
         "inheritedUSD": 0,
         "ownMessages": 4,
         "inheritedMessages": 0,

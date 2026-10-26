@@ -1,6 +1,6 @@
 // Small helpers over session summaries.
 
-import type { SessionKey, SessionSummary, State } from '../api/types'
+import type { PRLink, SessionKey, SessionSummary, State } from '../api/types'
 import { firstLine, shortId } from './paths'
 
 export const keyString = (k: SessionKey) => `${k.harness}/${k.id}`
@@ -21,3 +21,14 @@ export const isRunning = (state: State) => state === 'busy' || state === 'idle'
 
 /** A session another one continues from is dimmed in lists. */
 export const isSuperseded = (s: Pick<SessionSummary, 'lineage'>) => !s.lineage.leaf
+
+/** A PR's short name: `#12`, or the last part of its URL when it has no number. */
+export function prName(pr: PRLink): string {
+  return pr.number ? `#${pr.number}` : pr.url.replace(/\/+$/, '').split('/').pop() || pr.url
+}
+
+/** The badge for a session's PRs: `PR #12`, `2 PRs`; '' for none. */
+export function prBadge(prs: readonly PRLink[] | undefined): string {
+  if (!prs?.length) return ''
+  return prs.length === 1 ? `PR ${prName(prs[0])}` : `${prs.length} PRs`
+}

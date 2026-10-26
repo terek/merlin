@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -19,7 +20,9 @@ func summarize(cat *catalog.Catalog, in catalog.SessionInfo, state catalog.State
 		LastActivityAt: in.LastActivityAt, EndState: in.EndState, SourceMissing: in.SourceMissing,
 		State: state, Turns: in.Turns,
 		Cost: CostBrief{BestUSD: in.Cost.BestUSD, Flag: in.Cost.Flag, ReportedUSD: in.Cost.ReportedUSD,
-			UncoveredUSD: in.Cost.UncoveredUSD, OverheadUSD: in.Cost.OverheadUSD, InheritedUSD: in.Cost.InheritedUSD},
+			UncoveredUSD: in.Cost.UncoveredUSD, OverheadUSD: in.Cost.OverheadUSD, InheritedUSD: in.Cost.InheritedUSD,
+			LowerBound: in.Cost.LowerBound, TruncatedMessages: in.Cost.TruncatedMessages,
+			UnpricedMessages: in.Cost.UnpricedMessages},
 		Lineage: LineageBrief{Children: len(in.Children), Root: in.Root, Leaf: in.Leaf,
 			InheritedTurns: len(in.InheritedTurns), FirstOwnTurn: in.FirstOwnTurn},
 	}
@@ -31,6 +34,7 @@ func summarize(cat *catalog.Catalog, in catalog.SessionInfo, state catalog.State
 		s.HumanTurns = int(d.Stats.HumanTurns)
 		s.LastPrompt = lastPrompt(d)
 		s.Recap = lastRecap(d)
+		s.PRs = d.PRs
 		for i := range d.Agents {
 			if d.Agents[i].Kind != model.AgentCompact {
 				s.Agents++
@@ -247,9 +251,33 @@ func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
 	dc := *d
 	if !withMessages {
 		dc.Messages = nil
+	} else {
+		dc.Messages = scaleEstimates(d.Messages, &in.Cost)
 	}
 	out.Digest = &dc
 	a.json(w, http.StatusOK, out)
+}
+
+// scaleEstimates gives each message the share of its EstimatedUSD that the session's cost
+// counts, so that the messages add up to its figures. msgs is shared and never modified: a
+// copy is returned when anything changes.
+func scaleEstimates(msgs []model.Message, c *catalog.SessionCost) []model.Message {
+	var out []model.Message
+	for i, m := range msgs {
+		if m.EstimatedUSD == 0 {
+			continue
+		}
+		if f := c.EstimateScale(m.At); f != 1 {
+			if out == nil {
+				out = slices.Clone(msgs)
+			}
+			out[i].EstimatedUSD = m.EstimatedUSD * f
+		}
+	}
+	if out == nil {
+		return msgs
+	}
+	return out
 }
 
 func (a *API) family(cat *catalog.Catalog, key model.SessionKey, lv catalog.Liveness) SessionFamily {
@@ -404,8 +432,9 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		for _, in := range listing.Sessions {
 			c := in.Cost
 			out.Rows = append(out.Rows, CostRow{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: c.Flag,
+				LowerBound: c.LowerBound, TruncatedMessages: c.TruncatedMessages, UnpricedMessages: c.UnpricedMessages,
 				Harness: in.Key.Harness, Project: in.Project, LastActivityAt: in.LastActivityAt,
-				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD, Compactions: c.Compactions}})
+				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD + c.EstimatedUncoveredUSD, Compactions: c.Compactions}})
 		}
 		perProject := map[string]*CostRow{}
 		var order []string
@@ -493,6 +522,9 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			out.Backing.Partial++
 		default:
 			out.Backing.Estimated++
+		}
+		if in.Cost.LowerBound {
+			out.Backing.LowerBound++
 		}
 	}
 	for _, s := range listing.Scripted {

@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 4
+const ParserVersion = 5
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -654,6 +654,7 @@ func (b *builder) price(u usageRec) model.Message {
 	mc, ok := b.pricer.Cost(u.Model, tok, m.Fast)
 	if !ok {
 		b.unpriced[u.Model] = true
+		m.Unpriced = true
 		return m
 	}
 	m.USD = mc.USD
@@ -661,7 +662,8 @@ func (b *builder) price(u usageRec) model.Message {
 }
 
 func (b *builder) addCost(c *model.Cost, m model.Message) {
-	if b.unpriced[m.Model] {
+	if m.Unpriced {
+		c.AddUnpriced()
 		return
 	}
 	c.AddMessage(m.Model, m.Tokens, m.USD)

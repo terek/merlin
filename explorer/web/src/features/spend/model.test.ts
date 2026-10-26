@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, Message, SessionDetail, Turn } from '../../api/types'
 import {
+  addMessage,
   buildSpend,
   CLASS_SERIES,
   compactionTally,
@@ -9,6 +10,7 @@ import {
   missCause,
   missSummary,
   missText,
+  newBucket,
   promptLine,
   reportWhere,
   rereadTokens,
@@ -612,4 +614,22 @@ describe('an agent that reported more than once', () => {
     expect(turnList([5, 6, 7])).toBe('turns 5 to 7')
     expect(turnList([3])).toBe('turn 3')
   })
+})
+
+test('a bucket counts its truncated and unpriced messages and carries the estimates', () => {
+  const b = newBucket()
+  const fit = { input: IN, read: READ }
+  const msg = (id: string, extra: Partial<Message>): Message => ({
+    id,
+    at: '2026-09-16T10:00:00Z',
+    model: 'm',
+    usd: 0,
+    ...extra,
+  })
+  addMessage(b, msg('a', { usd: 1, input: 10, truncated: true, estimatedUSD: 0.5 }), fit, undefined)
+  addMessage(b, msg('b', { input: 10, unpriced: true }), fit, undefined)
+  addMessage(b, msg('c', { usd: 2, input: 10 }), fit, undefined)
+  expect([b.messages, b.truncated, b.unpriced, b.estimated, b.usd]).toEqual([3, 1, 1, 0.5, 3.5])
+  // the estimate is missing output
+  expect(b.byClass.output).toBeGreaterThanOrEqual(0.5)
 })

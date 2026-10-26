@@ -1004,8 +1004,15 @@ function OverheadText({ o }: { o: Overhead }) {
   return (
     <span className="truncate">
       Claude Code reported <span className="font-mono text-text">{formatMoney(o.reportedUSD)}</span> from {when(o.t0)}{' '}
-      to {when(o.t1)}; its messages add up to <span className="font-mono text-text">{formatMoney(o.coveredUSD)}</span>,
-      so <span className="font-mono text-text">{formatMoney(o.usd)}</span> went on calls it does not write down, in no
+      to {when(o.t1)}; its messages add up to <span className="font-mono text-text">{formatMoney(o.coveredUSD)}</span>
+      {Math.abs(o.rateDiffUSD) >= 0.005 && (
+        <>
+          {' '}
+          and its own prices differ from Merlin's by{' '}
+          <span className="font-mono text-text">{formatMoney(o.rateDiffUSD)}</span>
+        </>
+      )}
+      , so <span className="font-mono text-text">{formatMoney(o.usd)}</span> went on calls it does not write down, in no
       one turn or agent
     </span>
   )
