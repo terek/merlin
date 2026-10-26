@@ -36,6 +36,7 @@ const session = (
 ) =>
   ({
     summary: { key: { harness: 'claude', id }, title: `session ${id}` },
+    cost: { overheadUSD: 0 },
     lineage: {
       parent: parent && {
         parent: { harness: 'claude', id: parent.id },
@@ -102,5 +103,32 @@ describe('shortTitle', () => {
   test('one line, cut with an ellipsis', () => {
     expect(shortTitle('fix the build\nand more')).toBe('fix the build')
     expect(shortTitle('a'.repeat(80), 10)).toBe(`${'a'.repeat(9)}…`)
+  })
+})
+
+describe('overhead', () => {
+  const base = session('o', [4, 6])
+  const s = {
+    ...base,
+    cost: {
+      overheadUSD: 2,
+      windows: [
+        { from: at(0), to: at(3), totalUSD: 12, coveredUSD: 10, overheadUSD: 2 },
+        { from: at(4), to: at(5), totalUSD: 1, coveredUSD: 1, overheadUSD: 0.001 },
+        { from: at(6), to: at(7), totalUSD: 1, coveredUSD: 2, overheadUSD: -1 },
+      ],
+    },
+  } as unknown as SessionDetail
+  const tree = buildTree([s])
+
+  test('a window that reported more than its messages is a band of its own', () => {
+    expect(tree.branches[0].overhead).toEqual([
+      { t0: Date.parse(at(0)), t1: Date.parse(at(3)), usd: 2, reportedUSD: 12, coveredUSD: 10 },
+    ])
+  })
+
+  test('with the messages it adds up to what the harness reported', () => {
+    expect(tree.total).toBe(10)
+    expect(tree.overheadUSD).toBe(2)
   })
 })

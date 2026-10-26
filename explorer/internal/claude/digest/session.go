@@ -14,8 +14,9 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change here, in
 // the Builder, in Assemble or in the transcript package would change a digest built from
-// the same files: the engine rebuilds every digest whose parserVersion differs.
-const ParserVersion = 10
+// the same files: the engine rebuilds every digest whose parserVersion differs. A change of
+// the embedded price table counts too, as the stored costs are not repriced otherwise.
+const ParserVersion = 11
 
 // BuildSession reads the files of one discovered session and returns its complete digest.
 //

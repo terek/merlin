@@ -227,6 +227,10 @@ export interface ReportedWindow {
   to: string
   totalUSD: number
   byModel?: Record<string, ReportedModel>
+  /** A session's window (`SessionCost.windows`): what its own messages inside the window add up to. */
+  coveredUSD?: number
+  /** totalUSD - coveredUSD, not clamped: what the harness reported in the window that no message explains. */
+  overheadUSD?: number
 }
 
 export interface Inherited {
@@ -464,6 +468,8 @@ export interface InboxMessage {
   text?: string
   /** The failure the sender reported, when it stopped because of one. */
   error?: string
+  /** The harness keeps the text only encrypted (Codex, between agents): `text` is absent. */
+  encrypted?: boolean
 }
 
 export interface Agent {
@@ -491,6 +497,8 @@ export interface Agent {
   endedAt?: string
   status: AgentStatus
   prompt?: string
+  /** The harness keeps the prompt only encrypted (Codex): `prompt` is absent. */
+  promptEncrypted?: boolean
   finalText?: string
   inbox?: InboxMessage[]
   assistantMessages: number
@@ -516,6 +524,8 @@ export interface AgentTurn {
   origin: TurnOrigin
   /** First turn: the agent's prompt. Later: what was typed; delivered messages are in `inbox`. */
   prompt?: string
+  /** First turn: the agent's prompt is encrypted, as `Agent.promptEncrypted`. */
+  promptEncrypted?: boolean
   inbox?: InboxMessage[]
   queued?: QueuedPrompt[]
   finalText?: string

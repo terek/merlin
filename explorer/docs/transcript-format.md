@@ -365,7 +365,7 @@ all lines. Ignore them.
 | `claude-opus-5-5` | 4 | 20 | 0.20 | verified |
 | `claude-opus-5` | 5 | 25 | 0.50 | verified |
 | `claude-opus-4-8`, `-4-7`, `-4-6` | 5 | 25 | 0.50 | cache read assumed |
-| `claude-sonnet-5-5` | 2 | 10 | 0.20 | cache read from docs |
+| `claude-sonnet-5-5` | 2 | 10 | 0.10 | verified against `cost-state` from Claude Code 2.1.302; 2.1.289 and earlier reported it at 0.20, so their windows show the difference as overhead |
 | `claude-sonnet-5` | 2 | 10 | 0.20 | verified |
 | `claude-sonnet-4-6` | 3 | 15 | 0.30 | cache read assumed |
 | `claude-haiku-4-5-20251001` | 1 | 5 | 0.10 | verified (input/output) |

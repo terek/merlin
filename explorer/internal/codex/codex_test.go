@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -565,3 +566,64 @@ func TestLocate(t *testing.T) {
 }
 
 func harnessRef(id string) harness.SessionRef { return harness.SessionRef{ID: id} }
+
+// token makes a Fernet-shaped token: version 0x80, a big-endian timestamp in seconds (its high
+// bytes are zero, hence the "gAAAAA" every token starts with), IV, two blocks, HMAC.
+func token(seed byte) string {
+	b := make([]byte, 1+8+16+32+32)
+	b[0] = 0x80
+	for i := 5; i < len(b); i++ {
+		b[i] = seed + byte(i)
+	}
+	return base64.URLEncoding.EncodeToString(b)
+}
+
+func TestFernet(t *testing.T) {
+	for s, want := range map[string]bool{
+		token(1):                         true,
+		strings.TrimRight(token(2), "="): true,
+		"Do part one.":                   false,
+		"gAAAAA but not a token at all, only words that happen to start the same way ......": false,
+		token(3)[:60]: false,
+	} {
+		if got := fernet(s); got != want {
+			t.Errorf("fernet(%.20q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
+// Codex encrypts what agents send each other: the spawn prompt and messages, in both files.
+func TestEncryptedAgentMessages(t *testing.T) {
+	home := t.TempDir()
+	newRollout(t).meta("R", "R", "vscode", nil).
+		start(1, "r1", "", "user").ctx(1, "r1", "m", nil).
+		user(2, "Build the thing.", 0).
+		tool(4, "spawn_agent", map[string]any{"task_name": "worker", "model": "m2", "fork_turns": "none", "message": token(1)}).
+		usage(5, "resp-r1", "r1", 1000, 600, 50).
+		answer(21, "Started the worker.").
+		done(22, "r1").
+		write(home, "rollout-2026-10-01T09-00-00-R.jsonl")
+	newRollout(t).meta("A", "R", spawnSource("R", "/root/worker", "Ada", 1), map[string]any{"agent_nickname": "Ada", "agent_path": "/root/worker", "parent_thread_id": "R"}).
+		start(10, "a1", "r1", "user").ctx(10, "a1", "m2", "high").
+		tool(11, "send_message", map[string]any{"target": "/root", "message": token(2)}).
+		usage(12, "resp-a1", "a1", 400, 0, 10).
+		answer(19, "Part one done.").done(19, "a1").
+		write(home, "rollout-2026-10-01T09-00-10-A.jsonl")
+	d := build(t, home, "R")
+
+	if len(d.Agents) != 1 {
+		t.Fatalf("agents = %d", len(d.Agents))
+	}
+	a := d.Agents[0]
+	if a.Prompt != "" || !a.PromptEncrypted || len(a.Turns) != 1 || a.Turns[0].Prompt != "" || !a.Turns[0].PromptEncrypted {
+		t.Errorf("agent prompt = %q (encrypted %v), turns %+v", a.Prompt, a.PromptEncrypted, a.Turns)
+	}
+	var got []model.InboxMessage
+	for _, q := range d.Turns[0].Queued {
+		got = append(got, q.Inbox...)
+	}
+	got = append(got, d.Turns[0].Inbox...)
+	if len(got) != 1 || got[0].Text != "" || !got[0].Encrypted || got[0].From != "Ada" || got[0].Kind != model.InboxMessageKind {
+		t.Errorf("root received %+v", got)
+	}
+}

@@ -25,7 +25,7 @@ import type {
 import { agentRole } from '../../lib/agent'
 import { idleText } from '../../lib/compaction'
 import { formatDuration } from '../../lib/format'
-import { turnPrompt } from '../../lib/inbox'
+import { ENCRYPTED, inboxBody, turnPrompt } from '../../lib/inbox'
 
 /** What the dollars bought. `reread` is a cache miss: context that had been cached and was billed again in full. */
 export type ClassKey = 'output' | 'read' | 'write' | 'reread' | 'input'
@@ -662,7 +662,8 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         a.id,
         a.turns.map((t, k) => {
           const start = ms(t.startedAt)
-          const asked = t.prompt || (t.inbox ?? []).map((x) => x.text || x.summary || '').join('\n')
+          const asked =
+            t.prompt || (t.promptEncrypted ? ENCRYPTED : (t.inbox ?? []).map(inboxBody).filter(Boolean).join('\n'))
           const u = mkUnit(a, k, Number.isFinite(start) ? start : bornAt(a, Number.NaN), asked, t.inbox?.[0]?.from)
           u.root = t.rootTurn
           u.woken = k > 0 && t.origin === 'task-notification'
@@ -676,8 +677,8 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       : []
     const mk = (k: number, startMs: number, asked: string, from?: string) => mkUnit(a, k, startMs, asked, from)
     unitsOf.set(a.id, [
-      mk(0, bornAt(a, Number.NaN), a.prompt ?? ''),
-      ...inbox.map((x, k) => mk(k + 1, ms(x.at), x.text || x.summary || '', x.from)),
+      mk(0, bornAt(a, Number.NaN), a.prompt || (a.promptEncrypted ? ENCRYPTED : '')),
+      ...inbox.map((x, k) => mk(k + 1, ms(x.at), x.text || x.summary || (x.encrypted ? ENCRYPTED : ''), x.from)),
     ])
   }
   const unitAt = (root: Agent, at: number): Unit | undefined => {

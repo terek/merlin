@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/terek/merlin/explorer/internal/model"
-	"github.com/terek/merlin/explorer/internal/pricing"
 )
 
 func TestVersionAtLeast(t *testing.T) {
@@ -88,9 +87,9 @@ func TestCompactionCallEstimate(t *testing.T) {
 			}
 			tok := c.tokens
 			tok.Output = 3000
-			want, _ := pricing.Default().Cost("claude-sonnet-5-5", tok, false)
+			want, _ := fixturePrices().Cost("claude-sonnet-5-5", tok, false)
 			near(t, "usd", call.USD, want.USD)
-			warm, _ := pricing.Default().Cost("claude-sonnet-5-5", model.Tokens{CacheRead: pre, Output: 3000}, false)
+			warm, _ := fixturePrices().Cost("claude-sonnet-5-5", model.Tokens{CacheRead: pre, Output: 3000}, false)
 			near(t, "warm usd", call.WarmUSD, warm.USD)
 			if (call.USD == call.WarmUSD) != c.warmIsSameAsUSD {
 				t.Errorf("usd %v warm %v", call.USD, call.WarmUSD)

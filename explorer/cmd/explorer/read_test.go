@@ -63,6 +63,14 @@ func newReadEnv(t *testing.T) *readEnv {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the prices the fixtures' costs were worked out with, so that the snapshots do not follow the real table
+	prices, err := os.ReadFile(fixtures.PricesFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(e.home, "config.json"), prices, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if out, errs, code := e.run(nil, "scan", "--quiet"); code != 0 {
 		t.Fatalf("scan: code %d\n%s\n%s", code, out, errs)
 	}

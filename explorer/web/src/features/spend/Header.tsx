@@ -150,7 +150,7 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
         <p className="text-sec text-muted">
           Claude Code reported {formatMoney(Math.abs(best - tree.messagesUSD))}{' '}
           {best > tree.messagesUSD ? 'more' : 'less'} than the messages on this page add up to (
-          {formatMoney(tree.messagesUSD)}).
+          {formatMoney(tree.messagesUSD)}){best > tree.messagesUSD ? ': the hatched bands under the graph.' : '.'}
         </p>
       )}
     </header>

@@ -12,7 +12,6 @@ import (
 	"github.com/terek/merlin/explorer/internal/claude/discover"
 	"github.com/terek/merlin/explorer/internal/fixtures"
 	"github.com/terek/merlin/explorer/internal/model"
-	"github.com/terek/merlin/explorer/internal/pricing"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/golden from the current output")
@@ -32,7 +31,7 @@ func fixtureSources(t testing.TB) []discover.Source {
 
 func buildFixture(t testing.TB, src discover.Source) *model.SessionDigest {
 	t.Helper()
-	d, err := BuildSession(src, pricing.Default())
+	d, err := BuildSession(src, fixturePrices())
 	if err != nil {
 		t.Fatalf("%s/%s: %v", src.ProjectKey, src.ID, err)
 	}

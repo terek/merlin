@@ -54,6 +54,17 @@ function Swatch({ color }: { color: string }) {
   return <span aria-hidden className="inline-block size-2 shrink-0 rounded-[2px]" style={{ background: color }} />
 }
 
+/** The overhead bands' hatching, as a legend swatch. */
+function HatchSwatch() {
+  return (
+    <span
+      aria-hidden
+      className="inline-block size-2.5 shrink-0 rounded-[2px] border border-muted/60"
+      style={{ background: 'repeating-linear-gradient(45deg, var(--muted) 0 1px, transparent 1px 3.5px)' }}
+    />
+  )
+}
+
 function Chips({ parts }: { parts: Part[] }) {
   return (
     <>
@@ -232,6 +243,9 @@ export function SpendGraph({
 
   const { branches } = tree
   const focus = pinned?.branch ?? home
+  // the parts add up to the harness's figure: the messages, and what it reported beyond them
+  const overhead = tree.overheadUSD >= 0.005
+  const grand = tree.total + (overhead ? tree.overheadUSD : 0)
   const compactions = useMemo(
     () => ({
       ...compactionTally(branches.flatMap((b) => [...b.model.compactions, ...b.model.agentCompactions])),
@@ -297,9 +311,20 @@ export function SpendGraph({
             <Swatch color={p.color} />
             <span>{p.label}</span>
             <span className="font-mono">{formatMoney(p.usd)}</span>
-            <span className="text-faint">{formatPercent(p.usd, tree.total)}</span>
+            <span className="text-faint">{formatPercent(p.usd, grand)}</span>
           </span>
         ))}
+        {overhead && (
+          <span
+            className="inline-flex items-center gap-1.5"
+            title="Spend Claude Code reported that no message in the transcripts explains: calls it does not write down. It belongs to a whole reported stretch, so it is drawn under the rows and is in no turn, agent or decision."
+          >
+            <HatchSwatch />
+            <span>Not explained by messages</span>
+            <span className="font-mono">{formatMoney(tree.overheadUSD)}</span>
+            <span className="text-faint">{formatPercent(tree.overheadUSD, grand)}</span>
+          </span>
+        )}
       </div>
       {compactions.calls + compactions.unknown > 0 && (
         <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
@@ -344,8 +369,10 @@ export function SpendGraph({
         the row that sent it (none when its own background work woke it) and a dashed one to each turn its report came
         in; an addressable agent keeps a row of its own, one-shot agents share rows. A dot is a message you sent (hollow
         if typed while a turn ran), and the bracket rising from it totals everything up to your next one. A diamond is a
-        cache miss, a red mark a compaction on a cold cache, an amber dashed one on a warm cache. Dollars are recomputed
-        from token counts
+        cache miss, a red mark a compaction on a cold cache, an amber dashed one on a warm cache.
+        {overhead &&
+          ' A hatched band under a session spans a stretch Claude Code reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
+        Dollars are recomputed from token counts
         {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
         {tree.rereads.length > 0 &&
           ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}

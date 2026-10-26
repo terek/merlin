@@ -269,6 +269,12 @@ indexes of turns copied from the parent; `firstOwnTurn`: index of the first turn
 `family` (every linked session in tree order, and the `leaves` to resume, newest first) and
 `digest` (the stored digest, see `digest-schema.md`).
 
+Each of `cost.windows` carries, beside the harness's figures, `coveredUSD` (what the session's own
+messages inside the window add up to) and `overheadUSD` (`totalUSD` − `coveredUSD`, not clamped: what
+the harness reported in the window that no message explains, negative when the messages add up to
+more). The windows' `overheadUSD` add up to `reportedUSD` − `coveredUSD`; the session's `overheadUSD`
+is that, clamped at 0.
+
 ```json
 {
   "summary": {
@@ -351,7 +357,9 @@ indexes of turns copied from the parent; `firstOwnTurn`: index of the first turn
             "cacheCreationTokens": 1200,
             "usd": 0.0081
           }
-        }
+        },
+        "coveredUSD": 0.1157,
+        "overheadUSD": 0.0015000000000000013
       }
     ],
     "ownUSD": 0.1157,

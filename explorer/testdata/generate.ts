@@ -19,7 +19,8 @@ const pad = (n: number, w: number) => String(n).padStart(w, '0')
 
 // ---------------------------------------------------------------- pricing
 
-// [input, output, cacheRead] in $ per million tokens (transcript-format.md section 8).
+// [input, output, cacheRead] in $ per million tokens (transcript-format.md section 8). Where one differs
+// from internal/pricing/prices.json (sonnet-5-5 cache read, now 0.10), testdata/prices.json pins it for the tests.
 const PRICE: Record<string, [number, number, number]> = {
   'claude-fable-5-1': [10, 50, 0.25],
   'claude-opus-5-5': [4, 20, 0.2],
@@ -1517,7 +1518,7 @@ Conventions
   Agent ids: \`aSSe0c0de000000N\` (16 hex). Message ids \`msg_<name>_NN\`, tool ids \`toolu_<name>_NN\`.
 - Timestamps: RFC 3339 UTC, base \`2026-09-SST10:00:00Z\` (SS = scenario number), non-decreasing inside every file,
   and consistent between a parent and its subagent files. Copied records keep their original timestamps.
-- Default model \`claude-sonnet-5-5\` (input $2, output $10, cache read $0.20 per million). Cache write = input price x 1.25
+- Default model \`claude-sonnet-5-5\` (input $2, output $10, cache read $0.20 per million; the real price is $0.10, and \`prices.json\` gives the tests the fixture price). Cache write = input price x 1.25
   (5m) or x 2 (1h); main sessions write 1h, subagents write 5m. Prices for other models are in transcript-format.md section 8.
 - A *turn* is a human prompt (including a slash command) and everything until the next one. "Abandoned" = on a branch
   the session later rewound away from. Token counts are small round numbers; arithmetic is shown per message below

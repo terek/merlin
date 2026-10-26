@@ -516,7 +516,10 @@ type dayAmount struct {
 func (v *view) costs() {
 	for _, s := range v.sessions {
 		c := &s.info.Cost
-		c.Windows = s.windows
+		c.Windows = make([]WindowCost, len(s.windows))
+		for wi, w := range s.windows {
+			c.Windows[wi].ReportedWindow = w
+		}
 
 		type key struct {
 			day, model string
@@ -593,6 +596,7 @@ func (v *view) costs() {
 		for wi, w := range s.windows {
 			c.ReportedUSD += w.TotalUSD
 			over := w.TotalUSD - coveredBy[wi]
+			c.Windows[wi].CoveredUSD, c.Windows[wi].OverheadUSD = coveredBy[wi], over
 			switch {
 			case over == 0:
 			case coveredBy[wi] > 0:

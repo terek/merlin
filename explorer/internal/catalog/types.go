@@ -98,8 +98,8 @@ type SessionCost struct {
 
 	// ReportedUSD is the sum of the session's reported windows (windows another session
 	// owns are not included). Windows lists them.
-	ReportedUSD float64                `json:"reportedUSD"`
-	Windows     []model.ReportedWindow `json:"windows,omitempty"`
+	ReportedUSD float64      `json:"reportedUSD"`
+	Windows     []WindowCost `json:"windows,omitempty"`
 
 	// OwnUSD is the attributed cost of the messages this session owns, subagents
 	// included. CoveredUSD of it lies inside a window, UncoveredUSD outside every window.
@@ -126,6 +126,17 @@ type SessionCost struct {
 	// Compactions is the estimated cost of the session's compaction calls, main agent and
 	// sub-agents; see CompactionTally.
 	Compactions CompactionTally `json:"compactions,omitzero"`
+}
+
+// WindowCost is a reported window with what the session's own messages inside it add up to.
+type WindowCost struct {
+	model.ReportedWindow
+	// CoveredUSD is the attributed cost of the session's own messages inside the window.
+	CoveredUSD float64 `json:"coveredUSD"`
+	// OverheadUSD = TotalUSD - CoveredUSD: what the harness reported in the window that no
+	// message explains, negative when the messages add up to more. Not clamped, so the
+	// windows add up to ReportedUSD - CoveredUSD.
+	OverheadUSD float64 `json:"overheadUSD"`
 }
 
 // LinkKind says whether a child session took over from its parent or branched off it.

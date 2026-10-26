@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/terek/merlin/explorer/internal/model"
-	"github.com/terek/merlin/explorer/internal/pricing"
 )
 
 func withStop(l L, stop string) L {
@@ -14,7 +13,7 @@ func withStop(l L, stop string) L {
 
 func endStateOf(t *testing.T, lines ...L) model.EndState {
 	t.Helper()
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for _, r := range decode(t, lines...) {
 		b.Apply(r)
 	}

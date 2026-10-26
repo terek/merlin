@@ -250,6 +250,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `endedAt` | time of its last record |
 | `status` | `completed`, `killed` or `open` (no terminal marker in the files) |
 | `prompt` | its first prompt, complete (for kind `compact`, the last: the instruction to summarise what came before); when it arrived as a delivered message, that message's text; for a workflow agent, the task its script computed, without the harness's frame |
+| `promptEncrypted` | `true` when the harness keeps the prompt only encrypted (Codex 0.164 encrypts what agents send each other); `prompt` is then absent |
 | `finalText` | its last assistant text, complete |
 | `inbox` | later prompts it received, as `InboxMessage`, including those that arrived in the middle of a turn; a prompt that is not a delivered message is one entry of kind `message` with no sender |
 | `assistantMessages` | assistant API messages it made |
@@ -275,6 +276,7 @@ The turns' messages, tool calls and costs add up to the agent's.
 | `endedAt` | time of its last record |
 | `origin` | `spawn` for the first turn; later, who authored the prompt, as in `Turn.origin` |
 | `prompt` | what it was asked: for the first turn the agent's `prompt`; later, the prompt as its author wrote it (delivered messages are in `inbox`, as with `Turn.userText`) |
+| `promptEncrypted` | the first turn's prompt is encrypted, as `Agent.promptEncrypted` |
 | `inbox` | the messages that started it, as `InboxMessage`; for the first turn, those delivered with the prompt after the first |
 | `queued` | prompts that arrived while it ran, as `QueuedPrompt` |
 | `finalText` | its last assistant text, complete |
@@ -334,6 +336,7 @@ wrapping. Texts are whole.
 | `summary` | the sender's or harness's one-line summary |
 | `text` | the message, whole. `idle`: the teammate's last answer; `task`: the task's result or the event a monitor saw; `assignment`: the task's description |
 | `error` | the failure the sender reported, when it stopped because of one |
+| `encrypted` | `true` when the harness keeps the text only encrypted (Codex, between agents); `text` is then absent |
 
 ## Message
 

@@ -19,3 +19,12 @@ func Root() string {
 func ClaudeDir() string {
 	return filepath.Join(Root(), "claude")
 }
+
+// PricesFile returns the absolute path of explorer/testdata/prices.json: price overrides in
+// the shape of config.json that give the models the prices generate.ts worked the fixtures'
+// costs out with, where they differ from the embedded table. Load it with pricing.Load, or
+// copy it to MERLIN_HOME/config.json, so that a change of a real price does not move the
+// expected figures.
+func PricesFile() string {
+	return filepath.Join(Root(), "prices.json")
+}

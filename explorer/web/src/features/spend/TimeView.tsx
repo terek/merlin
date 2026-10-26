@@ -16,7 +16,10 @@
 //              at its end), each piece of work joined to the row that sent it (launch) and to the turn each of its reports came in (dashed); an addressable
 //              agent keeps a row of its own, the others share rows when they do not overlap
 //   breaks     time in which nothing ran is squeezed into a narrow band, with its length on the axis
-import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
+//   overhead   under a session's rows, a hatched band over each reported window for what the harness
+//              reported and no message explains: labelled with its dollars, on no scale, as it belongs
+//              to the whole window and not to any slot, turn or agent in it
+import { type KeyboardEvent, type PointerEvent, useId, useMemo, useRef, useState } from 'react'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { niceTicks } from '../context/chart'
@@ -38,7 +41,7 @@ import {
   timeAxis,
   turnPlace,
 } from './timeline'
-import type { Tree } from './tree'
+import type { Overhead, Tree } from './tree'
 import { useWidth } from './useWidth'
 
 /** Room left of the plot for the context scale. */
@@ -57,6 +60,9 @@ const ROW_GAP = 10
 const BRANCH_GAP = 20
 /** A spend bar is at least this wide. */
 const SLOT_PX = 4
+/** The strip of overhead bands under a session's rows, and the gap above it. */
+const OVER_H = 14
+const OVER_GAP = 6
 
 const COLOR: Record<KindKey | 'main', string> = {
   ...(Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<KindKey, string>),
@@ -149,6 +155,8 @@ export function TimePlot({
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const [px, setPx] = useState<{ x: number; row: number } | null>(null)
+  const [band, setBand] = useState<{ branch: number; k: number } | null>(null)
+  const hatch = `hatch${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
   const tl = useMemo(() => buildTimeline(tree), [tree])
   const X0 = LABEL_W
   const X1 = Math.max(X0 + 80, width - MR)
@@ -185,6 +193,7 @@ export function TimePlot({
 
   // ---- vertical layout
   const layout: Layout[] = []
+  const strips: { branch: number; top: number; bottom: number }[] = []
   let y = AXIS_H
   rows.forEach((row, i) => {
     if (i > 0) y += row.main ? BRANCH_GAP : ROW_GAP
@@ -195,6 +204,11 @@ export function TimePlot({
     const spendH = Math.max(SPEND_MIN, Math.ceil(maxS * kUsd) + 2) + (row.main ? TURNS_H : 0)
     layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })
     y = top + ctxH + spendH
+    // the session's overhead, under its last row
+    if (rows[i + 1]?.branch !== row.branch && tree.branches[row.branch]?.overhead.length) {
+      strips.push({ branch: row.branch, top: y + OVER_GAP, bottom: y + OVER_GAP + OVER_H })
+      y += OVER_GAP + OVER_H
+    }
   })
   const height = y + 6
   const yCtx = (g: Layout, v: number) => g.base - v * kCtx
@@ -217,6 +231,10 @@ export function TimePlot({
     const b = tree.branches.find((x) => x.model.units.includes(u))
     return u.reports.map((r) => ms(b?.model.cols[r]?.turn.startedAt)).filter(Number.isFinite)
   }
+  const overX = (o: Overhead): [number, number] => {
+    const a = axis.x(Math.max(o.t0, tl.t0))
+    return [a, Math.max(a + 3, axis.x(Math.min(o.t1, tl.t1)))]
+  }
   const uX = (u: Unit): [number, number] => {
     const a = axis.x(u.startMs)
     return [a, Math.max(a + 3, axis.x(Number.isFinite(u.endMs) ? u.endMs : u.startMs))]
@@ -228,6 +246,7 @@ export function TimePlot({
     const x = clientX - r.left
     const yy = clientY - r.top
     if (x < X0 - 4 || x > X1 + 4) return null
+    if (strips.some((s) => yy >= s.top - OVER_GAP / 2 && yy <= s.bottom + 2)) return null
     const k = layout.findIndex((g, i) => yy < g.bottom + (layout[i + 1] ? (layout[i + 1].top - g.bottom) / 2 : 99))
     if (k < 0) return null
     return { x, row: k, t: axis.t(x) }
@@ -248,7 +267,22 @@ export function TimePlot({
     if (!best) return { pin: null, unit: null }
     return { pin: turnOn(mainRow(best.lane.branch)?.row.lanes[0], h.t), unit: unitRef(best.lane, best.unit) }
   }
+  /** The overhead band under the pointer. */
+  const bandAt = (clientX: number, clientY: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect()
+    const x = clientX - r.left
+    const yy = clientY - r.top
+    const s = strips.find((s) => yy >= s.top - 2 && yy <= s.bottom + 2)
+    const k = s
+      ? tree.branches[s.branch].overhead.findIndex((o) => {
+          const [a, b] = overX(o)
+          return x >= a - 3 && x <= b + 3
+        })
+      : -1
+    return s && k >= 0 ? { branch: s.branch, k } : null
+  }
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
+    setBand(bandAt(e.clientX, e.clientY, e.currentTarget))
     const h = hit(e.clientX, e.clientY, e.currentTarget)
     setPx(h ? { x: h.x, row: h.row } : null)
     const r = h ? read(h) : { pin: null, unit: null }
@@ -795,7 +829,9 @@ export function TimePlot({
   return (
     <div>
       <div className="flex min-h-5 items-baseline gap-x-3 overflow-hidden whitespace-nowrap text-sec text-muted">
-        {under ? (
+        {band ? (
+          <OverheadText o={tree.branches[band.branch].overhead[band.k]} />
+        ) : under ? (
           <>
             <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
             {under.between && <span>{betweenText(under.between)}</span>}
@@ -833,6 +869,7 @@ export function TimePlot({
         onPointerMove={onMove}
         onPointerLeave={(e) => {
           setPx(null)
+          setBand(null)
           if (document.activeElement !== e.currentTarget) onCursor(null)
           onHoverUnit(null)
         }}
@@ -894,8 +931,52 @@ export function TimePlot({
               {l.text}
             </text>
           ))}
+          <defs>
+            <pattern id={hatch} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1={0} y1={0} x2={0} y2={5} stroke="var(--muted)" strokeWidth={1.25} strokeOpacity={0.55} />
+            </pattern>
+          </defs>
           {pinMarks}
           {layout.map(drawRow)}
+          {strips.flatMap((s) =>
+            tree.branches[s.branch].overhead.map((o, k) => {
+              const [a, b] = overX(o)
+              const on = band?.branch === s.branch && band.k === k
+              const money = formatMoney(o.usd)
+              const long = `${money} reported, not explained by messages`
+              const room = b - a - 8
+              const text = room >= long.length * 5.6 ? long : room >= money.length * 5.6 ? money : ''
+              return (
+                <g key={`o${s.branch}/${o.t0}`} pointerEvents="none">
+                  <rect
+                    x={a}
+                    y={s.top}
+                    width={b - a}
+                    height={OVER_H}
+                    rx={2}
+                    fill={`url(#${hatch})`}
+                    stroke="var(--muted)"
+                    strokeOpacity={on ? 0.9 : 0.4}
+                    strokeWidth={on ? 1.25 : 1}
+                  />
+                  {text && (
+                    <text
+                      x={a + 4}
+                      y={s.top + OVER_H / 2 + 3.5}
+                      fontSize={10}
+                      fontWeight={on ? 600 : 400}
+                      fill={on ? 'var(--text)' : 'var(--muted)'}
+                      stroke="var(--surface)"
+                      strokeWidth={3}
+                      paintOrder="stroke"
+                    >
+                      {text}
+                    </text>
+                  )}
+                </g>
+              )
+            }),
+          )}
           {forks}
           {connectors}
           {crossX !== undefined && (
@@ -914,6 +995,19 @@ export function TimePlot({
         </svg>
       </div>
     </div>
+  )
+}
+
+/** What an overhead band stands for, in one line. */
+function OverheadText({ o }: { o: Overhead }) {
+  const when = (t: number) => `${day(t)} ${clock(t)}`
+  return (
+    <span className="truncate">
+      Claude Code reported <span className="font-mono text-text">{formatMoney(o.reportedUSD)}</span> from {when(o.t0)}{' '}
+      to {when(o.t1)}; its messages add up to <span className="font-mono text-text">{formatMoney(o.coveredUSD)}</span>,
+      so <span className="font-mono text-text">{formatMoney(o.usd)}</span> went on calls it does not write down, in no
+      one turn or agent
+    </span>
   )
 }
 

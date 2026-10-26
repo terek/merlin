@@ -54,9 +54,9 @@
     "claude-sonnet-5-5": {
       "input": 2,
       "output": 10,
-      "cacheRead": 0.2,
-      "status": "assumed",
-      "note": "cache read from docs, not verified against cost-state"
+      "cacheRead": 0.1,
+      "status": "verified",
+      "note": "cache read 0.05x input (pricing page, read 2026-10-26); reproduces cost-state to the cent from Claude Code 2.1.302 on, which 2.1.289 and earlier priced at 0.20"
     },
     "claude-sonnet-5": { "input": 2, "output": 10, "cacheRead": 0.2, "status": "verified" },
     "claude-sonnet-4-6": {

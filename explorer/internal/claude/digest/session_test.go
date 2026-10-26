@@ -13,7 +13,6 @@ import (
 	"github.com/terek/merlin/explorer/internal/claude/discover"
 	"github.com/terek/merlin/explorer/internal/fixtures"
 	"github.com/terek/merlin/explorer/internal/model"
-	"github.com/terek/merlin/explorer/internal/pricing"
 )
 
 // fixtureDigest builds one fixture session by id.
@@ -238,7 +237,7 @@ func buildSynthetic(t *testing.T, lines ...L) *model.SessionDigest {
 	if err != nil || len(res.Sessions) != 1 {
 		t.Fatalf("scan: %v %v", err, res.Sessions)
 	}
-	d, err := BuildSession(res.Sessions[0], pricing.Default())
+	d, err := BuildSession(res.Sessions[0], fixturePrices())
 	if err != nil {
 		t.Fatal(err)
 	}

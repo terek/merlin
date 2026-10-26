@@ -3,6 +3,7 @@ package codex
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,7 +178,10 @@ type callRec struct {
 	Effort   string
 	Fork     string // fork_turns
 	Message  string
-	Target   string
+	// Encrypted: the message is a Fernet token (Codex encrypts what agents send each other),
+	// and Message is empty.
+	Encrypted bool
+	Target    string
 }
 
 // reportRec is a plain-text agent_message from another thread: a subagent's final answer.
@@ -690,8 +694,12 @@ func (p *parser) responseItem(raw json.RawMessage, at time.Time) {
 				Target   string `json:"target"`
 			}
 			_ = json.Unmarshal([]byte(r.Arguments), &a)
-			t.Calls = append(t.Calls, callRec{Name: r.Name, CallID: r.CallID, At: at, Turn: p.cur, TaskName: a.TaskName,
-				Model: a.Model, Effort: a.Effort, Fork: a.Fork, Message: a.Message, Target: a.Target})
+			c := callRec{Name: r.Name, CallID: r.CallID, At: at, Turn: p.cur, TaskName: a.TaskName,
+				Model: a.Model, Effort: a.Effort, Fork: a.Fork, Message: a.Message, Target: a.Target}
+			if fernet(c.Message) {
+				c.Message, c.Encrypted = "", true
+			}
+			t.Calls = append(t.Calls, c)
 		}
 	case "agent_message":
 		own := t.Source.AgentPath
@@ -760,4 +768,14 @@ func diffLines(d string) (added, removed int64) {
 		}
 	}
 	return added, removed
+}
+
+// fernet reports whether s is a Fernet token, as Codex stores the messages its agents send each
+// other: URL-safe base64 of version byte 0x80, a timestamp, an IV, the ciphertext and an HMAC.
+func fernet(s string) bool {
+	if len(s) < 100 || !strings.HasPrefix(s, "gAAAAA") {
+		return false
+	}
+	b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(s, "="))
+	return err == nil && len(b) >= 73 && b[0] == 0x80 && (len(b)-57)%16 == 0
 }

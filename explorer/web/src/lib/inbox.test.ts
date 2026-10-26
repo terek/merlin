@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { InboxMessage } from '../api/types'
-import { inboxBody, inboxLabel, inboxSummary, turnPrompt } from './inbox'
+import { ENCRYPTED, inboxBody, inboxLabel, inboxSummary, turnPrompt } from './inbox'
 
 const at = '2026-09-30T10:00:00Z'
 const msg = (m: Partial<InboxMessage>): InboxMessage => ({ at, kind: 'message', ...m })
@@ -26,6 +26,12 @@ describe('inbox messages', () => {
     expect(inboxBody(msg({ summary: 'done', text: 'done' }))).toBe('done')
     expect(inboxBody(msg({ summary: 'two nits', text: 'line 4 and 9' }))).toBe('two nits\n\nline 4 and 9')
     expect(inboxBody(msg({ kind: 'idle' }))).toBe('')
+  })
+  test('an encrypted message says so instead of reading as empty', () => {
+    const m = msg({ from: 'Ada', encrypted: true })
+    expect(inboxSummary(m)).toBe(ENCRYPTED)
+    expect(inboxBody(m)).toBe(ENCRYPTED)
+    expect(turnPrompt({ userText: '', inbox: [m] })).toEqual({ label: 'from Ada', body: ENCRYPTED, summary: ENCRYPTED })
   })
 })
 

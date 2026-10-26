@@ -46,10 +46,19 @@ func readAll(t testing.TB, path string) ([]*transcript.Record, int) {
 func build(t testing.TB, id string) *FileResult {
 	t.Helper()
 	recs, bad := readAll(t, fixturePath(t, id))
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for _, r := range recs {
 		b.Apply(r)
 	}
 	b.AddBadLines(bad)
 	return b.Result()
+}
+
+// fixturePrices is the price table the fixtures' expected costs were worked out with.
+func fixturePrices() *pricing.Table {
+	t, err := pricing.Load(fixtures.PricesFile())
+	if err != nil {
+		panic(err)
+	}
+	return t
 }

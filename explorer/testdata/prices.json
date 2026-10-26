@@ -1,0 +1,11 @@
+{
+  "prices": {
+    "claude-sonnet-5-5": {
+      "input": 2,
+      "output": 10,
+      "cacheRead": 0.2,
+      "status": "fixture",
+      "note": "the price generate.ts works the fixtures' costs and cost-state records out with; the real table has 0.10"
+    }
+  }
+}

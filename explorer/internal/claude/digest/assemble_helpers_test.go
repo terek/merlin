@@ -10,7 +10,6 @@ import (
 
 	"github.com/terek/merlin/explorer/internal/claude/transcript"
 	"github.com/terek/merlin/explorer/internal/fixtures"
-	"github.com/terek/merlin/explorer/internal/pricing"
 )
 
 // buildFile reads one transcript file into a FileResult.
@@ -21,7 +20,7 @@ func buildFile(t testing.TB, path string) *FileResult {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for {
 		rec, err := r.Next()
 		if errors.Is(err, io.EOF) {

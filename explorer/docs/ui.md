@@ -313,6 +313,12 @@ From top to bottom:
     the call), cold means idle longer than the cache lifetime, and it is in no figure on the page;
     for Codex it is the recorded call (`compaction.messageId`), cold when less than half the context
     came from the cache, and already in the figures;
+  - under a session's last row, a hatched band over each **reported window** whose figure is more
+    than its messages add up to (`cost.windows[].overheadUSD`): what the harness reported and no
+    message explains, labelled with its dollars and on no scale, since it belongs to the whole window
+    and not to a slot, turn or agent in it. Hover reads the window's reported and covered figures. The
+    legend's "Not explained by messages" entry adds the bands up, and the legend's percentages are
+    of messages plus overhead, which is the header's figure;
   - on a main row each **turn** is a thick stretch of the baseline from its start to its end, with a
     tick where it starts (the baseline is thin where no turn runs). A turn starts at
     `turn.startedAt` and ends at the last thing that ran in it (a call of the main agent or of any

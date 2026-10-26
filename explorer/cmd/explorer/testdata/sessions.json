@@ -318,7 +318,9 @@
                 "cacheCreationTokens": 1200,
                 "usd": 0.0081
               }
-            }
+            },
+            "coveredUSD": 0.1157,
+            "overheadUSD": 0.0015000000000000013
           }
         ],
         "ownUSD": 0.1157,

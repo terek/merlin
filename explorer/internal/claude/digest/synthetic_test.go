@@ -12,7 +12,6 @@ import (
 	"github.com/terek/merlin/explorer/internal/claude/transcript"
 	"github.com/terek/merlin/explorer/internal/fixtures"
 	"github.com/terek/merlin/explorer/internal/model"
-	"github.com/terek/merlin/explorer/internal/pricing"
 )
 
 // --- tiny hand-written transcript builder -------------------------------------------
@@ -86,7 +85,7 @@ func decode(t testing.TB, lines ...L) []*transcript.Record {
 
 func reduce(t testing.TB, lines ...L) *FileResult {
 	t.Helper()
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for _, r := range decode(t, lines...) {
 		b.Apply(r)
 	}
@@ -368,7 +367,7 @@ func TestMessageWithoutID(t *testing.T) {
 }
 
 func TestIgnoredAndMalformedRecords(t *testing.T) {
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for _, l := range []string{
 		`{"type":"hologram","uuid":"u1"}`,
 		`{"type":"assistant","uuid":"a1","timestamp":"2026-09-30T10:00:00Z","message":"not an object"}`,
@@ -393,7 +392,7 @@ func TestIgnoredAndMalformedRecords(t *testing.T) {
 }
 
 func TestEmptyBuilder(t *testing.T) {
-	res := NewBuilder(pricing.Default()).Result()
+	res := NewBuilder(fixturePrices()).Result()
 	if len(res.Turns) != 0 || res.Cost.USD != 0 || !res.FirstTimestamp.IsZero() {
 		t.Errorf("result = %+v", res)
 	}
@@ -432,7 +431,7 @@ func allFixtureFiles(t testing.TB) []string {
 func TestReducerHalvesEqualWhole(t *testing.T) {
 	for _, path := range allFixtureFiles(t) {
 		recs, bad := readAll(t, path)
-		whole := NewBuilder(pricing.Default())
+		whole := NewBuilder(fixturePrices())
 		for _, r := range recs {
 			whole.Apply(r)
 		}
@@ -444,7 +443,7 @@ func TestReducerHalvesEqualWhole(t *testing.T) {
 			if k < 0 || k > n {
 				continue
 			}
-			b := NewBuilder(pricing.Default())
+			b := NewBuilder(fixturePrices())
 			for _, r := range recs[:k] {
 				b.Apply(r)
 			}
@@ -469,7 +468,7 @@ func TestResultIsDeterministicAndIndependent(t *testing.T) {
 	recs, _ := readAll(t, fixturePath(t, "16161616-0000-4000-8000-000000000001"))
 	var first *FileResult
 	for i := 0; i < 20; i++ { // map iteration order must not leak
-		b := NewBuilder(pricing.Default())
+		b := NewBuilder(fixturePrices())
 		for _, r := range recs {
 			b.Apply(r)
 		}
@@ -482,7 +481,7 @@ func TestResultIsDeterministicAndIndependent(t *testing.T) {
 			t.Fatal("results differ between runs")
 		}
 	}
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for _, r := range recs {
 		b.Apply(r)
 	}
@@ -509,7 +508,7 @@ func TestAgentFilesReduceLikeMainFiles(t *testing.T) {
 		t.Fatal("teammate fixture not found")
 	}
 	recs, _ := readAll(t, path)
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	for _, r := range recs {
 		b.Apply(r)
 	}
@@ -530,7 +529,7 @@ func TestFeedReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Close()
-	b := NewBuilder(pricing.Default())
+	b := NewBuilder(fixturePrices())
 	if err := b.Feed(r); err != nil {
 		t.Fatal(err)
 	}

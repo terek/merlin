@@ -661,6 +661,9 @@ func (p *printer) inbox(m model.InboxMessage) {
 			parts = append(parts, s)
 		}
 	}
+	if m.Encrypted {
+		parts = append(parts, "(encrypted)")
+	}
 	if !p.opt.full {
 		line := "[" + label + "]"
 		if len(parts) > 0 {

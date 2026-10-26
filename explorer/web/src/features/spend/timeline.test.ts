@@ -65,6 +65,7 @@ const session = (
 ) =>
   ({
     summary: { key: { harness: 'claude', id }, title: `session ${id}` },
+    cost: { overheadUSD: 0 },
     lineage: { children: [], inheritedTurns: inherited },
     digest: { agents: [], compactions: [], ...digest },
   }) as unknown as SessionDetail

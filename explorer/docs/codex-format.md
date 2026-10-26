@@ -66,12 +66,15 @@ An agent path is `/root/<task name>/<task name>…`. Its spawning call is the pa
 `spawn_agent` whose `task_name` is the path's last element; its `message` is the agent's prompt.
 
 **Messages between threads.** What a thread receives from another (`send_message`, the
-`followup_task` that starts its next turn, the spawn prompt) is encrypted in the receiver's file:
-the text is in the sender's call arguments, addressed by `target` (`/root`, an agent path, a task
-name or a nickname). A subagent's final answer arrives at its parent as a plain-text
-`agent_message`. The digest takes texts from the calls and the plain answers: a message that
-arrives while a turn runs is queued in it, one that arrives between turns starts the next turn
-unless the user typed it.
+`followup_task` that starts its next turn, the spawn prompt) is encrypted in the receiver's file,
+and in Codex 0.164 the sender's call arguments carry it encrypted too: every `message` of
+`spawn_agent`, `send_message` and `followup_task` in 179 calls on this machine is a Fernet token
+(`gAAAAA…`, URL-safe base64 of version byte 0x80, timestamp, IV, ciphertext, HMAC), so no copy is
+in plain text. The call still says who sent what to whom (`target`: `/root`, an agent path, a task
+name or a nickname). The digest marks such a message `encrypted` and keeps no text. A subagent's
+final answer arrives at its parent as a plain-text `agent_message`. The digest takes texts from
+the calls and the plain answers: a message that arrives while a turn runs is queued in it, one
+that arrives between turns starts the next turn unless the user typed it.
 
 **Root turns.** A subagent's turn names the parent turn that set it off
 (`turn_attribution.parent_turn_id`), so `AgentTurn.rootTurn` is exact, through any depth.

@@ -189,6 +189,16 @@ func TestFable5Verified(t *testing.T) {
 	}
 }
 
+// A real Claude Code 2.1.302 window: 18,270 in, 316,518 out, 35,169,671 cache read and
+// 1,502,975 5m cache write on Sonnet 5.5, reported as $10.4761246.
+func TestSonnet55CacheRead(t *testing.T) {
+	tok := model.Tokens{Input: 18270, Output: 316518, CacheRead: 35169671, CacheWrite5m: 1502975}
+	mc, _ := Default().Cost("claude-sonnet-5-5", tok, false)
+	if math.Abs(mc.USD-10.4761246) > 1e-6 {
+		t.Errorf("claude-sonnet-5-5: $%.7f, want $10.4761246", mc.USD)
+	}
+}
+
 func TestEmbeddedTableStatus(t *testing.T) {
 	for n, p := range Default().models {
 		if p.Status != "verified" && p.Status != "assumed" {

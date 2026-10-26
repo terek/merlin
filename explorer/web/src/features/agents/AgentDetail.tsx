@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { Agent } from '../../api/types'
 import { agentRole, ROLE_LABEL } from '../../lib/agent'
 import { formatCount } from '../../lib/format'
-import { inboxLabel } from '../../lib/inbox'
+import { ENCRYPTED, inboxLabel } from '../../lib/inbox'
 import { fullTime, parseTime, spanMs, timeOfDay } from '../../lib/time'
 import { unwrapMachineText } from '../../lib/wrapper'
 import {
@@ -147,11 +147,18 @@ export function AgentDetail({
         </dd>
       </dl>
 
-      {a.prompt && (
+      {a.prompt ? (
         <div>
           <Label>Prompt{prompt.label ? ` (${prompt.label})` : ''}</Label>
           <PlainText text={prompt.body} lines={6} className="text-sec" />
         </div>
+      ) : (
+        a.promptEncrypted && (
+          <div>
+            <Label>Prompt</Label>
+            <p className="text-sec text-muted">Encrypted: the harness does not keep it in plain text.</p>
+          </div>
+        )
       )}
       {a.finalText ? (
         <div>
@@ -189,6 +196,7 @@ export function AgentDetail({
                     <span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</span>
                   </Clamp>
                 )}
+                {m.encrypted && <div className="text-muted">{ENCRYPTED}</div>}
               </li>
             ))}
           </ul>

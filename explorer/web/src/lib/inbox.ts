@@ -23,15 +23,19 @@ export function inboxLabel(m: InboxMessage): string {
   }
 }
 
+/** What stands in for a text the harness keeps only encrypted (Codex, between agents). */
+export const ENCRYPTED = '(encrypted)'
+
 /** What a compact line shows after the label: the summary, else the error, else the first line of the text. */
 export function inboxSummary(m: InboxMessage): string {
-  return m.summary || m.error || firstLine(m.text ?? '')
+  return m.summary || m.error || firstLine(m.text ?? '') || (m.encrypted ? ENCRYPTED : '')
 }
 
 /** Everything a message says, for a reader: summary, error and text, without repeating itself. */
 export function inboxBody(m: InboxMessage): string {
   const parts: string[] = []
   for (const s of [m.summary, m.error, m.text]) if (s?.trim() && !parts.includes(s)) parts.push(s)
+  if (m.encrypted) parts.push(ENCRYPTED)
   return parts.join('\n\n')
 }
 

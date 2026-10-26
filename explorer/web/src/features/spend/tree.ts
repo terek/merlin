@@ -21,12 +21,28 @@ export interface Branch {
   depth: number
   /** Its own turns (indexes into `model.cols`), in order. */
   own: number[]
+  /** The stretches the harness reported a cost for that its messages do not add up to. */
+  overhead: Overhead[]
+}
+
+/**
+ * A reported window's overhead: what the harness reported for it that no message explains (calls it
+ * makes without writing them down). It belongs to the window as a whole, never to a turn or an agent.
+ */
+export interface Overhead {
+  t0: number
+  t1: number
+  usd: number
+  reportedUSD: number
+  coveredUSD: number
 }
 
 export interface Tree {
   branches: Branch[]
   /** Own spend of every branch: nothing is counted twice. */
   total: number
+  /** Reported spend of every branch that no message explains: with `total`, the harness's figure. */
+  overheadUSD: number
   byKind: Part[]
   byClass: Part[]
   rereads: Reread[]
@@ -76,6 +92,7 @@ export function buildTree(details: readonly SessionDetail[]): Tree {
       kind: parent ? link?.kind : undefined,
       depth: parent ? parent.depth + 1 : 0,
       own,
+      overhead: overheadOf(detail),
     })
   }
 
@@ -90,11 +107,30 @@ export function buildTree(details: readonly SessionDetail[]): Tree {
   return {
     branches,
     total: branches.reduce((a, b) => a + b.model.total, 0),
+    overheadUSD: branches.reduce((a, b) => a + b.detail.cost.overheadUSD, 0),
     byKind: sum(KIND_SERIES, (m) => m.byKind),
     byClass: sum(CLASS_SERIES, (m) => m.byClass),
     rereads: branches.flatMap((b) => b.model.rereads),
     fromMessages: branches.every((b) => b.model.fromMessages),
   }
+}
+
+/** The windows of a session with overhead worth a cent; none from a daemon that does not split it by window. */
+function overheadOf(d: SessionDetail): Overhead[] {
+  return (d.cost.windows ?? []).flatMap((w) => {
+    const t0 = Date.parse(w.from)
+    const t1 = Date.parse(w.to)
+    if (w.overheadUSD === undefined || w.overheadUSD < 0.005 || !Number.isFinite(t0)) return []
+    return [
+      {
+        t0,
+        t1: Number.isFinite(t1) ? Math.max(t0, t1) : t0,
+        usd: w.overheadUSD,
+        reportedUSD: w.totalUSD,
+        coveredUSD: w.coveredUSD ?? 0,
+      },
+    ]
+  })
 }
 
 /** A decision with the branch it was made on. */

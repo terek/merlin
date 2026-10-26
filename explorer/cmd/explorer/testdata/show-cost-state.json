@@ -51,7 +51,9 @@
               "cacheCreationTokens": 1200,
               "usd": 0.0081
             }
-          }
+          },
+          "coveredUSD": 0.1157,
+          "overheadUSD": 0.0015000000000000013
         }
       ],
       "ownUSD": 0.1157,
@@ -91,7 +93,7 @@
   "resume": "cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001",
   "digest": {
     "schemaVersion": 2,
-    "parserVersion": 10,
+    "parserVersion": 11,
     "source": [
       {
         "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001.jsonl",

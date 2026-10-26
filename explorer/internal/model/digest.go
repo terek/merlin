@@ -241,6 +241,9 @@ type InboxMessage struct {
 	Status  string `json:"status,omitempty"`
 	Summary string `json:"summary,omitempty"`
 	Text    string `json:"text,omitempty"`
+	// Encrypted: the harness keeps the text only encrypted (Codex, between agents), so Text
+	// is empty.
+	Encrypted bool `json:"encrypted,omitempty"`
 	// Error is the failure the sender reported, when it stopped because of one.
 	Error string `json:"error,omitempty"`
 }
@@ -276,9 +279,11 @@ type Agent struct {
 	EndedAt   time.Time   `json:"endedAt,omitzero"`
 	Status    AgentStatus `json:"status"`
 
-	Prompt    string         `json:"prompt,omitempty"`
-	FinalText string         `json:"finalText,omitempty"`
-	Inbox     []InboxMessage `json:"inbox,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
+	// PromptEncrypted: the harness keeps the prompt only encrypted (Codex), so Prompt is empty.
+	PromptEncrypted bool           `json:"promptEncrypted,omitempty"`
+	FinalText       string         `json:"finalText,omitempty"`
+	Inbox           []InboxMessage `json:"inbox,omitempty"`
 
 	AssistantMessages int64            `json:"assistantMessages"`
 	ToolCalls         int64            `json:"toolCalls"`
@@ -303,11 +308,13 @@ type AgentTurn struct {
 	Origin TurnOrigin `json:"origin"`
 	// Prompt is what the agent was asked: for the first turn, Agent.Prompt; later, the prompt
 	// as its author wrote it (a delivered message is in Inbox instead, as in Turn.UserText).
-	Prompt      string         `json:"prompt,omitempty"`
-	Inbox       []InboxMessage `json:"inbox,omitempty"`
-	Queued      []QueuedPrompt `json:"queued,omitempty"`
-	FinalText   string         `json:"finalText,omitempty"`
-	Interrupted bool           `json:"interrupted,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
+	// PromptEncrypted: as Agent.PromptEncrypted, for the first turn.
+	PromptEncrypted bool           `json:"promptEncrypted,omitempty"`
+	Inbox           []InboxMessage `json:"inbox,omitempty"`
+	Queued          []QueuedPrompt `json:"queued,omitempty"`
+	FinalText       string         `json:"finalText,omitempty"`
+	Interrupted     bool           `json:"interrupted,omitempty"`
 	// RootTurn is the main agent's turn this work belongs to: the one that set it off, when
 	// the harness records that, else the one running when it started.
 	RootTurn *int `json:"rootTurn,omitempty"`

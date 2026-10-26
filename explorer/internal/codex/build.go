@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 3
+const ParserVersion = 4
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -356,7 +356,7 @@ func (b *builder) buildAgents() {
 		}
 		if spawn != nil {
 			a.SpawnToolUseID = spawn.CallID
-			a.Prompt = spawn.Message
+			a.Prompt, a.PromptEncrypted = spawn.Message, spawn.Encrypted
 			a.Model = spawn.Model
 			a.InheritsContext = spawn.Fork != "" && spawn.Fork != "none"
 		}
@@ -384,10 +384,10 @@ func (b *builder) buildAgents() {
 				ToolsByName: cloneCounts(tr.ToolsByName),
 			}
 			if i == 0 {
-				at.Origin, at.Prompt = model.OriginSpawn, a.Prompt
+				at.Origin, at.Prompt, at.PromptEncrypted = model.OriginSpawn, a.Prompt, a.PromptEncrypted
 			}
 			for k, u := range tr.Users {
-				if k == 0 && (i > 0 || at.Prompt == "") {
+				if k == 0 && (i > 0 || (at.Prompt == "" && !at.PromptEncrypted)) {
 					// A turn the user typed into; for a review, the request it was started with.
 					if i > 0 {
 						at.Origin = model.OriginHuman
@@ -512,7 +512,7 @@ type delivery struct {
 }
 
 // inboxes places every message a thread received: the follow-ups and messages other threads
-// sent it (their text is in the sender's call; the receiver's copy is encrypted) and the
+// sent it (from the sender's call, whose text Codex encrypts too from 0.164) and the
 // final answers of its own subagents. A message that arrives while a turn runs is queued in
 // it; one that arrives between turns starts the next turn when nobody typed that turn.
 func (b *builder) inboxes() {
@@ -539,7 +539,7 @@ func (b *builder) inboxes() {
 			if c.Name == "followup_task" {
 				kind = model.InboxAssignment
 			}
-			all = append(all, delivery{to: to.Meta.ID, msg: model.InboxMessage{At: c.At, Kind: kind, From: from, AgentID: fromID, Text: c.Message}})
+			all = append(all, delivery{to: to.Meta.ID, msg: model.InboxMessage{At: c.At, Kind: kind, From: from, AgentID: fromID, Text: c.Message, Encrypted: c.Encrypted}})
 		}
 		for _, r := range s.Reports {
 			sender := b.byPath[r.Author]
