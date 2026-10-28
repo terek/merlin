@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001.jsonl",
@@ -71,6 +71,7 @@
       "endedAt": "2026-09-09T10:00:08Z",
       "durationMs": 4000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "ask the reviewer to check the diff",
       "finalText": "The reviewer is on it.",
       "assistantMessages": 2,
@@ -104,6 +105,7 @@
       "endedAt": "2026-09-09T10:02:17Z",
       "durationMs": 20000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "tell the reviewer to also check the tests",
       "finalText": "The reviewer will also check the tests.",
       "assistantMessages": 2,

@@ -8,9 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/terek/merlin/explorer/internal/beads"
+	"github.com/terek/merlin/explorer/internal/model"
 )
 
 // maxLine bounds one rollout line. Lines carry whole command outputs and instructions;
@@ -192,6 +196,13 @@ type reportRec struct {
 	Turn   int
 }
 
+// beadRec is a bead event of a command the thread ran. MessageID on ev is the response
+// that asked for the command: the thread's latest billed call of the same turn.
+type beadRec struct {
+	ev   model.BeadEvent
+	turn int // index into thread.Turns
+}
+
 // compactRec is a compacted record.
 type compactRec struct {
 	At         time.Time
@@ -209,6 +220,7 @@ type thread struct {
 	Calls     []callRec
 	Reports   []reportRec
 	Compacts  []compactRec
+	Beads     []beadRec
 	Cwds      []string
 	FirstAt   time.Time
 	LastAt    time.Time
@@ -586,6 +598,12 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 				Diff     string  `json:"unified_diff"`
 				MovePath *string `json:"move_path"`
 			} `json:"changes"`
+			// CommandExecution
+			ID       string          `json:"id"`
+			Command  json.RawMessage `json:"command"`
+			Cwd      string          `json:"cwd"`
+			Output   string          `json:"aggregated_output"`
+			ExitCode *int            `json:"exit_code"`
 		} `json:"item"`
 	}
 	if json.Unmarshal(raw, &e) != nil {
@@ -653,7 +671,53 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 		}
 	case "EnteredReviewMode":
 		tr.Review = true
+	case "CommandExecution":
+		p.command(it.ID, it.Command, it.Cwd, it.Status, it.Output, it.ExitCode, at)
 	}
+}
+
+// command records the bead events of a finished shell command.
+func (p *parser) command(id string, argv json.RawMessage, cwd, status, output string, exit *int, at time.Time) {
+	t := p.t
+	script := shellScript(argv)
+	if script == "" {
+		return
+	}
+	res := &beads.Result{Output: output, Failed: (exit != nil && *exit != 0) || (status != "" && status != "completed")}
+	var msg string
+	if n := len(t.Usage); n > 0 && t.Usage[n-1].Turn == p.cur {
+		msg = t.Usage[n-1].ResponseID
+	}
+	for _, ev := range beads.Parse(script, fileURLPath(cwd), res) {
+		ev.At, ev.ToolUseID, ev.MessageID = at, id, msg
+		t.Beads = append(t.Beads, beadRec{ev: ev, turn: p.cur})
+	}
+}
+
+// shellScript is the script a CommandExecution ran: the last argument of `<shell> -c` /
+// `-lc`, else the arguments joined by spaces. A plain string is taken as it is.
+func shellScript(raw json.RawMessage) string {
+	var argv []string
+	if json.Unmarshal(raw, &argv) != nil {
+		var s string
+		_ = json.Unmarshal(raw, &s)
+		return s
+	}
+	if n := len(argv); n >= 3 && (argv[n-2] == "-c" || argv[n-2] == "-lc") {
+		return argv[n-1]
+	}
+	return strings.Join(argv, " ")
+}
+
+// fileURLPath is the path of a file:// URL; anything else is returned as it is.
+func fileURLPath(s string) string {
+	if !strings.HasPrefix(s, "file://") {
+		return s
+	}
+	if u, err := url.Parse(s); err == nil {
+		return u.Path
+	}
+	return strings.TrimPrefix(s, "file://")
 }
 
 func (p *parser) responseItem(raw json.RawMessage, at time.Time) {

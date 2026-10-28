@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-subnest/08080808-0000-4000-8000-000000000001.jsonl",
@@ -80,6 +80,7 @@
       "endedAt": "2026-09-08T10:00:28Z",
       "durationMs": 30000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "survey the repo with helpers",
       "finalText": "The repo has 4 test files.",
       "assistantMessages": 2,

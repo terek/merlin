@@ -53,6 +53,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `agents` | flat list of sub-agents, as `Agent` |
 | `workflows` | the workflow runs launched in the session, as `WorkflowRun`, ordered by start time |
 | `messages` | one entry per billed API message, as `Message` |
+| `beads` | the bd (beads issue tracker) calls of the session and its agents that name a bead, as `BeadEvent`, ordered by time, then tool call, then position in the command |
 | `diagnostics` | what the parser could not interpret, as `Diagnostics` |
 
 ## SourceFile
@@ -227,6 +228,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `queued` | the prompts that arrived while the turn was running, as `QueuedPrompt`, in order; they start no turn |
 | `images` | number of pasted images (image data is not stored) |
 | `command` | slash command name, when `origin` is `command` |
+| `gitBranch` | the git branch the session was on when the turn started (Claude Code: the prompt record's `gitBranch`; Codex: the thread's); omitted when unknown |
 | `finalText` | last assistant text of the turn, complete |
 | `interrupted` | the user interrupted the turn |
 | `assistantMessages` | assistant API messages of the main agent in this turn |
@@ -368,6 +370,30 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `estimatedUSD` | on a `truncated` sub-agent message: the expected cost of the output tokens missing from its count (680 tokens at the model's prices, docs/validation.md cause A); not in `usd`. Omitted when 0, always on main-agent messages |
 | `unpriced` | the model has no price (it is in `diagnostics.unpricedModels`): `usd` is 0 although the tokens were billed; omitted when false |
 | `fast` | the call was made in fast mode (Claude Code's fast speed, Codex's `priority` service tier); the prompt cache is not shared between fast and standard calls; omitted when false |
+
+## BeadEvent
+
+One bd call, in a shell command of the session or an agent, that names a bead (see
+docs/beads-and-repos.md). A chained command gives one event per bd call; a confirmed write that
+no call names (a wrapper script that runs bd) gives one of its own.
+
+| key | meaning |
+|---|---|
+| `at` | when the call's result arrived; the call's time when it has none yet |
+| `turn` | as on `Message`: the main turn, or for an agent the main turn its top-level ancestor was spawned in |
+| `agentId` | agent that made the call; omitted for the main agent |
+| `agentTurn` | for an agent's call, the index of the agent's turn |
+| `messageId` | the API message that made the call. A copy of the call in copied history keeps it, so events are deduplicated by message ownership like cost; inside a session an agent's copy of another's call is dropped |
+| `toolUseId` | the tool call (Codex: the command execution's id) |
+| `op` | `create`, `claim` (update --claim), `update`, `close` (also update --status closed), `reopen`, `comment` (comment or note), `dep` (dep add), `show` (read only: a weak link) |
+| `ids` | the beads it names; for `dep`, [issue, the bead it depends on]; for `create`, the new bead when the output names it |
+| `status` | the status it sets: `in_progress` for a claim, `closed`, `open` for a reopen, or the `--status` given |
+| `parent` | `create --parent` |
+| `depType` | for `dep`: `blocks`, `parent-child`, … (from `--type`, else the output, else `blocks`) |
+| `title` | the bead's title, from the call or its output |
+| `reason` | the close reason, whole, when the call gives it inline |
+| `cwd` | the directory the call ran in: a `cd` earlier in the command, else the harness's working directory for the call |
+| `outcome` | `ok` (the output confirms it), `failed` (the output reports an error for it, or the call failed with nothing confirmed), `unknown` (no result yet, output suppressed or not recognised) |
 
 ## Diagnostics
 

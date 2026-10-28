@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-coststate/16161616-0000-4000-8000-000000000001.jsonl",
@@ -159,6 +159,7 @@
       "endedAt": "2026-09-16T10:00:08Z",
       "durationMs": 9000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "plan the billing module",
       "finalText": "Plan: invoices, totals, tax.",
       "assistantMessages": 2,
@@ -189,6 +190,7 @@
       "endedAt": "2026-09-16T11:00:24Z",
       "durationMs": 12000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "implement the invoice totals",
       "finalText": "Invoice totals implemented",
       "assistantMessages": 2,
@@ -222,6 +224,7 @@
       "endedAt": "2026-09-16T11:00:30Z",
       "durationMs": 7000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "review the invoice totals",
       "finalText": "Review: totals look correct.",
       "assistantMessages": 1,

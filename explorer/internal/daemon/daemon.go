@@ -16,6 +16,7 @@ import (
 	"github.com/terek/merlin/explorer/internal/catalog"
 	"github.com/terek/merlin/explorer/internal/engine"
 	"github.com/terek/merlin/explorer/internal/harness"
+	"github.com/terek/merlin/explorer/internal/links"
 	"github.com/terek/merlin/explorer/internal/model"
 	"github.com/terek/merlin/explorer/internal/store"
 )
@@ -80,6 +81,15 @@ type Daemon struct {
 	hooksDropped atomic.Int64
 	rescans      atomic.Int64
 	lastRescan   atomic.Int64 // unix nanoseconds
+
+	// Where sessions worked (repos.json, beads/), refreshed after each rescan. linkDirs are
+	// the directories of digests written since; linksFull is when the whole catalog was last
+	// walked (zero: never). Only the rescan loop touches links and linksFull.
+	links     *links.Index
+	linkMu    sync.Mutex
+	linkDirs  []string
+	linksFull time.Time
+	linksErr  string // the last refresh error logged, so a lasting one is logged once
 }
 
 type discovered struct {
@@ -214,6 +224,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	d.cat.Store(cat)
 	d.logf("catalog loaded: %d sessions", cat.Len())
+	d.links = links.Open(home)
 
 	for _, h := range d.opts.Harnesses {
 		if f, ok := h.(harness.Follower); ok {
@@ -288,9 +299,38 @@ func (d *Daemon) onWrite(ev engine.Event) {
 	default:
 		if ev.Digest != nil {
 			cat.Upsert(ev.Digest)
+			dirs := links.Dirs(ev.Digest)
+			d.linkMu.Lock()
+			d.linkDirs = append(d.linkDirs, dirs...)
+			d.linkMu.Unlock()
 		}
 	}
 	d.bus.Publish(ev)
+}
+
+// refreshLinks brings repos.json and the bead registry up to date: with every directory of
+// the catalog at start and then hourly, otherwise with those of the digests written since the
+// last call (the registry's exports are checked each time; unchanged ones cost a stat).
+func (d *Daemon) refreshLinks() {
+	now := time.Now()
+	d.linkMu.Lock()
+	dirs := d.linkDirs
+	d.linkDirs = nil
+	d.linkMu.Unlock()
+	if d.linksFull.IsZero() || now.Sub(d.linksFull) >= links.RecheckAfter {
+		d.linksFull = now
+		d.cat.Load().Each(func(dg *model.SessionDigest) { dirs = append(dirs, links.Dirs(dg)...) })
+	}
+	res, err := d.links.Refresh(dirs, now)
+	if msg := fmt.Sprint(err); err != nil && msg != d.linksErr {
+		d.logf("links: %v", err)
+		d.linksErr = msg
+	} else if err == nil {
+		d.linksErr = ""
+	}
+	if res.Resolved > 0 || res.Databases > 0 {
+		d.logf("links: %d directories resolved, %d bead databases updated", res.Resolved, res.Databases)
+	}
 }
 
 func (d *Daemon) onDiscover(h harness.Harness, disc harness.Discovery) {
@@ -350,6 +390,7 @@ func (d *Daemon) rescan(ctx context.Context) {
 	}
 	first := d.rescans.Add(1) == 1
 	d.lastRescan.Store(time.Now().UnixNano())
+	d.refreshLinks()
 	if s := eng.Stats(); first || s.Seen != s.Unchanged || s.NewMissing > 0 {
 		d.logf("rescan: %d sessions, %d queued, %d newly missing", s.Seen, s.Seen-s.Unchanged, s.NewMissing)
 	}

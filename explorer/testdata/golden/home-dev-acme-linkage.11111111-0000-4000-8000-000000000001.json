@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-linkage/11111111-0000-4000-8000-000000000001.jsonl",
@@ -84,6 +84,7 @@
       "endedAt": "2026-09-11T10:00:18Z",
       "durationMs": 15000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "check three things in parallel",
       "finalText": "Entry point is main.ts; two config files.",
       "assistantMessages": 2,

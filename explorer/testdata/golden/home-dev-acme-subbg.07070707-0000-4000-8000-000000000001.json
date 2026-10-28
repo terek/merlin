@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001.jsonl",
@@ -70,6 +70,7 @@
       "endedAt": "2026-09-07T10:00:08Z",
       "durationMs": 5000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "run the slow audit in the background",
       "finalText": "The audit is running in the background.",
       "assistantMessages": 2,
@@ -103,6 +104,7 @@
       "endedAt": "2026-09-07T10:02:04Z",
       "durationMs": 4000,
       "origin": "task-notification",
+      "gitBranch": "main",
       "userText": "",
       "inbox": [
         {
@@ -141,6 +143,7 @@
       "endedAt": "2026-09-07T10:02:10Z",
       "durationMs": 4000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "fix the first issue",
       "finalText": "Fixed the first issue",
       "assistantMessages": 1,

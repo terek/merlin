@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/terek/merlin/explorer/internal/beads"
 	"github.com/terek/merlin/explorer/internal/model"
 )
 
@@ -62,6 +63,7 @@ func (b *Builder) Result() *FileResult {
 	}
 
 	res.EndState = b.endState()
+	res.Beads = b.beadEvents()
 	billed := b.priceMessages(res)
 	b.buildTurns(res, billed)
 	b.compactionCalls(res)
@@ -135,7 +137,7 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 			Index: i, Epoch: ts.epoch, UUID: ts.uuid,
 			StartedAt: ts.startedAt, EndedAt: ts.endedAt,
 			Origin: ts.origin, UserText: ts.userText, Inbox: slices.Clone(ts.inbox), Queued: slices.Clone(ts.queued), Images: ts.images,
-			Command: ts.command, Interrupted: ts.interrupted,
+			Command: ts.command, GitBranch: ts.gitBranch, Interrupted: ts.interrupted,
 		}
 		switch {
 		case ts.durationMs > 0:
@@ -284,4 +286,35 @@ func (b *Builder) endState() model.EndState {
 		return model.EndMidTurn
 	}
 	return model.EndUnknown
+}
+
+// beadEvents returns the bead events of the Bash calls, including those of calls that have
+// no result yet, with the calling message's id and turn.
+func (b *Builder) beadEvents() []model.BeadEvent {
+	calls := slices.Clone(b.beads)
+	ids := make([]string, 0, len(b.bash))
+	for id := range b.bash {
+		ids = append(ids, id)
+	}
+	slices.SortFunc(ids, func(x, y string) int {
+		if c := b.bash[x].at.Compare(b.bash[y].at); c != 0 {
+			return c
+		}
+		return strings.Compare(x, y)
+	})
+	for _, id := range ids {
+		call := b.bash[id]
+		for _, ev := range beads.Parse(call.script, call.cwd, nil) {
+			ev.At, ev.ToolUseID = call.at, id
+			calls = append(calls, beadCall{ev: ev, msg: call.msg})
+		}
+	}
+	var out []model.BeadEvent
+	for _, c := range calls {
+		m := b.msgs[c.msg]
+		turn := m.turn
+		c.ev.MessageID, c.ev.Turn = m.id, &turn
+		out = append(out, c.ev)
+	}
+	return out
 }

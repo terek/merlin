@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000004.jsonl",
@@ -70,6 +70,7 @@
       "endedAt": "2026-09-05T10:00:24Z",
       "durationMs": 20000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "audit every module",
       "finalText": "Audit complete",
       "assistantMessages": 2,

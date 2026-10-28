@@ -18,7 +18,7 @@ import (
 // the Builder, in Assemble or in the transcript package would change a digest built from
 // the same files: the engine rebuilds every digest whose parserVersion differs. A change of
 // the embedded price table counts too, as the stored costs are not repriced otherwise.
-const ParserVersion = 15
+const ParserVersion = 16
 
 // BuildSession reads the files of one discovered session and returns its complete digest.
 //
@@ -76,7 +76,7 @@ func BuildSessionFrom(src discover.Source, pricer Pricer, reduce FileReducer) (*
 	}
 
 	asm := Assemble(main, files)
-	d.Turns, d.Agents, d.Messages, d.Workflows = asm.Turns, asm.Agents, asm.Messages, asm.Workflows
+	d.Turns, d.Agents, d.Messages, d.Workflows, d.Beads = asm.Turns, asm.Agents, asm.Messages, asm.Workflows, asm.Beads
 	d.Compactions, d.Cost, d.Diagnostics = asm.Compactions, asm.Cost, asm.Diagnostics
 
 	// The files in time order: the main file first, then the agent files.

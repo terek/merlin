@@ -60,8 +60,37 @@ type SessionDigest struct {
 	Agents      []Agent       `json:"agents,omitempty"`
 	Workflows   []WorkflowRun `json:"workflows,omitempty"`
 	Messages    []Message     `json:"messages,omitempty"`
+	// Beads are the bd (beads issue tracker) calls of the session and its agents that name a
+	// bead, ordered by time, then tool call, then position in the command.
+	Beads []BeadEvent `json:"beads,omitempty"`
 
 	Diagnostics Diagnostics `json:"diagnostics"`
+}
+
+// BeadEvent is one bd call that names a bead. Turn, AgentID and AgentTurn are as on Message.
+// MessageID is the API message that made the call: a copy of the call in copied history keeps
+// it, so the catalog dedupes events by message ownership the way it dedupes cost.
+type BeadEvent struct {
+	At        time.Time `json:"at"`
+	Turn      *int      `json:"turn,omitempty"`
+	AgentID   string    `json:"agentId,omitempty"` // empty = main agent
+	AgentTurn *int      `json:"agentTurn,omitempty"`
+	MessageID string    `json:"messageId,omitempty"`
+	ToolUseID string    `json:"toolUseId,omitempty"`
+
+	Op BeadOp `json:"op"`
+	// IDs are the beads the call names: for dep, [issue, dependsOn]; for create, the new bead
+	// when the output names it.
+	IDs     []string `json:"ids,omitempty"`
+	Status  string   `json:"status,omitempty"`  // the status it sets
+	Parent  string   `json:"parent,omitempty"`  // create --parent
+	DepType string   `json:"depType,omitempty"` // dep: blocks, parent-child, …
+	Title   string   `json:"title,omitempty"`
+	Reason  string   `json:"reason,omitempty"` // close reason, whole, when the call or output gives it
+	// Cwd is the directory the call ran in: a cd earlier in the command, else the harness's
+	// working directory for the call.
+	Cwd     string      `json:"cwd,omitempty"`
+	Outcome BeadOutcome `json:"outcome"`
 }
 
 // Key returns the session's (harness, id) key.
@@ -199,6 +228,8 @@ type Turn struct {
 	EndedAt    time.Time  `json:"endedAt,omitzero"`
 	DurationMs int64      `json:"durationMs,omitempty"`
 	Origin     TurnOrigin `json:"origin"`
+	// GitBranch is the git branch the session was on when the turn started.
+	GitBranch string `json:"gitBranch,omitempty"`
 
 	// UserText is the prompt as its author wrote it. A prompt a machine delivered is taken
 	// apart into Inbox, and UserText keeps only what was not recognised (normally nothing).

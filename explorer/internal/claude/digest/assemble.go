@@ -39,6 +39,11 @@ type Assembly struct {
 	Messages []model.Message
 	// Workflows are the session's workflow runs, ordered by start time.
 	Workflows []model.WorkflowRun
+	// Beads are the bead events of the main file and the agents, ordered by time, then tool
+	// call. An agent's event is kept only when the agent owns the message that made the call
+	// (a fork's copy of its parent's calls is not its own); it carries the agent's id, its
+	// spawn turn and the agent turn of that message.
+	Beads []model.BeadEvent
 	// Compactions are the main file's compactions.
 	Compactions []model.Compaction
 	// Cost is the session total: main messages plus every agent's, each message id once.
@@ -214,6 +219,35 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 	}
 	sort.SliceStable(asm.Messages, func(i, j int) bool {
 		return earlier(asm.Messages[i].At, asm.Messages[j].At)
+	})
+
+	// Bead events.
+	if main != nil {
+		asm.Beads = append(asm.Beads, main.Beads...)
+	}
+	for i, a := range ags {
+		msgAt := make(map[string]int, len(owned[i]))
+		for j, m := range owned[i] {
+			msgAt[m.ID] = j
+		}
+		for _, ev := range a.res.Beads {
+			j, ok := msgAt[ev.MessageID]
+			if !ok {
+				continue
+			}
+			ev.AgentID, ev.Turn, ev.AgentTurn = a.id, agents[i].SpawnTurn, nil
+			if k := msgTurns[i][j]; k >= 0 {
+				ev.AgentTurn = &k
+			}
+			asm.Beads = append(asm.Beads, ev)
+		}
+	}
+	sort.SliceStable(asm.Beads, func(i, j int) bool {
+		x, y := asm.Beads[i], asm.Beads[j]
+		if !x.At.Equal(y.At) {
+			return earlier(x.At, y.At)
+		}
+		return x.ToolUseID < y.ToolUseID
 	})
 	asm.Agents = agents
 	mergeDiagnostics(&asm.Diagnostics, main, ags)

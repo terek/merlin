@@ -420,6 +420,10 @@ func (s *Store) ReadProject(harness, projectKey string, v any) (bool, error) {
 	return true, nil
 }
 
+// WriteFileAtomic writes b to path the way digests are written: a reader sees the old file
+// or the new one, never a torn one. For Merlin's other state files (repos.json, beads/).
+func WriteFileAtomic(path string, b []byte) error { return writeFileAtomic(path, b) }
+
 // writeFileAtomic writes b to path via a temp file in the same directory, then renames it
 // into place. The temp file is removed on any error.
 //

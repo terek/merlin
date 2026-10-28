@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-s13d-partial-copy/13131313-0000-4000-8000-000000000008.jsonl",
@@ -80,6 +80,7 @@
       "endedAt": "2026-09-13T10:00:20Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a reset button",
       "finalText": "Reset button added",
       "assistantMessages": 1,
@@ -107,6 +108,7 @@
       "endedAt": "2026-09-13T10:05:26Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a disabled state",
       "finalText": "Disabled state added",
       "assistantMessages": 1,

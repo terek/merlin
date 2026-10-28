@@ -7,9 +7,9 @@ only, never edit it.
 
 **Names.** The project is Merlin Explorer and lives in `explorer/`; the command it builds is
 `merlin` (it replaces the old Merlin binary in releases). Its state is under `~/.merlin`
-(`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `codex/`, `merlin.lock`, `merlin.log` and
-`config.json` only. The old program kept its own files in the same directory: never read, change
-or remove anything else there.
+(`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `codex/`, `beads/`, `repos.json`,
+`merlin.lock`, `merlin.log` and `config.json` only. The old program kept its own files in the
+same directory: never read, change or remove anything else there.
 
 ## Commands
 

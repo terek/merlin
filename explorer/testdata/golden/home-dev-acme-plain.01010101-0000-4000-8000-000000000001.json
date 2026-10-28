@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-plain/01010101-0000-4000-8000-000000000001.jsonl",
@@ -59,6 +59,7 @@
       "endedAt": "2026-09-01T10:00:14Z",
       "durationMs": 12000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a login page",
       "finalText": "Done, 3 files changed",
       "assistantMessages": 3,
@@ -93,6 +94,7 @@
       "endedAt": "2026-09-01T10:00:24Z",
       "durationMs": 8000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "now add a logout button",
       "finalText": "Logout button added",
       "assistantMessages": 2,

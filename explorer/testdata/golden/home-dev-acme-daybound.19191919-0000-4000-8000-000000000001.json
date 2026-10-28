@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-daybound/19191919-0000-4000-8000-000000000001.jsonl",
@@ -58,6 +58,7 @@
       "endedAt": "2026-09-19T03:50:12Z",
       "durationMs": 12000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a footer",
       "finalText": "Footer added",
       "assistantMessages": 1,
@@ -84,6 +85,7 @@
       "endedAt": "2026-09-19T04:00:32Z",
       "durationMs": 62000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a header",
       "finalText": "Header added",
       "assistantMessages": 2,
@@ -117,6 +119,7 @@
       "endedAt": "2026-09-19T04:05:22Z",
       "durationMs": 22000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a sidebar",
       "finalText": "Sidebar added",
       "assistantMessages": 1,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-s13a-continuation/13131313-0000-4000-8000-000000000001.jsonl",
@@ -58,6 +58,7 @@
       "endedAt": "2026-09-13T10:00:08Z",
       "durationMs": 9000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a search box",
       "finalText": "Search box added",
       "assistantMessages": 2,
@@ -91,6 +92,7 @@
       "endedAt": "2026-09-13T10:00:14Z",
       "durationMs": 5000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "style the search box",
       "finalText": "Styled",
       "assistantMessages": 1,

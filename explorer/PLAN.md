@@ -5,6 +5,8 @@ Merlin binary in releases and is installed by install.sh). Core, web UI, increme
 and the release workflow are done and were verified against the real corpus (results in
 [docs/validation.md](docs/validation.md); UI design in [docs/ui.md](docs/ui.md)). Open: starting
 the daemon at login (`merlin-t8s.26`). Tracked in beads (`bd list`, epic `merlin-t8s`).
+Sessions are also linked to the beads they worked on and the repositories they worked in
+([docs/beads-and-repos.md](docs/beads-and-repos.md); storage and extraction only so far).
 Decided: Go; hooks are installed by `merlin serve`; texts are stored whole; scripted runs are
 counted and shown only in aggregate; storage and code are split per harness
 (`~/.merlin/claude/`, `internal/claude/`) so Codex and Pi can be added later.

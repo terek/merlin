@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-slash/03030303-0000-4000-8000-000000000001.jsonl",
@@ -55,6 +55,7 @@
       "endedAt": "2026-09-03T10:00:04Z",
       "durationMs": 2000,
       "origin": "command",
+      "gitBranch": "main",
       "userText": "/model sonnet",
       "command": "model",
       "assistantMessages": 0,
@@ -72,6 +73,7 @@
       "endedAt": "2026-09-03T10:00:10Z",
       "durationMs": 5000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a logout button",
       "finalText": "Added the logout button.",
       "assistantMessages": 1,
@@ -98,6 +100,7 @@
       "endedAt": "2026-09-03T10:00:16Z",
       "durationMs": 4000,
       "origin": "command",
+      "gitBranch": "main",
       "userText": "/review the login page",
       "command": "review",
       "finalText": "Review: the login page looks fine.",
@@ -126,6 +129,7 @@
       "endedAt": "2026-09-03T10:00:20Z",
       "durationMs": 2000,
       "origin": "command",
+      "gitBranch": "main",
       "userText": "!ls src",
       "command": "!",
       "assistantMessages": 0,

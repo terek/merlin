@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-hostile/17171717-0000-4000-8000-000000000001.jsonl",
@@ -58,6 +58,7 @@
       "endedAt": "2026-09-17T10:00:10Z",
       "durationMs": 5000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add input validation",
       "finalText": "Validation added",
       "assistantMessages": 2,
@@ -88,6 +89,7 @@
       "endedAt": "2026-09-17T10:00:14Z",
       "durationMs": 2000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "now handle empty strings",
       "assistantMessages": 0,
       "toolCalls": 0,
@@ -104,6 +106,7 @@
       "endedAt": "2026-09-17T10:00:20Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "try again",
       "finalText": "Empty strings handled",
       "assistantMessages": 1,

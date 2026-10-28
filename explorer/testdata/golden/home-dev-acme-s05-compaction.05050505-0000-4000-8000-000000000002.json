@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000002.jsonl",
@@ -71,6 +71,7 @@
       "endedAt": "2026-09-05T10:00:08Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "continue with the repository layer",
       "finalText": "Repository layer continued",
       "assistantMessages": 1,

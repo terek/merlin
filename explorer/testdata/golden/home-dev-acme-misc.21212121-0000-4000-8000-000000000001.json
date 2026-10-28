@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-misc/21212121-0000-4000-8000-000000000001.jsonl",
@@ -68,6 +68,7 @@
       "endedAt": "2026-09-21T10:00:08Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "write the changelog",
       "finalText": "Changelog written",
       "assistantMessages": 1,

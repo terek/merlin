@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 5
+const ParserVersion = 6
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -167,6 +167,7 @@ func (b *builder) build() {
 	b.inboxes()
 	b.rollUp()
 	b.messages()
+	b.beads()
 	b.describe()
 	b.diagnostics()
 }
@@ -181,6 +182,9 @@ func (b *builder) mainTurns() {
 		for i := range t.Turns {
 			tr := &t.Turns[i]
 			mt := mainTurn(tr, off+i)
+			if t.Meta.Git != nil {
+				mt.GitBranch = t.Meta.Git.Branch
+			}
 			d.Turns = append(d.Turns, mt)
 			if _, seen := ids[tr.ID]; !seen || !copied {
 				ids[tr.ID] = off + i
@@ -767,6 +771,53 @@ func (b *builder) messages() {
 		add(b.byID[d.Agents[i].ID], 0, &d.Agents[i])
 	}
 	sort.SliceStable(d.Messages, func(i, j int) bool { return earlier(d.Messages[i].At, d.Messages[j].At) })
+}
+
+// beads lists the bead events of the main thread (inherited ones first) and the agents,
+// placed like their messages, in time order.
+func (b *builder) beads() {
+	d := b.d
+	add := func(t *thread, off int, agent *model.Agent) {
+		for _, r := range t.Beads {
+			ev := r.ev
+			if agent == nil {
+				if r.turn >= 0 {
+					v := off + r.turn
+					ev.Turn = &v
+				}
+			} else {
+				ev.AgentID = agent.ID
+				if agent.SpawnTurn != nil {
+					v := *agent.SpawnTurn
+					ev.Turn = &v
+				}
+				if len(agent.Turns) > 0 {
+					k := r.turn
+					if k < 0 || k >= len(agent.Turns) {
+						k = 0
+					}
+					ev.AgentTurn = &k
+				}
+			}
+			d.Beads = append(d.Beads, ev)
+		}
+	}
+	if b.copied != nil {
+		add(b.copied, 0, nil)
+	}
+	if b.root != nil {
+		add(b.root, b.mainTurn0, nil)
+	}
+	for i := range d.Agents {
+		add(b.byID[d.Agents[i].ID], 0, &d.Agents[i])
+	}
+	sort.SliceStable(d.Beads, func(i, j int) bool {
+		x, y := d.Beads[i], d.Beads[j]
+		if !x.At.Equal(y.At) {
+			return earlier(x.At, y.At)
+		}
+		return x.ToolUseID < y.ToolUseID
+	})
 }
 
 // ---- session-level fields ---------------------------------------------------------------

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-subsync/06060606-0000-4000-8000-000000000001.jsonl",
@@ -71,6 +71,7 @@
       "endedAt": "2026-09-06T10:00:18Z",
       "durationMs": 15000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "find where logins are validated",
       "finalText": "Login validation is in src/auth.ts.",
       "assistantMessages": 2,

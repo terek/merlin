@@ -87,3 +87,15 @@ func killedAgentIDs(raw json.RawMessage) []string {
 	}
 	return out.copy()
 }
+
+// bashScript returns the command of a Bash tool_use.
+func bashScript(blk transcript.Block) (string, bool) {
+	if blk.Name != "Bash" {
+		return "", false
+	}
+	var in struct {
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(blk.Input, &in) // a mistyped input leaves it empty
+	return in.Command, in.Command != ""
+}

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-sdk/15151515-0000-4000-8000-000000000001.jsonl",
@@ -98,6 +98,7 @@
       "endedAt": "2026-09-15T10:00:08Z",
       "durationMs": 5000,
       "origin": "sdk",
+      "gitBranch": "main",
       "userText": "summarize README.md",
       "finalText": "README.md describes the Acme project.",
       "assistantMessages": 2,

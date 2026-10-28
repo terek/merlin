@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-cwdchange/18181818-0000-4000-8000-000000000001.jsonl",
@@ -58,6 +58,7 @@
       "endedAt": "2026-09-18T10:00:04Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "start the feature",
       "finalText": "Feature started",
       "assistantMessages": 1,
@@ -84,6 +85,7 @@
       "endedAt": "2026-09-18T10:00:10Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "worktree-login",
       "userText": "continue in the worktree",
       "finalText": "Continuing in the worktree",
       "assistantMessages": 1,
@@ -111,6 +113,7 @@
       "endedAt": "2026-09-18T10:00:16Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "wrap up",
       "finalText": "Wrapped up",
       "assistantMessages": 1,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-nest/22222222-0000-4000-8000-000000000001.jsonl",
@@ -54,6 +54,7 @@
       "endedAt": "2026-09-22T10:00:04Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "outer session in the nest project",
       "finalText": "Outer done",
       "assistantMessages": 1,

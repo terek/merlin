@@ -290,3 +290,42 @@ $1.20. None is large.
 - The overhead is per session and mostly a property of how the session was used (recaps,
   background agents). It cannot be spread over agents or turns, which is what the design
   already does.
+
+## Bead events, registry and repositories (2026-10-28)
+
+Bead `merlin-t8s.48.7`. `merlin scan` (parser: Claude 16, Codex 6) over the real `~/.claude` and
+`~/.codex`, read-only, into a scratch `MERLIN_HOME`: 3,405 sessions in 1.6 s. Design:
+[beads-and-repos.md](beads-and-repos.md).
+
+**Bead events.** 3,744 events in 107 sessions (Claude 3,666, Codex 78); 2,918 by the main agent,
+826 by sub-agents. Outcomes: ok 2,666, failed 116, unknown 962. The unknowns were sampled by hand:
+almost all are calls whose output was sent to `/dev/null`, cut by `| tail -1`, or empty, which is
+what `unknown` is for. Every event has a `messageId`, a `turn` and a `cwd`.
+
+**Against the registry.** 4 beads databases found (merlin, chatfw, yimple, geocards), 724 issues,
+no bad lines. Of the 606 closed issues, 602 have a close event (ok or unknown) in some session.
+The 4 others were closed in calls the recogniser cannot see through (ids built at run time).
+Closes: 488 by the main agent, 98 by sub-agents.
+
+**Repositories.** 279 directories resolved: 236 in a git repository (11 repositories, 9 remotes),
+3 linked worktrees (resolved to the main repository and its beads database), 183 with a beads
+database. Worktrees removed before Merlin ever saw them (the `yimple-wt/*` projects) do not
+resolve: there is no answer to keep. Their sessions are still tied to yimple through the prefix
+of their bead events.
+
+**Fixed while validating** (each with a table test in `internal/beads`):
+
+- `bd show <memory key>` was a bead: `Issue X not found` now counts as an error line. Such
+  events remain (op `show`, outcome failed or unknown) with ids that match no registry prefix;
+  the catalog filters ids by the registry.
+- A bare word printed by the script (`echo epic-ok`, an indented `bd memories` entry) was taken
+  as a created id. A bare id line now counts only unindented, and only when its prefix is one
+  the script's other ids use (when they use any).
+- `Comment added to X` without the check mark (older bd) is a confirmation.
+- A script whose only bd call failed with an error naming no id (`Error: unknown flag`) marks it
+  failed.
+- `--dry-run` calls are ignored.
+- `for b in 470.1 470.2; do bd close acme-$b …; done` is unrolled over literal words (this took
+  close coverage from 588 to 602).
+- `cd ~/work/acme` expands `~` to the home directory the session's working directory is under
+  (the digest may not read `$HOME`); 141 events had no `cwd` before.

@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/terek/merlin/explorer/internal/beads"
 	"github.com/terek/merlin/explorer/internal/claude/transcript"
 	"github.com/terek/merlin/explorer/internal/model"
 )
@@ -54,6 +55,7 @@ type turnState struct {
 	queued      []model.QueuedPrompt
 	images      int
 	command     string
+	gitBranch   string
 	interrupted bool
 	msgs        []int // indexes into Builder.msgs, in order of first appearance
 }
@@ -62,6 +64,20 @@ type turnState struct {
 type toolUse struct {
 	name string
 	file string // file_path of an Edit / Write / NotebookEdit input
+}
+
+// bashCall is a Bash tool_use waiting for its tool_result.
+type bashCall struct {
+	script string
+	cwd    string    // working directory of the record that made the call
+	msg    int       // index into Builder.msgs
+	at     time.Time // of the assistant line
+}
+
+// beadCall is a bead event of a Bash call and the message that made the call.
+type beadCall struct {
+	ev  model.BeadEvent
+	msg int // index into Builder.msgs
 }
 
 // msgState groups the assistant lines of one API message.
@@ -116,6 +132,8 @@ type Builder struct {
 	customTitle  string
 	agentName    string
 	prs          []model.PRLink
+	bash         map[string]bashCall // Bash calls without a result yet, by tool_use id
+	beads        []beadCall
 	lastPrompt   string
 	lastLeaf     string
 
@@ -143,6 +161,7 @@ func NewBuilder(pricer Pricer) *Builder {
 		msgIdx:         make(map[string]int),
 		pendingSummary: -1,
 		spawnIDs:       make(map[string]struct{}),
+		bash:           make(map[string]bashCall),
 		unknown:        make(map[string]int64),
 	}
 }
@@ -426,7 +445,7 @@ func (b *Builder) user(r *transcript.Record, ts time.Time, pos int) {
 
 	t := turnState{
 		uuid: r.UUID, promptPos: pos, startedAt: ts, endedAt: ts,
-		origin: origin, userText: text, images: r.PromptImages(),
+		origin: origin, userText: text, images: r.PromptImages(), gitBranch: r.GitBranch,
 	}
 	if origin == model.OriginCommand {
 		// The harness wraps what was typed in tags; store what the user typed.
@@ -488,6 +507,10 @@ func (b *Builder) toolResult(r *transcript.Record, ts time.Time) {
 		if blk.Type != "tool_result" {
 			continue
 		}
+		if call, ok := b.bash[blk.ToolUseID]; ok {
+			delete(b.bash, blk.ToolUseID)
+			b.bashResult(blk.ToolUseID, call, &beads.Result{Output: blk.ResultText(), Failed: blk.IsError}, ts)
+		}
 		if hasTUR && tur.RunID != "" {
 			b.workflows = append(b.workflows, WorkflowLaunch{
 				ToolUseID: blk.ToolUseID, Turn: b.cur, At: ts, RunID: tur.RunID, TaskID: tur.TaskID,
@@ -526,7 +549,7 @@ func (b *Builder) assistant(r *transcript.Record, ts time.Time, pos int) {
 	}
 	if b.cur < 0 {
 		// Activity before any prompt (orphan or resumed file): keep it, with its cost.
-		b.startTurn(turnState{promptPos: -1, startedAt: ts, endedAt: ts, origin: model.OriginContinuation})
+		b.startTurn(turnState{promptPos: -1, startedAt: ts, endedAt: ts, origin: model.OriginContinuation, gitBranch: r.GitBranch})
 	}
 	key := am.ID
 	if key == "" {
@@ -575,6 +598,15 @@ func (b *Builder) assistant(r *transcript.Record, ts time.Time, pos int) {
 			if blk.IsAgentSpawn() {
 				b.spawn(blk, m, ts)
 			}
+			if script, ok := bashScript(blk); ok && blk.ID != "" {
+				if _, dup := b.bash[blk.ID]; !dup {
+					cwd := r.Cwd
+					if cwd == "" {
+						cwd = b.lastCwd
+					}
+					b.bash[blk.ID] = bashCall{script: script, cwd: cwd, msg: idx, at: ts}
+				}
+			}
 		}
 	}
 }
@@ -593,6 +625,18 @@ func (b *Builder) spawn(blk transcript.Block, m *msgState, ts time.Time) {
 		s.RunInBackground, s.Isolation = in.RunInBackground, in.Isolation
 	}
 	b.spawns = append(b.spawns, s)
+}
+
+// bashResult records the bead events of a Bash call. res is nil for a call without a result;
+// at is when the result arrived (the call's time when there is none).
+func (b *Builder) bashResult(id string, call bashCall, res *beads.Result, at time.Time) {
+	for _, ev := range beads.Parse(call.script, call.cwd, res) {
+		if at.IsZero() {
+			at = call.at
+		}
+		ev.At, ev.ToolUseID = at, id
+		b.beads = append(b.beads, beadCall{ev: ev, msg: call.msg})
+	}
 }
 
 // parseEpochMillis reads a cost-state startTime: a number (or numeric string) of epoch

@@ -123,3 +123,26 @@ const (
 	TriggerAuto   CompactionTrigger = "auto"
 	TriggerManual CompactionTrigger = "manual"
 )
+
+// BeadOp is what a bd (beads issue tracker) call did to the beads it names.
+type BeadOp string
+
+const (
+	BeadCreate  BeadOp = "create"
+	BeadClaim   BeadOp = "claim" // update --claim: assigned to the caller and in progress
+	BeadUpdate  BeadOp = "update"
+	BeadClose   BeadOp = "close" // close, or update --status closed
+	BeadReopen  BeadOp = "reopen"
+	BeadComment BeadOp = "comment" // a comment or note added
+	BeadDep     BeadOp = "dep"     // dep add: Ids[0] depends on Ids[1]
+	BeadShow    BeadOp = "show"    // read only: a weak link between the session and the bead
+)
+
+// BeadOutcome says whether a bd call is known to have worked.
+type BeadOutcome string
+
+const (
+	BeadOK      BeadOutcome = "ok"      // the output confirms it
+	BeadFailed  BeadOutcome = "failed"  // the output reports an error for it, or the call failed unconfirmed
+	BeadUnknown BeadOutcome = "unknown" // no output yet, or the output does not say
+)

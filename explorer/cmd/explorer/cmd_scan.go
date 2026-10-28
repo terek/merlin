@@ -11,10 +11,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/terek/merlin/explorer/internal/catalog"
 	"github.com/terek/merlin/explorer/internal/claude"
 	"github.com/terek/merlin/explorer/internal/codex"
 	"github.com/terek/merlin/explorer/internal/engine"
 	"github.com/terek/merlin/explorer/internal/harness"
+	"github.com/terek/merlin/explorer/internal/links"
+	"github.com/terek/merlin/explorer/internal/model"
 	"github.com/terek/merlin/explorer/internal/paths"
 	"github.com/terek/merlin/explorer/internal/pricing"
 	"github.com/terek/merlin/explorer/internal/store"
@@ -91,6 +94,18 @@ func runScan(args []string) int {
 	}
 	fmt.Printf("seen %d, processed %d, unchanged %d, failed %d, missing %d, elapsed %s\n",
 		sum.Seen, sum.Processed, sum.Unchanged, sum.Failed, sum.Missing, sum.Elapsed.Round(time.Millisecond))
+
+	// Where the sessions worked: repositories and bead databases.
+	cat, err := catalog.Load(st, "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
+		return 1
+	}
+	var dirs []string
+	cat.Each(func(d *model.SessionDigest) { dirs = append(dirs, links.Dirs(d)...) })
+	if _, err := links.Open(home).Refresh(dirs, time.Now()); err != nil {
+		fmt.Fprintf(os.Stderr, "merlin scan: links: %v\n", err)
+	}
 	return 0
 }
 

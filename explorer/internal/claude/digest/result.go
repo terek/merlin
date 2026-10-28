@@ -59,6 +59,10 @@ type FileResult struct {
 	Recaps []model.Recap
 	// PRs are the pr-link records in file order, repeats included.
 	PRs []model.PRLink
+	// Beads are the bead events of the file's Bash calls, in the order their results arrived,
+	// then the calls still without a result (by time, then tool_use id). MessageID and Turn
+	// are the calling message's id and turn; Assemble sets the agent fields.
+	Beads []model.BeadEvent
 
 	// Cwds, GitBranches, Versions, Entrypoints and SessionKinds are the unique values of
 	// the corresponding envelope fields over all records, in first-appearance order. A

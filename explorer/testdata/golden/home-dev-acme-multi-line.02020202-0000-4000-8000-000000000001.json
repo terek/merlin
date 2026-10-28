@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-multi-line/02020202-0000-4000-8000-000000000001.jsonl",
@@ -58,6 +58,7 @@
       "endedAt": "2026-09-02T10:00:14Z",
       "durationMs": 7000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "list the exported functions in utils.ts",
       "finalText": "Let me look at the file.\n\nutils.ts exports two functions:\nslugify and clamp.",
       "assistantMessages": 2,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 15,
+  "parserVersion": 16,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000003.jsonl",
@@ -55,6 +55,7 @@
       "endedAt": "2026-09-05T10:00:04Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add a cache layer",
       "finalText": "Cache layer added",
       "assistantMessages": 1,
@@ -81,6 +82,7 @@
       "endedAt": "2026-09-05T10:00:10Z",
       "durationMs": 3000,
       "origin": "human",
+      "gitBranch": "main",
       "userText": "add cache expiry",
       "finalText": "Expiry added",
       "assistantMessages": 1,

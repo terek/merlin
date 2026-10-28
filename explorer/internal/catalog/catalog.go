@@ -112,6 +112,16 @@ func (c *Catalog) Digest(key model.SessionKey) (*model.SessionDigest, bool) {
 	return d, ok
 }
 
+// Each calls f with every stored digest, in no particular order, under the read lock: f must
+// not call back into the catalog or modify the digest.
+func (c *Catalog) Each(f func(*model.SessionDigest)) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, d := range c.digests {
+		f(d)
+	}
+}
+
 // view returns the derived state, rebuilding it first when a write or a change of
 // time.Local made it stale. The returned view is immutable.
 func (c *Catalog) view() *view {
