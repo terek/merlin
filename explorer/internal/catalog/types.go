@@ -256,7 +256,18 @@ const (
 	ByDay
 	ByModel
 	ByKind
+	// The groupings (places.go). ByRepo puts a session's whole spend under its repository;
+	// ByBranch splits it over its turns' branches, ByBead over the beads it worked on (the
+	// rest under NoBead) and ByFamily over those beads' families, in proportion to the
+	// attributed cost of its messages.
+	ByRepo
+	ByBranch
+	ByBead
+	ByFamily
 )
+
+// facet reports whether the dimension needs the groupings.
+func (d Dim) facet() bool { return d >= ByRepo }
 
 // Row is one line of a rollup. Only the fields of the requested dimensions are set.
 // Sessions counts the distinct sessions that contributed spend to the row.
@@ -265,6 +276,10 @@ type Row struct {
 	Day      string `json:"day,omitempty"` // local date, 2006-01-02
 	Model    string `json:"model,omitempty"`
 	Kind     string `json:"kind,omitempty"`
+	Repo     string `json:"repo,omitempty"`
+	Branch   string `json:"branch,omitempty"` // repository#branch (SplitBranchKey)
+	Bead     string `json:"bead,omitempty"`
+	Family   string `json:"family,omitempty"` // the root bead of the family
 	Sessions int    `json:"sessions"`
 	Money
 }
@@ -315,6 +330,13 @@ type Filter struct {
 	// DayFrom and DayTo (local dates, inclusive) restrict rollups and scripted lines to
 	// spend on those days. They do not select sessions.
 	DayFrom, DayTo string
+	// Repo keeps the sessions that count under a repository (the main repository's
+	// directory, NoneFilter for none); Worktree those that worked in a linked worktree;
+	// Branch those with a turn on a branch; Bead those that worked on a bead or on one below
+	// it in its family. See places.go.
+	Repo, Worktree, Branch, Bead string
+
+	facet func(Filter, *sess) bool // set by Catalog.prepare when one of the three is
 }
 
 // Field names the part of a session a search hit matched.

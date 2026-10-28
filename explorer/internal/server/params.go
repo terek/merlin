@@ -113,6 +113,7 @@ func (a *API) filter(q url.Values) (catalog.Filter, error) {
 	var f catalog.Filter
 	var err error
 	f.Project = q.Get("project")
+	f.Repo, f.Worktree, f.Branch, f.Bead = q.Get("repo"), q.Get("worktree"), q.Get("branch"), q.Get("bead")
 	if f.Kinds, err = parseKinds(q); err != nil {
 		return f, err
 	}

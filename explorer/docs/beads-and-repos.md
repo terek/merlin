@@ -1,9 +1,8 @@
 # Beads and repositories: storage and extraction
 
 Status: built 2026-10-28 (epic `merlin-t8s.48`; validation in [validation.md](validation.md),
-"Bead events, registry and repositories"). This covers what is extracted and stored.
-How the data is used (cost per bead, grouping in the API and UI) comes later; the storage below is
-designed so that it needs no further parser bump.
+"Bead events, registry and repositories"). §1–4 cover what is extracted and stored; §5 how the
+catalog, API and UI use it (`merlin-t8s.49`).
 
 ## 1. Why
 
@@ -170,10 +169,26 @@ harness-neutral, in `internal/beads`.
    closes with no session event, resolver results for the worktree projects. Results go into
    docs/validation.md.
 
-## 5. Later (not in this epic)
+## 5. Use: groupings and cost per bead (built 2026-10-28, `merlin-t8s.49`)
 
-- Catalog: cost per bead (an agent that claims and closes one bead → its subtree; on the main
-  thread, claim to close, split while several are open; the rest "no bead"), bead families keyed by
-  `(projectId, root id)`, groupings by repository, worktree and `(repository, branch)`.
-- API and UI for those.
-- Commit messages citing bead ids; `interactions.jsonl` status history.
+The daemon hands the catalog the repository lookups and bead snapshots (`catalog.Places`) at start
+and whenever a refresh changes them; only the groupings are recomputed, never the sessions or their
+costs. Code: `internal/catalog/places.go`. The rules (repository per session, branch and bead
+shares, families) are in [api.md](api.md#groupings-get-apirepos-and-get-apibeads). Choices worth
+knowing:
+
+- A session counts under **one** repository, so repository totals add up; every repository it
+  touched is listed in its detail only.
+- A bead or branch gets a **share of the session's best cost**, in proportion to the attributed cost
+  of the messages spent on it. The reported overhead is spread the same way, so every grouping adds
+  up to the same total as projects and days.
+- A bead call counts only for the session that owns its message (copied history does not), never
+  for `show`, and never for an id the databases do not know or one of another database than the
+  repository the call ran in. The last rule drops `✓ Closed x-1` lines that a script printed from
+  another history (one session here quoted 18 such ids).
+- `bead=<id>` matches the bead and everything below it, so a family root selects the family.
+
+On the real history (3,405 sessions): 11 repositories (37 sessions in none), 4 bead databases,
+320 families; every grouping adds up to the same $6,538; 56% of spend falls on some bead.
+
+Not done: commit messages citing bead ids; `interactions.jsonl` status history; a CLI view.

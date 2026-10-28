@@ -23,6 +23,10 @@ type Catalog struct {
 	loc     *time.Location // nil: time.Local at rebuild time
 	v       *view
 	dirty   bool
+
+	places    Places
+	placesGen int
+	fv        *facets // the groupings of v under places (places.go)
 }
 
 // New returns an empty catalog.

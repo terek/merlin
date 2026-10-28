@@ -689,6 +689,9 @@ function route(req: Request): Response {
   const p = u.pathname.replace(/\/+$/, '')
   try {
     if (p === '/api/projects') return json(200, projects())
+    // The mock has no repositories or bead databases: the rail shows their empty states.
+    if (p === '/api/repos') return json(200, { repos: [] })
+    if (p === '/api/beads') return json(200, { families: [], databases: 0 })
     if (p === '/api/sessions') return json(200, sessionsList(u))
     const m = /^\/api\/sessions\/([^/]+)\/([^/]+)$/.exec(p)
     if (m) return sessionDetail(decodeURIComponent(m[1]), decodeURIComponent(m[2]), u)

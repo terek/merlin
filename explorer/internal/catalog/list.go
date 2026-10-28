@@ -10,7 +10,7 @@ import (
 // lines for scripted sessions. Scripted (sdk) sessions are never listed individually.
 // lv supplies liveness: it fills SessionInfo.State and is needed for f.States.
 func (c *Catalog) List(f Filter, lv Liveness) Listing {
-	v := c.view()
+	v, _, f := c.prepare(f, false)
 	var l Listing
 	for _, s := range v.sessions {
 		if s.d.Kind == model.KindSDK {
@@ -44,7 +44,7 @@ func (c *Catalog) List(f Filter, lv Liveness) Listing {
 // activity of the tree first (then root harness and id). Each tree holds all its members,
 // selected or not; scripted sessions are left out.
 func (c *Catalog) Trees(f Filter, lv Liveness) []Tree {
-	v := c.view()
+	v, _, f := c.prepare(f, false)
 	var out []Tree
 	seen := make(map[model.SessionKey]bool)
 	for _, s := range v.sessions {

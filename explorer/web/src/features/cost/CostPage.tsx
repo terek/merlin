@@ -4,7 +4,7 @@
 
 import { X } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCost, useProjects } from '../../api/queries'
 import type { CompactionTally, CostRow, CostTable } from '../../api/types'
 import { tallyLine, warmLine } from '../../lib/compaction'
@@ -81,6 +81,11 @@ export function CostPage() {
   const byProject = useCost({ by: 'project', ...q })
   const byModel = useCost({ by: 'model', ...q })
   const byKind = head
+  const repoCut = sp.get('repocut') === 'branch' ? 'branch' : 'repo'
+  const beadCut = sp.get('beadcut') === 'bead' ? 'bead' : 'family'
+  const byRepo = useCost({ by: repoCut, limit: 30, ...q })
+  const byBead = useCost({ by: beadCut, limit: 30, ...q })
+  const navigate = useNavigate()
   const top = useCost({ by: 'session', limit: 50, ...q })
   const projects = useProjects()
 
@@ -220,6 +225,62 @@ export function CostPage() {
                 />
               </Card>
             </div>
+          </div>
+          <div className="grid grid-cols-2 items-start gap-4">
+            <Card
+              title="By repository"
+              flush
+              actions={
+                <SegmentedControl
+                  label="Repository or branch"
+                  value={repoCut}
+                  onChange={(v) => set({ repocut: v === 'repo' ? undefined : v })}
+                  options={[
+                    { value: 'repo', label: 'Repository', title: 'Each session under its repository' },
+                    {
+                      value: 'branch',
+                      label: 'Branch',
+                      title: 'Each session split over the branches its turns ran on',
+                    },
+                  ]}
+                />
+              }
+            >
+              <CutTable
+                query={byRepo}
+                name={repoCut === 'branch' ? 'Branch' : 'Repository'}
+                label={(r) => <GroupLabel row={r} mono={repoCut === 'branch'} />}
+                onPick={(r) => navigate(placePath(repoCut, r.key))}
+                footer={() =>
+                  'A session counts under the repository it started in, else the one most of its work was in; a branch gets the part of its cost spent on turns on that branch.'
+                }
+              />
+            </Card>
+            <Card
+              title="By bead"
+              flush
+              actions={
+                <SegmentedControl
+                  label="Bead family or bead"
+                  value={beadCut}
+                  onChange={(v) => set({ beadcut: v === 'family' ? undefined : v })}
+                  options={[
+                    { value: 'family', label: 'Family', title: 'Beads grouped under the root of their family' },
+                    { value: 'bead', label: 'Bead', title: 'Each bead on its own' },
+                  ]}
+                />
+              }
+            >
+              <CutTable
+                query={byBead}
+                name={beadCut === 'bead' ? 'Bead' : 'Family'}
+                label={(r) => <GroupLabel row={r} id />}
+                onPick={(r) => r.key && navigate(placePath('bead', r.key))}
+                footer={() =>
+                  'A session’s cost is split over the beads it worked on: from a claim (or the previous close) to the close, shared while several are open; an agent that worked on one bead spends all of it there. The rest is “no bead”.'
+                }
+              />
+            </Card>
           </div>
           <div>
             <Card
@@ -405,6 +466,33 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
   return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
 }
 
+/** The Sessions page narrowed to a repository, a branch (key "repository#branch") or a bead. */
+function placePath(cut: 'repo' | 'branch' | 'bead', key: string): string {
+  const p = new URLSearchParams()
+  if (cut === 'bead') {
+    p.set('group', 'bead')
+    p.set('bead', key)
+  } else {
+    p.set('group', 'repo')
+    const hash = key.lastIndexOf('#')
+    const repo = cut === 'branch' && hash >= 0 ? key.slice(0, hash) : key
+    p.set('repo', repo || '-')
+    if (cut === 'branch' && hash >= 0 && key.slice(hash + 1)) p.set('branch', key.slice(hash + 1))
+  }
+  return `/?${p.toString()}`
+}
+
+/** A grouping row's name: the label the API gives, the id first for beads; none in italics. */
+function GroupLabel({ row, mono, id }: { row: CostRow; mono?: boolean; id?: boolean }) {
+  if (!row.key) return <span className="text-muted italic">{row.label}</span>
+  return (
+    <span title={row.label ? `${row.key}\n${row.label}` : row.key}>
+      {id && <span className="mr-1.5 font-mono text-meta text-muted">{row.key}</span>}
+      <span className={mono ? 'font-mono text-meta' : undefined}>{row.label || row.key}</span>
+    </span>
+  )
+}
+
 type CutQuery = Parameters<typeof QueryBoundary<CostTable>>[0]['query']
 
 function CutTable({
@@ -483,6 +571,7 @@ function CutTable({
             onRowClick={onPick}
             selectedKey={selected}
             stickyTop={0}
+            className="table-fixed"
             footer={note || undefined}
           />
         )

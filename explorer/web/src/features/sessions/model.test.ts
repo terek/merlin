@@ -7,9 +7,11 @@ import {
   countLabel,
   fieldLabel,
   groupHits,
+  hasFilters,
   hitHash,
   hitPlace,
   moveSelection,
+  NO_FILTERS,
   openMember,
   readFilters,
   showsScripted,
@@ -74,12 +76,24 @@ describe('filters in the URL', () => {
       since: '7d',
     })
     expect(readFilters(new URLSearchParams(p.toString()))).toEqual({
+      ...NO_FILTERS,
       project: '/p/a b',
       state: 'running',
       kind: 'background',
       since: '7d',
-      q: '',
     })
+  })
+  test('groupings round trip', () => {
+    const p = writeFilters(new URLSearchParams(), { group: 'bead', repo: '/r', branch: 'main', bead: 'x-a.1' })
+    expect(readFilters(p)).toEqual({ ...NO_FILTERS, group: 'bead', repo: '/r', branch: 'main', bead: 'x-a.1' })
+    expect(readFilters(new URLSearchParams('group=nope')).group).toBe('')
+    expect(apiFilters({ ...NO_FILTERS, group: 'repo', repo: '/r', worktree: '/r/w' })).toEqual({
+      repo: '/r',
+      worktree: '/r/w',
+    })
+    expect(hasFilters({ ...NO_FILTERS, group: 'bead' })).toBe(false)
+    expect(hasFilters({ ...NO_FILTERS, bead: 'x' })).toBe(true)
+    expect(showsScripted({ ...NO_FILTERS, repo: '/r' })).toBe(false)
   })
   test('unknown values count as not set; empty values are removed', () => {
     expect(readFilters(new URLSearchParams('state=ended&kind=sdk&since=1y')).state).toBe('')
@@ -92,16 +106,16 @@ describe('filters in the URL', () => {
     expect(sinceDate('7d', now)).toBe('2026-09-26')
     expect(sinceDate('30d', now)).toBe('2026-09-03')
     expect(sinceDate('', now)).toBeUndefined()
-    expect(apiFilters({ project: '/p', state: 'recent', kind: '', since: '7d', q: 'x' }, now)).toEqual({
+    expect(apiFilters({ ...NO_FILTERS, project: '/p', state: 'recent', since: '7d', q: 'x' }, now)).toEqual({
       project: '/p',
       state: 'recent',
       since: '2026-09-26',
     })
   })
   test('scripted lines hide under a state or kind filter', () => {
-    expect(showsScripted({ project: '/p', state: '', kind: '', since: '7d', q: '' })).toBe(true)
-    expect(showsScripted({ project: '', state: 'running', kind: '', since: '', q: '' })).toBe(false)
-    expect(showsScripted({ project: '', state: '', kind: 'background', since: '', q: '' })).toBe(false)
+    expect(showsScripted({ ...NO_FILTERS, project: '/p', since: '7d' })).toBe(true)
+    expect(showsScripted({ ...NO_FILTERS, state: 'running' })).toBe(false)
+    expect(showsScripted({ ...NO_FILTERS, kind: 'background' })).toBe(false)
   })
 })
 

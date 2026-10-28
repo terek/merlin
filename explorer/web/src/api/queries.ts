@@ -1,6 +1,8 @@
 // One hook per endpoint, and the query keys (docs/ui.md section 6).
 //
 //   ['projects']                          useProjects
+//   ['repos']                             useRepos
+//   ['beads']                             useBeads
 //   ['sessions', filters]                 useSessions       (infinite, pages of SessionList)
 //   ['trees', filters]                    useTrees          (infinite, pages of TreeList)
 //   ['session', harness, id]              useSession        (['session', harness, id, 'messages'] with messages)
@@ -18,9 +20,11 @@ import {
 import { daysBefore, localDay } from '../lib/time'
 import { ApiError, get } from './client'
 import type {
+  BeadList,
   CostParams,
   CostTable,
   ProjectList,
+  RepoList,
   SearchResult,
   SessionDetail,
   SessionFilters,
@@ -32,6 +36,8 @@ export const STALE_MS = 30_000
 
 export const queryKeys = {
   projects: () => ['projects'] as const,
+  repos: () => ['repos'] as const,
+  beads: () => ['beads'] as const,
   sessions: (filters: SessionFilters) => ['sessions', filters] as const,
   trees: (filters: SessionFilters) => ['trees', filters] as const,
   session: (harness: string, id: string, messages = false) =>
@@ -65,6 +71,22 @@ export function useProjects(): UseQueryResult<ProjectList> {
   return useQuery({
     queryKey: queryKeys.projects(),
     queryFn: ({ signal }) => get<ProjectList>('/api/projects', undefined, signal),
+  })
+}
+
+/** The repositories sessions count under, with their worktrees and branches. */
+export function useRepos(): UseQueryResult<RepoList> {
+  return useQuery({
+    queryKey: queryKeys.repos(),
+    queryFn: ({ signal }) => get<RepoList>('/api/repos', undefined, signal),
+  })
+}
+
+/** The bead families sessions worked on, with the cost spent on each bead. */
+export function useBeads(): UseQueryResult<BeadList> {
+  return useQuery({
+    queryKey: queryKeys.beads(),
+    queryFn: ({ signal }) => get<BeadList>('/api/beads', undefined, signal),
   })
 }
 

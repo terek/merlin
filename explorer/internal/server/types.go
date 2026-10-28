@@ -99,8 +99,20 @@ type SessionSummary struct {
 	Recap      *RecapPreview  `json:"recap,omitempty"`
 	// PRs are the pull requests the session created or linked (Digest.PRs).
 	PRs []model.PRLink `json:"prs,omitempty"`
-	Cost       CostBrief      `json:"cost"`
-	Lineage    LineageBrief   `json:"lineage"`
+	// Repo is the repository the session counts under; Beads the beads it worked on, most
+	// spent on first (catalog.SessionPlaces). Both omitted when unknown.
+	Repo    *catalog.RepoRef `json:"repo,omitempty"`
+	Beads   []BeadBrief      `json:"beads,omitempty"`
+	Cost    CostBrief        `json:"cost"`
+	Lineage LineageBrief     `json:"lineage"`
+}
+
+// BeadBrief names a bead a session worked on.
+type BeadBrief struct {
+	ID     string `json:"id"`
+	Title  string `json:"title,omitempty"`
+	Status string `json:"status,omitempty"`
+	Root   string `json:"root"`
 }
 
 // PromptPreview is the last human prompt of a session. Text is shortened (see Preview);
@@ -170,6 +182,20 @@ type ProjectSummary struct {
 	Cost           catalog.Money `json:"cost"`
 }
 
+// RepoList is the body of GET /api/repos: the repositories sessions count under, most
+// recently active first, then the group of sessions in none (empty repo).
+type RepoList struct {
+	Repos []catalog.RepoGroup `json:"repos"`
+}
+
+// BeadList is the body of GET /api/beads: the bead families sessions worked on, most recently
+// worked on first (narrowed to one repository with ?repo=). Databases is how many bead
+// databases Merlin knows.
+type BeadList struct {
+	Families  []catalog.FamilyGroup `json:"families"`
+	Databases int                   `json:"databases"`
+}
+
 // ProjectList is the body of GET /api/projects, most recently active first.
 type ProjectList struct {
 	Projects []ProjectSummary `json:"projects"`
@@ -212,12 +238,15 @@ type SessionFamily struct {
 // what the catalog derives from it. Digest.Messages is empty unless ?messages=1;
 // MessageCount is always the real number.
 type SessionDetail struct {
-	Summary      SessionSummary       `json:"summary"`
-	Cost         catalog.SessionCost  `json:"cost"`
-	Lineage      SessionLineage       `json:"lineage"`
-	Family       SessionFamily        `json:"family"`
-	MessageCount int                  `json:"messageCount"`
-	Digest       *model.SessionDigest `json:"digest"`
+	Summary      SessionSummary      `json:"summary"`
+	Cost         catalog.SessionCost `json:"cost"`
+	Lineage      SessionLineage      `json:"lineage"`
+	Family       SessionFamily       `json:"family"`
+	MessageCount int                 `json:"messageCount"`
+	// Places is where the session worked: its repositories, branches and beads, with the
+	// share of its best cost spent on each branch and bead.
+	Places catalog.SessionPlaces `json:"places"`
+	Digest *model.SessionDigest  `json:"digest"`
 }
 
 // SearchResult is the body of GET /api/search.

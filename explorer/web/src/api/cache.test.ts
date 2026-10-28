@@ -62,6 +62,23 @@ describe('matchesFilters', () => {
     expect(matchesFilters({ state: 'recent,ended' }, { ...s, state: 'ended' })).toBe(true)
     expect(matchesFilters({ state: 'idle' }, s)).toBe(false)
   })
+  test('groupings, as far as the summary tells', () => {
+    const g = sum('g', '2026-09-16T10:00:00Z', {
+      repo: { repo: '/r', name: 'r' },
+      cwd: '/r/.wt/one/src',
+      branch: 'main',
+      beads: [{ id: 'x-a.1', root: 'x-a' }],
+    })
+    expect(matchesFilters({ repo: '/r' }, g)).toBe(true)
+    expect(matchesFilters({ repo: '/o' }, g)).toBe(false)
+    expect(matchesFilters({ repo: '-' }, g)).toBe(false)
+    expect(matchesFilters({ repo: '-' }, s)).toBe(true)
+    expect(matchesFilters({ worktree: '/r/.wt/one' }, g)).toBe(true)
+    expect(matchesFilters({ branch: 'dev' }, g)).toBe(false)
+    expect(matchesFilters({ bead: 'x-a' }, g)).toBe(true)
+    expect(matchesFilters({ bead: 'x-a.1' }, g)).toBe(true)
+    expect(matchesFilters({ bead: 'y-b' }, g)).toBe(false)
+  })
   test('project by directory or key', () => {
     expect(matchesFilters({ project: '/home/dev/acme/web' }, s)).toBe(true)
     expect(matchesFilters({ project: '-home-dev-acme-web' }, s)).toBe(true)
@@ -191,7 +208,7 @@ describe('applyEvent', () => {
     expect(ids(running)).toEqual(['b', 'a'])
     expect(running?.pages[0].total).toBe(2)
     expect(qc.getQueryData<SessionDetail>(['session', 'claude', 'b'])?.summary.state).toBe('busy')
-    expect(calls).toEqual(['["session","claude","b"]', '["projects"]', '["cost"]'])
+    expect(calls).toEqual(['["session","claude","b"]', '["projects"]', '["repos"]', '["beads"]', '["cost"]'])
     expect(changed).toEqual(['b'])
   })
 

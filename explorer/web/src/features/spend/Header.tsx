@@ -1,17 +1,29 @@
 // The parts of the Session page around the spend tree: the header, the resume command, the
 // banners, the family list and the parser's diagnostics.
-import { GitBranch, GitPullRequest, TriangleAlert } from 'lucide-react'
+import { FolderGit2, GitBranch, GitPullRequest, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
-import type { SessionDetail } from '../../api/types'
+import type { SessionDetail, SessionPlaces } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { approxMoney } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { isRunning, prName, promptCount, sameKey, sessionTitle } from '../../lib/session'
 import { fullTime, parseTime, spanMs } from '../../lib/time'
-import { Badge, Card, CopyButton, Duration, EndStateBadge, Id, Money, ProjectName, RelTime, StateDot } from '../../ui'
+import {
+  Badge,
+  BeadStatus,
+  Card,
+  CopyButton,
+  Duration,
+  EndStateBadge,
+  Id,
+  Money,
+  ProjectName,
+  RelTime,
+  StateDot,
+} from '../../ui'
 import { diagnosticsLines, familyRows, resumeInfo } from './session'
 
 function Stat({ n, label, title }: { n: ReactNode; label: string; title?: string }) {
@@ -45,6 +57,88 @@ export interface TreeStats {
   estimated: number
   /** What Claude Code charged at other rates than Merlin's table (SessionCost.rateDiffUSD). */
   rateDiff: number
+}
+
+/** How many beads the header lists before "more". */
+const BEADS_SHOWN = 6
+
+/** The Sessions page narrowed to one repository (and branch) or bead. */
+function placeLink(p: Record<string, string>): string {
+  return `/?${new URLSearchParams(p).toString()}`
+}
+
+/**
+ * Where the session worked: its repository and worktrees, the branches its turns ran on and the
+ * beads it worked on, each with the share of its cost spent there. Each links to the sessions of
+ * the same place.
+ */
+function Places({ places }: { places: SessionPlaces }) {
+  const { repo, worktrees = [], branches = [], beads = [] } = places
+  const [all, setAll] = useState(false)
+  if (!repo && beads.length === 0) return null
+  const shown = all ? beads : beads.slice(0, BEADS_SHOWN)
+  return (
+    <div className="space-y-0.5 text-sec text-muted">
+      {repo && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <Link
+            to={placeLink({ group: 'repo', repo: repo.repo })}
+            className="inline-flex items-center gap-1"
+            title={`${repo.repo}${repo.remote ? `\n${repo.remote}` : ''}\nThe sessions of this repository`}
+          >
+            <FolderGit2 size={12} aria-hidden />
+            {repo.name}
+          </Link>
+          {worktrees.map((w) => (
+            <Link
+              key={w}
+              to={placeLink({ group: 'repo', repo: repo.repo, worktree: w })}
+              title={`Worked in the worktree ${w}`}
+            >
+              ⌥ {w.slice(w.lastIndexOf('/') + 1)}
+            </Link>
+          ))}
+          {branches.length > 1 &&
+            branches.map((b) => (
+              <Link
+                key={b.name}
+                to={placeLink({ group: 'repo', repo: repo.repo, branch: b.name })}
+                className="inline-flex items-center gap-1 font-mono"
+                title={`Spent on turns on ${b.name}`}
+              >
+                <GitBranch size={11} aria-hidden />
+                {b.name} <Money usd={b.usd} dim className="font-sans" />
+              </Link>
+            ))}
+        </div>
+      )}
+      {beads.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          {shown.map((b) => (
+            <Link
+              key={b.id}
+              to={placeLink({ group: 'bead', bead: b.id })}
+              className="inline-flex min-w-0 max-w-96 items-center gap-1.5"
+              title={`${b.id}${b.title ? ` — ${b.title}` : ''}\n${b.status ?? ''} · ${b.ops.join(', ')}\nThe sessions that worked on it`}
+            >
+              <BeadStatus status={b.status} />
+              <span className="shrink-0 whitespace-nowrap font-mono text-meta">{b.id}</span>
+              <span className="min-w-0 truncate text-fg">{b.title}</span>
+              <Money usd={b.usd} dim />
+            </Link>
+          ))}
+          {beads.length > shown.length && (
+            <button type="button" className="text-accent hover:underline" onClick={() => setAll(true)}>
+              +{beads.length - shown.length} more
+            </button>
+          )}
+          <span title="The part of the cost spent while no bead was being worked on">
+            no bead <Money usd={places.noBeadUSD} dim />
+          </span>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: TreeStats }) {
@@ -172,6 +266,8 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
           })}
         </div>
       )}
+
+      {detail.places && <Places places={detail.places} />}
 
       {Math.abs(best - tree.messagesUSD) >= 0.005 && (
         <p className="text-sec text-muted">

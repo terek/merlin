@@ -88,8 +88,7 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 	if len(terms) == 0 {
 		return nil
 	}
-	v := c.view()
-	f := opt.Filter
+	v, _, f := c.prepare(opt.Filter, false)
 	f.States = nil
 
 	var hits []Hit

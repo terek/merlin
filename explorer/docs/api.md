@@ -70,6 +70,8 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | Route | Returns |
 |---|---|
 | `GET /api/projects` | `ProjectList` |
+| `GET /api/repos` | `RepoList` |
+| `GET /api/beads` | `BeadList` |
 | `GET /api/sessions` | `SessionList` |
 | `GET /api/sessions/{harness}/{id}` | `SessionDetail` |
 | `GET /api/search?q=` | `SearchResult` |
@@ -132,6 +134,14 @@ Session summaries, newest last activity first: no turns, no messages. Meant for 
 | `limit` | page size, 1 to 500, default 50 |
 | `cursor` | the `nextCursor` of the previous page |
 | `by` | `session` (the default) or `tree`: see [By tree](#by-tree) |
+| `repo` | a main repository's directory (`repos[].repo`): the sessions that count under it; `-` for the sessions in no repository |
+| `worktree` | a linked worktree's directory: the sessions that worked in it |
+| `branch` | a branch name: the sessions with a turn on it (combine with `repo`) |
+| `bead` | a bead id: the sessions that worked on it or on a bead below it in its family (any bd call but `show`) |
+
+The grouping filters (`repo`, `worktree`, `branch`, `bead`) are facets: see
+[Groupings](#groupings-get-apirepos-and-get-apibeads). They apply to `/api/search` and
+`/api/cost` too.
 
 `total` counts all sessions matching the filters, over all pages. `nextCursor` is set while more
 follow; it encodes a position (last activity, key), so paging stays correct when sessions are
@@ -777,9 +787,9 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 
 | Parameter | Meaning |
 |---|---|
-| `by` | `project` (default), `day`, `model`, `kind` or `session` |
+| `by` | `project` (default), `day`, `model`, `kind`, `repo`, `branch`, `bead`, `family` or `session` |
 | `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
-| `project` | as for `/api/sessions` |
+| `project`, `repo`, `worktree`, `branch`, `bead` | as for `/api/sessions` |
 | `limit` | cut the rows (1 to 500). Default: none; `by=session` defaults to 100. `total` is not affected; `truncated` says rows were cut |
 | `split` | `project`, `model` or `kind`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
 
@@ -870,6 +880,50 @@ parts. Without `split` nothing changes in the response: no `split` key anywhere.
 ```
 
 (One row shown; the real response has a row per kind.)
+
+## Groupings: GET /api/repos and GET /api/beads
+
+Besides its project (the directory it started in), a session can be grouped by the repository it
+worked in, the branches its turns ran on and the beads it worked on. These are facets: a session's
+key stays `(harness, id)` and its `project` the start directory. They come from the repository
+lookups and bead databases Merlin keeps ([beads-and-repos.md](beads-and-repos.md)); until those
+are known, every session is in no repository and on no bead.
+
+- **Repository** (`summary.repo`): that of the directory the session started in, else the one
+  most of its directories (working directories, bd calls, changed files) lie in. One per session,
+  so a `by=repo` table adds up. A worktree counts under its main repository.
+- **Branches**: the `gitBranch` of its turns. `by=branch` splits a session's best cost over its
+  branches in proportion to the attributed cost of its messages (an agent's messages go with the
+  turn that launched it). Row keys are `<repository>#<branch>`.
+- **Beads**: the beads named by its bd calls (any but `show`; failed calls and calls copied from
+  another session do not count; ids the bead databases do not know, or of another database than
+  the call's repository, are dropped). `by=bead` splits a session's best cost over the beads in
+  proportion to the attributed cost of the messages spent on each: per thread (the main agent, each
+  agent) a bead is worked on from its claim (`--claim`, `--status in_progress`) to its close, or
+  from the thread's previous claim or close (or its creation, if later) when it was closed without
+  a claim; a message spent while several are worked on is shared evenly; an agent that worked on
+  exactly one bead spends everything on it; a thread working on none takes what the thread that
+  launched it worked on. The rest is the row with key `""` and label `no bead`. `by=family` groups
+  the same by the root of each bead's family (from the database's parent links).
+
+Every grouped table adds up to the same total as `by=project`.
+
+`GET /api/repos` (`RepoList`): `repos[]` with `repo` (the key), `name`, `remote`, `gone`,
+`sessions` (not scripted runs), `lastActivityAt`, `cost` (`Money`: their best costs, scripted runs
+included), `worktrees[]` (`top`, `name`, `gone`, `sessions`, `bestUSD`: the whole cost of the
+sessions that worked in it) and `branches[]` (`name`, `sessions`, `usd`: the share spent on it).
+Most recently active first; the group with `repo: ""` (no repository) last.
+
+`GET /api/beads` (`BeadList`, optional `repo=`): `families[]`, most recently worked on first, each
+with `root` (a `BeadRef`: `id`, `title`, `type`, `status`, `parent`, `root`, `database`),
+`sessions` (distinct), `usd`, `lastActivityAt` (the last bd call), `issues` and `closed` (the
+family in the database) and `beads[]` (the root and every member a session worked on, in id order,
+each with `sessions`, `usd`, `lastActivityAt`); `databases` is how many bead databases are known.
+
+A session summary carries `repo` (`RepoRef`) and `beads[]` (`id`, `title`, `status`, `root`; most
+spent on first). The detail carries `places`: `repo`, `worktrees`, `repos` (every repository it
+touched), `branches[]` (`name`, `usd`), `beads[]` (`BeadRef` with `usd` and `ops`, the bd operations
+it ran) and `noBeadUSD`.
 
 ## GET /api/events
 

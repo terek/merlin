@@ -98,3 +98,16 @@ export function AgentStatusMark({ status }: { status: AgentStatus }) {
 export function OriginBadge({ origin }: { origin: TurnOrigin }) {
   return origin === 'human' ? null : <Badge>{origin}</Badge>
 }
+
+const BEAD_DOT: Record<string, string> = {
+  closed: 'bg-ok',
+  in_progress: 'bg-accent',
+  blocked: 'bg-bad',
+  deferred: 'bg-faint',
+}
+
+/** A small dot for a bead's status: green closed, accent in progress, red blocked, hollow open. */
+export function BeadStatus({ status }: { status?: string }) {
+  const dot = (status && BEAD_DOT[status]) ?? 'border border-faint'
+  return <span title={status ?? 'unknown'} className={cn('inline-block size-1.5 shrink-0 rounded-full', dot)} />
+}

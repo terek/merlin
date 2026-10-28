@@ -51,11 +51,18 @@ export function matchesFilters(f: SessionFilters, s: SessionSummary): boolean {
   if (since !== undefined && at < since) return false
   const until = parseBound(f.until)
   if (until !== undefined && at >= until) return false
+  // The groupings, as far as a summary tells: a bead filter also matches beads below the one
+  // named, which only the daemon knows past the family's root.
+  if (f.repo && (f.repo === '-' ? Boolean(s.repo) : s.repo?.repo !== f.repo)) return false
+  if (f.worktree && !(s.cwd === f.worktree || s.cwd?.startsWith(`${f.worktree}/`))) return false
+  if (f.branch && s.branch !== f.branch) return false
+  if (f.bead && !s.beads?.some((b) => b.id === f.bead || b.root === f.bead)) return false
   return true
 }
 
 /** No filter at all: the list every session of the default kinds is in. */
-export const isUnfiltered = (f: SessionFilters) => !f.project && !f.state && !f.kind && !f.since && !f.until
+export const isUnfiltered = (f: SessionFilters) =>
+  !f.project && !f.state && !f.kind && !f.since && !f.until && !f.repo && !f.worktree && !f.branch && !f.bead
 
 const activity = (s: SessionSummary) => (s.lastActivityAt ? Date.parse(s.lastActivityAt) : 0)
 
@@ -282,6 +289,8 @@ export function applyEvent<K extends keyof EventMap>(
       qc.setQueryData<SessionDetail>(['session', key.harness, key.id], (d) => patchDetailSummary(d, session))
       invalidate(['session', key.harness, key.id])
       invalidate(['projects'])
+      invalidate(['repos'])
+      invalidate(['beads'])
       invalidate(['cost'])
       sink.changed?.(key)
       break

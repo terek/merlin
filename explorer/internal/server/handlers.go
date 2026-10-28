@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -29,6 +30,12 @@ func summarize(cat *catalog.Catalog, in catalog.SessionInfo, state catalog.State
 	if in.Parent != nil {
 		p := in.Parent.Parent
 		s.Lineage.Parent, s.Lineage.ParentKind = &p, in.Parent.Kind
+	}
+	if p, ok := cat.Places(in.Key); ok {
+		s.Repo = p.Repo
+		for _, b := range p.Beads {
+			s.Beads = append(s.Beads, BeadBrief{ID: b.ID, Title: b.Title, Status: b.Status, Root: b.Root})
+		}
 	}
 	if d, ok := cat.Digest(in.Key); ok {
 		s.HumanTurns = int(d.Stats.HumanTurns)
@@ -86,6 +93,23 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 		return out.Projects[i].LastActivityAt.After(out.Projects[j].LastActivityAt)
 	})
 	a.json(w, http.StatusOK, out)
+}
+
+func (a *API) handleRepos(w http.ResponseWriter, r *http.Request) {
+	cat := a.cat(w)
+	if cat == nil {
+		return
+	}
+	a.json(w, http.StatusOK, RepoList{Repos: cat.Repos(catalog.Filter{})})
+}
+
+func (a *API) handleBeads(w http.ResponseWriter, r *http.Request) {
+	cat := a.cat(w)
+	if cat == nil {
+		return
+	}
+	f := catalog.Filter{Repo: r.URL.Query().Get("repo")}
+	a.json(w, http.StatusOK, BeadList{Families: cat.Families(f), Databases: cat.BeadDatabases()})
 }
 
 func (a *API) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +272,7 @@ func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
 		out.Lineage.InheritedTurns = []int{}
 	}
 	out.Family = a.family(cat, key, lv)
+	out.Places, _ = cat.Places(key)
 	dc := *d
 	if !withMessages {
 		dc.Messages = nil
@@ -341,18 +366,13 @@ func (a *API) handleSearch(w http.ResponseWriter, r *http.Request) {
 // dayOf is the local date of t.
 func (a *API) dayOf(t time.Time) string { return t.In(a.loc()).Format(dayLayout) }
 
+// costDims are the dimensions of GET /api/cost.
+var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel,
+	"kind": catalog.ByKind, "repo": catalog.ByRepo, "branch": catalog.ByBranch, "bead": catalog.ByBead,
+	"family": catalog.ByFamily}
+
 // rowKey is the value of a rollup row along the named dimension.
-func rowKey(dim string, r catalog.Row) string {
-	switch dim {
-	case "project":
-		return r.Project
-	case "day":
-		return r.Day
-	case "model":
-		return r.Model
-	}
-	return r.Kind
-}
+func rowKey(dim string, r catalog.Row) string { return r.Key(costDims[dim]) }
 
 func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	cat := a.cat(w)
@@ -365,17 +385,16 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		by = "project"
 	}
 	split := q.Get("split")
-	dims := map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel, "kind": catalog.ByKind}
-	dim, isDim := dims[by]
+	dim, isDim := costDims[by]
 	if !isDim && by != "session" {
-		a.badParam(w, "by=%q: use project, day, model, kind or session", by)
+		a.badParam(w, "by=%q: use project, day, model, kind, repo, branch, bead, family or session", by)
 		return
 	}
 	var splitDim catalog.Dim
 	if split != "" {
-		sd, ok := dims[split]
+		sd, ok := costDims[split]
 		switch {
-		case !ok || split == "day":
+		case !ok || split != "project" && split != "model" && split != "kind":
 			a.badParam(w, "split=%q: use project, model or kind", split)
 			return
 		case by == "session":
@@ -404,7 +423,8 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	f := catalog.Filter{Project: q.Get("project")}
+	f := catalog.Filter{Project: q.Get("project"), Repo: q.Get("repo"), Worktree: q.Get("worktree"),
+		Branch: q.Get("branch"), Bead: q.Get("bead")}
 	out := CostTable{By: by, Split: split, Project: f.Project, Rows: []CostRow{}}
 	if !since.IsZero() {
 		out.Since = &since
@@ -493,6 +513,8 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 				if r.Kind == string(model.KindSDK) {
 					row.Label = "sdk (scripted runs)"
 				}
+			default:
+				row.Key, row.Label = groupLabel(cat, by, r.Key(dim))
 			}
 			out.Rows = append(out.Rows, row)
 		}
@@ -531,6 +553,35 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		out.Backing.ScriptedRuns += s.Count
 	}
 	a.json(w, http.StatusOK, out)
+}
+
+// groupLabel names a cost row of a grouping dimension (repo, branch, bead, family).
+func groupLabel(cat *catalog.Catalog, by, key string) (string, string) {
+	switch by {
+	case "repo":
+		if key == catalog.NoRepo {
+			return key, "no repository"
+		}
+		return key, filepath.Base(key)
+	case "branch":
+		repo, branch := catalog.SplitBranchKey(key)
+		switch {
+		case repo == catalog.NoRepo && branch == catalog.NoBranch:
+			return key, "no repository or branch"
+		case branch == catalog.NoBranch:
+			return key, filepath.Base(repo) + " · no branch"
+		case repo == catalog.NoRepo:
+			return key, branch
+		}
+		return key, filepath.Base(repo) + " · " + branch
+	}
+	if key == catalog.NoBead {
+		return key, "no bead"
+	}
+	if b, ok := cat.Bead(key); ok {
+		return key, b.Title
+	}
+	return key, ""
 }
 
 // previewRunes is the length, in runes, of the texts a summary shows.

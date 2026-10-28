@@ -2,6 +2,7 @@
 // grouped by day, keyboard selection and the grouping of search hits by tree.
 
 import type {
+  BeadBrief,
   CostFlag,
   Hit,
   PRLink,
@@ -21,17 +22,43 @@ import { daysBefore, localDay, localDayOf } from '../../lib/time'
 export type StateFilter = '' | 'running' | 'recent'
 export type KindFilter = '' | 'interactive' | 'background'
 export type SinceFilter = '' | '7d' | '30d'
+/** What the rail groups by: projects (''), repositories or bead families. */
+export type GroupBy = '' | 'repo' | 'bead'
 
-/** What the URL holds: `project`, `state`, `kind`, `since` and `q`. Empty string = not set. */
+/**
+ * What the URL holds: `group` (the rail), `project`, `repo`, `worktree`, `branch`, `bead`, `state`,
+ * `kind`, `since` and `q`. Empty string = not set.
+ */
 export interface PageFilters {
+  group: GroupBy
   project: string
+  /** A main repository's directory, `-` for sessions in none. */
+  repo: string
+  worktree: string
+  branch: string
+  /** A bead id: the sessions that worked on it or on a bead below it. */
+  bead: string
   state: StateFilter
   kind: KindFilter
   since: SinceFilter
   q: string
 }
 
-export const NO_FILTERS: PageFilters = { project: '', state: '', kind: '', since: '', q: '' }
+export const NO_FILTERS: PageFilters = {
+  group: '',
+  project: '',
+  repo: '',
+  worktree: '',
+  branch: '',
+  bead: '',
+  state: '',
+  kind: '',
+  since: '',
+  q: '',
+}
+
+/** The filters the rail sets; switching what it groups by clears them. */
+export const PLACE_FILTERS = { project: '', repo: '', worktree: '', branch: '', bead: '' } as const
 
 const pick = <T extends string>(v: string | null, allowed: readonly T[], none: T): T =>
   allowed.includes(v as T) ? (v as T) : none
@@ -39,7 +66,12 @@ const pick = <T extends string>(v: string | null, allowed: readonly T[], none: T
 /** Reads the filters; a value the page does not know counts as not set. */
 export function readFilters(p: URLSearchParams): PageFilters {
   return {
+    group: pick(p.get('group'), ['repo', 'bead'], ''),
     project: p.get('project') ?? '',
+    repo: p.get('repo') ?? '',
+    worktree: p.get('worktree') ?? '',
+    branch: p.get('branch') ?? '',
+    bead: p.get('bead') ?? '',
     state: pick(p.get('state'), ['running', 'recent'], ''),
     kind: pick(p.get('kind'), ['interactive', 'background'], ''),
     since: pick(p.get('since'), ['7d', '30d'], ''),
@@ -58,7 +90,8 @@ export function writeFilters(p: URLSearchParams, patch: Partial<PageFilters>): U
 }
 
 /** True when anything but the search is set (the "clear filters" button). */
-export const hasFilters = (f: PageFilters) => Boolean(f.project || f.state || f.kind || f.since)
+export const hasFilters = (f: PageFilters) =>
+  Boolean(f.project || f.repo || f.worktree || f.branch || f.bead || f.state || f.kind || f.since)
 
 /** The `since` preset as the local date the API takes. */
 export function sinceDate(since: SinceFilter, now: Date = new Date()): string | undefined {
@@ -70,6 +103,10 @@ export function sinceDate(since: SinceFilter, now: Date = new Date()): string | 
 export function apiFilters(f: PageFilters, now: Date = new Date()): SessionFilters {
   const out: SessionFilters = {}
   if (f.project) out.project = f.project
+  if (f.repo) out.repo = f.repo
+  if (f.worktree) out.worktree = f.worktree
+  if (f.branch) out.branch = f.branch
+  if (f.bead) out.bead = f.bead
   if (f.state) out.state = f.state
   if (f.kind) out.kind = f.kind
   const since = sinceDate(f.since, now)
@@ -161,7 +198,16 @@ export function buildDayGroups(trees: TreeSummary[], scripted: ScriptedLine[], m
 }
 
 /** Scripted runs are neither interactive nor background nor in a liveness state: a filter hides them. */
-export const showsScripted = (f: PageFilters) => !f.state && !f.kind
+export const showsScripted = (f: PageFilters) => !f.state && !f.kind && !f.repo && !f.worktree && !f.branch && !f.bead
+
+/** The beads of a tree's sessions, each once: the newest session's first, most spent on first. */
+export function treeBeads(t: TreeSummary): BeadBrief[] {
+  const seen = new Set<string>()
+  const open = openMember(t)
+  return [open, ...t.sessions.filter((s) => s !== open)]
+    .flatMap((s) => s.beads ?? [])
+    .filter((b) => !seen.has(b.id) && !!seen.add(b.id))
+}
 
 // ---- keyboard selection ------------------------------------------------------------------
 

@@ -11,9 +11,27 @@ import { sessionsLowerBound } from '../../lib/cost'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { isRunning, keyString, promptCount, sessionTitle } from '../../lib/session'
-import { Badge, EndStateBadge, Money, ProjectName, RelTime, StateDot } from '../../ui'
-import { openMember, treeFlag, treePRs, treeState } from './model'
+import { Badge, BeadStatus, EndStateBadge, Money, ProjectName, RelTime, StateDot } from '../../ui'
+import { openMember, treeBeads, treeFlag, treePRs, treeState } from './model'
 import { PRBadge, SessionRow } from './SessionRow'
+
+/** The beads the tree's sessions worked on: the first two by id, then how many more. */
+function BeadBadges({ tree }: { tree: TreeSummary }) {
+  const beads = treeBeads(tree)
+  if (beads.length === 0) return null
+  const all = beads.map((b) => `${b.id}${b.title ? ` — ${b.title}` : ''} (${b.status ?? '?'})`).join('\n')
+  return (
+    <span className="hidden items-center gap-1 @[640px]:flex" title={`Beads worked on:\n${all}`}>
+      {beads.slice(0, 2).map((b) => (
+        <Badge key={b.id} className="gap-1 font-mono">
+          <BeadStatus status={b.status} />
+          {b.id}
+        </Badge>
+      ))}
+      {beads.length > 2 && <span className="text-meta text-faint">+{beads.length - 2}</span>}
+    </span>
+  )
+}
 
 export function TreeRow({
   tree,
@@ -74,6 +92,7 @@ export function TreeRow({
               {!isRunning(s.state) && <EndStateBadge endState={s.endState} />}
               {s.key.harness === 'codex' && <Badge title="A Codex session">codex</Badge>}
               <PRBadge prs={treePRs(tree)} />
+              <BeadBadges tree={tree} />
               {s.kind === 'background' && (
                 <Badge title="A background session: nobody typed into it interactively">background</Badge>
               )}

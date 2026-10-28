@@ -402,6 +402,20 @@ was retired and deleted on 2026-10-03; it is in the git history before that date
 turn that launched it, the context along the path to the session in focus) was replaced by the time
 view and deleted on 2026-10-25.
 
+### The rail's groupings (added 2026-10-28)
+
+The rail switches between **Projects** (the start directory, as before), **Repos** and **Beads**
+(`group=repo|bead` in the URL; switching clears the rail's filters). Repos lists each repository with
+its sessions and cost; the selected one opens into its worktrees (`worktree=`) and branches
+(`branch=`, with the cost spent on each). Beads lists the bead families sessions worked on, newest
+first, each a two-line entry (title over id, sessions, cost); the selected family opens into the
+beads sessions worked on (`bead=` matches a bead and everything below it). A grouping filter that
+the rail does not show (collapsed, or another grouping) is a chip in the toolbar. Tree rows show the
+first two beads their sessions worked on (status dot and id) and how many more.
+The Session page header has a line for where the session worked (`places`): its repository and
+worktrees, its branches with their cost when there are several, and its beads (six, then "more")
+with the cost spent on each and "no bead" for the rest; each links to the Sessions page so filtered.
+
 ## 10. Cost page (`/cost`)
 
 - **Controls**: range (`7d`, `30d`, `90d`, `all`), project (from `/api/projects`).
@@ -420,6 +434,9 @@ view and deleted on 2026-10-25.
 - **Top sessions** (`by=session`, limit 50): title, project, last activity, compaction calls ("1 cold
   · ~$3.48"), cost with flag, linking
   to the session. Scripted runs are the `scripted:<project>` rows, not links.
+- **By repository** (repository or branch, `repocut=branch`) and **By bead** (family or bead,
+  `beadcut=bead`), limit 30 each, with a footnote saying how a session's cost is split. A row opens
+  the Sessions page grouped and filtered to it.
 - Selecting a project row sets the `project` filter; selecting a day bar narrows the range to it.
 
 ## 11. As built

@@ -225,6 +225,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.cat.Store(cat)
 	d.logf("catalog loaded: %d sessions", cat.Len())
 	d.links = links.Open(home)
+	cat.SetPlaces(d.places())
 
 	for _, h := range d.opts.Harnesses {
 		if f, ok := h.(harness.Follower); ok {
@@ -330,7 +331,14 @@ func (d *Daemon) refreshLinks() {
 	}
 	if res.Resolved > 0 || res.Databases > 0 {
 		d.logf("links: %d directories resolved, %d bead databases updated", res.Resolved, res.Databases)
+		d.cat.Load().SetPlaces(d.places())
 	}
+}
+
+// places is what the catalog groups sessions by: the current repository lookups and bead
+// databases.
+func (d *Daemon) places() catalog.Places {
+	return catalog.Places{Repos: d.links.Repos.All(), Beads: d.links.Beads.All()}
 }
 
 func (d *Daemon) onDiscover(h harness.Harness, disc harness.Discovery) {

@@ -36,7 +36,9 @@ import {
   hasFilters,
   type KindFilter,
   moveSelection,
+  NO_FILTERS,
   type PageFilters,
+  PLACE_FILTERS,
   readFilters,
   type SinceFilter,
   type StateFilter,
@@ -115,8 +117,10 @@ export function SessionsPage() {
   const searching = term.length >= 2
 
   // ---- data ----
-  const { project, state, kind, since } = filters
-  const api = useMemo(() => apiFilters({ project, state, kind, since, q: '' }), [project, state, kind, since])
+  const { project, repo, worktree, branch, bead, state, kind, since } = filters
+  const listFilters: PageFilters = { ...NO_FILTERS, project, repo, worktree, branch, bead, state, kind, since }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: listFilters is rebuilt from these each render
+  const api = useMemo(() => apiFilters(listFilters), [project, repo, worktree, branch, bead, state, kind, since])
   const { state: _state, ...searchFilters } = api
   const sessions = useTrees(api)
   const search = useSearch(term, searchFilters)
@@ -124,7 +128,7 @@ export function SessionsPage() {
 
   const loaded: TreeSummary[] = useMemo(() => sessions.data?.pages.flatMap((p) => p.trees) ?? [], [sessions.data])
   const more = sessions.hasNextPage
-  const scriptedOn = showsScripted({ project, state, kind, since, q: '' })
+  const scriptedOn = showsScripted(listFilters)
   const scripted = sessions.data?.pages[0]?.scripted
   const groups = useMemo(
     () => buildDayGroups(loaded, scriptedOn ? (scripted ?? []) : [], Boolean(more)),
@@ -185,13 +189,13 @@ export function SessionsPage() {
     document.querySelector(`[data-nav-id="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
-  const clearFilters = () => setFilters({ project: '', state: '', kind: '', since: '' })
+  const clearFilters = () => setFilters({ ...PLACE_FILTERS, state: '', kind: '', since: '' })
 
   return (
     <div className="flex items-start">
       <ProjectRail
-        selected={filters.project}
-        onSelect={(project) => setFilters({ project })}
+        filters={filters}
+        onChange={(patch) => setFilters(patch)}
         collapsed={collapsed}
         onToggle={() => {
           saveCollapsed(!collapsed)
@@ -228,17 +232,37 @@ export function SessionsPage() {
             options={SINCE_OPTIONS}
           />
           {filters.project && collapsed && (
-            <Badge tone="accent" className="max-w-48 shrink gap-1 py-px" title={filters.project}>
-              <span className="truncate">{shortProject(filters.project)}</span>
-              <button
-                type="button"
-                aria-label="Clear the project filter"
-                onClick={() => setFilters({ project: '' })}
-                className="inline-flex shrink-0 opacity-70 hover:opacity-100"
-              >
-                <X size={11} />
-              </button>
-            </Badge>
+            <FilterChip label="project" title={filters.project} onClear={() => setFilters({ project: '' })}>
+              {shortProject(filters.project)}
+            </FilterChip>
+          )}
+          {filters.repo && (collapsed || filters.group !== 'repo') && (
+            <FilterChip
+              label="repository"
+              title={filters.repo === '-' ? 'Sessions in no repository' : filters.repo}
+              onClear={() => setFilters({ repo: '', worktree: '', branch: '' })}
+            >
+              {filters.repo === '-' ? 'no repository' : shortProject(filters.repo)}
+            </FilterChip>
+          )}
+          {filters.worktree && (
+            <FilterChip label="worktree" title={filters.worktree} onClear={() => setFilters({ worktree: '' })}>
+              ⌥ {shortProject(filters.worktree)}
+            </FilterChip>
+          )}
+          {filters.branch && (
+            <FilterChip label="branch" title={filters.branch} onClear={() => setFilters({ branch: '' })}>
+              <span className="font-mono">{filters.branch}</span>
+            </FilterChip>
+          )}
+          {filters.bead && (
+            <FilterChip
+              label="bead"
+              title={`Sessions that worked on ${filters.bead} or a bead below it`}
+              onClear={() => setFilters({ bead: '' })}
+            >
+              <span className="font-mono">{filters.bead}</span>
+            </FilterChip>
           )}
           <span className="ml-auto hidden shrink-0 whitespace-nowrap text-sec text-muted @[900px]:block">
             {searching
@@ -280,6 +304,33 @@ export function SessionsPage() {
   )
 }
 
+/** An active filter in the toolbar, with a button that clears it. */
+function FilterChip({
+  label,
+  title,
+  onClear,
+  children,
+}: {
+  label: string
+  title: string
+  onClear: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <Badge tone="accent" className="max-w-48 shrink gap-1 py-px" title={title}>
+      <span className="truncate">{children}</span>
+      <button
+        type="button"
+        aria-label={`Clear the ${label} filter`}
+        onClick={onClear}
+        className="inline-flex shrink-0 opacity-70 hover:opacity-100"
+      >
+        <X size={11} />
+      </button>
+    </Badge>
+  )
+}
+
 function ListView({
   query,
   groups,
@@ -311,7 +362,7 @@ function ListView({
               title="No sessions match these filters"
               action={<Button onClick={onClear}>Clear filters</Button>}
             >
-              Widen the time range or pick another project or state.
+              Widen the time range or pick another project, repository, bead or state.
             </EmptyState>
           ) : (
             <EmptyState icon={<FolderOpen size={20} />} title="No sessions yet">

@@ -122,6 +122,110 @@ export interface SessionSummary {
   recap?: RecapPreview
   /** Pull requests the session created or linked, each once, oldest first. */
   prs?: PRLink[]
+  /** The repository the session counts under (its start directory's, else where most work happened). */
+  repo?: RepoRef
+  /** Beads the session worked on (any bd call but show), most spent on first. */
+  beads?: BeadBrief[]
+}
+
+// ---- groupings: repositories, branches, beads (docs/beads-and-repos.md §5) -------------
+
+export interface RepoRef {
+  /** The main repository's directory: the key of `repo=`. */
+  repo: string
+  name: string
+  remote?: string
+  gone?: boolean
+}
+
+export interface BeadBrief {
+  id: string
+  title?: string
+  status?: string
+  /** The root of its family (itself when it has no parent). */
+  root: string
+}
+
+export interface BeadRef extends BeadBrief {
+  type?: string
+  parent?: string
+  /** The bead database (registry key). */
+  database: string
+}
+
+/** A bead one session worked on: the share of its best cost and the bd operations it ran. */
+export interface BeadShare extends BeadRef {
+  usd: number
+  ops: string[]
+}
+
+export interface SessionPlaces {
+  repo?: RepoRef
+  /** Linked worktrees of `repo` the session worked in. */
+  worktrees?: string[]
+  /** Every repository it touched. */
+  repos?: RepoRef[]
+  /** Branches its turns ran on, with the share of its best cost. */
+  branches?: { name: string; usd: number }[]
+  beads?: BeadShare[]
+  /** The part of its best cost no bead accounts for. */
+  noBeadUSD: number
+}
+
+export interface WorktreeGroup {
+  top: string
+  name: string
+  gone?: boolean
+  sessions: number
+  /** Best costs of the sessions that worked in it (also what they spent elsewhere). */
+  bestUSD: number
+  lastActivityAt?: string
+}
+
+export interface BranchGroup {
+  name: string
+  sessions: number
+  /** The share of those sessions' cost spent on the branch. */
+  usd: number
+  lastActivityAt?: string
+}
+
+/** GET /api/repos; the group of sessions in no repository has `repo: ""`. */
+export interface RepoGroup extends RepoRef {
+  sessions: number
+  lastActivityAt?: string
+  cost: Money
+  worktrees?: WorktreeGroup[]
+  branches?: BranchGroup[]
+}
+
+export interface RepoList {
+  repos: RepoGroup[]
+}
+
+export interface BeadGroup extends BeadRef {
+  sessions: number
+  usd: number
+  /** The last bd call on it. */
+  lastActivityAt?: string
+}
+
+export interface FamilyGroup {
+  root: BeadRef
+  sessions: number
+  usd: number
+  lastActivityAt?: string
+  /** Issues in the family, and how many are closed (the registry). */
+  issues: number
+  closed: number
+  /** The root and the members some session worked on, in id order. */
+  beads: BeadGroup[]
+}
+
+/** GET /api/beads */
+export interface BeadList {
+  families: FamilyGroup[]
+  databases: number
 }
 
 export interface ScriptedLine {
@@ -298,6 +402,8 @@ export interface SessionDetail {
   lineage: SessionLineage
   family: SessionFamily
   messageCount: number
+  /** Absent from an older daemon. */
+  places?: SessionPlaces
   digest: SessionDigest
 }
 
@@ -662,7 +768,7 @@ export interface SearchResult {
 
 // ---- cost -----------------------------------------------------------------------------
 
-export type CostBy = 'project' | 'day' | 'model' | 'kind' | 'session'
+export type CostBy = 'project' | 'day' | 'model' | 'kind' | 'repo' | 'branch' | 'bead' | 'family' | 'session'
 export type CostSplit = 'project' | 'model' | 'kind'
 
 /** One slice of a row when the table is requested with `split=`. */
@@ -781,6 +887,11 @@ export interface SessionFilters {
   since?: string
   until?: string
   limit?: number
+  /** Groupings: a repository (main repository directory, `-` for none), a worktree, a branch, a bead or family root. */
+  repo?: string
+  worktree?: string
+  branch?: string
+  bead?: string
 }
 
 export interface CostParams {
@@ -789,5 +900,7 @@ export interface CostParams {
   since?: string
   until?: string
   project?: string
+  repo?: string
+  bead?: string
   limit?: number
 }
