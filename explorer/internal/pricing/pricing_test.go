@@ -205,6 +205,16 @@ func TestSonnet55CacheRead(t *testing.T) {
 	}
 }
 
+// Haiku 5.5 has two rate cards: a prompt over 100,000 tokens, counting cache reads and
+// writes, is billed at the higher one in full.
+func TestHaiku55PromptLength(t *testing.T) {
+	tab := Default()
+	short, _ := tab.Cost("claude-haiku-5-5", model.Tokens{Input: 2000, CacheRead: 90000, CacheWrite5m: 8000, Output: 500}, false)
+	near(t, short.USD*1e6, 2000*0.1+90000*0.01+8000*0.125+500*0.5)
+	long, _ := tab.Cost("claude-haiku-5-5", model.Tokens{Input: 2000, CacheRead: 90000, CacheWrite1h: 8001, Output: 500}, false)
+	near(t, long.USD*1e6, 2000*0.5+90000*0.05+8001*1.0+500*2.5)
+}
+
 func TestEmbeddedTableStatus(t *testing.T) {
 	for n, p := range Default().models {
 		if p.Status != "verified" && p.Status != "assumed" {

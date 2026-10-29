@@ -414,6 +414,7 @@ all lines. Ignore them.
 | `claude-sonnet-5-5` | 2 | 10 | 0.10 | verified against `cost-state` from Claude Code 2.1.302; 2.1.289 and earlier reported it at 0.20: the digest prices each window's reported tokens with this table and keeps the difference as the window's `rateDiffUSD`, apart from the overhead |
 | `claude-sonnet-5` | 2 | 10 | 0.20 | verified |
 | `claude-sonnet-4-6` | 3 | 15 | 0.30 | cache read assumed |
+| `claude-haiku-5-5` | 0.10 | 0.50 | 0.01 | pricing page; a prompt over 100,000 tokens (cache reads and writes included) is billed at 0.50 / 2.50 / 0.05 in full |
 | `claude-haiku-4-5-20251001` | 1 | 5 | 0.10 | verified (input/output) |
 
 - Cache write = input price × 1.25 for `ephemeral_5m`, × 2 for `ephemeral_1h` (verified:
