@@ -296,6 +296,12 @@
   .prose-x li > p {
     margin: 0;
   }
+  .prose-x li + li {
+    margin-top: 2px;
+  }
+  .prose-x li::marker {
+    color: var(--muted);
+  }
   .prose-x :not(pre) > code {
     background: var(--surface-2);
     border-radius: 3px;

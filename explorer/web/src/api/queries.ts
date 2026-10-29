@@ -82,11 +82,12 @@ export function useRepos(): UseQueryResult<RepoList> {
   })
 }
 
-/** The bead families sessions worked on, with the cost spent on each bead. */
-export function useBeads(): UseQueryResult<BeadList> {
+/** The bead prefixes and families sessions worked on, with the cost spent on each bead. */
+export function useBeads(enabled = true): UseQueryResult<BeadList> {
   return useQuery({
     queryKey: queryKeys.beads(),
     queryFn: ({ signal }) => get<BeadList>('/api/beads', undefined, signal),
+    enabled,
   })
 }
 

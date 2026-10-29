@@ -222,8 +222,32 @@ export interface FamilyGroup {
   beads: BeadGroup[]
 }
 
+/**
+ * A bead prefix (merlin for merlin-t8s.48; in practice one project's bead database) and the
+ * sessions that worked on a bead of it.
+ */
+export interface PrefixGroup {
+  prefix: string
+  /** The bead database (registry key). */
+  database: string
+  sessions: number
+  /** The share of those sessions' cost spent on its beads. */
+  usd: number
+  /** Their whole best cost. */
+  bestUSD: number
+  /** The last activity of any of them. */
+  lastActivityAt?: string
+  /** Its beads in the database, and how many are closed. */
+  issues: number
+  closed: number
+  /** The families some session worked on. */
+  families: number
+}
+
 /** GET /api/beads */
 export interface BeadList {
+  /** The one with the most recently active session first. Missing from a daemon before 0.5.2. */
+  prefixes?: PrefixGroup[]
   families: FamilyGroup[]
   databases: number
 }

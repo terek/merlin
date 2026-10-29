@@ -109,7 +109,7 @@ func (a *API) handleBeads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := catalog.Filter{Repo: r.URL.Query().Get("repo")}
-	a.json(w, http.StatusOK, BeadList{Families: cat.Families(f), Databases: cat.BeadDatabases()})
+	a.json(w, http.StatusOK, BeadList{Prefixes: cat.Prefixes(f), Families: cat.Families(f), Databases: cat.BeadDatabases()})
 }
 
 func (a *API) handleSessions(w http.ResponseWriter, r *http.Request) {

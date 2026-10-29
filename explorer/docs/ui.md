@@ -17,7 +17,7 @@ cost, subagents included** (Session, Cost).
 | Client state | URL search parameters for filters; `useState` for the rest. No global store |
 | Styling | Tailwind 4 (`@tailwindcss/vite`) over CSS-variable tokens defined in `src/styles.css` |
 | Icons | `lucide-react` |
-| Markdown | `react-markdown` + `remark-gfm`, for assistant texts only. No raw HTML, no syntax highlighter |
+| Markdown | `react-markdown` + `remark-gfm`, for assistant texts and agents' prompts (an agent writes them). No raw HTML, no syntax highlighter |
 | Charts | hand-written SVG. No chart library |
 | Tests | `bun test` for pure logic in `src/lib` and `src/api`; `tsc --noEmit`; Biome (root `biome.json`) |
 
@@ -171,7 +171,7 @@ restyle them.
 | `StateDot`, `Badge` | the states above; `Badge` has tones `neutral`, `ok`, `warn`, `bad`, `accent` |
 | `Clamp` | text clamped to N lines with "show more" / "show less"; never cuts the data, only the view |
 | `Prose` | assistant text through `react-markdown` (GFM), styled for 13px: code blocks scroll sideways, tables are bordered, links open in a new tab with `rel="noreferrer"` |
-| `PlainText` | prompt text: `white-space: pre-wrap`, long lines wrap, no markdown |
+| `PlainText` | a person's prompt text: `white-space: pre-wrap`, long lines wrap, no markdown (an agent's prompt goes through `Prose`) |
 | `CopyButton` | copies a string, shows a check for a second |
 | `Bar` | a horizontal proportion bar with one or more coloured segments |
 | `Card`, `Section` | a bordered surface with an optional title row |
@@ -293,6 +293,20 @@ From top to bottom:
     are squeezed into a narrow grey **break** labelled with its length; with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
+  - **one day at a time** (bead `merlin-t8s.50`): a tree that ran on more than one day (one ran
+    for two months) is cut each night at the idle stretch that covers most of the night's core
+    (00:00–08:00), then of its window (18:00–12:00); the time after the last activity counts as such
+    a stretch, so work past midnight with nothing after it stays with its evening, and a turn still
+    running is never cut. A part is shown as the calendar day its first-to-last activity overlaps
+    most; when two land on one day the first goes back to the day it started on (an evening run deep
+    into the night), or, if it started that same day, they are one. Every scale, row and break is the
+    day's own. Above the readout a **day locator** (`DayStrip.tsx`) has a cell per day, at most 44 px
+    wide so that two days take two cells, not the card: the day's spend as a stacked bar in the
+    legend's split, the day of the month (and the month where it changes), a break mark where
+    calendar days with nothing were skipped, the pinned turn's marker over its day. A click or ← →
+    picks the day; pinning a turn (in the graph, a panel or the list of decisions) or moving the
+    keyboard cursor brings its day into view. The first day shown is the last one, unless it spent
+    under 1% of the tree (a resume that only compacted), then the last that spent more;
   - a **row** per session's main agent and per agent it launched, in the tree's order. Above its
     baseline, the context every call of the agent was sent with (prompt tokens), as a step area, on one
     token scale for every row: a row is as tall as its largest context needs, so the rows that were
@@ -407,9 +421,12 @@ view and deleted on 2026-10-25.
 The rail switches between **Projects** (the start directory, as before), **Repos** and **Beads**
 (`group=repo|bead` in the URL; switching clears the rail's filters). Repos lists each repository with
 its sessions and cost; the selected one opens into its worktrees (`worktree=`) and branches
-(`branch=`, with the cost spent on each). Beads lists the bead families sessions worked on, newest
-first, each a two-line entry (title over id, sessions, cost); the selected family opens into the
-beads sessions worked on (`bead=` matches a bead and everything below it). A grouping filter that
+(`branch=`, with the cost spent on each). Beads lists the bead prefixes (merlin for merlin-t8s.48: in
+practice one project's bead database; `merlin-t8s.51`, which replaced the list of every family root),
+the one with the most recently active session first, each with its sessions and the cost they spent
+on its beads; picking one (`bead=merlin`) lists every session that worked on a bead of it, newest
+first. A single bead picked elsewhere (`bead=<id>`, a bead and everything below it, from a session's
+bead tags or the Session page) shows as a two-line entry (title over id) under its prefix. A grouping filter that
 the rail does not show (collapsed, or another grouping) is a chip in the toolbar. Tree rows show the
 first two beads their sessions worked on (status dot and id) and how many more.
 The Session page header has a line for where the session worked (`places`): its repository and

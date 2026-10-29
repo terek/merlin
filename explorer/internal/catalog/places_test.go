@@ -143,6 +143,20 @@ func TestPlacesFiltersAndRollups(t *testing.T) {
 			t.Errorf("family x-e = %+v", f)
 		}
 	}
+	pres := c.Prefixes(Filter{})
+	// y-z was only quoted from another database's output: no session worked on a y bead
+	if len(pres) != 1 || pres[0].Prefix != "x" {
+		t.Fatalf("prefixes = %+v, want x alone", pres)
+	}
+	if x := pres[0]; x.Sessions != 1 || x.Issues != 4 || x.Closed != 1 || x.Families != 3 || x.Database != "db-r" {
+		t.Errorf("prefix x = %+v", x)
+	}
+	wantNear(t, "prefix x", pres[0].USD, 3.5+3.5+2)
+	for pre, want := range map[string]int{"x": 1, "y": 0} {
+		if n := len(c.List(Filter{Bead: pre}, Liveness{}).Sessions); n != want {
+			t.Errorf("List(bead=%s) = %d sessions, want %d", pre, n, want)
+		}
+	}
 	rs := c.Repos(Filter{})
 	if len(rs) != 2 || len(rs[0].Worktrees)+len(rs[1].Worktrees) != 1 {
 		t.Errorf("repos = %+v", rs)

@@ -1,7 +1,21 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, AgentTurn, Message, SessionDetail, Turn } from '../../api/types'
 import type { Col } from './model'
-import { buildTimeline, GAP_MS, type Lane, packLanes, slotLength, splitHeld, timeAxis, turnPlace } from './timeline'
+import {
+  buildTimeline,
+  dayAt,
+  GAP_MS,
+  type Lane,
+  latestDay,
+  packLanes,
+  sliceTimeline,
+  slotLength,
+  splitDays,
+  splitHeld,
+  type Timeline,
+  timeAxis,
+  turnPlace,
+} from './timeline'
 import { buildTree } from './tree'
 
 const T0 = Date.UTC(2026, 0, 1, 10, 0)
@@ -289,4 +303,95 @@ describe('turnPlace', () => {
     expect(where(55)).toBe(2)
     expect(where(70)).toEqual([2, undefined])
   })
+})
+
+describe('splitDays', () => {
+  // local times, in a month with no change of clocks
+  const h = (day: number, hour: number) => new Date(2026, 0, day, 0).getTime() + hour * 60 * 60_000
+  const of = (...spans: [number, number][]): Timeline => ({ lanes: [], spans, peak: 0, t0: 0, t1: 0 })
+  const dates = (tl: Timeline) => splitDays(tl).map((d) => new Date(d.date).getDate())
+
+  test('two working days are two days, cut at the night between them', () => {
+    const days = splitDays(of([h(5, 9), h(5, 17)], [h(6, 8), h(6, 12)]))
+    expect(days.map((d) => new Date(d.date).getDate())).toEqual([5, 6])
+    expect(days[0].hi).toBe(days[1].lo)
+    expect(days[0].hi).toBeGreaterThan(h(5, 17))
+    expect(days[0].hi).toBeLessThan(h(6, 8))
+  })
+
+  test('work past midnight with nothing after it stays with its evening', () => {
+    expect(dates(of([h(5, 20), h(5, 23)], [h(5, 23.7), h(6, 1.5)]))).toEqual([5])
+  })
+
+  test('the night is cut at its longest pause, not at midnight', () => {
+    // 20:00 to 01:30 with a pause at 23:00, then the next morning
+    const days = splitDays(of([h(5, 20), h(5, 23)], [h(5, 23.7), h(6, 1.5)], [h(6, 10), h(6, 12)]))
+    expect(days.map((d) => new Date(d.date).getDate())).toEqual([5, 6])
+    expect(days[0].t1).toBe(h(6, 1.5))
+  })
+
+  test('a part is the calendar day it overlaps most; of two on one day, the first goes back a day', () => {
+    // from 22:00 to 06:00 with no pause: the 6th
+    expect(dates(of([h(5, 22), h(6, 6)], [h(8, 9), h(8, 10)]))).toEqual([6, 8])
+    // the same, then the afternoon after a long pause: the night goes back to the 5th
+    expect(dates(of([h(5, 22), h(6, 6)], [h(6, 15), h(6, 18)]))).toEqual([5, 6])
+    // an early hour, a long pause, then the day: one day
+    const days = splitDays(of([h(6, 4), h(6, 5)], [h(6, 10), h(6, 18)]))
+    expect(days.map((d) => [new Date(d.date).getDate(), d.t0, d.t1])).toEqual([[6, h(6, 4), h(6, 18)]])
+  })
+
+  test('days with nothing are left out', () => {
+    expect(dates(of([h(5, 9), h(5, 10)], [h(9, 9), h(9, 10)]))).toEqual([5, 9])
+    expect(dates(of())).toEqual([])
+  })
+
+  test('a session that starts late in the evening is cut at its sleep, however short', () => {
+    // 23:15 to 02:20, five hours of sleep, then the day
+    expect(dates(of([h(1, 23.25), h(2, 2.33)], [h(2, 7.4), h(2, 22.7)]))).toEqual([1, 2])
+  })
+
+  test('a morning after a short sleep is not glued to the evening before', () => {
+    expect(dates(of([h(5, 15), h(6, 4)], [h(6, 7), h(6, 7.5)]))).toEqual([5, 6])
+  })
+
+  test('a session on one day is one day', () => {
+    expect(dates(of([h(5, 8), h(5, 9)], [h(5, 13), h(5, 14)], [h(5, 19), h(5, 21)]))).toEqual([5])
+  })
+})
+
+describe('sliceTimeline', () => {
+  // turn 0 on one day, turn 1 the next, and an agent launched in turn 1
+  const helper = agent('helper', { spawnTurn: 1, startedAt: at(1442), endedAt: at(1450) })
+  const detail = session('d', {
+    turns: [turn(0, 0, 30), turn(1, 1440, 1460)],
+    messages: [
+      msg('a0', 1, 20_000, { turn: 0 }),
+      msg('a1', 25, 90_000, { turn: 0 }),
+      msg('b0', 1441, 30_000, { turn: 1 }),
+      msg('h0', 1445, 10_000, { agentId: 'helper' }),
+    ],
+    agents: [helper],
+  })
+  const tl = buildTimeline(buildTree([detail]))
+  const days = splitDays(tl)
+
+  test('each day has only its own turns, calls, lanes and scale', () => {
+    expect(days).toHaveLength(2)
+    const [one, two] = days.map((d) => sliceTimeline(tl, d))
+    expect(one.lanes.map((l) => l.key)).toEqual(['0/main'])
+    expect(one.lanes[0].turns.map((s) => s.col.index)).toEqual([0])
+    expect(one.peak).toBe(90_000)
+    expect(two.lanes.map((l) => l.main)).toEqual([true, false])
+    expect(two.lanes[0].turns.map((s) => s.col.index)).toEqual([1])
+    expect(two.lanes[0].usd).toBeCloseTo(0.01 + 0.03, 9)
+    expect(two.peak).toBe(30_000)
+    expect(two.t0).toBeGreaterThanOrEqual(Date.parse(at(1440)))
+    expect(dayAt(days, Date.parse(at(1441)))).toBe(1)
+  })
+})
+
+test('the first day shown is the last that spent more than next to nothing', () => {
+  expect(latestDay([{ total: 5 }, { total: 3 }, { total: 0.01 }])).toBe(1)
+  expect(latestDay([{ total: 5 }, { total: 3 }])).toBe(1)
+  expect(latestDay([{}, {}])).toBe(1)
 })

@@ -1,12 +1,14 @@
 // The rail: what the list is narrowed to, grouped by project (the directory a session started
-// in), by repository (with its worktrees and branches) or by bead family (with its beads). Each
-// grouping is a facet: a session keeps its identity, the rail only filters the list.
+// in), by repository (with its worktrees and branches) or by bead prefix (merlin for
+// merlin-t8s.48: in practice a project's bead database). Each grouping is a facet: a session keeps
+// its identity, the rail only filters the list.
 
-import { FolderGit2, GitBranch, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { CircleDot, FolderGit2, GitBranch, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Fragment } from 'react'
 import { useBeads, useProjects, useRepos } from '../../api/queries'
-import type { BeadRef, FamilyGroup, RepoGroup } from '../../api/types'
+import type { BeadBrief, RepoGroup } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatCount, plural } from '../../lib/format'
+import { formatCount, formatMoney, plural } from '../../lib/format'
 import { BeadStatus, IconButton, Money, ProjectName, QueryBoundary, SegmentedControl, SkeletonRows } from '../../ui'
 import { type GroupBy, type PageFilters, PLACE_FILTERS } from './model'
 
@@ -59,7 +61,7 @@ const GROUPS: { value: GroupBy; label: string; title: string }[] = [
     label: 'Repos',
     title: 'The git repository each session worked in, with its worktrees and branches',
   },
-  { value: 'bead', label: 'Beads', title: 'The beads (bd issues) sessions worked on, by family' },
+  { value: 'bead', label: 'Beads', title: 'The beads (bd issues) sessions worked on, by prefix' },
 ]
 
 export function ProjectRail({
@@ -243,8 +245,12 @@ function RepoItem({
   )
 }
 
-/** Whether a family holds the bead the filter names. */
-const holds = (f: FamilyGroup, id: string) => f.root.id === id || f.beads.some((b) => b.id === id)
+/** A bead id's prefix: what precedes the last dash of its root (merlin for merlin-t8s.48). */
+function prefixOf(id: string): string {
+  const root = id.split('.')[0]
+  const i = root.lastIndexOf('-')
+  return i > 0 ? root.slice(0, i) : ''
+}
 
 function BeadList({ filters, onChange }: { filters: PageFilters; onChange: (patch: Partial<PageFilters>) => void }) {
   const query = useBeads()
@@ -252,7 +258,7 @@ function BeadList({ filters, onChange }: { filters: PageFilters; onChange: (patc
     <QueryBoundary
       query={query}
       skeleton={<SkeletonRows rows={8} height={28} />}
-      isEmpty={(d) => d.families.length === 0}
+      isEmpty={(d) => (d.prefixes ?? []).length === 0}
       empty={
         <p className="px-2 py-3 text-sec text-muted">
           {query.data?.databases
@@ -261,31 +267,63 @@ function BeadList({ filters, onChange }: { filters: PageFilters; onChange: (patc
         </p>
       }
     >
-      {(d) => (
-        <ul className="space-y-px">
-          <Item
-            active={!filters.bead}
-            onClick={() => onChange(PLACE_FILTERS)}
-            name="All"
-            usd={d.families.reduce((n, f) => n + f.usd, 0)}
-            title="Every session; the cost is the part spent on beads"
-          />
-          {d.families.map((f) => (
-            <FamilyItem
-              key={f.root.id}
-              family={f}
-              open={holds(f, filters.bead)}
-              filters={filters}
-              onChange={onChange}
+      {(d) => {
+        const prefixes = d.prefixes ?? []
+        // a single bead picked elsewhere (a session's bead tags, a link) shows under its prefix
+        const one = prefixes.some((p) => p.prefix === filters.bead) ? '' : filters.bead
+        // a family's beads include its root
+        const found = one ? d.families.flatMap((f) => f.beads).find((b) => b.id === one) : undefined
+        const oneRef: BeadBrief | undefined = one ? (found ?? { id: one, root: one }) : undefined
+        return (
+          <ul className="space-y-px">
+            <Item
+              active={!filters.bead}
+              onClick={() => onChange(PLACE_FILTERS)}
+              name="All"
+              usd={prefixes.reduce((n, p) => n + p.usd, 0)}
+              title="Every session; the cost is the part spent on beads"
             />
-          ))}
-        </ul>
-      )}
+            {prefixes.map((p) => (
+              <Fragment key={p.prefix}>
+                <Item
+                  active={filters.bead === p.prefix}
+                  onClick={() => onChange({ ...PLACE_FILTERS, bead: p.prefix })}
+                  name={
+                    <>
+                      <CircleDot size={12} className="shrink-0 text-faint" />
+                      <span className="truncate">{p.prefix}</span>
+                    </>
+                  }
+                  count={p.sessions}
+                  countTitle={`${plural(p.sessions, 'session')} worked on its beads`}
+                  usd={p.usd}
+                  title={`Beads ${p.prefix}-…: ${p.closed} of ${plural(p.issues, 'bead')} closed; sessions worked on ${plural(p.families, 'family', 'families')} of them.\nThe cost is what these sessions spent on these beads, of ${formatMoney(p.bestUSD)} in all.`}
+                />
+                {oneRef && prefixOf(one) === p.prefix && (
+                  <BeadItem
+                    level={1}
+                    bead={oneRef}
+                    label={oneRef.id}
+                    active
+                    onClick={() => onChange({ ...PLACE_FILTERS, bead: p.prefix })}
+                    sessions={found?.sessions ?? 0}
+                    usd={found?.usd ?? 0}
+                    title={beadTitle(
+                      oneRef,
+                      '\nThe sessions that worked on it or a bead below it; click for all of the prefix',
+                    )}
+                  />
+                )}
+              </Fragment>
+            ))}
+          </ul>
+        )
+      }}
     </QueryBoundary>
   )
 }
 
-function beadTitle(b: BeadRef, extra: string): string {
+function beadTitle(b: BeadBrief, extra: string): string {
   return `${b.id}${b.title ? ` — ${b.title}` : ''}\n${b.status ?? 'unknown status'}${extra}`
 }
 
@@ -300,7 +338,7 @@ function BeadItem({
   title,
   level = 0,
 }: {
-  bead: BeadRef
+  bead: BeadBrief
   label: string
   active: boolean
   onClick: () => void
@@ -335,53 +373,5 @@ function BeadItem({
         </span>
       </button>
     </li>
-  )
-}
-
-function FamilyItem({
-  family,
-  open,
-  filters,
-  onChange,
-}: {
-  family: FamilyGroup
-  open: boolean
-  filters: PageFilters
-  onChange: (patch: Partial<PageFilters>) => void
-}) {
-  const { root } = family
-  const single = family.beads.length === 1 && family.issues <= 1
-  return (
-    <>
-      <BeadItem
-        bead={root}
-        label={root.id}
-        active={filters.bead === root.id}
-        onClick={() => onChange({ ...PLACE_FILTERS, bead: root.id })}
-        sessions={family.sessions}
-        usd={family.usd}
-        title={beadTitle(
-          root,
-          single ? '' : `\n${family.closed} of ${plural(family.issues, 'issue')} closed in this family`,
-        )}
-      />
-      {open &&
-        !single &&
-        family.beads
-          .filter((b) => b.id !== root.id)
-          .map((b) => (
-            <BeadItem
-              key={b.id}
-              level={1}
-              bead={b}
-              label={b.id.startsWith(`${root.id}.`) ? `…${b.id.slice(root.id.length)}` : b.id}
-              active={filters.bead === b.id}
-              onClick={() => onChange({ ...PLACE_FILTERS, bead: b.id })}
-              sessions={b.sessions}
-              usd={b.usd}
-              title={beadTitle(b, `\n${plural(b.sessions, 'session')} worked on it`)}
-            />
-          ))}
-    </>
   )
 }

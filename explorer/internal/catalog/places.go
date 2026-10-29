@@ -105,6 +105,7 @@ type facets struct {
 	gen    int
 	places Places
 	bead   map[string]*BeadRef // id -> bead, for the ids the registry knows
+	prefix map[string]string   // bead id prefix -> database key
 	dbAt   map[string]string   // .beads directory -> database key
 	repo   map[string]RepoRef  // main repository dir -> ref
 	ses    []sessFacets        // by sess.idx
@@ -158,12 +159,17 @@ func (c *Catalog) prepare(f Filter, need bool) (*view, *facets, Filter) {
 }
 
 func buildFacets(v *view, p Places, gen int) *facets {
-	fv := &facets{v: v, gen: gen, places: p, bead: map[string]*BeadRef{}, repo: map[string]RepoRef{},
-		dbAt: map[string]string{}}
+	fv := &facets{v: v, gen: gen, places: p, bead: map[string]*BeadRef{}, prefix: map[string]string{},
+		repo: map[string]RepoRef{}, dbAt: map[string]string{}}
 	for i := range p.Beads {
 		db := &p.Beads[i]
 		for _, dir := range db.Dirs {
 			fv.dbAt[dir] = db.Key
+		}
+		for _, pre := range db.Prefixes {
+			if _, dup := fv.prefix[pre]; !dup {
+				fv.prefix[pre] = db.Key
+			}
 		}
 		parent := map[string]string{}
 		for _, is := range db.Issues {
@@ -521,8 +527,12 @@ func (fv *facets) selects(f Filter, s *sess) bool {
 	return true
 }
 
-// within reports whether bead id is anc or lies below it.
+// within reports whether bead id is anc or lies below it; anc can also be a prefix, which
+// holds every bead of that prefix (no bead id is a bare prefix).
 func (fv *facets) within(id, anc string) bool {
+	if _, ok := fv.prefix[anc]; ok {
+		return beads.Prefix(id) == anc
+	}
 	for range 32 {
 		if id == anc {
 			return true
@@ -841,6 +851,79 @@ func (c *Catalog) Families(f Filter) []FamilyGroup {
 			return out[i].LastActivityAt.After(out[j].LastActivityAt)
 		}
 		return out[i].Root.ID < out[j].Root.ID
+	})
+	return out
+}
+
+// PrefixGroup is a bead prefix (merlin for merlin-t8s.48: in practice one project's bead
+// database) with the sessions that worked on a bead of it, newest first in the list. USD is the
+// share of their cost spent on its beads, BestUSD their whole best cost. Issues and Closed count
+// its beads in the database; Families the families some session worked on.
+type PrefixGroup struct {
+	Prefix         string    `json:"prefix"`
+	Database       string    `json:"database"`
+	Sessions       int       `json:"sessions"`
+	USD            float64   `json:"usd"`
+	BestUSD        float64   `json:"bestUSD"`
+	LastActivityAt time.Time `json:"lastActivityAt,omitzero"`
+	Issues         int       `json:"issues"`
+	Closed         int       `json:"closed"`
+	Families       int       `json:"families"`
+}
+
+// Prefixes returns the bead prefixes some session selected by f worked on, the one with the most
+// recently active session first.
+func (c *Catalog) Prefixes(f Filter) []PrefixGroup {
+	v, fv, f := c.prepare(f, true)
+	groups := map[string]*PrefixGroup{}
+	roots := map[string]map[string]bool{}
+	for _, s := range v.sessions {
+		if !f.selects(s, "") {
+			continue
+		}
+		sf := &fv.ses[s.idx]
+		if len(sf.beads) == 0 {
+			continue
+		}
+		usd := map[string]float64{}
+		share(sf.beadAll, s.info.Cost.BestUSD, NoBead, func(k string, x float64) { usd[k] += x })
+		seen := map[string]bool{}
+		for _, id := range sf.beads {
+			pre := beads.Prefix(id)
+			g := groups[pre]
+			if g == nil {
+				g = &PrefixGroup{Prefix: pre, Database: fv.bead[id].Database}
+				groups[pre] = g
+				roots[pre] = map[string]bool{}
+			}
+			g.USD += usd[id]
+			roots[pre][fv.bead[id].Root] = true
+			if !seen[pre] {
+				seen[pre] = true
+				g.Sessions++
+				g.BestUSD += s.info.Cost.BestUSD
+				g.LastActivityAt = later(g.LastActivityAt, s.d.LastActivityAt)
+			}
+		}
+	}
+	for _, ref := range fv.bead {
+		if g := groups[beads.Prefix(ref.ID)]; g != nil {
+			g.Issues++
+			if ref.Status == "closed" {
+				g.Closed++
+			}
+		}
+	}
+	out := make([]PrefixGroup, 0, len(groups))
+	for pre, g := range groups {
+		g.Families = len(roots[pre])
+		out = append(out, *g)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].LastActivityAt.Equal(out[j].LastActivityAt) {
+			return out[i].LastActivityAt.After(out[j].LastActivityAt)
+		}
+		return out[i].Prefix < out[j].Prefix
 	})
 	return out
 }

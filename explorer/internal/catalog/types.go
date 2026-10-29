@@ -333,7 +333,8 @@ type Filter struct {
 	// Repo keeps the sessions that count under a repository (the main repository's
 	// directory, NoneFilter for none); Worktree those that worked in a linked worktree;
 	// Branch those with a turn on a branch; Bead those that worked on a bead or on one below
-	// it in its family. See places.go.
+	// it in its family, or, when it is a bead prefix (merlin), on any bead of that prefix.
+	// See places.go.
 	Repo, Worktree, Branch, Bead string
 
 	facet func(Filter, *sess) bool // set by Catalog.prepare when one of the three is

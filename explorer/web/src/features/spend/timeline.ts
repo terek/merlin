@@ -21,6 +21,7 @@ import {
   newBucket,
   promptTokens,
   type Reread,
+  type Split,
   type Unit,
 } from './model'
 import type { Tree } from './tree'
@@ -239,21 +240,31 @@ export function buildTimeline(tree: Tree): Timeline {
     for (const lane of [main, ...agentLanes]) {
       lane.calls.sort((x, y) => x.t - y.t)
       lane.compactions.sort((x, y) => x.t - y.t)
-      const times = [
-        ...lane.calls.map((c) => c.t),
-        ...lane.turns.flatMap((t) => [t.t0, t.t1]),
-        ...lane.units.flatMap((u) => [u.startMs, u.endMs]),
-      ].filter(Number.isFinite)
-      lane.t0 = times.length ? Math.min(...times) : Number.NaN
-      lane.t1 = times.length ? Math.max(...times) : Number.NaN
-      lane.peak = Math.max(
-        0,
-        ...lane.series.flatMap((s) => s.points.map((p) => p.tokens)),
-        ...lane.compactions.map((c) => (lane.main || c.agent === lane.agent ? (c.compaction.preTokens ?? 0) : 0)),
-      )
+      measure(lane)
     }
     lanes.push(main, ...agentLanes.filter((l) => l.calls.length > 0 || l.units.length > 0))
   }
+  return withBounds(lanes, spans)
+}
+
+/** Sets a lane's first and last moment and its largest context from what is on it. */
+function measure(lane: Lane): Lane {
+  const times = [
+    ...lane.calls.map((c) => c.t),
+    ...lane.turns.flatMap((t) => [t.t0, t.t1]),
+    ...lane.units.flatMap((u) => [u.startMs, u.endMs]),
+  ].filter(Number.isFinite)
+  lane.t0 = times.length ? Math.min(...times) : Number.NaN
+  lane.t1 = times.length ? Math.max(...times) : Number.NaN
+  lane.peak = Math.max(
+    0,
+    ...lane.series.flatMap((s) => s.points.map((p) => p.tokens)),
+    ...lane.compactions.map((c) => (lane.main || c.agent === lane.agent ? (c.compaction.preTokens ?? 0) : 0)),
+  )
+  return lane
+}
+
+function withBounds(lanes: Lane[], spans: [number, number][]): Timeline {
   const all = spans.flat().filter(Number.isFinite)
   return {
     lanes,
@@ -333,16 +344,10 @@ export function timeAxis(
   gapMs = GAP_MS,
   maxBreaks = MAX_BREAKS,
 ): TimeAxis {
-  const sorted = spans.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b)).sort((a, b) => a[0] - b[0])
   // the shortest gap from `gapMs` up that leaves no more than `maxBreaks` breaks
   let merged: [number, number][] = []
   for (const gap of [gapMs, ...GAPS.filter((g) => g > gapMs)]) {
-    merged = []
-    for (const [a, b] of sorted) {
-      const top = merged[merged.length - 1]
-      if (top && a - top[1] <= gap) top[1] = Math.max(top[1], b)
-      else merged.push([a, Math.max(a, b)])
-    }
+    merged = mergeSpans(spans, gap)
     if (merged.length - 1 <= maxBreaks) break
   }
   if (merged.length === 0) merged.push([0, 1])
@@ -389,6 +394,18 @@ export function timeAxis(
   return { pieces, breaks, scale, x0, x1, x: toX, t: toT }
 }
 
+/** `spans` in order, those no more than `gap` apart joined into one. */
+function mergeSpans(spans: readonly [number, number][], gap: number): [number, number][] {
+  const sorted = spans.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b)).sort((a, b) => a[0] - b[0])
+  const merged: [number, number][] = []
+  for (const [a, b] of sorted) {
+    const top = merged[merged.length - 1]
+    if (top && a - top[1] <= gap) top[1] = Math.max(top[1], b)
+    else merged.push([a, Math.max(a, b)])
+  }
+  return merged
+}
+
 const MIN = 60_000
 const HOUR = 60 * MIN
 const STEPS = [
@@ -426,6 +443,169 @@ export const slotLength = (axis: TimeAxis, minPx: number) =>
 
 /** "30 s", "5 min", "1 h" */
 export const slotText = (ms: number) => (ms < MIN ? `${ms / 1000} s` : ms < HOUR ? `${ms / MIN} min` : `${ms / HOUR} h`)
+
+/** Adds a call to a bar's parts: by token class, or by who with the cache miss apart; and to its total. */
+export function addCall(bar: Record<string, number>, c: Call, split: Split) {
+  if (split === 'class') for (const [key, v] of Object.entries(c.byClass)) bar[key] = (bar[key] ?? 0) + v
+  else {
+    bar[c.kind] = (bar[c.kind] ?? 0) + c.usd - c.reread
+    bar.reread = (bar.reread ?? 0) + c.reread
+  }
+  bar.total = (bar.total ?? 0) + c.usd
+}
+
+// ---- days -----------------------------------------------------------------------------
+
+/**
+ * What ran between two nights: the time view shows one day at a time. Everything at or after `lo`
+ * and before `hi` belongs to it.
+ */
+export interface Day {
+  /** Local midnight of the calendar day it is shown as. */
+  date: number
+  /** Its first and last moment of activity. */
+  t0: number
+  t1: number
+  lo: number
+  hi: number
+}
+
+/** Local midnight of the day `n` days after the one `t` is on. */
+const midnight = (t: number, n = 0) => {
+  const d = new Date(t)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime()
+}
+/**
+ * Where the cut after a day is looked for: from 18:00 that day to 12:00 the next, and above all in
+ * its core, from midnight to 08:00.
+ */
+const NIGHT_FROM = 18
+const NIGHT_TO = 36
+const CORE_FROM = 24
+const CORE_TO = 32
+
+/**
+ * The days of a timeline. Each night it is cut at the stretch in which nothing ran that covers most
+ * of the night's core (then most of its window). The time after the last activity counts as such a
+ * stretch, so that work running past midnight with nothing after it stays with its evening. A part
+ * is shown as the calendar day its first-to-last activity overlaps most; when two land on one day,
+ * the first goes back to the day it started on (an evening's work that ran deep into the night), or,
+ * when it started on that same day, the two are one.
+ */
+export function splitDays(tl: Timeline): Day[] {
+  // a turn is never cut: its prompt and the calls that answered it are on the same day
+  const turns = tl.lanes.flatMap((l) => l.turns.map((s) => [s.t0, s.t1] as [number, number]))
+  const merged = mergeSpans([...tl.spans, ...turns], 0)
+  if (merged.length === 0) return []
+  const first = merged[0][0]
+  const last = merged[merged.length - 1][1]
+  const cuts = new Set<number>()
+  for (let d = midnight(first); d <= last; d = midnight(d, 1)) {
+    const at = (h: number) => (h < 24 ? d : midnight(d, 1)) + (h % 24) * HOUR
+    const [w0, w1, c0, c1] = [at(NIGHT_FROM), at(NIGHT_TO), at(CORE_FROM), at(CORE_TO)]
+    if (w1 <= first || w0 >= last) continue
+    // how much of the core, then of the window, idle time from a to b covers
+    const cover = (a: number, b: number) =>
+      Math.max(0, Math.min(c1, b) - Math.max(c0, a)) * 1e3 + Math.max(0, Math.min(w1, b) - Math.max(w0, a)) / HOUR
+    let best = cover(last, Number.POSITIVE_INFINITY)
+    let cut = -1
+    for (let i = 1; i < merged.length; i++) {
+      const c = cover(merged[i - 1][1], merged[i][0])
+      if (c > best) {
+        best = c
+        cut = i
+      }
+    }
+    if (cut > 0) cuts.add(cut)
+  }
+  const days: Day[] = []
+  let from = 0
+  for (let i = 1; i <= merged.length; i++) {
+    if (i < merged.length && !cuts.has(i)) continue
+    const t0 = merged[from][0]
+    const t1 = merged[i - 1][1]
+    let date = midnight(t0)
+    let most = -1
+    for (let d = midnight(t0); d <= t1; d = midnight(d, 1)) {
+      const o = Math.min(t1, midnight(d, 1)) - Math.max(t0, d)
+      if (o > most) {
+        most = o
+        date = d
+      }
+    }
+    const hi = i === merged.length ? Number.POSITIVE_INFINITY : (t1 + merged[i][0]) / 2
+    // two parts on one calendar day: the first is an evening run past midnight, and goes back to the
+    // day it started on, unless that day is taken; then they are one day
+    const prev = days[days.length - 1]
+    const back = prev ? midnight(prev.t0) : 0
+    if (prev?.date === date && back < date && (days[days.length - 2]?.date ?? 0) < back) prev.date = back
+    if (prev?.date === date) Object.assign(prev, { t1, hi })
+    else days.push({ date, t0, t1, lo: from === 0 ? Number.NEGATIVE_INFINITY : (merged[from - 1][1] + t0) / 2, hi })
+    from = i
+  }
+  return days
+}
+
+/** What each day spent, in a bar's parts (`addCall`). */
+export function daySpend(tl: Timeline, days: readonly Day[], split: Split): Record<string, number>[] {
+  const out = days.map(() => ({}) as Record<string, number>)
+  for (const l of tl.lanes)
+    for (const c of l.calls) {
+      const k = dayAt(days, c.t)
+      if (k >= 0) addCall(out[k], c, split)
+    }
+  return out
+}
+
+/**
+ * The day to show first: the last one, unless it spent next to nothing (a resume that only
+ * compacted, say); then the last that spent more.
+ */
+export function latestDay(spend: readonly Record<string, number>[]): number {
+  const total = spend.reduce((s, d) => s + (d.total ?? 0), 0)
+  for (let k = spend.length - 1; k >= 0; k--) if ((spend[k].total ?? 0) >= total * 0.01) return k
+  return spend.length - 1
+}
+
+/** The day `t` is on: an index into `days`, or -1. */
+export function dayAt(days: readonly Day[], t: number): number {
+  let lo = 0
+  let hi = days.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (t < days[mid].lo) hi = mid - 1
+    else if (t >= days[mid].hi) lo = mid + 1
+    else return mid
+  }
+  return -1
+}
+
+/**
+ * What of a timeline happened on one day: its lanes with only that day's calls, turns, pieces of
+ * work, contexts and marks. A session's main lane stays while anything of its session is left.
+ */
+export function sliceTimeline(tl: Timeline, day: Day): Timeline {
+  const on = (t: number) => t >= day.lo && t < day.hi
+  const lanes = tl.lanes.map((l) =>
+    measure({
+      ...l,
+      calls: l.calls.filter((c) => on(c.t)),
+      turns: l.turns.filter((s) => on(s.t0)),
+      units: l.units.filter((u) => on(u.startMs)),
+      series: l.series.map((s) => ({ ...s, points: s.points.filter((p) => on(p.t)) })).filter((s) => s.points.length),
+      misses: l.misses.filter((m) => on(m.t)),
+      compactions: l.compactions.filter((c) => on(c.t)),
+      usd: l.calls.reduce((s, c) => s + (on(c.t) ? c.usd : 0), 0),
+    }),
+  )
+  const busy = new Set(
+    lanes.filter((l) => l.calls.length > 0 || l.units.length > 0 || l.turns.length > 0).map((l) => l.branch),
+  )
+  return withBounds(
+    lanes.filter((l) => (l.main ? busy.has(l.branch) : l.calls.length > 0 || l.units.length > 0)),
+    tl.spans.filter(([a]) => on(a)),
+  )
+}
 
 // ---- packing --------------------------------------------------------------------------
 

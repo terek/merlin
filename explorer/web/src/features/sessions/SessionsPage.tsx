@@ -6,7 +6,7 @@
 import { FolderOpen, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useSearch, useTrees } from '../../api/queries'
+import { useBeads, useSearch, useTrees } from '../../api/queries'
 import type { TreeSummary } from '../../api/types'
 import { plural } from '../../lib/format'
 import { useDebounced, useDocumentTitle, useInView } from '../../lib/hooks'
@@ -118,6 +118,9 @@ export function SessionsPage() {
 
   // ---- data ----
   const { project, repo, worktree, branch, bead, state, kind, since } = filters
+  // a bead filter names a bead, or a prefix (merlin) for every bead of it
+  const beadList = useBeads(!!bead)
+  const beadPrefix = !!bead && !!beadList.data?.prefixes?.some((p) => p.prefix === bead)
   const listFilters: PageFilters = { ...NO_FILTERS, project, repo, worktree, branch, bead, state, kind, since }
   // biome-ignore lint/correctness/useExhaustiveDependencies: listFilters is rebuilt from these each render
   const api = useMemo(() => apiFilters(listFilters), [project, repo, worktree, branch, bead, state, kind, since])
@@ -255,15 +258,24 @@ export function SessionsPage() {
               <span className="font-mono">{filters.branch}</span>
             </FilterChip>
           )}
-          {filters.bead && (
-            <FilterChip
-              label="bead"
-              title={`Sessions that worked on ${filters.bead} or a bead below it`}
-              onClear={() => setFilters({ bead: '' })}
-            >
-              <span className="font-mono">{filters.bead}</span>
-            </FilterChip>
-          )}
+          {filters.bead &&
+            (beadPrefix ? (
+              <FilterChip
+                label="beads"
+                title={`Sessions that worked on a bead of ${filters.bead} (${filters.bead}-…)`}
+                onClear={() => setFilters({ bead: '' })}
+              >
+                <span className="font-mono">{filters.bead}</span>
+              </FilterChip>
+            ) : (
+              <FilterChip
+                label="bead"
+                title={`Sessions that worked on ${filters.bead} or a bead below it`}
+                onClear={() => setFilters({ bead: '' })}
+              >
+                <span className="font-mono">{filters.bead}</span>
+              </FilterChip>
+            ))}
           <span className="ml-auto hidden shrink-0 whitespace-nowrap text-sec text-muted @[900px]:block">
             {searching
               ? search.data &&

@@ -137,7 +137,7 @@ Session summaries, newest last activity first: no turns, no messages. Meant for 
 | `repo` | a main repository's directory (`repos[].repo`): the sessions that count under it; `-` for the sessions in no repository |
 | `worktree` | a linked worktree's directory: the sessions that worked in it |
 | `branch` | a branch name: the sessions with a turn on it (combine with `repo`) |
-| `bead` | a bead id: the sessions that worked on it or on a bead below it in its family (any bd call but `show`) |
+| `bead` | a bead id: the sessions that worked on it or on a bead below it in its family (any bd call but `show`); or a bead prefix (`merlin`): the sessions that worked on any bead of it |
 
 The grouping filters (`repo`, `worktree`, `branch`, `bead`) are facets: see
 [Groupings](#groupings-get-apirepos-and-get-apibeads). They apply to `/api/search` and
@@ -914,7 +914,12 @@ included), `worktrees[]` (`top`, `name`, `gone`, `sessions`, `bestUSD`: the whol
 sessions that worked in it) and `branches[]` (`name`, `sessions`, `usd`: the share spent on it).
 Most recently active first; the group with `repo: ""` (no repository) last.
 
-`GET /api/beads` (`BeadList`, optional `repo=`): `families[]`, most recently worked on first, each
+`GET /api/beads` (`BeadList`, optional `repo=`): `prefixes[]`, the one with the most recently active
+session first, each with `prefix` (merlin for merlin-t8s.48), `database`, `sessions` (distinct),
+`usd` (the share of their cost spent on its beads), `bestUSD` (their whole cost), `lastActivityAt`
+(of the sessions), `issues` and `closed` (its beads in the database) and `families` (those sessions
+worked on); `bead=<prefix>` as a filter keeps every session that worked on a bead of the prefix.
+`families[]`, most recently worked on first, each
 with `root` (a `BeadRef`: `id`, `title`, `type`, `status`, `parent`, `root`, `database`),
 `sessions` (distinct), `usd`, `lastActivityAt` (the last bd call), `issues` and `closed` (the
 family in the database) and `beads[]` (the root and every member a session worked on, in id order,

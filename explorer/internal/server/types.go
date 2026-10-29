@@ -188,10 +188,12 @@ type RepoList struct {
 	Repos []catalog.RepoGroup `json:"repos"`
 }
 
-// BeadList is the body of GET /api/beads: the bead families sessions worked on, most recently
-// worked on first (narrowed to one repository with ?repo=). Databases is how many bead
-// databases Merlin knows.
+// BeadList is the body of GET /api/beads: the bead prefixes sessions worked on, the one with
+// the most recently active session first, and the bead families, most recently worked on
+// first (both narrowed to one repository with ?repo=). Databases is how many bead databases
+// Merlin knows.
 type BeadList struct {
+	Prefixes  []catalog.PrefixGroup `json:"prefixes"`
 	Families  []catalog.FamilyGroup `json:"families"`
 	Databases int                   `json:"databases"`
 }

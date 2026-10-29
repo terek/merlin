@@ -529,7 +529,14 @@ function UnitDetail({
           </p>
           <div>
             <Label>What it was asked{asked.label ? ` (${asked.label})` : ''}</Label>
-            {asked.body ? <PlainText text={asked.body} lines={8} /> : <p className="text-faint">No text.</p>}
+            {asked.body ? (
+              // an agent's prompt is written by the agent that sent it, in markdown as a rule
+              <Clamp lines={8}>
+                <Prose>{asked.body}</Prose>
+              </Clamp>
+            ) : (
+              <p className="text-faint">No text.</p>
+            )}
           </div>
         </div>
         <div className="min-w-0">

@@ -7,19 +7,7 @@ import { formatCount } from '../../lib/format'
 import { ENCRYPTED, inboxLabel } from '../../lib/inbox'
 import { fullTime, parseTime, spanMs, timeOfDay } from '../../lib/time'
 import { unwrapMachineText } from '../../lib/wrapper'
-import {
-  AgentStatusMark,
-  Badge,
-  Clamp,
-  Duration,
-  IconButton,
-  Id,
-  ModelName,
-  Money,
-  PlainText,
-  Prose,
-  Tokens,
-} from '../../ui'
+import { AgentStatusMark, Badge, Clamp, Duration, IconButton, Id, ModelName, Money, Prose, Tokens } from '../../ui'
 import { KindIcon } from './AgentRow'
 import { agentLabel } from './model'
 
@@ -151,7 +139,10 @@ export function AgentDetail({
       {a.prompt ? (
         <div>
           <Label>Prompt{prompt.label ? ` (${prompt.label})` : ''}</Label>
-          <PlainText text={prompt.body} lines={6} className="text-sec" />
+          {/* written by the agent that sent it, in markdown as a rule */}
+          <Clamp lines={8}>
+            <Prose>{prompt.body}</Prose>
+          </Clamp>
         </div>
       ) : (
         a.promptEncrypted && (

@@ -27,16 +27,19 @@ import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
 import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, type Unit } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
 import {
-  buildTimeline,
+  addCall,
   clockTicks,
+  type Day,
   HOLD_MS,
   type Lane,
   type Point,
   packLanes,
   type Row,
+  sliceTimeline,
   slotLength,
   slotText,
   splitHeld,
+  type Timeline,
   type TurnSpan,
   timeAxis,
   turnPlace,
@@ -79,7 +82,7 @@ const markColor = (call: { cache: string } | undefined) =>
 
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-const day = (t: number) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' })
+const dateOf = (t: number) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' })
 
 /** The last point at or before `t`. */
 function pointAt(points: readonly Point[], t: number): Point | undefined {
@@ -127,6 +130,10 @@ interface Layout {
 
 export interface TimePlotProps {
   tree: Tree
+  /** The tree's timeline, every day of it. */
+  timeline: Timeline
+  /** The day to show, of a tree that ran on more than one. */
+  day: Day | undefined
   split: Split
   pinned: Pin | null
   cursor: Pin | undefined
@@ -141,6 +148,8 @@ export interface TimePlotProps {
 
 export function TimePlot({
   tree,
+  timeline,
+  day,
   split,
   pinned,
   cursor,
@@ -157,7 +166,12 @@ export function TimePlot({
   const [px, setPx] = useState<{ x: number; row: number } | null>(null)
   const [band, setBand] = useState<{ branch: number; k: number } | null>(null)
   const hatch = `hatch${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
-  const tl = useMemo(() => buildTimeline(tree), [tree])
+  const tl = useMemo(() => (day ? sliceTimeline(timeline, day) : timeline), [timeline, day])
+  // the overhead windows of the day
+  const overheads = useMemo(
+    () => tree.branches.map((b) => b.overhead.filter((o) => o.t1 >= tl.t0 && o.t0 <= tl.t1)),
+    [tree, tl],
+  )
   const X0 = LABEL_W
   const X1 = Math.max(X0 + 80, width - MR)
   const axis = useMemo(() => timeAxis(tl.spans, X0, X1), [tl, X1])
@@ -173,12 +187,7 @@ export function TimePlot({
           for (const c of l.calls) {
             const k = Math.floor(c.t / slot)
             const s = m.get(k) ?? {}
-            if (split === 'class') for (const [key, v] of Object.entries(c.byClass)) s[key] = (s[key] ?? 0) + v
-            else {
-              s[c.kind] = (s[c.kind] ?? 0) + c.usd - c.reread
-              s.reread = (s.reread ?? 0) + c.reread
-            }
-            s.total = (s.total ?? 0) + c.usd
+            addCall(s, c, split)
             m.set(k, s)
           }
         return m
@@ -205,7 +214,7 @@ export function TimePlot({
     layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })
     y = top + ctxH + spendH
     // the session's overhead, under its last row
-    if (rows[i + 1]?.branch !== row.branch && tree.branches[row.branch]?.overhead.length) {
+    if (rows[i + 1]?.branch !== row.branch && overheads[row.branch]?.length) {
       strips.push({ branch: row.branch, top: y + OVER_GAP, bottom: y + OVER_GAP + OVER_H })
       y += OVER_GAP + OVER_H
     }
@@ -229,7 +238,9 @@ export function TimePlot({
   /** When each of a unit's reports came in: the start of the turn it began. */
   const arrivals = (u: Unit) => {
     const b = tree.branches.find((x) => x.model.units.includes(u))
-    return u.reports.map((r) => ms(b?.model.cols[r]?.turn.startedAt)).filter(Number.isFinite)
+    return u.reports
+      .map((r) => ms(b?.model.cols[r]?.turn.startedAt))
+      .filter((t) => Number.isFinite(t) && t >= tl.t0 && t <= tl.t1)
   }
   const overX = (o: Overhead): [number, number] => {
     const a = axis.x(Math.max(o.t0, tl.t0))
@@ -274,7 +285,7 @@ export function TimePlot({
     const yy = clientY - r.top
     const s = strips.find((s) => yy >= s.top - 2 && yy <= s.bottom + 2)
     const k = s
-      ? tree.branches[s.branch].overhead.findIndex((o) => {
+      ? overheads[s.branch].findIndex((o) => {
           const [a, b] = overX(o)
           return x >= a - 3 && x <= b + 3
         })
@@ -778,13 +789,13 @@ export function TimePlot({
 
   // the labels along the top, left to right, each where it does not run into the one before: clock
   // times (with the date where it changes), and how long each break was
-  const multiDay = day(tl.t0) !== day(tl.t1)
+  const multiDay = dateOf(tl.t0) !== dateOf(tl.t1)
   const ticks = clockTicks(axis, 70)
   const axisLabels = [
     ...ticks.map((t, i) => ({
       key: `t${t}`,
       x: axis.x(t),
-      text: multiDay && (i === 0 || day(t) !== day(ticks[i - 1])) ? `${day(t)} ${clock(t)}` : clock(t),
+      text: multiDay && (i === 0 || dateOf(t) !== dateOf(ticks[i - 1])) ? `${dateOf(t)} ${clock(t)}` : clock(t),
       gap: false,
     })),
     ...axis.breaks.map((b) => ({ key: `b${b.t0}`, x: (b.x0 + b.x1) / 2, text: gapText(b.t1 - b.t0), gap: true })),
@@ -830,7 +841,7 @@ export function TimePlot({
     <div>
       <div className="flex min-h-5 items-baseline gap-x-3 overflow-hidden whitespace-nowrap text-sec text-muted">
         {band ? (
-          <OverheadText o={tree.branches[band.branch].overhead[band.k]} />
+          <OverheadText o={overheads[band.branch][band.k]} />
         ) : under ? (
           <>
             <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
@@ -939,7 +950,7 @@ export function TimePlot({
           {pinMarks}
           {layout.map(drawRow)}
           {strips.flatMap((s) =>
-            tree.branches[s.branch].overhead.map((o, k) => {
+            overheads[s.branch].map((o, k) => {
               const [a, b] = overX(o)
               const on = band?.branch === s.branch && band.k === k
               const money = formatMoney(o.usd)
@@ -1000,7 +1011,7 @@ export function TimePlot({
 
 /** What an overhead band stands for, in one line. */
 function OverheadText({ o }: { o: Overhead }) {
-  const when = (t: number) => `${day(t)} ${clock(t)}`
+  const when = (t: number) => `${dateOf(t)} ${clock(t)}`
   return (
     <span className="truncate">
       Claude Code reported <span className="font-mono text-text">{formatMoney(o.reportedUSD)}</span> from {when(o.t0)}{' '}
