@@ -5,11 +5,6 @@ machine: what it cost (subagents included), what you asked, what the agent last 
 it stopped. It follows running sessions and serves the result as a web page on a local port,
 and as commands in the terminal. Nothing leaves your machine and no model is called.
 
-The Go program in [`explorer/`](explorer/) (Merlin Explorer) is what is built and released as
-`merlin`. The TypeScript sources at the top level (`src/`, `packages/`, `scripts/`, `tests/`)
-are the earlier Merlin, a remote-control daemon with a relay; they are kept for reference and
-are no longer built or released.
-
 ## Install
 
 ```sh
