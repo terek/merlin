@@ -6,10 +6,8 @@ node_modules
 dist/
 tmp/
 bin/
-src/web/client-assets.gen.ts
-
-# Wrangler local dev state and temp bundles
-.wrangler/
+/cmd/explorer/explorer
+/internal/webui/dist/
 
 # Beads / Dolt files (added by bd init)
 .dolt/

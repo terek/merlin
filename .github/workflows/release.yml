@@ -13,8 +13,8 @@ name: Release
 # -> build-macos (cross-builds, signs, notarizes both darwin binaries) and build-linux
 # -> release (assembles SHA256SUMS, verifies the asset list, uploads).
 #
-# The build itself is explorer/scripts/release-build.sh and the smoke test is
-# explorer/scripts/release-smoke.sh; both run the same way on a developer machine.
+# The build itself is scripts/release-build.sh and the smoke test is
+# scripts/release-smoke.sh; both run the same way on a developer machine.
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   APPLE_CERT_P12        base64 of the exported "Developer ID Application" cert (.p12)
@@ -73,16 +73,13 @@ jobs:
   # A release must not be cut from a tree that fails these.
   checks:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: explorer
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: explorer/go.mod
-          cache-dependency-path: explorer/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -107,13 +104,12 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Build the web UI
-        working-directory: explorer
         run: make web
 
       - uses: actions/upload-artifact@v7
         with:
           name: web-dist
-          path: explorer/internal/webui/dist
+          path: internal/webui/dist
           if-no-files-found: error
 
   build-macos:
@@ -126,16 +122,15 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: explorer/go.mod
-          cache-dependency-path: explorer/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - uses: actions/download-artifact@v8
         with:
           name: web-dist
-          path: explorer/internal/webui/dist
+          path: internal/webui/dist
 
       - name: Build darwin binaries
-        working-directory: explorer
         env:
           MERLIN_SKIP_WEB: '1'
           OUT_DIR: ${{ github.workspace }}/bin
@@ -192,7 +187,7 @@ jobs:
       # cannot run natively on this runner; it is only checked to be a signed x86_64 Mach-O.
       - name: Smoke test the signed binaries
         run: |
-          explorer/scripts/release-smoke.sh bin/merlin-darwin-arm64 "$VERSION"
+          scripts/release-smoke.sh bin/merlin-darwin-arm64 "$VERSION"
           codesign -dv bin/merlin-darwin-arm64 2>&1 | grep -q 'flags=.*runtime'
           file bin/merlin-darwin-x64 | grep -q x86_64
           codesign -dv bin/merlin-darwin-x64 2>&1 | grep -q 'flags=.*runtime'
@@ -219,23 +214,22 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: explorer/go.mod
-          cache-dependency-path: explorer/go.sum
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - uses: actions/download-artifact@v8
         with:
           name: web-dist
-          path: explorer/internal/webui/dist
+          path: internal/webui/dist
 
       - name: Build linux binaries
-        working-directory: explorer
         env:
           MERLIN_SKIP_WEB: '1'
           OUT_DIR: ${{ github.workspace }}/bin
         run: scripts/release-build.sh "$VERSION" linux-x64 linux-arm64
 
       - name: Smoke test linux-x64
-        run: explorer/scripts/release-smoke.sh bin/merlin-linux-x64 "$VERSION"
+        run: scripts/release-smoke.sh bin/merlin-linux-x64 "$VERSION"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -262,7 +256,7 @@ jobs:
       - name: Smoke test linux-arm64
         run: |
           chmod +x bin/merlin-linux-arm64
-          explorer/scripts/release-smoke.sh bin/merlin-linux-arm64 "$VERSION"
+          scripts/release-smoke.sh bin/merlin-linux-arm64 "$VERSION"
 
   release:
     needs: [prepare, build-macos, build-linux, smoke-linux-arm64]

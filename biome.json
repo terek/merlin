@@ -16,9 +16,7 @@
       "!**/dist",
       "!**/build",
       "!**/node_modules",
-      "!**/legacy",
-      "!packages/*/dist",
-      "!explorer/testdata"
+      "!testdata"
     ]
   },
   "formatter": {

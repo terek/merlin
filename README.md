@@ -67,7 +67,7 @@ merlin upgrade [--check] [--force]        replace this binary with the latest re
 merlin version                            print the version
 ```
 
-The read commands work without the daemon. See [`explorer/docs/`](explorer/docs/) for the
+The read commands work without the daemon. See [`docs/`](docs/) for the
 HTTP API and the design.
 
 ## Upgrade
@@ -103,9 +103,9 @@ by hand, together with the rest of `~/.merlin` (which holds that program's keys 
 
 ## Building from source
 
-From `explorer/`: `make build` (needs Go and [bun](https://bun.sh); embeds the UI into
+`make build` (needs Go and [bun](https://bun.sh); embeds the UI into
 `bin/merlin`), `make test`, `make vet`, `make web-check`. Releases are described in
-[`explorer/PLAN.md`](explorer/PLAN.md#12-releasing).
+[`PLAN.md`](PLAN.md#12-releasing).
 
 ## License
 
