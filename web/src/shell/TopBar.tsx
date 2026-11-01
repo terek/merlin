@@ -89,6 +89,9 @@ export function TopBar() {
         <NavLink to="/cost" className={navClass} title="Cost (g c)">
           Cost
         </NavLink>
+        <NavLink to="/moments" className={navClass} title="Moments: what your sessions say about how you work">
+          Moments
+        </NavLink>
       </nav>
       <div className="ml-auto flex items-center gap-4">
         <ScanIndicator />

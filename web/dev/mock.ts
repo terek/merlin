@@ -13,6 +13,7 @@ import type {
   CostSplitEntry,
   CostTable,
   Hit,
+  MomentsReport,
   Money,
   ProjectList,
   ProjectSummary,
@@ -27,6 +28,8 @@ import type {
 import { buildDataset, type Dataset, makeRng, messagesOf, order, type Sess } from './gen'
 
 const port = Number(process.env.MOCK_PORT ?? 7452)
+// Written by a throwaway program over synthetic digests (no real history); see docs/moments.md.
+const mockMoments: MomentsReport = await Bun.file(new URL('./moments.json', import.meta.url)).json()
 const MIN = 60_000
 
 const ds: Dataset = buildDataset(Math.floor(Date.now() / 3_600_000) * 3_600_000 + 30 * MIN)
@@ -697,6 +700,8 @@ function route(req: Request): Response {
     if (m) return sessionDetail(decodeURIComponent(m[1]), decodeURIComponent(m[2]), u)
     if (p === '/api/search') return json(200, search(u))
     if (p === '/api/cost') return json(200, costTable(u))
+    // A report built by internal/moments from synthetic digests; regenerate it when the registry changes.
+    if (p === '/api/moments') return json(200, mockMoments)
     if (p === '/api/events') return events(req)
   } catch (e) {
     if (e instanceof BadRequest) return fail(400, 'invalid_parameter', e.message)

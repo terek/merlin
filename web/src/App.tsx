@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { UiGallery } from './dev/UiGallery'
 import { CostPage } from './features/cost/CostPage'
+import { MomentsPage } from './features/moments/MomentsPage'
 import { SessionsPage } from './features/sessions/SessionsPage'
 import { SessionPage } from './features/spend/SessionPage'
 import { Layout } from './shell/Layout'
@@ -20,6 +21,7 @@ export function App() {
         <Route index element={<SessionsPage />} />
         <Route path="s/:harness/:id" element={<SessionPage />} />
         <Route path="cost" element={<CostPage />} />
+        <Route path="moments" element={<MomentsPage />} />
         <Route path="dev/ui" element={<UiGallery />} />
         <Route path="dev/spend/:harness/:id" element={<SpendRedirect />} />
         <Route path="*" element={<NotFound />} />

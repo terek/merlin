@@ -75,6 +75,7 @@ func New(o Options) *API {
 	a.route("/api/sessions/{harness}/{id}", a.handleSession)
 	a.route("/api/search", a.handleSearch)
 	a.route("/api/cost", a.handleCost)
+	a.route("/api/moments", a.handleMoments)
 	a.route("/api/events", a.handleEvents)
 	a.route("/api/", func(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, http.StatusNotFound, CodeNotFound, "no such endpoint: "+r.URL.Path)

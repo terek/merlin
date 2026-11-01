@@ -1,0 +1,854 @@
+{
+  "now": "2026-11-01T18:00:00Z",
+  "windowDays": 28,
+  "sessions": 100,
+  "scripted": 0,
+  "since": "2026-08-24T09:00:00Z",
+  "projects": 9,
+  "personas": [
+    {
+      "id": "karpathy",
+      "name": "Andrej Karpathy",
+      "focus": "Context",
+      "reaction": "👏",
+      "reason": "Keeping up 4 habits: Steering mid-turn, Spec with criteria, One-shot spec and 1 more.",
+      "habits": 4,
+      "explored": 0,
+      "unseen": 5,
+      "new": 0
+    },
+    {
+      "id": "boris",
+      "name": "Boris Cherny",
+      "focus": "Harness",
+      "reaction": "🚀",
+      "reason": "New lately: Background agents, Ships.",
+      "habits": 6,
+      "explored": 1,
+      "unseen": 6,
+      "new": 2
+    },
+    {
+      "id": "yegge",
+      "name": "Steve Yegge",
+      "focus": "Frontier",
+      "reaction": "🤘",
+      "reason": "Tried something new: Agent team, Swarm, Beads as the plan.",
+      "habits": 2,
+      "explored": 1,
+      "unseen": 6,
+      "new": 3
+    }
+  ],
+  "moments": [
+    {
+      "id": "steer-mid-turn",
+      "persona": "karpathy",
+      "title": "Steering mid-turn",
+      "what": "You sent a correction or more context while the agent was still working, without stopping it.",
+      "try": "You don't have to wait for the agent to finish. Type while it works: the message reaches it mid-turn, so a wrong assumption is fixed before it turns into twenty edits.",
+      "status": "habit",
+      "hits": 34,
+      "sessions": 34,
+      "weeks": 10,
+      "recentHits": 14,
+      "first": "2026-08-24T09:05:00Z",
+      "last": "2026-10-29T09:45:00Z",
+      "examples": [
+        {
+          "at": "2026-10-29T09:45:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 0,
+          "note": "sent while the agent was working"
+        },
+        {
+          "at": "2026-10-29T09:05:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-097"
+          },
+          "turn": 0,
+          "note": "sent while the agent was working"
+        },
+        {
+          "at": "2026-10-26T09:45:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-092"
+          },
+          "turn": 0,
+          "note": "sent while the agent was working"
+        }
+      ]
+    },
+    {
+      "id": "interrupt-redirect",
+      "persona": "karpathy",
+      "title": "Interrupt and redirect",
+      "what": "You stopped the agent and gave it a new direction within two minutes.",
+      "try": "When the agent heads the wrong way, press Esc and say what you want instead. Stopping early is cheaper than undoing later.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "rewind",
+      "persona": "karpathy",
+      "title": "Takes the other branch",
+      "what": "You rewound the conversation, or forked the session, to try a different route.",
+      "try": "When a turn went wrong, rewind to before it (Esc Esc) instead of arguing with the result: the failed attempt leaves the context.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "grounded-prompt",
+      "persona": "karpathy",
+      "title": "Grounded prompt",
+      "what": "Your prompt named files the agent then worked on.",
+      "try": "Name the files, functions or commands that matter. The agent spends fewer tokens searching and guesses wrong less often.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "pasted-evidence",
+      "persona": "karpathy",
+      "title": "Shows the evidence",
+      "what": "You pasted an error, a stack trace or a screenshot instead of describing it.",
+      "try": "Paste the actual error output or a screenshot. It is the most precise context you can give, and it costs nothing to write.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "acceptance-criteria",
+      "persona": "karpathy",
+      "title": "Spec with criteria",
+      "what": "You wrote a structured prompt with constraints or acceptance criteria.",
+      "try": "For anything bigger than a quick fix, list what done means: the constraints, what must not change, how to verify it. The agent then checks its own work.",
+      "status": "habit",
+      "hits": 100,
+      "sessions": 100,
+      "weeks": 10,
+      "recentHits": 40,
+      "first": "2026-08-24T09:00:00Z",
+      "last": "2026-10-30T09:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 0,
+          "note": "3-point spec"
+        },
+        {
+          "at": "2026-10-30T09:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 0,
+          "note": "3-point spec"
+        },
+        {
+          "at": "2026-10-29T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 0,
+          "note": "3-point spec"
+        }
+      ]
+    },
+    {
+      "id": "one-shot-spec",
+      "persona": "karpathy",
+      "title": "One-shot spec",
+      "what": "A detailed prompt that the agent carried out in one go, with no correction afterwards.",
+      "try": "Front-load the thinking: one well-specified prompt usually beats five rounds of corrections, in quality and in tokens.",
+      "status": "habit",
+      "hits": 100,
+      "sessions": 100,
+      "weeks": 10,
+      "recentHits": 40,
+      "first": "2026-08-24T09:00:00Z",
+      "last": "2026-10-30T09:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 0,
+          "note": "150-word prompt, 24 tool calls, no correction"
+        },
+        {
+          "at": "2026-10-30T09:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 0,
+          "note": "150-word prompt, 24 tool calls, no correction"
+        },
+        {
+          "at": "2026-10-29T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 0,
+          "note": "150-word prompt, 24 tool calls, no correction"
+        }
+      ]
+    },
+    {
+      "id": "vibe-one-shot",
+      "persona": "karpathy",
+      "title": "Vibe one-shot",
+      "what": "A prompt of a few words that led to real edits, with no correction afterwards.",
+      "try": "Once the agent knows the project, a short prompt can carry a lot. Try a one-liner for a change you both understand well.",
+      "status": "habit",
+      "hits": 100,
+      "sessions": 100,
+      "weeks": 10,
+      "recentHits": 40,
+      "first": "2026-08-24T10:00:00Z",
+      "last": "2026-10-30T10:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 1,
+          "note": "5 words, 4 edits, no correction"
+        },
+        {
+          "at": "2026-10-30T10:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 1,
+          "note": "5 words, 4 edits, no correction"
+        },
+        {
+          "at": "2026-10-29T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "5 words, 4 edits, no correction"
+        }
+      ]
+    },
+    {
+      "id": "clean-slate",
+      "persona": "karpathy",
+      "title": "Clean slate",
+      "what": "You cleared the context to start the next task fresh.",
+      "try": "Starting something new? /clear first. Old context is paid for on every call and distracts the agent.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "plans-first",
+      "persona": "boris",
+      "title": "Plans first",
+      "what": "You had the agent plan before it touched any code.",
+      "try": "Use plan mode (Shift+Tab) for anything non-trivial: you review the approach before a single file changes.",
+      "status": "habit",
+      "hits": 20,
+      "sessions": 20,
+      "weeks": 10,
+      "recentHits": 8,
+      "first": "2026-08-28T10:00:00Z",
+      "last": "2026-10-27T10:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-27T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-094"
+          },
+          "turn": 1,
+          "note": "planned before editing"
+        },
+        {
+          "at": "2026-10-27T10:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-093"
+          },
+          "turn": 1,
+          "note": "planned before editing"
+        },
+        {
+          "at": "2026-10-22T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-088"
+          },
+          "turn": 1,
+          "note": "planned before editing"
+        }
+      ]
+    },
+    {
+      "id": "deliberate-compact",
+      "persona": "boris",
+      "title": "Compacts on purpose",
+      "what": "You compacted the context yourself, at a moment you chose.",
+      "try": "Context grows with every call, and so does the price of each call. Run /compact at a natural break, saying what to keep, before auto-compaction picks a worse moment.",
+      "status": "habit",
+      "hits": 50,
+      "sessions": 50,
+      "weeks": 10,
+      "recentHits": 20,
+      "first": "2026-08-25T10:50:00Z",
+      "last": "2026-10-30T11:30:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T11:30:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 1,
+          "note": "compacted by hand at 140k tokens"
+        },
+        {
+          "at": "2026-10-30T10:50:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 1,
+          "note": "compacted by hand at 140k tokens"
+        },
+        {
+          "at": "2026-10-28T11:30:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-096"
+          },
+          "turn": 1,
+          "note": "compacted by hand at 140k tokens"
+        }
+      ]
+    },
+    {
+      "id": "model-switch",
+      "persona": "boris",
+      "title": "Right model for the job",
+      "what": "You switched the model or the effort in the middle of a session.",
+      "try": "Not every task needs the largest model. Switch with /model: a smaller one for mechanical work, the largest for hard reasoning.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "custom-command",
+      "persona": "boris",
+      "title": "Own commands and skills",
+      "what": "You ran a skill or a slash command that you or a plugin added.",
+      "try": "Typing the same instructions again and again? Make them a skill or a slash command and run them with one word.",
+      "status": "habit",
+      "hits": 100,
+      "sessions": 100,
+      "weeks": 10,
+      "recentHits": 40,
+      "first": "2026-08-24T11:00:00Z",
+      "last": "2026-10-30T11:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T11:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 2,
+          "note": "ran a command of your own"
+        },
+        {
+          "at": "2026-10-30T11:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 2,
+          "note": "ran a command of your own"
+        },
+        {
+          "at": "2026-10-29T11:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 2,
+          "note": "ran a command of your own"
+        }
+      ]
+    },
+    {
+      "id": "builds-harness",
+      "persona": "boris",
+      "title": "Builds the harness",
+      "what": "You had the agent edit its own instructions, skills, commands or settings.",
+      "try": "When you correct the agent twice for the same thing, put the rule in CLAUDE.md or a skill. The fix then holds in every session after.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "context-isolation",
+      "persona": "boris",
+      "title": "Context isolation",
+      "what": "A subagent did the reading in a context of its own and came back with a summary.",
+      "try": "Send exploration to a subagent: it reads twenty files in its own context and returns a page, so the main context stays small and cheap.",
+      "status": "habit",
+      "hits": 100,
+      "sessions": 100,
+      "weeks": 10,
+      "recentHits": 40,
+      "first": "2026-08-24T09:02:00Z",
+      "last": "2026-10-30T09:42:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T09:42:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 0,
+          "note": "a subagent made 14 calls in its own context"
+        },
+        {
+          "at": "2026-10-30T09:02:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 0,
+          "note": "a subagent made 14 calls in its own context"
+        },
+        {
+          "at": "2026-10-29T09:42:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 0,
+          "note": "a subagent made 14 calls in its own context"
+        }
+      ]
+    },
+    {
+      "id": "model-routing",
+      "persona": "boris",
+      "title": "Model routing",
+      "what": "A subagent ran on a cheaper model than the session's main one.",
+      "try": "Subagents that search or summarise rarely need the largest model. Give them a smaller one and pay a fraction.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "parallel-sessions",
+      "persona": "boris",
+      "title": "Parallel sessions",
+      "what": "Several of your sessions were working at the same time.",
+      "try": "While one agent works, start another on an independent task in a second terminal. Two to five at once is where many experienced users settle.",
+      "status": "habit",
+      "hits": 50,
+      "sessions": 50,
+      "weeks": 10,
+      "recentHits": 20,
+      "first": "2026-08-24T09:40:00Z",
+      "last": "2026-10-30T09:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 0,
+          "note": "2 sessions working at once"
+        },
+        {
+          "at": "2026-10-29T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 0,
+          "note": "2 sessions working at once"
+        },
+        {
+          "at": "2026-10-28T09:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-096"
+          },
+          "turn": 0,
+          "note": "2 sessions working at once"
+        }
+      ]
+    },
+    {
+      "id": "worktrees",
+      "persona": "boris",
+      "title": "Worktrees",
+      "what": "An agent worked in a git worktree of its own.",
+      "try": "Parallel agents in one checkout trip over each other's changes. Give each one its own git worktree.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "background-agents",
+      "persona": "boris",
+      "title": "Background agents",
+      "what": "Agents worked in the background while the session carried on.",
+      "try": "Long work (a test suite, a broad search) can run as a background agent while you keep talking to the main one.",
+      "status": "habit",
+      "hits": 84,
+      "sessions": 14,
+      "weeks": 3,
+      "recentHits": 84,
+      "new": true,
+      "first": "2026-10-13T10:05:00Z",
+      "last": "2026-10-29T10:50:00Z",
+      "examples": [
+        {
+          "at": "2026-10-29T10:50:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "an agent ran in the background"
+        },
+        {
+          "at": "2026-10-29T10:49:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "an agent ran in the background"
+        },
+        {
+          "at": "2026-10-29T10:48:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "an agent ran in the background"
+        }
+      ]
+    },
+    {
+      "id": "automation",
+      "persona": "boris",
+      "title": "Automation",
+      "what": "Agents ran headless or on a schedule, without you typing.",
+      "try": "Some work doesn't need you in the loop: run the agent from a script or CI (claude -p), or schedule a recurring check.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "ships-pr",
+      "persona": "boris",
+      "title": "Ships",
+      "what": "A session opened or linked a pull request.",
+      "try": "Let the agent take a change all the way: branch, commit, push and open the pull request.",
+      "status": "explored",
+      "hits": 2,
+      "sessions": 2,
+      "weeks": 1,
+      "recentHits": 2,
+      "new": true,
+      "first": "2026-10-23T11:50:00Z",
+      "last": "2026-10-23T12:30:00Z",
+      "examples": [
+        {
+          "at": "2026-10-23T12:30:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-090"
+          },
+          "note": "pull request #42"
+        },
+        {
+          "at": "2026-10-23T11:50:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-089"
+          },
+          "note": "pull request #42"
+        }
+      ]
+    },
+    {
+      "id": "mcp-tools",
+      "persona": "boris",
+      "title": "Plugged in",
+      "what": "The agent used tools from an MCP server.",
+      "try": "Connect the agent to the systems you work in (issue tracker, docs, browser) over MCP, so it can look things up itself.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "agent-team",
+      "persona": "yegge",
+      "title": "Agent team",
+      "what": "You ran teammates: agents that stay around and take more work.",
+      "try": "An agent team splits a big job over teammates that message each other. Start with two or three on clearly separate parts.",
+      "status": "habit",
+      "hits": 14,
+      "sessions": 14,
+      "weeks": 3,
+      "recentHits": 14,
+      "new": true,
+      "first": "2026-10-13T10:05:00Z",
+      "last": "2026-10-29T10:45:00Z",
+      "examples": [
+        {
+          "at": "2026-10-29T10:45:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "6 teammates"
+        },
+        {
+          "at": "2026-10-29T10:05:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-097"
+          },
+          "turn": 1,
+          "note": "6 teammates"
+        },
+        {
+          "at": "2026-10-27T10:45:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-094"
+          },
+          "turn": 1,
+          "note": "6 teammates"
+        }
+      ]
+    },
+    {
+      "id": "workflow-run",
+      "persona": "yegge",
+      "title": "Workflow",
+      "what": "A scripted workflow fanned the work out over many agents.",
+      "try": "When the same multi-step job comes back, script it as a workflow and let it run the agents.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "nested-agents",
+      "persona": "yegge",
+      "title": "Agents spawning agents",
+      "what": "Agents started agents of their own.",
+      "try": "For tree-shaped work, let a coordinating agent hand pieces out to subagents of its own.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "swarm",
+      "persona": "yegge",
+      "title": "Swarm",
+      "what": "Five or more agents ran at the same moment.",
+      "try": "Independent pieces of work (one per package, one per test file) can run as many agents at once. Watch the bill.",
+      "status": "habit",
+      "hits": 14,
+      "sessions": 14,
+      "weeks": 3,
+      "recentHits": 14,
+      "new": true,
+      "first": "2026-10-13T10:10:00Z",
+      "last": "2026-10-29T10:50:00Z",
+      "examples": [
+        {
+          "at": "2026-10-29T10:50:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "6 agents at once"
+        },
+        {
+          "at": "2026-10-29T10:10:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-097"
+          },
+          "turn": 1,
+          "note": "6 agents at once"
+        },
+        {
+          "at": "2026-10-27T10:50:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-094"
+          },
+          "turn": 1,
+          "note": "6 agents at once"
+        }
+      ]
+    },
+    {
+      "id": "beads-graph",
+      "persona": "yegge",
+      "title": "Beads as the plan",
+      "what": "The plan lived in beads: issues created, linked and closed.",
+      "try": "A plan in markdown gets rewritten over and over. Beads (bd) keeps it as a graph of issues that agents claim and close across sessions.",
+      "status": "explored",
+      "hits": 10,
+      "sessions": 10,
+      "weeks": 2,
+      "recentHits": 10,
+      "new": true,
+      "first": "2026-10-19T09:01:00Z",
+      "last": "2026-10-30T09:01:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T09:01:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "note": "3 beads created, 1 links, 1 closed"
+        },
+        {
+          "at": "2026-10-29T09:01:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-097"
+          },
+          "note": "3 beads created, 1 links, 1 closed"
+        },
+        {
+          "at": "2026-10-28T09:01:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-095"
+          },
+          "note": "3 beads created, 1 links, 1 closed"
+        }
+      ]
+    },
+    {
+      "id": "personas",
+      "persona": "yegge",
+      "title": "Persistent personas",
+      "what": "You woke a persistent persona: a named agent with its own memory, whose day ends with sleep rather than an exit.",
+      "try": "Sessions are days, personas persist. Give a recurring role a persona that wakes with its memory and open threads, works a bounded day and sleeps, instead of starting from nothing each time (Yegge's model-welfare essay).",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "forked-agents",
+      "persona": "yegge",
+      "title": "Forks itself",
+      "what": "The agent forked copies of itself that started with its whole context.",
+      "try": "A fork starts with everything the agent knows. Use one for a side quest that needs the full picture.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "two-harnesses",
+      "persona": "yegge",
+      "title": "Two harnesses",
+      "what": "You worked with both Claude Code and Codex in the same week.",
+      "try": "Each harness has its strengths. Trying another one on a real task shows you what your main one does well.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    },
+    {
+      "id": "night-shift",
+      "persona": "yegge",
+      "title": "Night shift",
+      "what": "Agents kept working for hours while you were away.",
+      "try": "Hand over a well-specified, well-tested task before you leave, and come back to the result.",
+      "status": "unseen",
+      "hits": 0,
+      "sessions": 0,
+      "weeks": 0,
+      "recentHits": 0
+    }
+  ],
+  "suggestions": [
+    {
+      "moment": "model-routing",
+      "reason": "184 subagents ran on the main session's model."
+    },
+    {
+      "moment": "interrupt-redirect"
+    },
+    {
+      "moment": "workflow-run"
+    }
+  ]
+}

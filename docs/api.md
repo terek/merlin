@@ -76,6 +76,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/sessions/{harness}/{id}` | `SessionDetail` |
 | `GET /api/search?q=` | `SearchResult` |
 | `GET /api/cost` | `CostTable` |
+| `GET /api/moments` | `moments.Report` (experimental) |
 | `GET /api/events` | `text/event-stream` |
 
 ## GET /api/projects
@@ -929,6 +930,35 @@ A session summary carries `repo` (`RepoRef`) and `beads[]` (`id`, `title`, `stat
 spent on first). The detail carries `places`: `repo`, `worktrees`, `repos` (every repository it
 touched), `branches[]` (`name`, `usd`), `beads[]` (`BeadRef` with `usd` and `ops`, the bd operations
 it ran) and `noBeadUSD`.
+
+## GET /api/moments
+
+Experimental: the moments report ([moments.md](moments.md)), recomputed from every digest on each
+request. No parameters.
+
+```json
+{
+  "now": "…", "windowDays": 28, "sessions": 3419, "scripted": 3133, "since": "…",
+  "projects": 41,
+  "personas": [{ "id": "karpathy", "name": "Andrej Karpathy", "focus": "Context",
+                 "reaction": "👏", "reason": "Keeping up 8 habits: …",
+                 "habits": 8, "explored": 1, "unseen": 0, "new": 0 }],
+  "moments": [{ "id": "steer-mid-turn", "persona": "karpathy", "title": "Steering mid-turn",
+                "what": "…", "try": "…", "status": "habit", "hits": 84, "sessions": 49,
+                "weeks": 18, "recentHits": 10, "new": false, "first": "…", "last": "…",
+                "examples": [{ "at": "…", "session": { "harness": "claude", "id": "…" },
+                               "turn": 3, "note": "sent while the agent was working" }] }],
+  "suggestions": [{ "moment": "clean-slate", "reason": "3 sessions went past 40 prompts in one context." }],
+  "overYegge": false
+}
+```
+
+`projects` counts where the interactive sessions worked: a session's repository when it has
+one (so its worktrees count once), else the directory it started in. `moments` is in registry
+order (Karpathy, Boris, Yegge) and lists every moment, unseen ones
+included. `status` is `habit`, `explored` or `unseen`; `examples` are the latest hits, newest
+first, at most 3. A note never quotes the session. `suggestions[].reason` is absent when the
+moment's symptom did not fire. Clients ignore moment ids they do not know.
 
 ## GET /api/events
 

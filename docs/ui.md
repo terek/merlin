@@ -52,6 +52,7 @@ web/
       agents/           AgentDetail, AgentRow (KindIcon), agent helpers
       context/          chart.ts (niceTicks)
       cost/             CostPage and its parts                (Cost bead)
+      moments/          MomentsPage, MomentCard (a fixed-look SVG), MomentsInvite (on Sessions), model.ts, avatars/
 ```
 
 A feature directory is owned by one bead. `api/`, `lib/` and `ui/` are shared: additive changes
@@ -84,6 +85,7 @@ CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scratch dir> \
 | `/` | Sessions | `project`, `state`, `kind`, `q` (search), `since` |
 | `/s/:harness/:id` | Session | `#t<index>` pins a turn, `#a<agentId>` opens an agent's work, `#c<index>` pins a compaction's turn |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
+| `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists

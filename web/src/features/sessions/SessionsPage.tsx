@@ -27,6 +27,7 @@ import {
   SkeletonRows,
   Spinner,
 } from '../../ui'
+import { MomentsInvite } from '../moments/MomentsInvite'
 import {
   apiFilters,
   buildDayGroups,
@@ -301,15 +302,22 @@ export function SessionsPage() {
             </QueryBoundary>
           </div>
         ) : (
-          <ListView
-            query={sessions}
-            groups={groups}
-            expanded={expanded}
-            onToggle={toggle}
-            filters={filters}
-            selected={selected}
-            onClear={clearFilters}
-          />
+          <>
+            {!hasFilters(filters) && (
+              <div className="border-b border-line p-3">
+                <MomentsInvite />
+              </div>
+            )}
+            <ListView
+              query={sessions}
+              groups={groups}
+              expanded={expanded}
+              onToggle={toggle}
+              filters={filters}
+              selected={selected}
+              onClear={clearFilters}
+            />
+          </>
         )}
       </div>
     </div>

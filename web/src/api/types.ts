@@ -899,6 +899,70 @@ export interface EventMap {
   'scan-progress': ScanProgress
 }
 
+// ---- moments (experimental, docs/moments.md) -------------------------------------------
+
+export type MomentPersona = 'karpathy' | 'boris' | 'yegge'
+export type MomentStatus = 'habit' | 'explored' | 'unseen'
+
+/** One occurrence of a moment. The note is Merlin's wording with numbers only. */
+export interface MomentHit {
+  at: string
+  session: SessionKey
+  turn?: number
+  note?: string
+}
+
+export interface MomentView {
+  /** Durable name; clients ignore ids they do not know. */
+  id: string
+  persona: MomentPersona
+  title: string
+  what: string
+  try: string
+  status: MomentStatus
+  hits: number
+  sessions: number
+  weeks: number
+  recentHits: number
+  new?: boolean
+  first?: string
+  last?: string
+  examples?: MomentHit[]
+}
+
+export interface PersonaView {
+  id: MomentPersona
+  name: string
+  focus: string
+  /** One emoji. */
+  reaction: string
+  reason: string
+  habits: number
+  explored: number
+  unseen: number
+  new: number
+}
+
+export interface MomentSuggestion {
+  moment: string
+  reason?: string
+}
+
+/** GET /api/moments */
+export interface MomentsReport {
+  now: string
+  windowDays: number
+  sessions: number
+  scripted: number
+  since?: string
+  /** Projects the interactive sessions worked in: repositories (worktrees count once), else directories. */
+  projects: number
+  personas: PersonaView[]
+  moments: MomentView[]
+  suggestions: MomentSuggestion[]
+  overYegge?: boolean
+}
+
 // ---- request parameters ---------------------------------------------------------------
 
 /** Parameters of GET /api/sessions (and the shared ones of /api/search). Comma-separated lists. */

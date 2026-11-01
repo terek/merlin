@@ -8,6 +8,7 @@
 //   ['session', harness, id]              useSession        (['session', harness, id, 'messages'] with messages)
 //   ['search', q, filters]                useSearch
 //   ['cost', params]                      useCost
+//   ['moments']                           useMoments
 
 import {
   keepPreviousData,
@@ -23,6 +24,7 @@ import type {
   BeadList,
   CostParams,
   CostTable,
+  MomentsReport,
   ProjectList,
   RepoList,
   SearchResult,
@@ -44,6 +46,7 @@ export const queryKeys = {
     messages ? (['session', harness, id, 'messages'] as const) : (['session', harness, id] as const),
   search: (q: string, filters: SessionFilters) => ['search', q, filters] as const,
   cost: (params: CostParams) => ['cost', params] as const,
+  moments: () => ['moments'] as const,
 }
 
 /** Drops undefined and empty values, so that equal filters give equal keys. */
@@ -173,4 +176,12 @@ export function rangeSince(range: string, now: Date = new Date()): string | unde
 /** The total spend of the last 7 days (today and the six days before), for the top bar. */
 export function useSpend7d(): UseQueryResult<CostTable> {
   return useCost({ by: 'kind', since: rangeSince('7d'), limit: 1 })
+}
+
+/** The moments report (experimental): recomputed by the daemon on every request. */
+export function useMoments(): UseQueryResult<MomentsReport> {
+  return useQuery({
+    queryKey: queryKeys.moments(),
+    queryFn: ({ signal }) => get<MomentsReport>('/api/moments', undefined, signal),
+  })
 }
