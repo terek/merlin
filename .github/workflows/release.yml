@@ -114,7 +114,7 @@ jobs:
 
   build-macos:
     needs: [prepare, web]
-    runs-on: macos-14            # arm64 runner; builds and signs both darwin binaries
+    runs-on: macos-15            # arm64 runner; builds and signs both darwin binaries
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
