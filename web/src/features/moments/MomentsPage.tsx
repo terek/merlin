@@ -1,11 +1,12 @@
-// The Moments page (docs/moments.md): what the sessions say about how someone works with agents,
-// the three personas' reactions, what to try next, and the card to share.
+// The Moments page (docs/moments.md): what the sessions say about how someone works with agents.
+// The card to share (with the three personas' reactions) on top, then what to try next and the
+// moments by status.
 
 import { ChevronRight, Download } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
-import type { MomentsReport, MomentView, PersonaView } from '../../api/types'
+import type { MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatCount } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
@@ -13,7 +14,7 @@ import { sessionPath } from '../../lib/paths'
 import { Badge, Button, Card, EmptyState, QueryBoundary, RelTime, Section, Skeleton } from '../../ui'
 import { cardPng, MomentCard } from './MomentCard'
 import { groupByStatus, PERSONA_NAMES, PERSONAS } from './model'
-import { PersonaAvatar, PersonaFace } from './PersonaAvatar'
+import { PersonaFace } from './PersonaAvatar'
 
 const HANDLE_KEY = 'merlin.moments.handle'
 
@@ -67,12 +68,6 @@ function Report({ report }: { report: MomentsReport }) {
   return (
     <div className="space-y-8">
       <CardPanel report={report} />
-      <div className="grid grid-cols-3 gap-3">
-        {PERSONAS.map((id) => {
-          const p = report.personas.find((x) => x.id === id)
-          return p ? <PersonaPanel key={id} persona={p} /> : null
-        })}
-      </div>
       {report.suggestions.length > 0 && (
         <Section title="Worth trying" hint="Moments that are not yet a habit, picked from what your sessions show.">
           <div className="grid grid-cols-3 gap-3">
@@ -162,25 +157,6 @@ function CardPanel({ report }: { report: MomentsReport }) {
         {failed && <span className="text-sec text-bad">Could not make the image.</span>}
       </div>
     </div>
-  )
-}
-
-function PersonaPanel({ persona }: { persona: PersonaView }) {
-  return (
-    <Card bodyClassName="flex gap-5">
-      <PersonaAvatar persona={persona} />
-      <div className="min-w-0 space-y-1">
-        <div>
-          <div className="text-title font-semibold">{persona.name}</div>
-          <div className="text-sec font-medium text-muted">{persona.focus}</div>
-        </div>
-        <p className="text-sec text-muted">{persona.reason}</p>
-        <p className="text-meta text-faint">
-          {persona.habits} habit{persona.habits === 1 ? '' : 's'} · {persona.explored} explored · {persona.unseen} not
-          yet
-        </p>
-      </div>
-    </Card>
   )
 }
 
