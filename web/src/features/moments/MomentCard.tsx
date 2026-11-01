@@ -297,3 +297,32 @@ export const MomentCard = forwardRef<SVGSVGElement, { report: MomentsReport; han
     )
   },
 )
+
+/**
+ * The card as a PNG, `scale` times its size: the SVG is serialised and drawn on a canvas. It
+ * needs nothing from the page, since the drawings are data URLs inside the SVG.
+ */
+export async function cardPng(svg: SVGSVGElement, scale = 2): Promise<Blob> {
+  const w = svg.width.baseVal.value
+  const h = svg.height.baseVal.value
+  const src = URL.createObjectURL(
+    new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml;charset=utf-8' }),
+  )
+  try {
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = src
+    await img.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(w * scale)
+    canvas.height = Math.round(h * scale)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('no canvas')
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('no image'))), 'image/png'),
+    )
+  } finally {
+    URL.revokeObjectURL(src)
+  }
+}

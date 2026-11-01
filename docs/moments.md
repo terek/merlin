@@ -191,7 +191,8 @@ longest column needs (about 730 to 1080), so it stays close to square. The Merli
 right. The drawings (`web/src/features/moments/avatars/*.webp`, about 15 KB each) were cut from an
 AI-generated reference card and are inlined as data URLs, so the SVG stands alone. On the page, a
 small drawing of the persona's whole head (`avatars/*-head.webp`, about 5 KB each, no neck and no
-backdrop) marks a moment's persona in the lists. The Sessions page
+backdrop) marks a moment's persona in the lists. Download PNG
+saves the card at twice its size (drawn on a canvas in the browser). The Sessions page
 shows a one-row invite with the three reactions that links to `/moments`.
 
 ## 6. Sharing (open)

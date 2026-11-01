@@ -1,8 +1,8 @@
 // The Moments page (docs/moments.md): what the sessions say about how someone works with agents,
 // the three personas' reactions, what to try next, and the card to share.
 
-import { ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ChevronRight, Download } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
 import type { MomentsReport, MomentView, PersonaView } from '../../api/types'
@@ -10,8 +10,8 @@ import { cn } from '../../lib/cn'
 import { formatCount } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { sessionPath } from '../../lib/paths'
-import { Badge, Card, EmptyState, QueryBoundary, RelTime, Section, Skeleton } from '../../ui'
-import { MomentCard } from './MomentCard'
+import { Badge, Button, Card, EmptyState, QueryBoundary, RelTime, Section, Skeleton } from '../../ui'
+import { cardPng, MomentCard } from './MomentCard'
 import { groupByStatus, PERSONA_NAMES, PERSONAS } from './model'
 import { PersonaAvatar, PersonaFace } from './PersonaAvatar'
 
@@ -113,22 +113,54 @@ function Report({ report }: { report: MomentsReport }) {
 
 function CardPanel({ report }: { report: MomentsReport }) {
   const [handle, setHandle] = useState(loadHandle)
+  const [saving, setSaving] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const card = useRef<SVGSVGElement>(null)
+  const download = async () => {
+    if (!card.current) return
+    setSaving(true)
+    setFailed(false)
+    try {
+      const url = URL.createObjectURL(await cardPng(card.current))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'merlin-moments.png'
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      setFailed(true)
+    } finally {
+      setSaving(false)
+    }
+  }
   return (
     <div className="mx-auto max-w-[680px] space-y-2">
-      <MomentCard report={report} handle={handle} className="h-auto w-full rounded-card border border-line" />
-      <label className="flex items-center justify-center gap-2">
-        <span className="text-sec text-muted">Your handle on the card</span>
-        <input
-          value={handle}
-          onChange={(e) => {
-            setHandle(e.target.value)
-            saveHandle(e.target.value)
-          }}
-          placeholder="@you"
-          maxLength={25}
-          className="h-7 w-48 rounded-card border border-line bg-surface px-2 text-body outline-none focus:border-accent"
-        />
-      </label>
+      <MomentCard
+        ref={card}
+        report={report}
+        handle={handle}
+        className="h-auto w-full rounded-card border border-line"
+      />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <label className="flex items-center gap-2">
+          <span className="text-sec text-muted">Your handle on the card</span>
+          <input
+            value={handle}
+            onChange={(e) => {
+              setHandle(e.target.value)
+              saveHandle(e.target.value)
+            }}
+            placeholder="@you"
+            maxLength={25}
+            className="h-7 w-48 rounded-card border border-line bg-surface px-2 text-body outline-none focus:border-accent"
+          />
+        </label>
+        <Button onClick={download} disabled={saving}>
+          <Download size={14} />
+          {saving ? 'Saving…' : 'Download PNG'}
+        </Button>
+        {failed && <span className="text-sec text-bad">Could not make the image.</span>}
+      </div>
     </div>
   )
 }
