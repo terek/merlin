@@ -32,10 +32,12 @@ The repository is a bare container: `~/work/merlin/.bare` holds git, and every c
 worktree beside it.
 
 - `~/work/merlin/main/` is the user's checkout of `main`; agents do not edit there. Work reaches
-  `main` by push from a seat.
-- Commit and push are allowed. Commit on your seat's branch. To land: `git fetch`,
+  `main` by push from a seat; after every push, update it with
+  `git -C ~/work/merlin/main pull --ff-only` (if it refuses, leave it and tell the user).
+- Every finished piece of work ends on `main`, without asking: pushing is safe (nothing deploys on
+  push), and whatever is on `main` goes into the next release. Commit on your seat's branch. To land: `git fetch`,
   `git rebase origin/main`, run the checks, then `git push origin HEAD:main` (fast-forward only;
-  never force-push `main`). This repository opts in to the beads team-maintainer profile,
+  never force-push `main`), then pull `~/work/merlin/main`. This repository opts in to the beads team-maintainer profile,
   `bd dolt push` included. Tags make releases: push one only when the user asks.
 - `~/work/merlin/<seat>/` belongs to one persona (seat) and its workers; stay in yours and never
   edit another seat's. A task gets a branch `<seat>/<topic>` cut from `origin/main`
