@@ -13,7 +13,7 @@ import { sessionPath } from '../../lib/paths'
 import { isRunning, keyString, promptCount, sessionTitle } from '../../lib/session'
 import { Badge, BeadStatus, EndStateBadge, Money, ProjectName, RelTime, StateDot } from '../../ui'
 import { openMember, treeBeads, treeFlag, treePRs, treeState } from './model'
-import { PRBadge, SessionRow } from './SessionRow'
+import { HarnessBadge, PRBadge, SessionRow } from './SessionRow'
 
 /** The beads the tree's sessions worked on: the first two by id, then how many more. */
 function BeadBadges({ tree }: { tree: TreeSummary }) {
@@ -90,7 +90,7 @@ export function TreeRow({
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
               {!isRunning(s.state) && <EndStateBadge endState={s.endState} />}
-              {s.key.harness === 'codex' && <Badge title="A Codex session">codex</Badge>}
+              <HarnessBadge harness={s.key.harness} />
               <PRBadge prs={treePRs(tree)} />
               <BeadBadges tree={tree} />
               {s.kind === 'background' && (

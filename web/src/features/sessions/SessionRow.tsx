@@ -3,6 +3,7 @@
 import { Bot, MessageSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
+import { useHarness } from '../../api/harnesses'
 import type { PRLink, SessionSummary } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { sessionsLowerBound } from '../../lib/cost'
@@ -71,7 +72,7 @@ export function SessionRow({
         <span className="flex shrink-0 items-center gap-1.5">
           {/* while it runs, the end state only says the last record is not an answer yet */}
           {!isRunning(s.state) && <EndStateBadge endState={s.endState} />}
-          {s.key.harness === 'codex' && <Badge title="A Codex session">codex</Badge>}
+          <HarnessBadge harness={s.key.harness} />
           <PRBadge prs={s.prs} />
           {s.kind === 'background' && (
             <Badge title="A background session: nobody typed into it interactively">background</Badge>
@@ -137,6 +138,12 @@ export function SessionRow({
       </div>
     </Link>
   )
+}
+
+/** The tag of a harness other than the main one (HarnessInfo.badge); nothing for the main one. */
+export function HarnessBadge({ harness }: { harness: string }) {
+  const h = useHarness(harness)
+  return h.badge ? <Badge title={`A ${h.title} session`}>{h.badge}</Badge> : null
 }
 
 /** The pull requests a session (or a tree) opened or linked; the tooltip lists them. Not a link: the row is one. */

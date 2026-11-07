@@ -6,8 +6,8 @@ import "strings"
 // ToolsByName and Turn.Command. This file is the only place in the package that knows them;
 // a new harness adds its names here.
 
-// editTools change files.
-var editTools = []string{"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch"}
+// editTools change files. Pi's built-ins are lower case (edit, write).
+var editTools = []string{"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch", "edit", "write"}
 
 // planTools are the harness's plan mode.
 var planTools = []string{"EnterPlanMode", "ExitPlanMode"}
@@ -21,8 +21,8 @@ var worktreeTools = []string{"EnterWorktree"}
 // scheduleTools set up a later or recurring run.
 var scheduleTools = []string{"ScheduleWakeup", "CronCreate", "RemoteTrigger"}
 
-// readOnlyTools only look.
-var readOnlyTools = []string{"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "ToolSearch"}
+// readOnlyTools only look. Pi's built-ins are read, grep, find and ls.
+var readOnlyTools = []string{"Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "ToolSearch", "read", "grep", "find", "ls"}
 
 // builtinCommands are slash commands the harnesses ship. Any other command a person types is
 // one they (or a plugin they installed) added.

@@ -12,11 +12,8 @@ import (
 	"syscall"
 
 	"github.com/terek/merlin/internal/catalog"
-	"github.com/terek/merlin/internal/claude"
 	"github.com/terek/merlin/internal/claude/hooks"
-	"github.com/terek/merlin/internal/codex"
 	"github.com/terek/merlin/internal/daemon"
-	"github.com/terek/merlin/internal/harness"
 	"github.com/terek/merlin/internal/hookfile"
 	"github.com/terek/merlin/internal/paths"
 	"github.com/terek/merlin/internal/pricing"
@@ -56,15 +53,11 @@ func runServe(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	cfg, err := paths.ClaudeConfigDir()
-	if err != nil {
-		return fail(err)
-	}
-	codexHome, err := paths.CodexHome()
-	if err != nil {
-		return fail(err)
-	}
 	pricer, err := pricing.Load(filepath.Join(home, "config.json"))
+	if err != nil {
+		return fail(err)
+	}
+	harnesses, err := buildHarnesses(pricer)
 	if err != nil {
 		return fail(err)
 	}
@@ -73,7 +66,7 @@ func runServe(args []string) int {
 	}
 	opts := daemon.Options{
 		Home:           home,
-		Harnesses:      []harness.Harness{claude.New(cfg, pricer), codex.New(codexHome, pricer)},
+		Harnesses:      harnesses,
 		Port:           *port,
 		Workers:        *workers,
 		RescanInterval: *rescan,
@@ -104,7 +97,7 @@ func runServe(args []string) int {
 		return fail(err)
 	}
 
-	d.Handle("/api/", server.New(apiOptions(d, cfg)).Handler())
+	d.Handle("/api/", server.New(apiOptions(d)).Handler())
 	d.Handle("/", webui.Handler())
 	if webui.Built() {
 		fmt.Fprintf(os.Stderr, "merlin: UI at http://127.0.0.1:%d/\n", *port)
@@ -142,12 +135,13 @@ func refreshHooks(t hookTarget) (string, error) {
 
 // apiOptions wires the JSON API to the daemon: its catalog, its event bus, the indexing
 // counters of its engine and the registry of running sessions.
-func apiOptions(d *daemon.Daemon, cfg string) server.Options {
+func apiOptions(d *daemon.Daemon) server.Options {
 	return server.Options{
 		Catalog:   d.Catalog,
 		Subscribe: d.Events().Subscribe,
+		Harnesses: harnessInfos(),
 		Registry: func() catalog.Registry {
-			reg, err := catalog.ReadRegistry(claudeHarness, filepath.Join(cfg, "sessions"), aliveFunc())
+			reg, err := liveRegistry()
 			if err != nil {
 				return nil
 			}

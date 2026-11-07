@@ -386,6 +386,7 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `estimatedUSD` | on a `truncated` sub-agent message: the expected cost of the output tokens missing from its count (680 tokens at the model's prices, docs/validation.md cause A); not in `usd`. Omitted when 0, always on main-agent messages |
 | `unpriced` | the model has no price (it is in `diagnostics.unpricedModels`): `usd` is 0 although the tokens were billed; omitted when false |
 | `fast` | the call was made in fast mode (Claude Code's fast speed, Codex's `priority` service tier); the prompt cache is not shared between fast and standard calls; omitted when false |
+| `recorded` | `usd` is the harness's own per-call figure (Pi writes a cost on every call), not a recomputation from tokens with Merlin's price table; it is the harness's catalog estimate, not an invoice. Omitted when false (recomputed, or `unpriced`) |
 
 ## BeadEvent
 

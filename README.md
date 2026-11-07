@@ -62,6 +62,7 @@ merlin scan                               index once and exit
 merlin search <terms...>                  matching turns with the resume command
 merlin serve [--port 7433] [--no-hooks]   daemon: index, follow, serve
 merlin sessions [--project P] [--kind K] [--since D]   list sessions, newest first
+merlin shape [--json] <path>...            field names, types and counts of JSONL files, never values
 merlin show <session-id>                  turns, agent tree, compactions, cost
 merlin upgrade [--check] [--force]        replace this binary with the latest release
 merlin version                            print the version

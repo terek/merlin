@@ -152,6 +152,7 @@ function projects(): ProjectList {
       cost: { totalUSD: 0, reportedUSD: 0, attributedUSD: 0 },
     }
     cur.sessions++
+    if (p.cost.flag === 'unknown') cur.unknownSessions = (cur.unknownSessions ?? 0) + 1
     if (!cur.lastActivityAt || (p.lastActivityAt ?? '') > cur.lastActivityAt) cur.lastActivityAt = p.lastActivityAt
     for (const e of s.spend) addMoney(cur.cost, e.usd, e.reported)
     by.set(p.project, cur)
@@ -733,6 +734,13 @@ function route(req: Request): Response {
     )
   const p = u.pathname.replace(/\/+$/, '')
   try {
+    if (p === '/api/harnesses')
+      return json(200, {
+        harnesses: [
+          { name: 'claude', title: 'Claude Code', resume: 'claude --resume {id}' },
+          { name: 'codex', title: 'Codex', resume: 'codex resume {id}', badge: 'codex' },
+        ],
+      })
     if (p === '/api/projects') return json(200, projects())
     // The mock has repositories (dev/places.ts) but no bead databases: the rail shows their empty state.
     if (p === '/api/repos') return json(200, repos(visible().map((s) => s.summary)))

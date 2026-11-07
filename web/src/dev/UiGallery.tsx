@@ -166,7 +166,7 @@ export function UiGallery() {
             ))}
           </Row>
           <Row label="Money, flags">
-            {(['exact', 'partial', 'estimated'] as CostFlag[]).map((f) => (
+            {(['exact', 'partial', 'recorded', 'estimated', 'unknown'] as CostFlag[]).map((f) => (
               <Money key={f} usd={12.34} flag={f} />
             ))}
             <Money usd={0.003} flag="estimated" />

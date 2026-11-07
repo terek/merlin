@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 7
+const ParserVersion = 8
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -48,6 +48,7 @@ func buildSession(src source, pricer Pricer) (*model.SessionDigest, error) {
 	}
 	b := newBuilder(d, threads, pricer)
 	b.forkSession = src.ForkSession
+	b.missing = src.Missing
 	if err := b.inherit(src); err != nil {
 		return nil, err
 	}
@@ -77,8 +78,10 @@ type builder struct {
 	copied *thread // history a fork inherits, read from the files it forked from
 	// forkSession is the session the root forked from (discovery maps the thread it names).
 	forkSession string
-	unpriced    map[string]bool
-	diag        model.Diagnostics
+	// missing is what the tree's forks point at and discovery did not find (source.Missing).
+	missing  map[string]int64
+	unpriced map[string]bool
+	diag     model.Diagnostics
 
 	// filled while building
 	agentIdx  map[string]int            // thread id -> index into d.Agents
@@ -917,6 +920,12 @@ func (b *builder) diagnostics() {
 			}
 			d.Diagnostics.UnknownTypes[k] += v
 		}
+	}
+	for k, v := range b.missing {
+		if d.Diagnostics.UnknownTypes == nil {
+			d.Diagnostics.UnknownTypes = map[string]int64{}
+		}
+		d.Diagnostics.UnknownTypes[k] += v
 	}
 	for m := range b.unpriced {
 		d.Diagnostics.UnpricedModels = append(d.Diagnostics.UnpricedModels, m)

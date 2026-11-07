@@ -160,7 +160,7 @@ export function treeState(t: TreeSummary): State {
   return t.sessions.reduce<State>((st, s) => (BUSY[s.state] > BUSY[st] ? s.state : st), 'ended')
 }
 
-const FLAG_RANK: Record<CostFlag, number> = { exact: 0, partial: 1, estimated: 2 }
+const FLAG_RANK: Record<CostFlag, number> = { exact: 0, partial: 1, recorded: 2, estimated: 3, unknown: -1 }
 
 /** How well a tree's cost is backed: the weakest of its members. */
 /** The PRs of every session of a tree, each once, in member order. */
@@ -170,7 +170,10 @@ export function treePRs(t: TreeSummary): PRLink[] {
 }
 
 export function treeFlag(t: TreeSummary): CostFlag {
-  return t.sessions.reduce<CostFlag>((f, s) => (FLAG_RANK[s.cost.flag] > FLAG_RANK[f] ? s.cost.flag : f), 'exact')
+  // unknown only when no member has a known cost: the tree's figure is otherwise a real one
+  const known = t.sessions.filter((s) => s.cost.flag !== 'unknown')
+  if (t.sessions.length > 0 && known.length === 0) return 'unknown'
+  return known.reduce<CostFlag>((f, s) => (FLAG_RANK[s.cost.flag] > FLAG_RANK[f] ? s.cost.flag : f), 'exact')
 }
 
 /** "12 sessions", or "14 sessions in 12 trees" when some trees hold several. */

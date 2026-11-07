@@ -4,6 +4,7 @@ import { FolderGit2, FolderOpen, GitBranch, GitPullRequest, Globe, TriangleAlert
 import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
+import { useHarness } from '../../api/harnesses'
 import type { SessionDetail, SessionPlaces } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { approxMoney } from '../../lib/cost'
@@ -46,7 +47,7 @@ function Dot() {
 /** What the tree adds up to, for the header. */
 export interface TreeStats {
   sessions: number
-  /** Claude Code's figure for every session of the tree. */
+  /** The harness's figure for every session of the tree. */
   bestUSD: number
   /** What the messages on the page add up to. */
   messagesUSD: number
@@ -56,7 +57,7 @@ export interface TreeStats {
   truncated: number
   /** The estimated output of those of them that are sub-agent messages; in messagesUSD. */
   estimated: number
-  /** What Claude Code charged at other rates than Merlin's table (SessionCost.rateDiffUSD). */
+  /** What the harness charged at other rates than Merlin's table (SessionCost.rateDiffUSD). */
   rateDiff: number
 }
 
@@ -173,6 +174,7 @@ function Places({ places }: { places: SessionPlaces }) {
 export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: TreeStats }) {
   const { summary, digest, lineage, family } = detail
   const flashing = useJustChanged(summary.key)
+  const harness = useHarness(summary.key.harness)
   const started = parseTime(summary.startedAt)
   const last = parseTime(summary.lastActivityAt)
   const parentLink = lineage.parent
@@ -300,13 +302,13 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
 
       {Math.abs(best - tree.messagesUSD) >= 0.005 && (
         <p className="text-sec text-muted">
-          Claude Code reported {formatMoney(Math.abs(best - tree.messagesUSD))}{' '}
+          {harness.title} reported {formatMoney(Math.abs(best - tree.messagesUSD))}{' '}
           {best > tree.messagesUSD ? 'more' : 'less'} than the messages on this page add up to (
           {formatMoney(tree.messagesUSD)})
           {best <= tree.messagesUSD
             ? '.'
             : Math.abs(tree.rateDiff) >= 0.005
-              ? `; ${formatMoney(tree.rateDiff)} of it is Claude Code charging other rates than Merlin's table (an older price), the rest the hatched bands under the graph.`
+              ? `; ${formatMoney(tree.rateDiff)} of it is ${harness.title} charging other rates than Merlin's table (an older price), the rest the hatched bands under the graph.`
               : ': the hatched bands under the graph.'}
         </p>
       )}
@@ -325,7 +327,8 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
 }
 
 export function ResumeBox({ detail }: { detail: SessionDetail }) {
-  const r = resumeInfo(detail)
+  const r = resumeInfo(detail, useHarness(detail.summary.key.harness).resume)
+  if (!r.command) return null
   return (
     <div className="rounded-card border border-line bg-surface">
       {!r.leaf && (

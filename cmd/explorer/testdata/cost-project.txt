@@ -31,4 +31,4 @@ TOTAL                     35  $0.638    $0.131      $0.506
 
 Of $0.638: $0.131 (21%) was reported by the harness itself; $0.506 (79%) is recomputed from tokens where it reported nothing.
 Compaction calls, estimated: $0.069 for 3 compactions. $0.069 of it is in no figure above (outside every reported window).
-Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run, counting any that made no API call  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)
+Sessions: 1 exact, 0 partial, 33 estimated; plus 1 scripted run, counting any that made no API call  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported; recorded: the harness's own per-call figures, no total; unknown: work but no billed message, cost shown as —, not counted)

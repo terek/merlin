@@ -30,10 +30,11 @@ Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin`.
   `internal/claude/hooks` only. Do not add others; if you think one is needed, say so in the
   bead and stop short of adding it.
 - **Harness boundary.** Only `internal/claude/**` may know the layout of `~/.claude` or
-  the shape of Claude Code transcripts, and only `internal/codex/**` that of `~/.codex` and
-  Codex rollouts ([docs/codex-format.md](docs/codex-format.md)). `internal/model`, `store`,
+  the shape of Claude Code transcripts, only `internal/codex/**` that of `~/.codex` and
+  Codex rollouts ([docs/codex-format.md](docs/codex-format.md)), and only `internal/pi/**` that of
+  Pi sessions ([docs/pi-format.md](docs/pi-format.md)). `internal/model`, `store`,
   `catalog`, `engine`, `server`, `harness` and `hookfile` are harness-neutral and must not import
-  `internal/claude/*` or `internal/codex`; other harnesses (Pi) go beside them.
+  `internal/claude/*`, `internal/codex` or `internal/pi`; other harnesses go beside them.
   Storage is per harness: `<MERLIN_HOME>/claude/...`, `<MERLIN_HOME>/codex/...`.
 - **Parallel work.** Other agents edit other packages in this tree at the same time. If
   `make test` or `make vet` fails in a package you do not own, do not fix it: run the

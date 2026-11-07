@@ -31,6 +31,11 @@ type source struct {
 	Bases map[string]string
 	// ForkSession is the session the root thread forked from (forked_from_id names a thread).
 	ForkSession string
+	// Missing counts what a fork points at that is not in CODEX_HOME: "fork/parent_missing"
+	// (forked_from_id names a thread with no rollout) and "fork/history_base_missing"
+	// (a history_base thread, or one further down its chain, with no rollout). The digest
+	// reports them in its diagnostics.
+	Missing map[string]int64
 	// Index is session_index.jsonl when it exists: titles live there.
 	Index       string
 	Fingerprint []model.SourceFile
@@ -164,6 +169,8 @@ func (c *metaCache) scan(home string) ([]source, []string, error) {
 					s.ForkSession = from
 					if p := byThread[from]; p != nil {
 						s.ForkSession = sessionOf(p.meta)
+					} else {
+						s.miss("fork/parent_missing")
 					}
 				}
 			}
@@ -171,7 +178,11 @@ func (c *metaCache) scan(home string) ([]source, []string, error) {
 			// point, and the files that one forked from, and so on.
 			for hb, n := sc.meta.HistoryBase, 0; hb != nil && n < 8; n++ {
 				base := byThread[hb.ThreadID]
-				if base == nil || s.Bases[hb.ThreadID] != "" {
+				if base == nil {
+					s.miss("fork/history_base_missing")
+					break
+				}
+				if s.Bases[hb.ThreadID] != "" {
 					break
 				}
 				if s.Bases == nil {
@@ -201,6 +212,13 @@ func (c *metaCache) scan(home string) ([]source, []string, error) {
 		return out[i].ID < out[j].ID
 	})
 	return out, warnings, nil
+}
+
+func (s *source) miss(key string) {
+	if s.Missing == nil {
+		s.Missing = map[string]int64{}
+	}
+	s.Missing[key]++
 }
 
 // sessionOf is the session a thread belongs to: the root thread of its tree.

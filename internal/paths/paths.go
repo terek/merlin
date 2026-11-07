@@ -31,6 +31,32 @@ func ClaudeConfigDir() (string, error) {
 	return resolve("CLAUDE_CONFIG_DIR", ".claude")
 }
 
+// PiAgentDir returns PI_CODING_AGENT_DIR, defaulting to ~/.pi/agent.
+func PiAgentDir() (string, error) {
+	if v := os.Getenv("PI_CODING_AGENT_DIR"); v != "" {
+		return filepath.Clean(v), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".pi", "agent"), nil
+}
+
+// PiSessionsDir returns the directory Pi keeps its sessions in: PI_CODING_AGENT_SESSION_DIR
+// when set (the session files then lie directly in it), else <PiAgentDir>/sessions. Pi's
+// --session-dir flag and sessionDir setting, which rank above the variable, are not followed.
+func PiSessionsDir() (string, error) {
+	if v := os.Getenv("PI_CODING_AGENT_SESSION_DIR"); v != "" {
+		return filepath.Clean(v), nil
+	}
+	dir, err := PiAgentDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "sessions"), nil
+}
+
 func resolve(env, defaultName string) (string, error) {
 	if v := os.Getenv(env); v != "" {
 		return filepath.Clean(v), nil

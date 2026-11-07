@@ -8,7 +8,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCost, useProjects } from '../../api/queries'
 import type { CompactionTally, CostRow, CostTable } from '../../api/types'
 import { tallyLine, warmLine } from '../../lib/compaction'
-import { backingLowerBound, backingSentence, sessionsLowerBound } from '../../lib/cost'
+import { backingLowerBound, backingSentence, sessionsLowerBound, unknownNote } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
@@ -211,7 +211,7 @@ export function CostPage() {
                   name="Model"
                   label={(r) =>
                     r.key === OVERHEAD ? (
-                      <span title="Spend Claude Code reported that no transcript message explains.">
+                      <span title="Spend the harness reported that no transcript message explains.">
                         (overhead)<sup className="ml-0.5 text-faint">1</sup>
                       </span>
                     ) : (
@@ -221,7 +221,7 @@ export function CostPage() {
                   footer={(d) =>
                     d.rows.some((r) => r.key === OVERHEAD) && (
                       <>
-                        <sup>1</sup> (overhead) is spend Claude Code reported that no transcript message explains. It
+                        <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It
                         has no model of its own.
                       </>
                     )
@@ -328,15 +328,20 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
                   height={8}
                   label="Reported versus attributed"
                   segments={[
-                    { value: reportedUSD, tone: 'reported', title: 'Reported by Claude Code' },
+                    { value: reportedUSD, tone: 'reported', title: 'Reported by the harness' },
                     { value: attributedUSD, tone: 'attributed', title: 'Attributed from token counts' },
                   ]}
                 />
                 <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-sec">
-                  <Source tone="reported" name="Reported" usd={reportedUSD} note="Claude Code's own figure" />
+                  <Source tone="reported" name="Reported" usd={reportedUSD} note="the harness's own figure" />
                   <Source tone="attributed" name="Attributed" usd={attributedUSD} note="recomputed from token counts" />
                 </div>
                 <div className="text-sec text-muted">{backingSentence(d.backing)}</div>
+                {(d.backing.unknown ?? 0) > 0 && (
+                  <div className="text-sec text-muted" data-testid="unknown-line">
+                    {unknownNote(d.backing.unknown ?? 0)}
+                  </div>
+                )}
                 {d.total.compactions && d.total.compactions.calls > 0 && (
                   <div
                     className="text-sec text-muted"
@@ -612,11 +617,11 @@ function TopSessions({ query }: { query: CutQuery }) {
             key: 'title',
             header: 'Session',
             cell: (r) =>
-              r.key.startsWith('scripted:') ? (
+              r.key.startsWith('scripted:') || !r.harness ? (
                 <span title="Scripted runs are only shown in aggregate">{r.label ?? r.key}</span>
               ) : (
                 <Link
-                  to={sessionPath({ harness: r.harness ?? 'claude', id: r.key })}
+                  to={sessionPath({ harness: r.harness, id: r.key })}
                   className="block max-w-[60ch] truncate"
                   title={r.label ?? r.key}
                 >
@@ -662,7 +667,13 @@ function TopSessions({ query }: { query: CutQuery }) {
             columns={columns}
             rows={d.rows}
             rowKey={(r) => r.key}
-            rowHref={(r) => (r.key.startsWith('scripted:') ? undefined : sessionPath({ harness: 'claude', id: r.key }))}
+            rowHref={(r) =>
+              r.key.startsWith('scripted:')
+                ? undefined
+                : r.harness
+                  ? sessionPath({ harness: r.harness, id: r.key })
+                  : undefined
+            }
             stickyTop={0}
             footer={
               d.truncated

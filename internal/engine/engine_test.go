@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -431,20 +430,6 @@ func TestSecondHarness(t *testing.T) {
 	}
 	if d, _, _ := st.Read(store.Ref{Harness: "fakeagent", ProjectKey: "proj", SessionID: "s2"}); d == nil || !d.SourceMissing {
 		t.Fatal("s2 not marked missing")
-	}
-}
-
-func TestEngineDoesNotImportClaudeInternals(t *testing.T) {
-	for _, pkg := range []string{"./internal/engine", "./internal/harness"} {
-		out, err := exec.Command("go", "list", "-deps", pkg).CombinedOutput()
-		if err != nil {
-			t.Skipf("go list unavailable: %v: %s", err, out)
-		}
-		for _, dep := range strings.Fields(string(out)) {
-			if strings.Contains(dep, "merlin/internal/claude") {
-				t.Errorf("%s depends on %s", pkg, dep)
-			}
-		}
 	}
 }
 

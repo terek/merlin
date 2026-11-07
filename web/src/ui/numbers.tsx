@@ -9,7 +9,7 @@ import { fullTime, parseTime, relTime } from '../lib/time'
 
 /**
  * Every dollar figure in the app. Under $0.01 `<$0.01`, under $100 two decimals, from $100 none;
- * zero is a faint `$0`. `flag` adds the marker (`~` estimated, `+est` partial) and a tooltip that
+ * zero is a faint `$0`; flag `unknown` with zero is a faint em dash. `flag` adds the marker (`~` estimated, `+est` partial) and a tooltip that
  * explains it; without a flag the tooltip is the full figure. Never pass a flag for a figure
  * that is not session level (a turn or an agent is attributed: say so once per panel).
  * `lowerBound` (from lowerBoundNote) writes `≥` in place of `~` and adds the reason to the tooltip;
@@ -39,6 +39,8 @@ export function Money({
   const markers = flagMarkers(flag)
   const prefix = lowerBound ? '≥' : estimate ? '~' : markers.prefix
   const suffix = markers.suffix
+  // a session with work but no billed message: an em dash, not $0
+  const unknown = flag === 'unknown' && usd === 0
   const zero = usd === 0 && !lowerBound
   const notes = [lowerBound, estimate].filter(Boolean).join('\n')
   const explain = [flagExplanation(flag), notes].filter(Boolean).join('\n')
@@ -51,11 +53,14 @@ export function Money({
       : formatMoneyFull(usd)
   return (
     <span
-      className={cn('font-mono whitespace-nowrap', zero ? 'text-faint' : dim ? 'text-muted' : 'text-fg', className)}
+      className={cn(
+        'font-mono whitespace-nowrap',
+        zero || unknown ? 'text-faint' : dim ? 'text-muted' : 'text-fg',
+        className,
+      )}
       title={tip}
     >
-      {prefix}
-      {formatMoney(usd)}
+      {unknown ? '—' : prefix + formatMoney(usd)}
       {suffix && <span className="ml-0.5 text-meta text-faint">{suffix}</span>}
     </span>
   )

@@ -583,3 +583,54 @@ func TestRateDiffBeforeEstimates(t *testing.T) {
 		t.Errorf("scale = %v", s)
 	}
 }
+
+func TestSameIdsAcrossHarnessesDoNotLink(t *testing.T) {
+	tu := []model.Turn{turn(0, "u0", "go", 0)}
+	a := syn("claude", "s1", "/work/app", 0, 10, tu, msgSpec{"m1", 1, 3, 0})
+	b := syn("codex", "s2", "/work/app", 1, 11, tu, msgSpec{"m1", 2, 7, 0})
+	c := New()
+	c.Upsert(a)
+	c.Upsert(b)
+	for _, k := range []model.SessionKey{{Harness: "claude", ID: "s1"}, {Harness: "codex", ID: "s2"}} {
+		in, ok := c.Session(k)
+		if !ok {
+			t.Fatalf("%v missing", k)
+		}
+		if in.Cost.InheritedUSD != 0 || in.Parent != nil {
+			t.Errorf("%v: inherited %v parent %v", k, in.Cost.InheritedUSD, in.Parent)
+		}
+	}
+	wantNear(t, "total", c.Total(Filter{}).TotalUSD, 10)
+}
+
+func TestSameIdsWithinHarnessStillLink(t *testing.T) {
+	tu := []model.Turn{turn(0, "u0", "go", 0)}
+	a := syn("codex", "s1", "/work/app", 0, 10, tu, msgSpec{"m1", 1, 3, 0})
+	b := syn("codex", "s2", "/work/app", 1, 11, tu, msgSpec{"m1", 2, 3, 0})
+	c := New()
+	c.Upsert(a)
+	c.Upsert(b)
+	wantNear(t, "total", c.Total(Filter{}).TotalUSD, 3)
+}
+
+func TestUnknownCostForWorkWithoutMessages(t *testing.T) {
+	work := syn("codex", "w", "/work/app", 0, 10, []model.Turn{{Index: 0, UUID: "w0", StartedAt: at(0), UserText: "go", FinalText: "done"}})
+	tools := syn("codex", "t", "/work/app", 0, 10, []model.Turn{{Index: 0, UUID: "t0", StartedAt: at(0), UserText: "go", ToolCalls: 2}})
+	idle := syn("codex", "i", "/work/app", 0, 10, []model.Turn{turn(0, "i0", "go", 0)})
+	billed := syn("codex", "b", "/work/app", 0, 10, []model.Turn{{Index: 0, UUID: "b0", StartedAt: at(0), FinalText: "x"}}, msgSpec{"bm", 1, 2, 0})
+	c := New()
+	for _, d := range []*model.SessionDigest{work, tools, idle, billed} {
+		c.Upsert(d)
+	}
+	want := map[string]CostFlag{"w": CostUnknown, "t": CostUnknown, "i": CostEstimated, "b": CostEstimated}
+	for id, f := range want {
+		in, _ := c.Session(model.SessionKey{Harness: "codex", ID: id})
+		if in.Cost.Flag != f {
+			t.Errorf("%s flag = %q, want %q", id, in.Cost.Flag, f)
+		}
+	}
+	wantNear(t, "total", c.Total(Filter{}).TotalUSD, 2)
+	if n := c.Diagnostics().SessionsUnknown; n != 2 {
+		t.Errorf("SessionsUnknown = %d", n)
+	}
+}

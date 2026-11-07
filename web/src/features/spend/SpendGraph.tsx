@@ -3,6 +3,7 @@
 // piece of agent work are the page's; the panels under the card open them.
 import { type KeyboardEvent, useMemo, useState } from 'react'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
+import { spendBasis } from '../../lib/cost'
 import { formatCount, formatDuration, formatMoney, formatPercent, formatTokens, plural } from '../../lib/format'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
@@ -50,6 +51,10 @@ export interface SpendGraphProps {
   initialSplit?: Split
   /** Dev and screenshots: start with the cursor on this turn of the home branch. */
   initialCursor?: number
+  /** Sessions of the tree whose cost is unknown (work, no billed message). */
+  unknownSessions?: number
+  /** Sessions of the tree whose dollars the harness recorded per call (flag recorded). */
+  recordedSessions?: number
 }
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
@@ -239,6 +244,8 @@ export function SpendGraph({
   onSelectUnit,
   initialSplit = 'kind',
   initialCursor,
+  unknownSessions = 0,
+  recordedSessions = 0,
 }: SpendGraphProps) {
   const [split, setSplit] = useState<Split>(initialSplit)
   const [cursor, setCursor] = useState<Pin | null>(
@@ -346,7 +353,7 @@ export function SpendGraph({
         {overhead && (
           <span
             className="inline-flex items-center gap-1.5"
-            title="Spend Claude Code reported that no message in the transcripts explains: calls it does not write down. It belongs to a whole reported stretch, so it is drawn under the rows and is in no turn, agent or decision."
+            title="Spend the harness reported that no message in the transcripts explains: calls it does not write down. It belongs to a whole reported stretch, so it is drawn under the rows and is in no turn, agent or decision."
           >
             <HatchSwatch />
             <span>Not explained by messages</span>
@@ -414,8 +421,8 @@ export function SpendGraph({
         ran), and the bracket rising from it totals everything up to your next one. A diamond is a cache miss, a red
         mark a compaction on a cold cache, an amber dashed one on a warm cache.
         {overhead &&
-          ' A hatched band under a session spans a stretch Claude Code reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
-        Dollars are recomputed from token counts
+          ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
+        {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}
         {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
         {tree.rereads.length > 0 &&
           ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}

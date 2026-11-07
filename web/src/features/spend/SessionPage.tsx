@@ -124,6 +124,8 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
           onSelectUnit={selectUnit}
           initialSplit={params.get('split') === 'class' ? 'class' : 'kind'}
           initialCursor={num(params.get('cursor')) ?? undefined}
+          unknownSessions={details.filter((d) => d.cost.flag === 'unknown').length}
+          recordedSessions={details.filter((d) => d.cost.flag === 'recorded').length}
         />
       </div>
       <div ref={opened} className="scroll-mt-4 space-y-4">

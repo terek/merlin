@@ -269,6 +269,7 @@ func (v *view) ownMessages(pairs map[pairKey]*pairCount) {
 			if id == "" {
 				continue
 			}
+			id = scoped(s.key.Harness, id)
 			h := holders[id]
 			if n := len(h); n > 0 && h[n-1] == int32(s.idx) {
 				s.dupMsgs = true
@@ -313,7 +314,7 @@ func (v *view) ownMessages(pairs map[pairKey]*pairCount) {
 					}
 					seen[m.ID] = struct{}{}
 				}
-				if o, shared := owner[m.ID]; shared && int(o) != s.idx {
+				if o, shared := owner[scoped(s.key.Harness, m.ID)]; shared && int(o) != s.idx {
 					in := inh[o]
 					if in == nil {
 						in = &Inherited{From: v.sessions[o].key}
@@ -423,6 +424,7 @@ func (v *view) holdTurns(pairs map[pairKey]*pairCount) {
 			if id == "" {
 				continue
 			}
+			id = scoped(s.key.Harness, id)
 			h := v.turnHolders[id]
 			if n := len(h); n > 0 && h[n-1] == int32(s.idx) {
 				continue
@@ -449,21 +451,25 @@ func (v *view) holdTurns(pairs map[pairKey]*pairCount) {
 	}
 }
 
+// scoped keys an id by harness: two harnesses never share a message id or a prompt uuid,
+// whatever the ids look like.
+func scoped(harness, id string) string { return harness + "\x00" + id }
+
 // compactionKey identifies a compaction across sessions that copied it.
-func compactionKey(c *model.Compaction) string {
+func compactionKey(harness string, c *model.Compaction) string {
 	if c.At.IsZero() {
 		return ""
 	}
 	h := fnv.New64a()
 	h.Write([]byte(c.Summary))
-	return strconv.FormatInt(c.At.UnixNano(), 36) + "/" + strconv.FormatUint(h.Sum64(), 36)
+	return harness + "\x00" + strconv.FormatInt(c.At.UnixNano(), 36) + "/" + strconv.FormatUint(h.Sum64(), 36)
 }
 
 func (v *view) holdCompactions() {
 	v.compHolders = make(map[string][]int32)
 	for _, s := range v.sessions {
 		for k := range s.d.Compactions {
-			key := compactionKey(&s.d.Compactions[k])
+			key := compactionKey(s.key.Harness, &s.d.Compactions[k])
 			if key == "" {
 				continue
 			}
@@ -535,6 +541,7 @@ func (v *view) costs() {
 		perWin := make([][]dayAmount, len(s.windows))
 		coveredBy := make([]float64, len(s.windows))
 		estBy := make([]float64, len(s.windows))
+		var priced, recorded int // owned messages with a price, and of those the harness's own figure
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)
 			k := key{v.day(m.At), m.Model, wi >= 0}
@@ -548,6 +555,11 @@ func (v *view) costs() {
 			}
 			if m.Unpriced {
 				c.UnpricedMessages++
+			} else {
+				priced++
+				if m.Recorded {
+					recorded++
+				}
 			}
 			if wi < 0 {
 				c.UncoveredUSD += m.USD
@@ -585,7 +597,7 @@ func (v *view) costs() {
 		}
 		for k := range s.d.Compactions {
 			cp := &s.d.Compactions[k]
-			if key := compactionKey(cp); key != "" {
+			if key := compactionKey(s.key.Harness, cp); key != "" {
 				if o, shared := v.compOwner[key]; shared && int(o) != s.idx {
 					continue
 				}
@@ -648,8 +660,14 @@ func (v *view) costs() {
 		c.OverheadUSD = over
 		c.BestUSD = bestCost(c)
 		switch {
+		case len(s.windows) == 0 && hasWorkWithoutMessages(s.d):
+			c.Flag = CostUnknown
+			v.diag.SessionsUnknown++
 		case len(s.windows) == 0:
 			c.Flag = CostEstimated
+			if priced > 0 && recorded == priced {
+				c.Flag = CostRecorded
+			}
 			v.diag.SessionsEstimate++
 		case c.UncoveredUSD > 0:
 			c.Flag = CostPartial
@@ -666,9 +684,30 @@ func (v *view) costs() {
 	}
 }
 
+// hasWorkWithoutMessages reports a session that billed no message yet shows work: a turn
+// or an agent with a final text or tool calls. Its cost is unknown, not zero.
+func hasWorkWithoutMessages(d *model.SessionDigest) bool {
+	if len(d.Messages) > 0 {
+		return false
+	}
+	for i := range d.Turns {
+		if d.Turns[i].FinalText != "" || d.Turns[i].ToolCalls > 0 {
+			return true
+		}
+	}
+	for i := range d.Agents {
+		if d.Agents[i].FinalText != "" || d.Agents[i].ToolCalls > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // bestCost is the best cost of a session: the reported total of its windows plus the
 // attributed and estimated cost of the owned messages outside every window.
-func bestCost(c *SessionCost) float64 { return c.ReportedUSD + c.UncoveredUSD + c.EstimatedUncoveredUSD }
+func bestCost(c *SessionCost) float64 {
+	return c.ReportedUSD + c.UncoveredUSD + c.EstimatedUncoveredUSD
+}
 
 // EstimateScale is the share of the EstimatedUSD of a message at t that the session's cost
 // counts: below 1 inside a window whose overhead caps its estimates, else 1.

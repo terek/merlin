@@ -5,7 +5,7 @@ import { formatCount, formatMoney, plural } from './format'
 
 /** The marker written with a figure: prefix "~" (estimated), suffix "+est" (partial), none (exact). */
 export function flagMarkers(flag: CostFlag | undefined): { prefix: string; suffix: string } {
-  if (flag === 'estimated') return { prefix: '~', suffix: '' }
+  if (flag === 'estimated' || flag === 'recorded') return { prefix: '~', suffix: '' }
   if (flag === 'partial') return { prefix: '', suffix: '+est' }
   return { prefix: '', suffix: '' }
 }
@@ -14,11 +14,15 @@ export function flagMarkers(flag: CostFlag | undefined): { prefix: string; suffi
 export function flagExplanation(flag: CostFlag | undefined): string {
   switch (flag) {
     case 'exact':
-      return 'Reported by Claude Code for the whole session.'
+      return 'Reported by the harness for the whole session.'
     case 'partial':
       return 'Partly reported; the rest recomputed from token counts.'
+    case 'recorded':
+      return 'Recorded per call by the harness (its own catalog estimate, not an invoice); no total was reported for the session.'
     case 'estimated':
       return 'Recomputed from token counts; no figure was reported for this session.'
+    case 'unknown':
+      return 'Unknown: the session did the work, but the harness recorded no billed message and no cost figure. Not counted in any total.'
     default:
       return ''
   }
@@ -67,11 +71,11 @@ export interface CostSegment {
 /**
  * The three parts of a session's best cost for a stacked bar, in order: reported spend that a
  * transcript message explains (covered), overhead (reported, but no message explains it; the two
- * together are what Claude Code reported), and spend recomputed from token counts outside the
+ * together are what the harness reported), and spend recomputed from token counts outside the
  * reported windows. They add up to `bestUSD`.
  */
 export function sessionCostSegments(cost: SessionCost): CostSegment[] {
-  // the estimates and Claude Code's other rates explain part of the overhead
+  // the estimates and the harness's other rates explain part of the overhead
   const explained = (cost.estimatedCoveredUSD ?? 0) + (cost.rateDiffUSD ?? 0)
   return [
     { key: 'reported', label: 'Reported, matched to messages', usd: cost.coveredUSD + explained },
@@ -103,6 +107,8 @@ export function backingSentence(b: CostBacking): string {
   if (b.exact) parts.push(lead(b.exact, 'exact'))
   if (b.partial) parts.push(lead(b.partial, 'partial'))
   if (b.estimated) parts.push(lead(b.estimated, 'estimated'))
+  if (b.recorded) parts.push(lead(b.recorded, 'recorded'))
+  if (b.unknown) parts.push(lead(b.unknown, 'unknown'))
   if (b.scriptedRuns) parts.push(`${formatCount(b.scriptedRuns)} scripted run${b.scriptedRuns === 1 ? '' : 's'}`)
   if (!parts.length) return 'no sessions'
   const out = parts.join(', ')
@@ -115,9 +121,42 @@ export function backingLowerBound(b: CostBacking): string {
   return `A lower bound: ${plural(b.lowerBound, 'session')} include messages on a model without a price (counted as $0).`
 }
 
-/** The weakest flag of several (estimated < partial < exact); undefined for none. */
+/** The flag a rail row's <Money> takes: `unknown` only when every session counted is unknown and nothing else is billed. */
+export function groupFlag(sessions: number, unknownSessions = 0, usd = 0): CostFlag | undefined {
+  return sessions > 0 && unknownSessions >= sessions && usd === 0 ? 'unknown' : undefined
+}
+
+/** Appended to the cost sentences when sessions of the period have an unknown cost; '' for none. */
+export function unknownNote(n: number): string {
+  if (n <= 0) return ''
+  return `${plural(n, 'session')} did work but recorded no cost: ${n === 1 ? 'it is' : 'they are'} in no total, so the real figure may be higher.`
+}
+
+/**
+ * Why a spend graph's dollars are what they are: recomputed from tokens, recorded per call by the
+ * harness, or not known at all. `recorded` counts the sessions whose figures the harness recorded.
+ */
+export function spendBasis(sessions: number, unknown: number, recorded = 0): string {
+  if (sessions > 0 && unknown >= sessions) {
+    return sessions === 1
+      ? 'This session recorded work but no billed message and no cost figure, so its dollars are not known'
+      : 'These sessions recorded work but no billed message and no cost figure, so their dollars are not known'
+  }
+  const base =
+    recorded > 0 && recorded + unknown >= sessions
+      ? 'Dollars are the per-call figures the harness recorded (its own estimate)'
+      : recorded > 0
+        ? `Dollars are recomputed from token counts, except ${plural(recorded, 'session')} whose per-call figures the harness recorded`
+        : 'Dollars are recomputed from token counts'
+  if (unknown > 0) {
+    return `${base} (${plural(unknown, 'session')} of the tree recorded no cost and counts as unknown, not $0)`
+  }
+  return base
+}
+
+/** The weakest flag of several (unknown < estimated < partial < exact); undefined for none. */
 export function weakestFlag(flags: (CostFlag | undefined)[]): CostFlag | undefined {
-  const rank: Record<CostFlag, number> = { estimated: 0, partial: 1, exact: 2 }
+  const rank: Record<CostFlag, number> = { unknown: -1, estimated: 0, recorded: 1, partial: 2, exact: 3 }
   let best: CostFlag | undefined
   for (const f of flags) if (f && (!best || rank[f] < rank[best])) best = f
   return best

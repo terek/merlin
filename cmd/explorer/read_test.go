@@ -226,6 +226,7 @@ func TestReadCommandSnapshots(t *testing.T) {
 		{name: "doctor", args: []string{"doctor"}},
 		{name: "doctor.json", args: []string{"doctor", "--json"}},
 		{name: "doctor-all-versions", args: []string{"doctor", "--all-versions"}},
+		{name: "doctor-coverage", args: []string{"doctor", "--coverage"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -386,6 +387,23 @@ func TestFormatters(t *testing.T) {
 	}
 	if got := resumeCommand("claude", "/p q", "id1"); got != "cd '/p q' && claude --resume id1" {
 		t.Errorf("resumeCommand = %q", got)
+	}
+}
+
+// A harness that is not in the list is named by its own name and has no resume command:
+// nothing is borrowed from Claude.
+func TestUnlistedHarness(t *testing.T) {
+	if got := resumeCommand("zed", "/p", "id3"); got != "" {
+		t.Errorf("resume = %q, want none", got)
+	}
+	if got := harnessTitle("zed"); got != "zed" {
+		t.Errorf("title = %q", got)
+	}
+	if got := harnessTitle("claude"); got != "Claude Code" {
+		t.Errorf("claude title = %q", got)
+	}
+	if b := describeHarness("zed").Badge; b != "zed" {
+		t.Errorf("badge = %q", b)
 	}
 }
 

@@ -42,7 +42,7 @@ Flags:
 type hitJSON struct {
 	catalog.Hit
 	ID          string   `json:"id"`
-	Resume      string   `json:"resume"`
+	Resume      string   `json:"resume,omitempty"`
 	ContinuedID []string `json:"continuedInIds,omitempty"`
 }
 
@@ -155,7 +155,9 @@ func doSearch(query, project, since string, limit int, asJSON bool) error {
 			}
 			fmt.Printf("    continued in: %s\n", strings.Join(parts, "; "))
 		}
-		fmt.Printf("    %s\n", resumeCommand(h.Session.Harness, projectOf(h.Session), h.Session.ID))
+		if r := resumeCommand(h.Session.Harness, projectOf(h.Session), h.Session.ID); r != "" {
+			fmt.Printf("    %s\n", r)
+		}
 		if i < len(hits)-1 {
 			fmt.Println()
 		}

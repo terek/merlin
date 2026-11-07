@@ -11,6 +11,7 @@ import (
 
 	"github.com/terek/merlin/internal/catalog"
 	"github.com/terek/merlin/internal/engine"
+	"github.com/terek/merlin/internal/harness"
 )
 
 // Defaults for the intervals in Options.
@@ -34,6 +35,9 @@ type Options struct {
 	Registry func() catalog.Registry
 	// Progress returns the indexing counters for scan-progress events; nil disables them.
 	Progress func() ScanProgress
+	// Harnesses describes the harnesses for GET /api/harnesses (title, resume command,
+	// badge). Plain data: the server knows no harness.
+	Harnesses []harness.Info
 	// Now is the clock for liveness; nil means time.Now. Handlers read no other clock.
 	Now func() time.Time
 	// Location buckets days and parses date-only parameters; nil means time.Local.
@@ -68,6 +72,7 @@ func New(o Options) *API {
 		o.Now = time.Now
 	}
 	a := &API{o: o, mux: http.NewServeMux()}
+	a.route("/api/harnesses", a.handleHarnesses)
 	a.route("/api/projects", a.handleProjects)
 	a.route("/api/repos", a.handleRepos)
 	a.route("/api/groups", a.handleGroups)

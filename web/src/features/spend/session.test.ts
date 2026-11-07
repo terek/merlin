@@ -154,13 +154,18 @@ describe('resolveTarget', () => {
   })
 })
 
+const CLAUDE_RESUME = 'claude --resume {id}'
+
 describe('resumeInfo', () => {
   test('quoted cwd and the full id', () => {
     const d = detail({ cwd: "/home/dev/it's here" })
-    expect(resumeInfo(d).command).toBe(`cd '/home/dev/it'\\''s here' && claude --resume aaaa`)
+    expect(resumeInfo(d, CLAUDE_RESUME).command).toBe(`cd '/home/dev/it'\\''s here' && claude --resume aaaa`)
   })
   test('no cwd: just the resume', () => {
-    expect(resumeInfo(detail({})).command).toBe('claude --resume aaaa')
+    expect(resumeInfo(detail({}), CLAUDE_RESUME).command).toBe('claude --resume aaaa')
+  })
+  test('a harness without a resume command has none', () => {
+    expect(resumeInfo(detail({}), undefined).command).toBe('')
   })
   test('a non-leaf lists the other leaves it knows', () => {
     const m = (id: string, leaf: boolean): FamilyMember => ({
@@ -176,7 +181,7 @@ describe('resumeInfo', () => {
       members: [m('aaaa', false), m('bbbb', true), m('cccc', true)],
       leaves: ['cccc', 'bbbb', 'zzzz'],
     })
-    const r = resumeInfo(d)
+    const r = resumeInfo(d, CLAUDE_RESUME)
     expect(r.leaf).toBe(false)
     expect(r.leaves.map((x) => x.key.id)).toEqual(['cccc', 'bbbb'])
   })

@@ -194,6 +194,9 @@ describe('trees', () => {
     expect(treeState(tree([leaf]))).toBe('ended')
     expect(treeFlag(t)).toBe('partial')
     expect(treeFlag(tree([leaf]))).toBe('exact')
+    const unknown = { ...leaf, cost: { ...leaf.cost, flag: 'unknown' as const } }
+    expect(treeFlag(tree([unknown]))).toBe('unknown')
+    expect(treeFlag(tree([root, unknown]))).toBe('partial')
   })
   test('counts', () => {
     expect(countLabel(3, 3)).toBe('3 sessions')

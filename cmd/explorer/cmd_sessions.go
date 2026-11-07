@@ -59,7 +59,7 @@ type sessionJSON struct {
 	catalog.SessionInfo
 	ID     string `json:"id"`
 	Agents int    `json:"agents"`
-	Resume string `json:"resume"`
+	Resume string `json:"resume,omitempty"`
 }
 
 func runSessions(args []string) int {

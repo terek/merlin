@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/terek/merlin/internal/fixtures"
 	"github.com/terek/merlin/internal/model"
 )
 
@@ -220,10 +218,7 @@ func TestSearchAbandonedTurnIsFlagged(t *testing.T) {
 
 func TestLiveness(t *testing.T) {
 	c := fixtureCatalog(t)
-	reg, err := ReadRegistry("claude", filepath.Join(fixtures.ClaudeDir(), "sessions"), func(pid int) bool { return pid == 4242 })
-	if err != nil {
-		t.Fatal(err)
-	}
+	reg := Registry{sid("01", "01"): {PID: 4242, SessionID: sid("01", "01").ID, Status: "busy"}}
 	if len(reg) != 1 || reg[sid("01", "01")].Status != "busy" || reg[sid("01", "01")].PID != 4242 {
 		t.Fatalf("registry = %+v", reg)
 	}
@@ -247,7 +242,7 @@ func TestLiveness(t *testing.T) {
 	}
 
 	// both pids alive: idle for the second
-	reg, _ = ReadRegistry("claude", filepath.Join(fixtures.ClaudeDir(), "sessions"), func(int) bool { return true })
+	reg[slash.Key] = RegistryEntry{PID: 4343, SessionID: slash.Key.ID, Status: "idle"}
 	lv = Liveness{Registry: reg, Now: time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)}
 	if st, _ := c.StateOf(slash.Key, lv); st != StateIdle {
 		t.Errorf("idle: %s", st)
@@ -264,18 +259,6 @@ func TestLiveness(t *testing.T) {
 	}
 	if st, _ := c.StateOf(key("nope"), lv); st != "" {
 		t.Errorf("unknown session has state %q", st)
-	}
-	// missing registry directory is not an error
-	if r, err := ReadRegistry("claude", filepath.Join(t.TempDir(), "none"), nil); err != nil || len(r) != 0 {
-		t.Errorf("missing dir: %v %v", r, err)
-	}
-	// a dead pid, a malformed file and an unrelated file are skipped
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "1.json"), []byte(`{"pid":1,"sessionId":"x","status":"idle"}`), 0o644)
-	os.WriteFile(filepath.Join(dir, "2.json"), []byte(`not json`), 0o644)
-	os.WriteFile(filepath.Join(dir, "notes.txt"), []byte(`{}`), 0o644)
-	if r, _ := ReadRegistry("claude", dir, func(int) bool { return false }); len(r) != 0 {
-		t.Errorf("dead pid kept: %v", r)
 	}
 	if !ProcessAlive(os.Getpid()) || ProcessAlive(0) {
 		t.Errorf("ProcessAlive")

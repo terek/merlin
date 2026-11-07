@@ -5,9 +5,11 @@
 
 import { CircleDot, FolderGit2, GitBranch, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Fragment } from 'react'
+import { harnessTitles, useHarnesses } from '../../api/harnesses'
 import { useBeads, useGroups, useProjects, useRepos } from '../../api/queries'
-import type { BeadBrief, GroupDim, RepoGroup } from '../../api/types'
+import type { BeadBrief, CostFlag, GroupDim, RepoGroup } from '../../api/types'
 import { cn } from '../../lib/cn'
+import { groupFlag } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { placeLabels, remoteLabels } from '../../lib/places'
 import { BeadStatus, IconButton, Money, ProjectName, QueryBoundary, Select, SkeletonRows } from '../../ui'
@@ -19,6 +21,7 @@ function Item({
   name,
   count,
   usd,
+  flag,
   title,
   level = 0,
   countTitle,
@@ -28,6 +31,8 @@ function Item({
   name: React.ReactNode
   count?: number
   usd: number
+  /** `unknown` writes a dash for a zero figure. */
+  flag?: CostFlag
   title?: string
   level?: 0 | 1
   countTitle?: string
@@ -49,7 +54,7 @@ function Item({
         <span className="w-8 shrink-0 text-right text-sec text-muted" title={countTitle}>
           {count === undefined ? '' : formatCount(count)}
         </span>
-        <Money usd={usd} dim className="w-14 shrink-0 text-right text-sec" />
+        <Money usd={usd} flag={flag} dim className="w-14 shrink-0 text-right text-sec" />
       </button>
     </li>
   )
@@ -117,6 +122,7 @@ export function ProjectRail({
 
 function ProjectList({ selected, onSelect }: { selected: string; onSelect: (project: string) => void }) {
   const query = useProjects()
+  const harnesses = useHarnesses().data?.harnesses
   return (
     <QueryBoundary
       query={query}
@@ -128,9 +134,17 @@ function ProjectList({ selected, onSelect }: { selected: string; onSelect: (proj
         const projects = [...d.projects].sort((a, b) => (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? ''))
         const count = projects.reduce((n, p) => n + p.sessions, 0)
         const usd = projects.reduce((n, p) => n + p.cost.totalUSD, 0)
+        const unknown = projects.reduce((n, p) => n + (p.unknownSessions ?? 0), 0)
         return (
           <ul className="space-y-px">
-            <Item active={selected === ''} onClick={() => onSelect('')} name="All" count={count} usd={usd} />
+            <Item
+              active={selected === ''}
+              onClick={() => onSelect('')}
+              name="All"
+              count={count}
+              usd={usd}
+              flag={groupFlag(count, unknown, usd)}
+            />
             {projects.map((p) => (
               <Item
                 key={`${p.harness}/${p.projectKey}`}
@@ -139,7 +153,12 @@ function ProjectList({ selected, onSelect }: { selected: string; onSelect: (proj
                 name={<ProjectName path={p.project} />}
                 count={p.sessions}
                 usd={p.cost.totalUSD}
-                title={(p.harnesses ?? [p.harness]).length > 1 ? `${p.project} (Claude Code and Codex)` : p.project}
+                flag={groupFlag(p.sessions, p.unknownSessions, p.cost.totalUSD)}
+                title={
+                  (p.harnesses ?? [p.harness]).length > 1
+                    ? `${p.project} (${harnessTitles(harnesses, p.harnesses ?? [])})`
+                    : p.project
+                }
               />
             ))}
           </ul>

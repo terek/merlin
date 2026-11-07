@@ -1,0 +1,138 @@
+Explorer doctor  ($MERLIN_HOME)
+
+Index
+  35 sessions indexed: 34 interactive, 0 background, 1 scripted
+  error stubs: none
+  missing sources: none
+  catalog: 124 distinct messages (13 shared between sessions), 5 lineage links
+
+Format drift  (by the harness version that wrote the files; a session spanning versions counts under each)
+  VERSION              SESSIONS  BAD LINES  UNKNOWN RECORD TYPES
+  Claude Code 2.1.200        31          1  hologram-state×1
+  and 3 other versions with no bad lines and no unknown record types
+
+Coverage  (what each harness package claims, against the sessions indexed; seen is not correct)
+  Claude Code: 35 sessions; 29 parsed, 0 dropped, 0 absent, 0 unknown
+    ! session.recaps: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
+    ! turns.queued: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
+    ! links.beads: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
+
+    CAPABILITY           STATE   SEEN          FLAG                   NOTE
+    session.project      parsed  35 of 35                             cwd of the records
+    session.title        parsed  35 of 35                             ai-title and custom-title records
+    session.gitBranch    parsed  35 of 35                             gitBranch on records
+    session.recaps       parsed  0 of 35       ! parsed but not seen  away-summary system records
+    turns.userText       parsed  34 of 35
+    turns.finalText      parsed  34 of 35
+    turns.inbox          parsed  1 of 35                              machine-delivered prompts taken apart (transcript-format.md 4a)
+    turns.queued         parsed  0 of 35       ! parsed but not seen  queued_command attachments (transcript-format.md 4b)
+    turns.abandoned      parsed  1 of 35                              rewinds, edits and retries inside one file (transcript-format.md 9)
+    tools.calls          parsed  26 of 35
+    files.touched        parsed  12 of 35
+    files.linesChanged   parsed  2 of 35                              totalLinesAdded and totalLinesRemoved of cost-state records
+    cost.perMessage      parsed  35 of 35                             usage of assistant records
+    cost.reported        parsed  2 of 35                              cost-state records, as windows (transcript-format.md 8)
+    cost.truncated       parsed  2 of 35                              assistant records written before they finished
+    cost.fast            parsed  1 of 35                              usage speed of assistant records
+    compactions.record   parsed  3 of 35                              compact_boundary system records
+    compactions.summary  parsed  3 of 35                              the isCompactSummary record after the boundary
+    compactions.trigger  parsed  3 of 35                              compactMetadata.trigger
+    compactions.call     parsed  1 of 35                              an estimate: Claude Code does not record the call (transcript-format.md 6a)
+    agents.tree          parsed  10 of 35                             subagent files and workflow runs
+    agents.nesting       parsed  1 of 35                              spawnDepth and the parent chain
+    agents.prompts       parsed  10 of 35
+    agents.inbox         parsed  1 of 35                              teammate messages, idle notices, task notifications
+    lineage.fork         parsed  2 of 35                              forkedFrom and records copied from another session (transcript-format.md 9)
+    links.prs            parsed  1 of 35                              pr-link records
+    links.beads          parsed  0 of 35       ! parsed but not seen  bd calls in Bash tool uses
+    live.registry        parsed  not measured                         sessions/<pid>.json files (registry.go)
+    live.hooks           parsed  not measured                         ParseHook
+  Codex: 0 sessions; 22 parsed, 0 dropped, 2 absent, 5 unknown
+    unknown: session.recaps, turns.abandoned, cost.truncated, links.prs, live.registry
+
+    CAPABILITY           STATE    SEEN          FLAG  NOTE
+    session.project      parsed   0 of 0              session_meta cwd
+    session.title        parsed   0 of 0              session_index.jsonl thread names, else the first prompt
+    session.gitBranch    parsed   0 of 0              session_meta git.branch
+    session.recaps       unknown  0 of 0              no record of this kind is known; not looked for
+    turns.userText       parsed   0 of 0              item_completed UserMessage; event_msg user_message in Codex 0.116 and 0.137 (public corpus: 6 of 6 sessions)
+    turns.finalText      parsed   0 of 0              task_complete last_agent_message, final_answer messages; event_msg agent_message final_answer in 0.116 and 0.137
+    turns.inbox          parsed   0 of 0              messages between threads (send_message, followup_task)
+    turns.queued         parsed   0 of 0              messages that arrive while a turn runs
+    turns.abandoned      unknown  0 of 0              rewinds inside a rollout are not examined; turn_aborted is read as interrupted
+    tools.calls          parsed   0 of 0              function_call and custom_tool_call
+    files.touched        parsed   0 of 0              FileChange items
+    files.linesChanged   parsed   0 of 0              FileChange diffs
+    cost.perMessage      parsed   0 of 0              token_usage_record; without one (0.116, 0.137) each token_count with info is a call, repeats skipped; the redacted public dataset has token_count without info, so it has no cost
+    cost.reported        absent   0 of 0              docs/codex-format.md, Not recorded: no dollar figure; cost is recomputed from tokens
+    cost.truncated       unknown  0 of 0              whether a usage record can be written before its call finished is not known
+    cost.fast            parsed   0 of 0              service_tier priority in thread_settings_applied
+    compactions.record   parsed   0 of 0              compacted records; 0.137 also writes event_msg context_compacted (24 in the public corpus, 0 compacted records: redacted) which is not read
+    compactions.summary  absent   0 of 0              docs/codex-format.md, Compactions: the summary is stored encrypted
+    compactions.trigger  parsed   0 of 0              manual when no one typed into the turn; auto is inferred; the public corpus has 24 compaction events (context_compacted) and none carries a trigger
+    compactions.call     parsed   0 of 0              recorded: the call has its own token_usage_record
+    agents.tree          parsed   0 of 0              threads sharing a session_id
+    agents.nesting       parsed   0 of 0              parent_thread_id and agent paths
+    agents.prompts       parsed   0 of 0              spawn_agent message; encrypted in 0.164, then marked promptEncrypted and empty
+    agents.inbox         parsed   0 of 0              agent_message records and plain final answers; messages between threads are encrypted in 0.164
+    lineage.fork         parsed   0 of 0              forked_from_id, history_base and copied subagent history
+    links.prs            unknown  0 of 0              no record of this kind is known; not looked for
+    links.beads          parsed   0 of 0              bd calls in command executions
+    live.registry        unknown  not measured        LiveSessions returns none; whether Codex keeps a registry is not known
+    live.hooks           parsed   not measured        ParseHook, with hooks installed by internal/codex/hooks
+  Pi: 0 sessions; 14 parsed, 1 dropped, 8 absent, 6 unknown
+    unknown: turns.queued, cost.truncated, cost.fast, links.prs, live.registry, live.hooks
+
+    CAPABILITY           STATE    SEEN          FLAG  NOTE
+    session.project      parsed   0 of 0              header cwd. Kind is always interactive: nothing in the file says otherwise
+    session.title        parsed   0 of 0              the last session_info name (an empty one clears it), else the first line of the first prompt
+    session.gitBranch    absent   0 of 0              docs/pi-format.md, Not recorded (from source): the session header holds only type, version, id, timestamp, cwd and parentSession
+    session.recaps       absent   0 of 0              docs/pi-format.md, Records (from source): no entry type of that kind; compaction and branch_summary summaries are read as compactions and are not recaps
+    turns.userText       parsed   0 of 0              message role user; text blocks joined by a newline, images counted
+    turns.finalText      parsed   0 of 0              the last assistant text of the turn that did not end in a tool call, on the current path
+    turns.inbox          dropped  0 of 0              custom_message entries (extension text sent to the model) are recorded; their text is not read and they start no turn
+    turns.queued         unknown  0 of 0              whether prompts typed while a turn runs leave a trace in the file is not known
+    turns.abandoned      parsed   0 of 0              a turn whose user message is off the path from the last entry to the root
+    tools.calls          parsed   0 of 0              toolCall blocks of assistant messages, counted by name, on every branch
+    files.touched        parsed   0 of 0              path argument of the edit and write tools, resolved against the header cwd
+    files.linesChanged   parsed   0 of 0              edit results' details.diff: lines starting with + and -; write is not counted
+    cost.perMessage      parsed   0 of 0              every assistant message with tokens or cost, plus the usage of compaction, branch_summary, usage entries and tool results; usage.cost.total is kept as Recorded, else the price table, else Unpriced. A tool result's or compaction's model is a guess: the nearest assistant message above
+    cost.reported        absent   0 of 0              docs/pi-format.md, Tokens and cost (from source): Pi stores a cost on every call and no session or run total; totals are summed on demand, so there is no reported window
+    cost.truncated       unknown  0 of 0              aborted and error responses can carry tokens; whether the counts are partial is not known
+    cost.fast            unknown  0 of 0              a service tier scales Pi's cost for some providers; no field says which calls
+    compactions.record   parsed   0 of 0              compaction entries on the current path
+    compactions.summary  parsed   0 of 0              compaction.summary, whole
+    compactions.trigger  absent   0 of 0              docs/pi-format.md, Compaction (from source): a compaction entry has no trigger field; manual (/compact) and automatic are not told apart
+    compactions.call     parsed   0 of 0              compaction.usage, when Pi recorded it, as a message and as the compaction's call
+    agents.tree          absent   0 of 0              docs/pi-format.md, Not recorded (from source): Pi's core has no subagents. Extension tools (subagent, Task, oracle) exist and are plain tool calls here
+    agents.nesting       absent   0 of 0              as agents.tree: no agents in Pi's core
+    agents.prompts       absent   0 of 0              as agents.tree: no agents in Pi's core
+    agents.inbox         absent   0 of 0              as agents.tree: no agents in Pi's core
+    lineage.fork         parsed   0 of 0              header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog
+    links.prs            unknown  0 of 0              no record of this kind is known; not looked for
+    links.beads          parsed   0 of 0              bd calls in the bash tool and in bashExecution (!) messages
+    live.registry        unknown  not measured        LiveSessions returns none; whether Pi keeps a registry is not known
+    live.hooks           unknown  not measured        ParseHook always declines: Pi has no hook list to install into; an extension could send one, none is designed
+
+Pricing
+  unpriced models (their messages cost $0 until a price is added to config.json):
+    claude-nova-9-9  in 1 session
+
+Agents
+  unresolved agents: 4 in 2 sessions (11111111, 12121212); attached to the session root
+  messages cut short in the transcript: 4 in 2 sessions (1 in agent files); their output tokens are partial, so attributed cost is a lower bound
+
+Cost: reported vs recomputed from the transcripts
+  2 sessions carry a cost their harness reported: $0.131 reported, $0.128 of it explained by transcript messages (covered)
+  covered / reported = 0.977 overall; the rest ($0.0030) is calls that are in no transcript
+  per session: min 0.892   p10 0.892   median 0.892   p90 0.987   max 0.987
+  outside the windows: $0 recomputed in 0 sessions that have windows; 33 sessions have none at all ($0.506, all recomputed)
+
+  Largest gaps, reported above the transcripts (calls missing from them):
+    ID        PROJECT    TITLE                    REPORTED  COVERED      GAP  RATIO
+    16161616  coststate  plan the billing module    $0.117   $0.116  $0.0015  0.987
+    15151515  sdk        summarize README.md        $0.014   $0.012  $0.0015  0.892
+
+  Largest gaps, transcripts above reported (should be none: a wrong price or a bug): none
+
+  Spend outside every reported window: none

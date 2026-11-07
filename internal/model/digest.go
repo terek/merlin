@@ -428,6 +428,11 @@ type Message struct {
 	// Fast marks a call made in fast mode (Claude's fast speed, Codex's priority tier). The
 	// prompt cache is not shared between fast and standard calls.
 	Fast bool `json:"fast,omitempty"`
+	// Recorded marks a message whose USD is the harness's own per-call figure (Pi writes a
+	// cost on every call), not a recomputation from the token counts with Merlin's table.
+	// It is the harness's catalog estimate, not an invoice. False when USD was recomputed
+	// or the message is Unpriced.
+	Recorded bool `json:"recorded,omitempty"`
 	Tokens
 }
 

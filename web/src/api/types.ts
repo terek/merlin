@@ -14,7 +14,8 @@ export type SessionKind = 'interactive' | 'sdk' | 'background'
 export type EndState = 'clean' | 'interrupted' | 'mid-turn' | 'unknown'
 /** Liveness: busy and idle are running; recent = not running, active in the last 10 minutes. */
 export type State = 'busy' | 'idle' | 'recent' | 'ended'
-export type CostFlag = 'exact' | 'partial' | 'estimated'
+/** `unknown`: work but no billed message and no reported figure; the cost is unknown, not $0. */
+export type CostFlag = 'exact' | 'partial' | 'recorded' | 'estimated' | 'unknown'
 export type LinkKind = 'fork' | 'continuation'
 export type TurnOrigin =
   | 'human'
@@ -334,6 +335,8 @@ export interface ProjectSummary {
   scriptedRuns: number
   lastActivityAt?: string
   cost: Money
+  /** Sessions with cost flag unknown; absent for 0. All of them (and a zero cost) means a dash, not $0. */
+  unknownSessions?: number
 }
 
 export interface ProjectList {
@@ -865,6 +868,10 @@ export interface CostBacking {
   exact: number
   partial: number
   estimated: number
+  /** Sessions with no reported window whose priced messages all carry the harness's own per-call figure. */
+  recorded?: number
+  /** Sessions whose cost is unknown (work, but no billed message). */
+  unknown?: number
   scriptedRuns: number
   /** Sessions, of any flag, whose best cost is a lower bound. */
   lowerBound?: number

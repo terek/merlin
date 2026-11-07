@@ -20,7 +20,7 @@ func init() {
 	})
 }
 
-const doctorHelp = `Usage: merlin doctor [--json] [--all-versions]
+const doctorHelp = `Usage: merlin doctor [--json] [--all-versions] [--coverage]
 
 Health of the index, read from the digests and the catalog; nothing is changed.
 
@@ -40,6 +40,13 @@ Health of the index, read from the digests and the catalog; nothing is changed.
                  the ten largest gaps in both directions, and sessions with spend
                  outside every reported window. A ratio above 1.0 means a wrong
                  price or a bug
+
+  Coverage       per harness, what its package claims to understand (parsed,
+                 dropped, absent or unknown) against the sessions indexed: a
+                 summary line, the contradictions (parsed but not seen; absent or
+                 dropped but populated) and the unknown capabilities. --coverage
+                 lists every capability with "seen in N of M sessions". Seen is
+                 not correct. See docs/harness-support.md
 
 doctor prints findings and exits 0; it exits 1 only when it cannot read the index.
 `
@@ -117,6 +124,8 @@ type doctorReport struct {
 
 	Catalog catalog.Diagnostics `json:"catalog"`
 
+	Coverage []harnessCoverage `json:"coverage"`
+
 	WithWindows  int     `json:"sessionsWithWindows"`
 	ReportedUSD  float64 `json:"reportedUSD"`
 	CoveredUSD   float64 `json:"coveredUSD"`
@@ -132,17 +141,19 @@ type doctorReport struct {
 		P90    float64 `json:"p90"`
 		Max    float64 `json:"max"`
 	} `json:"ratioDistribution"`
-	ReportedAbove []gapRow     `json:"largestGapsReportedAbove"`
-	CoveredAbove  []gapRow     `json:"largestGapsTranscriptAbove"`
-	UncoveredUSD  float64      `json:"uncoveredUSD"` // outside the windows of sessions that have windows
-	EstimatedUSD  float64      `json:"estimatedUSD"` // sessions without any reported window
-	Uncovered     []outsideRow `json:"largestSpendOutsideWindows"`
+	ReportedAbove   []gapRow     `json:"largestGapsReportedAbove"`
+	CoveredAbove    []gapRow     `json:"largestGapsTranscriptAbove"`
+	UncoveredUSD    float64      `json:"uncoveredUSD"`              // outside the windows of sessions that have windows
+	EstimatedUSD    float64      `json:"estimatedUSD"`              // sessions without any reported window
+	UnknownSessions int          `json:"unknownSessions,omitempty"` // work but no billed message: cost unknown
+	Uncovered       []outsideRow `json:"largestSpendOutsideWindows"`
 }
 
 func runDoctor(args []string) int {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "")
 	allVersions := fs.Bool("all-versions", false, "")
+	coverage := fs.Bool("coverage", false, "")
 	pos, help, err := parseArgs("doctor", fs, doctorHelp, args)
 	if help {
 		fmt.Print(doctorHelp)
@@ -154,7 +165,7 @@ func runDoctor(args []string) int {
 	if err != nil {
 		return finish("doctor", err)
 	}
-	return finish("doctor", doDoctor(*asJSON, *allVersions))
+	return finish("doctor", doDoctor(*asJSON, *allVersions, *coverage))
 }
 
 func percentile(sorted []float64, p float64) float64 {
@@ -172,6 +183,7 @@ func buildDoctor(w *world) doctorReport {
 	r.Sessions = len(w.sessions)
 	r.UnpricedModels = map[string]int{}
 	r.Catalog = w.cat.Diagnostics()
+	r.Coverage = buildCoverage(w.sessions)
 	r.SourceMissing = []struct {
 		ID      string `json:"id"`
 		Project string `json:"project"`
@@ -257,6 +269,9 @@ func buildDoctor(w *world) doctorReport {
 			continue
 		}
 		c := in.Cost
+		if c.Flag == catalog.CostUnknown {
+			r.UnknownSessions++
+		}
 		if c.Flag == catalog.CostEstimated {
 			r.EstimatedUSD += c.BestUSD
 		}
@@ -331,7 +346,7 @@ func versionLess(a, b string) bool {
 	return a < b
 }
 
-func doDoctor(asJSON, allVersions bool) error {
+func doDoctor(asJSON, allVersions, coverage bool) error {
 	w, err := loadWorld("doctor")
 	if err != nil {
 		return err
@@ -406,6 +421,8 @@ func doDoctor(asJSON, allVersions bool) error {
 		}
 	}
 
+	printCoverage(out, r.Coverage, coverage)
+
 	section("Pricing")
 	if len(r.UnpricedModels) == 0 {
 		fmt.Fprintln(out, "  unpriced models: none")
@@ -456,6 +473,9 @@ func doDoctor(asJSON, allVersions bool) error {
 	}
 	fmt.Fprintf(out, "  outside the windows: %s recomputed in %s that have windows; %s have none at all (%s, all recomputed)\n",
 		usd(r.UncoveredUSD), plural(cd.SessionsUncover, "session", "sessions"), plural(cd.SessionsEstimate, "session", "sessions"), usd(r.EstimatedUSD))
+	if r.UnknownSessions > 0 {
+		fmt.Fprint(out, unknownCostLine(r.UnknownSessions))
+	}
 	if cd.OverheadClamped > 0 || cd.SharedWindows > 0 {
 		fmt.Fprintf(out, "  bookkeeping: %d overhead clamped at 0 (transcripts above reported), %d windows shared between linked sessions\n", cd.OverheadClamped, cd.SharedWindows)
 	}
@@ -499,4 +519,13 @@ func indentFirst(rows [][]string) [][]string {
 		r[0] = "  " + r[0]
 	}
 	return rows
+}
+
+// unknownCostLine is the doctor line for sessions whose cost is unknown.
+func unknownCostLine(n int) string {
+	verb := "show"
+	if n == 1 {
+		verb = "shows"
+	}
+	return fmt.Sprintf("  unknown cost: %s %s work but no billed message and no window; shown as —, counted in no total\n", plural(n, "session", "sessions"), verb)
 }

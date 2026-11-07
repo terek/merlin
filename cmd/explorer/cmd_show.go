@@ -108,7 +108,7 @@ func doShow(arg string, opt showOpts, asJSON bool) error {
 		return writeJSON(struct {
 			Session catalog.SessionInfo  `json:"session"`
 			Family  familyJSON           `json:"family"`
-			Resume  string               `json:"resume"`
+			Resume  string               `json:"resume,omitempty"`
 			Digest  *model.SessionDigest `json:"digest"`
 		}{in, familyJSON{fam.Root, fam.Members, fam.Leaves}, resume, &cp})
 	}
@@ -123,9 +123,11 @@ func doShow(arg string, opt showOpts, asJSON bool) error {
 	p.workflows(d)
 	p.family(key, fam)
 	p.timeline(d, in)
-	fmt.Println()
-	fmt.Println("Resume")
-	fmt.Println("  " + resume)
+	if resume != "" {
+		fmt.Println()
+		fmt.Println("Resume")
+		fmt.Println("  " + resume)
+	}
 	var later []string
 	for _, c := range in.Children {
 		later = append(later, w.shortID(c.Child.ID))
@@ -247,8 +249,12 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 	switch c.Flag {
 	case catalog.CostExact:
 		p.printf("   exact: %s's own figure; nothing lies outside its windows\n", harnessTitle(in.Key.Harness))
+	case catalog.CostRecorded:
+		p.printf("   recorded: %s's own figure for each call (its catalog estimate); it reported no session total\n", harnessTitle(in.Key.Harness))
 	case catalog.CostPartial:
 		p.printf("   partial: %s's figure plus %s recomputed for spend outside its windows\n", harnessTitle(in.Key.Harness), usd(c.UncoveredUSD))
+	case catalog.CostUnknown:
+		p.printf("   unknown: %s shows work but no billed message and no reported figure\n", harnessTitle(in.Key.Harness))
 	default:
 		p.printf("   estimated: %s reported no figure; recomputed from tokens\n", harnessTitle(in.Key.Harness))
 	}

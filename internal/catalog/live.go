@@ -1,20 +1,16 @@
 package catalog
 
 import (
-	"encoding/json"
 	"errors"
-	"io/fs"
 	"os"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/terek/merlin/internal/model"
 )
 
-// RegistryEntry is one live-session file of a harness (for Claude Code,
-// <config>/sessions/<pid>.json).
+// RegistryEntry is one live-session file of a harness. Reading them is the harness's job
+// (see claude.ReadRegistry); the catalog only holds the result.
 type RegistryEntry struct {
 	PID       int
 	SessionID string
@@ -50,53 +46,6 @@ func (lv Liveness) StateOf(key model.SessionKey, lastActivity time.Time) State {
 		return StateRecent
 	}
 	return StateEnded
-}
-
-// ReadRegistry reads every <dir>/*.json for a harness and keeps the entries whose pid
-// alive reports true (nil alive: ProcessAlive). A missing directory gives an empty
-// registry; unreadable or malformed files are skipped. When several live processes name
-// the same session, the most recently updated wins.
-func ReadRegistry(harness, dir string, alive func(pid int) bool) (Registry, error) {
-	if alive == nil {
-		alive = ProcessAlive
-	}
-	reg := Registry{}
-	ents, err := os.ReadDir(dir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return reg, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	for _, e := range ents {
-		if !strings.HasSuffix(e.Name(), ".json") || !e.Type().IsRegular() {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		var raw struct {
-			PID       int     `json:"pid"`
-			SessionID string  `json:"sessionId"`
-			Status    string  `json:"status"`
-			UpdatedAt float64 `json:"updatedAt"` // epoch milliseconds
-			Cwd       string  `json:"cwd"`
-		}
-		if json.Unmarshal(b, &raw) != nil || raw.PID <= 0 || raw.SessionID == "" || !alive(raw.PID) {
-			continue
-		}
-		ent := RegistryEntry{PID: raw.PID, SessionID: raw.SessionID, Status: raw.Status, Cwd: raw.Cwd}
-		if raw.UpdatedAt > 0 {
-			ent.UpdatedAt = time.UnixMilli(int64(raw.UpdatedAt))
-		}
-		key := model.SessionKey{Harness: harness, ID: raw.SessionID}
-		if old, ok := reg[key]; ok && old.UpdatedAt.After(ent.UpdatedAt) {
-			continue
-		}
-		reg[key] = ent
-	}
-	return reg, nil
 }
 
 // ProcessAlive reports whether a process with this pid exists.

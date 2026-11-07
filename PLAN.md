@@ -118,6 +118,8 @@ Only Claude Code is implemented. The split that keeps Codex, Pi and others cheap
 - **Projects are identified by directory path**, not by a harness's storage key, so the
   catalog can show one project across harnesses. `projectKey` stays as the storage key.
 - **A session is identified by `(harness, id)`.**
+- **What each harness understands is declared as data** (`internal/<name>/support.go`) and
+  checked against the digests by `merlin doctor`: [docs/harness-support.md](docs/harness-support.md).
 - No plugin system and no registry beyond a list of adapters in `main`. The interface is
   written for one implementation and adjusted when the second one arrives.
 

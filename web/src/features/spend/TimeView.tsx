@@ -1014,7 +1014,7 @@ function OverheadText({ o }: { o: Overhead }) {
   const when = (t: number) => `${dateOf(t)} ${clock(t)}`
   return (
     <span className="truncate">
-      Claude Code reported <span className="font-mono text-text">{formatMoney(o.reportedUSD)}</span> from {when(o.t0)}{' '}
+      The harness reported <span className="font-mono text-text">{formatMoney(o.reportedUSD)}</span> from {when(o.t0)}{' '}
       to {when(o.t1)}; its messages add up to <span className="font-mono text-text">{formatMoney(o.coveredUSD)}</span>
       {Math.abs(o.rateDiffUSD) >= 0.005 && (
         <>

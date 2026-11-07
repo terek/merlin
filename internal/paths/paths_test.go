@@ -50,3 +50,25 @@ func TestEarlierVariableName(t *testing.T) {
 		t.Fatalf("Home with both = %q, %v", got, err)
 	}
 }
+
+func TestPiDirs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PI_CODING_AGENT_DIR", "")
+	t.Setenv("PI_CODING_AGENT_SESSION_DIR", "")
+	if got, err := PiAgentDir(); err != nil || got != filepath.Join(home, ".pi", "agent") {
+		t.Fatalf("PiAgentDir = %q, %v", got, err)
+	}
+	if got, err := PiSessionsDir(); err != nil || got != filepath.Join(home, ".pi", "agent", "sessions") {
+		t.Fatalf("PiSessionsDir = %q, %v", got, err)
+	}
+	agent, sess := t.TempDir(), t.TempDir()
+	t.Setenv("PI_CODING_AGENT_DIR", agent)
+	if got, _ := PiSessionsDir(); got != filepath.Join(agent, "sessions") {
+		t.Fatalf("PiSessionsDir under PI_CODING_AGENT_DIR = %q", got)
+	}
+	t.Setenv("PI_CODING_AGENT_SESSION_DIR", sess)
+	if got, _ := PiSessionsDir(); got != sess {
+		t.Fatalf("PiSessionsDir with its own variable = %q", got)
+	}
+}

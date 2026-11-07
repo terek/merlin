@@ -346,9 +346,24 @@ type parser struct {
 	skipTo   int64 // records with a smaller ordinal are a copy of the parent's history
 	haveMeta bool
 	cwds     map[string]bool
+	// counts are the token_count events that carry usage: Codex before token_usage_record
+	// (0.116, 0.137) reports a call's tokens only there. finish uses them when the thread
+	// has no token_usage_record.
+	counts []countRec
 	// review is set by EnteredReviewMode, which Codex writes between the turn that asked for
 	// a review and the turn that runs it.
 	review bool
+}
+
+// countRec is a token_count event with usage: the last call's tokens and the running total.
+type countRec struct {
+	At     time.Time
+	Turn   int
+	Model  string
+	Effort string
+	Tier   string
+	Last   usage
+	Total  int64 // total_token_usage.total_tokens
 }
 
 func newParser(t *thread) *parser {
@@ -383,6 +398,9 @@ func (p *parser) apply(env envelope) {
 			return
 		}
 		t.Source = parseSource(t.Meta.Source)
+		if t.Source.Kind == sourceOther {
+			t.Unknown["session_meta/source/other"]++
+		}
 		if t.Source.Parent == "" {
 			t.Source.Parent = t.Meta.ParentThreadID
 		}
@@ -577,7 +595,62 @@ func (p *parser) event(raw json.RawMessage, at time.Time) {
 		}
 	case "item_completed":
 		p.item(raw, at)
+	case "user_message":
+		// The older form of item_completed UserMessage (Codex 0.116, 0.137). A rollout that
+		// has both gives the prompt once.
+		var e struct {
+			Message     string            `json:"message"`
+			Images      []json.RawMessage `json:"images"`
+			LocalImages []json.RawMessage `json:"local_images"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			t.BadLines++
+			return
+		}
+		if p.cur < 0 {
+			return
+		}
+		tr := &t.Turns[p.cur]
+		for _, u := range tr.Users {
+			if u.Text == e.Message {
+				return
+			}
+		}
+		tr.Users = append(tr.Users, userMsg{At: at, Text: e.Message, Images: len(e.Images) + len(e.LocalImages)})
+	case "agent_message":
+		// The older form of item_completed AgentMessage; task_complete's last_agent_message
+		// overrides it when it has the text.
+		var e struct {
+			Message string `json:"message"`
+			Phase   string `json:"phase"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			t.BadLines++
+			return
+		}
+		if p.cur >= 0 && e.Phase == "final_answer" {
+			t.Turns[p.cur].FinalText = e.Message
+		}
 	case "token_count":
+		var e struct {
+			Info *struct {
+				Last  *usage `json:"last_token_usage"`
+				Total *struct {
+					Total int64 `json:"total_tokens"`
+				} `json:"total_token_usage"`
+			} `json:"info"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			t.BadLines++
+			return
+		}
+		if e.Info != nil && e.Info.Last != nil && e.Info.Total != nil {
+			c := countRec{At: at, Turn: p.cur, Model: p.model, Effort: p.effort, Tier: p.tier, Last: *e.Info.Last, Total: e.Info.Total.Total}
+			if p.cur >= 0 && t.Turns[p.cur].Model != "" {
+				c.Model, c.Effort = t.Turns[p.cur].Model, t.Turns[p.cur].Effort
+			}
+			p.counts = append(p.counts, c)
+		}
 	default:
 		t.Unknown["event_msg/"+head.Type]++
 	}
@@ -631,6 +704,8 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 				parts = append(parts, c.Text)
 			case "local_image", "image":
 				u.Images++
+			default:
+				t.Unknown["item_completed/UserMessage/"+c.Type]++
 			}
 		}
 		u.Text = strings.Join(parts, "\n")
@@ -674,6 +749,9 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 			case "delete":
 				tr.LinesRemoved += countLines(c.Content)
 			default:
+				if c.Type != "update" {
+					t.Unknown["item_completed/FileChange/"+c.Type]++ // read as a diff all the same
+				}
 				a, r := diffLines(c.Diff)
 				tr.LinesAdded += a
 				tr.LinesRemoved += r
@@ -683,6 +761,16 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 		tr.Review = true
 	case "CommandExecution":
 		p.command(it.ID, it.Command, it.Cwd, it.Status, it.Output, it.ExitCode, at)
+	case "McpToolCall", "SubAgentActivity", "CollabAgentToolCall", "ContextCompaction",
+		"Reasoning", "FunctionCallOutput", "ExitedReviewMode":
+		// Known, and carried by other records (the tool calls and their outputs, the reasoning
+		// response_item, the compacted record), or by the turn itself (a review ends with it).
+	default:
+		kind := it.Type
+		if kind == "" {
+			kind = "(none)" // the payload has no item, or an item without a type
+		}
+		t.Unknown["item_completed/"+kind]++
 	}
 }
 
@@ -804,6 +892,21 @@ func (p *parser) responseItem(raw json.RawMessage, at time.Time) {
 }
 
 func (p *parser) finish() {
+	if len(p.t.Usage) == 0 {
+		// No token_usage_record: take each call from the token_count that reports it. Codex
+		// repeats an event when nothing was billed in between, so one whose running total did
+		// not change is skipped. The id is made from the thread's, so a copy of the file bills
+		// once.
+		var prev int64 = -1
+		for _, c := range p.counts {
+			if c.Total == prev {
+				continue
+			}
+			prev = c.Total
+			p.t.Usage = append(p.t.Usage, usageRec{ResponseID: fmt.Sprintf("%s#token_count%d", p.t.Meta.ID, len(p.t.Usage)+1),
+				At: c.At, Turn: c.Turn, Model: c.Model, Effort: c.Effort, Tier: c.Tier, Usage: c.Last})
+		}
+	}
 	if len(p.t.Unknown) == 0 {
 		p.t.Unknown = nil
 	}

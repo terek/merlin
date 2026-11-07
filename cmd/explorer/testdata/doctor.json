@@ -40,7 +40,10 @@
     "claude-nova-9-9": 1
   },
   "unresolvedAgents": 4,
-  "unresolvedAgentsIn": ["11111111-0000-4000-8000-000000000001", "12121212-0000-4000-8000-000000000001"],
+  "unresolvedAgentsIn": [
+    "11111111-0000-4000-8000-000000000001",
+    "12121212-0000-4000-8000-000000000001"
+  ],
   "truncatedMessages": 4,
   "truncatedSessions": 2,
   "truncatedAgentMessages": 1,
@@ -58,8 +61,557 @@
     "CoveredUSD": 0.1281,
     "BestUSD": 0.63751,
     "SessionsUncover": 0,
-    "SessionsEstimate": 33
+    "SessionsEstimate": 33,
+    "SessionsUnknown": 0
   },
+  "coverage": [
+    {
+      "harness": "claude",
+      "sessions": 35,
+      "states": {
+        "parsed": 29
+      },
+      "rows": [
+        {
+          "capability": "session.project",
+          "state": "parsed",
+          "note": "cwd of the records",
+          "seen": 35
+        },
+        {
+          "capability": "session.title",
+          "state": "parsed",
+          "note": "ai-title and custom-title records",
+          "seen": 35
+        },
+        {
+          "capability": "session.gitBranch",
+          "state": "parsed",
+          "note": "gitBranch on records",
+          "seen": 35
+        },
+        {
+          "capability": "session.recaps",
+          "state": "parsed",
+          "note": "away-summary system records",
+          "seen": 0,
+          "flag": "parsed but not seen"
+        },
+        {
+          "capability": "turns.userText",
+          "state": "parsed",
+          "seen": 34
+        },
+        {
+          "capability": "turns.finalText",
+          "state": "parsed",
+          "seen": 34
+        },
+        {
+          "capability": "turns.inbox",
+          "state": "parsed",
+          "note": "machine-delivered prompts taken apart (transcript-format.md 4a)",
+          "seen": 1
+        },
+        {
+          "capability": "turns.queued",
+          "state": "parsed",
+          "note": "queued_command attachments (transcript-format.md 4b)",
+          "seen": 0,
+          "flag": "parsed but not seen"
+        },
+        {
+          "capability": "turns.abandoned",
+          "state": "parsed",
+          "note": "rewinds, edits and retries inside one file (transcript-format.md 9)",
+          "seen": 1
+        },
+        {
+          "capability": "tools.calls",
+          "state": "parsed",
+          "seen": 26
+        },
+        {
+          "capability": "files.touched",
+          "state": "parsed",
+          "seen": 12
+        },
+        {
+          "capability": "files.linesChanged",
+          "state": "parsed",
+          "note": "totalLinesAdded and totalLinesRemoved of cost-state records",
+          "seen": 2
+        },
+        {
+          "capability": "cost.perMessage",
+          "state": "parsed",
+          "note": "usage of assistant records",
+          "seen": 35
+        },
+        {
+          "capability": "cost.reported",
+          "state": "parsed",
+          "note": "cost-state records, as windows (transcript-format.md 8)",
+          "seen": 2
+        },
+        {
+          "capability": "cost.truncated",
+          "state": "parsed",
+          "note": "assistant records written before they finished",
+          "seen": 2
+        },
+        {
+          "capability": "cost.fast",
+          "state": "parsed",
+          "note": "usage speed of assistant records",
+          "seen": 1
+        },
+        {
+          "capability": "compactions.record",
+          "state": "parsed",
+          "note": "compact_boundary system records",
+          "seen": 3
+        },
+        {
+          "capability": "compactions.summary",
+          "state": "parsed",
+          "note": "the isCompactSummary record after the boundary",
+          "seen": 3
+        },
+        {
+          "capability": "compactions.trigger",
+          "state": "parsed",
+          "note": "compactMetadata.trigger",
+          "seen": 3
+        },
+        {
+          "capability": "compactions.call",
+          "state": "parsed",
+          "note": "an estimate: Claude Code does not record the call (transcript-format.md 6a)",
+          "seen": 1
+        },
+        {
+          "capability": "agents.tree",
+          "state": "parsed",
+          "note": "subagent files and workflow runs",
+          "seen": 10
+        },
+        {
+          "capability": "agents.nesting",
+          "state": "parsed",
+          "note": "spawnDepth and the parent chain",
+          "seen": 1
+        },
+        {
+          "capability": "agents.prompts",
+          "state": "parsed",
+          "seen": 10
+        },
+        {
+          "capability": "agents.inbox",
+          "state": "parsed",
+          "note": "teammate messages, idle notices, task notifications",
+          "seen": 1
+        },
+        {
+          "capability": "lineage.fork",
+          "state": "parsed",
+          "note": "forkedFrom and records copied from another session (transcript-format.md 9)",
+          "seen": 2
+        },
+        {
+          "capability": "links.prs",
+          "state": "parsed",
+          "note": "pr-link records",
+          "seen": 1
+        },
+        {
+          "capability": "links.beads",
+          "state": "parsed",
+          "note": "bd calls in Bash tool uses",
+          "seen": 0,
+          "flag": "parsed but not seen"
+        },
+        {
+          "capability": "live.registry",
+          "state": "parsed",
+          "note": "sessions/<pid>.json files (registry.go)"
+        },
+        {
+          "capability": "live.hooks",
+          "state": "parsed",
+          "note": "ParseHook"
+        }
+      ]
+    },
+    {
+      "harness": "codex",
+      "sessions": 0,
+      "states": {
+        "absent": 2,
+        "parsed": 22,
+        "unknown": 5
+      },
+      "rows": [
+        {
+          "capability": "session.project",
+          "state": "parsed",
+          "note": "session_meta cwd",
+          "seen": 0
+        },
+        {
+          "capability": "session.title",
+          "state": "parsed",
+          "note": "session_index.jsonl thread names, else the first prompt",
+          "seen": 0
+        },
+        {
+          "capability": "session.gitBranch",
+          "state": "parsed",
+          "note": "session_meta git.branch",
+          "seen": 0
+        },
+        {
+          "capability": "session.recaps",
+          "state": "unknown",
+          "note": "no record of this kind is known; not looked for",
+          "seen": 0
+        },
+        {
+          "capability": "turns.userText",
+          "state": "parsed",
+          "note": "item_completed UserMessage; event_msg user_message in Codex 0.116 and 0.137 (public corpus: 6 of 6 sessions)",
+          "seen": 0
+        },
+        {
+          "capability": "turns.finalText",
+          "state": "parsed",
+          "note": "task_complete last_agent_message, final_answer messages; event_msg agent_message final_answer in 0.116 and 0.137",
+          "seen": 0
+        },
+        {
+          "capability": "turns.inbox",
+          "state": "parsed",
+          "note": "messages between threads (send_message, followup_task)",
+          "seen": 0
+        },
+        {
+          "capability": "turns.queued",
+          "state": "parsed",
+          "note": "messages that arrive while a turn runs",
+          "seen": 0
+        },
+        {
+          "capability": "turns.abandoned",
+          "state": "unknown",
+          "note": "rewinds inside a rollout are not examined; turn_aborted is read as interrupted",
+          "seen": 0
+        },
+        {
+          "capability": "tools.calls",
+          "state": "parsed",
+          "note": "function_call and custom_tool_call",
+          "seen": 0
+        },
+        {
+          "capability": "files.touched",
+          "state": "parsed",
+          "note": "FileChange items",
+          "seen": 0
+        },
+        {
+          "capability": "files.linesChanged",
+          "state": "parsed",
+          "note": "FileChange diffs",
+          "seen": 0
+        },
+        {
+          "capability": "cost.perMessage",
+          "state": "parsed",
+          "note": "token_usage_record; without one (0.116, 0.137) each token_count with info is a call, repeats skipped; the redacted public dataset has token_count without info, so it has no cost",
+          "seen": 0
+        },
+        {
+          "capability": "cost.reported",
+          "state": "absent",
+          "note": "docs/codex-format.md, Not recorded: no dollar figure; cost is recomputed from tokens",
+          "seen": 0
+        },
+        {
+          "capability": "cost.truncated",
+          "state": "unknown",
+          "note": "whether a usage record can be written before its call finished is not known",
+          "seen": 0
+        },
+        {
+          "capability": "cost.fast",
+          "state": "parsed",
+          "note": "service_tier priority in thread_settings_applied",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.record",
+          "state": "parsed",
+          "note": "compacted records; 0.137 also writes event_msg context_compacted (24 in the public corpus, 0 compacted records: redacted) which is not read",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.summary",
+          "state": "absent",
+          "note": "docs/codex-format.md, Compactions: the summary is stored encrypted",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.trigger",
+          "state": "parsed",
+          "note": "manual when no one typed into the turn; auto is inferred; the public corpus has 24 compaction events (context_compacted) and none carries a trigger",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.call",
+          "state": "parsed",
+          "note": "recorded: the call has its own token_usage_record",
+          "seen": 0
+        },
+        {
+          "capability": "agents.tree",
+          "state": "parsed",
+          "note": "threads sharing a session_id",
+          "seen": 0
+        },
+        {
+          "capability": "agents.nesting",
+          "state": "parsed",
+          "note": "parent_thread_id and agent paths",
+          "seen": 0
+        },
+        {
+          "capability": "agents.prompts",
+          "state": "parsed",
+          "note": "spawn_agent message; encrypted in 0.164, then marked promptEncrypted and empty",
+          "seen": 0
+        },
+        {
+          "capability": "agents.inbox",
+          "state": "parsed",
+          "note": "agent_message records and plain final answers; messages between threads are encrypted in 0.164",
+          "seen": 0
+        },
+        {
+          "capability": "lineage.fork",
+          "state": "parsed",
+          "note": "forked_from_id, history_base and copied subagent history",
+          "seen": 0
+        },
+        {
+          "capability": "links.prs",
+          "state": "unknown",
+          "note": "no record of this kind is known; not looked for",
+          "seen": 0
+        },
+        {
+          "capability": "links.beads",
+          "state": "parsed",
+          "note": "bd calls in command executions",
+          "seen": 0
+        },
+        {
+          "capability": "live.registry",
+          "state": "unknown",
+          "note": "LiveSessions returns none; whether Codex keeps a registry is not known"
+        },
+        {
+          "capability": "live.hooks",
+          "state": "parsed",
+          "note": "ParseHook, with hooks installed by internal/codex/hooks"
+        }
+      ]
+    },
+    {
+      "harness": "pi",
+      "sessions": 0,
+      "states": {
+        "absent": 8,
+        "dropped": 1,
+        "parsed": 14,
+        "unknown": 6
+      },
+      "rows": [
+        {
+          "capability": "session.project",
+          "state": "parsed",
+          "note": "header cwd. Kind is always interactive: nothing in the file says otherwise",
+          "seen": 0
+        },
+        {
+          "capability": "session.title",
+          "state": "parsed",
+          "note": "the last session_info name (an empty one clears it), else the first line of the first prompt",
+          "seen": 0
+        },
+        {
+          "capability": "session.gitBranch",
+          "state": "absent",
+          "note": "docs/pi-format.md, Not recorded (from source): the session header holds only type, version, id, timestamp, cwd and parentSession",
+          "seen": 0
+        },
+        {
+          "capability": "session.recaps",
+          "state": "absent",
+          "note": "docs/pi-format.md, Records (from source): no entry type of that kind; compaction and branch_summary summaries are read as compactions and are not recaps",
+          "seen": 0
+        },
+        {
+          "capability": "turns.userText",
+          "state": "parsed",
+          "note": "message role user; text blocks joined by a newline, images counted",
+          "seen": 0
+        },
+        {
+          "capability": "turns.finalText",
+          "state": "parsed",
+          "note": "the last assistant text of the turn that did not end in a tool call, on the current path",
+          "seen": 0
+        },
+        {
+          "capability": "turns.inbox",
+          "state": "dropped",
+          "note": "custom_message entries (extension text sent to the model) are recorded; their text is not read and they start no turn",
+          "seen": 0
+        },
+        {
+          "capability": "turns.queued",
+          "state": "unknown",
+          "note": "whether prompts typed while a turn runs leave a trace in the file is not known",
+          "seen": 0
+        },
+        {
+          "capability": "turns.abandoned",
+          "state": "parsed",
+          "note": "a turn whose user message is off the path from the last entry to the root",
+          "seen": 0
+        },
+        {
+          "capability": "tools.calls",
+          "state": "parsed",
+          "note": "toolCall blocks of assistant messages, counted by name, on every branch",
+          "seen": 0
+        },
+        {
+          "capability": "files.touched",
+          "state": "parsed",
+          "note": "path argument of the edit and write tools, resolved against the header cwd",
+          "seen": 0
+        },
+        {
+          "capability": "files.linesChanged",
+          "state": "parsed",
+          "note": "edit results' details.diff: lines starting with + and -; write is not counted",
+          "seen": 0
+        },
+        {
+          "capability": "cost.perMessage",
+          "state": "parsed",
+          "note": "every assistant message with tokens or cost, plus the usage of compaction, branch_summary, usage entries and tool results; usage.cost.total is kept as Recorded, else the price table, else Unpriced. A tool result's or compaction's model is a guess: the nearest assistant message above",
+          "seen": 0
+        },
+        {
+          "capability": "cost.reported",
+          "state": "absent",
+          "note": "docs/pi-format.md, Tokens and cost (from source): Pi stores a cost on every call and no session or run total; totals are summed on demand, so there is no reported window",
+          "seen": 0
+        },
+        {
+          "capability": "cost.truncated",
+          "state": "unknown",
+          "note": "aborted and error responses can carry tokens; whether the counts are partial is not known",
+          "seen": 0
+        },
+        {
+          "capability": "cost.fast",
+          "state": "unknown",
+          "note": "a service tier scales Pi's cost for some providers; no field says which calls",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.record",
+          "state": "parsed",
+          "note": "compaction entries on the current path",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.summary",
+          "state": "parsed",
+          "note": "compaction.summary, whole",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.trigger",
+          "state": "absent",
+          "note": "docs/pi-format.md, Compaction (from source): a compaction entry has no trigger field; manual (/compact) and automatic are not told apart",
+          "seen": 0
+        },
+        {
+          "capability": "compactions.call",
+          "state": "parsed",
+          "note": "compaction.usage, when Pi recorded it, as a message and as the compaction's call",
+          "seen": 0
+        },
+        {
+          "capability": "agents.tree",
+          "state": "absent",
+          "note": "docs/pi-format.md, Not recorded (from source): Pi's core has no subagents. Extension tools (subagent, Task, oracle) exist and are plain tool calls here",
+          "seen": 0
+        },
+        {
+          "capability": "agents.nesting",
+          "state": "absent",
+          "note": "as agents.tree: no agents in Pi's core",
+          "seen": 0
+        },
+        {
+          "capability": "agents.prompts",
+          "state": "absent",
+          "note": "as agents.tree: no agents in Pi's core",
+          "seen": 0
+        },
+        {
+          "capability": "agents.inbox",
+          "state": "absent",
+          "note": "as agents.tree: no agents in Pi's core",
+          "seen": 0
+        },
+        {
+          "capability": "lineage.fork",
+          "state": "parsed",
+          "note": "header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog",
+          "seen": 0
+        },
+        {
+          "capability": "links.prs",
+          "state": "unknown",
+          "note": "no record of this kind is known; not looked for",
+          "seen": 0
+        },
+        {
+          "capability": "links.beads",
+          "state": "parsed",
+          "note": "bd calls in the bash tool and in bashExecution (!) messages",
+          "seen": 0
+        },
+        {
+          "capability": "live.registry",
+          "state": "unknown",
+          "note": "LiveSessions returns none; whether Pi keeps a registry is not known"
+        },
+        {
+          "capability": "live.hooks",
+          "state": "unknown",
+          "note": "ParseHook always declines: Pi has no hook list to install into; an extension could send one, none is designed"
+        }
+      ]
+    }
+  ],
   "sessionsWithWindows": 2,
   "reportedUSD": 0.1311,
   "coveredUSD": 0.1281,

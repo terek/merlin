@@ -204,13 +204,17 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	}
 
 	// How the figures are backed, over the sessions in the table.
-	var exact, partial, estimated int
+	var exact, partial, estimated, recorded, unknown int
 	for _, in := range listing.Sessions {
 		switch in.Cost.Flag {
 		case catalog.CostExact:
 			exact++
 		case catalog.CostPartial:
 			partial++
+		case catalog.CostRecorded:
+			recorded++
+		case catalog.CostUnknown:
+			unknown++
 		default:
 			estimated++
 		}
@@ -238,6 +242,8 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 				Exact     int `json:"exact"`
 				Partial   int `json:"partial"`
 				Estimated int `json:"estimated"`
+				Recorded  int `json:"recorded,omitempty"`
+				Unknown   int `json:"unknown,omitempty"`
 				Scripted  int `json:"scriptedRuns"`
 			} `json:"backing"`
 		}{By: by, Since: sinceOut, Rows: rows, Total: total, Sessions: nSessions,
@@ -245,8 +251,10 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 				Exact     int `json:"exact"`
 				Partial   int `json:"partial"`
 				Estimated int `json:"estimated"`
+				Recorded  int `json:"recorded,omitempty"`
+				Unknown   int `json:"unknown,omitempty"`
 				Scripted  int `json:"scriptedRuns"`
-			}{exact, partial, estimated, scriptedRuns}})
+			}{exact, partial, estimated, recorded, unknown, scriptedRuns}})
 	}
 
 	w.emptyHint("cost")
@@ -323,11 +331,17 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 		fmt.Println(line)
 	}
 	parts := []string{fmt.Sprintf("%d exact", exact), fmt.Sprintf("%d partial", partial), fmt.Sprintf("%d estimated", estimated)}
+	if recorded > 0 {
+		parts = append(parts, fmt.Sprintf("%d recorded", recorded))
+	}
+	if unknown > 0 {
+		parts = append(parts, fmt.Sprintf("%d unknown", unknown))
+	}
 	line := "Sessions: " + strings.Join(parts, ", ")
 	if scriptedRuns > 0 {
 		line += fmt.Sprintf("; plus %s, counting any that made no API call", plural(scriptedRuns, "scripted run", "scripted runs"))
 	}
-	fmt.Println(line + "  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported)")
+	fmt.Println(line + "  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported; recorded: the harness's own per-call figures, no total; unknown: work but no billed message, cost shown as —, not counted)")
 	return nil
 }
 

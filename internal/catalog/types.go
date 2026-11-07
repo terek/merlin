@@ -28,6 +28,13 @@ const (
 	CostPartial CostFlag = "partial"
 	// CostEstimated: no reported windows at all; the cost is recomputed from tokens.
 	CostEstimated CostFlag = "estimated"
+	// CostRecorded: no reported windows, but every priced message the session owns carries the
+	// harness's own per-call figure (Message.Recorded). It is the harness's catalog estimate,
+	// not an invoice. A mix of recorded and recomputed messages stays CostEstimated.
+	CostRecorded CostFlag = "recorded"
+	// CostUnknown: the session shows work (a final text or tool calls) but no billed
+	// message and no reported window, so its cost is unknown, not zero. Totals skip it.
+	CostUnknown CostFlag = "unknown"
 )
 
 // Money is a dollar amount split by where it comes from. TotalUSD = ReportedUSD +
@@ -417,4 +424,5 @@ type Diagnostics struct {
 	BestUSD          float64 // sum of best costs
 	SessionsUncover  int     // sessions with owned spend outside every window
 	SessionsEstimate int     // sessions without reported windows
+	SessionsUnknown  int     // sessions with work but no messages and no windows: cost unknown
 }

@@ -7,9 +7,12 @@ import {
   estimateNote,
   flagExplanation,
   flagMarkers,
+  groupFlag,
   lowerBoundNote,
   sessionCostSegments,
   sessionsLowerBound,
+  spendBasis,
+  unknownNote,
   weakestFlag,
 } from './cost'
 
@@ -17,6 +20,10 @@ test('flag markers', () => {
   expect(flagMarkers('exact')).toEqual({ prefix: '', suffix: '' })
   expect(flagMarkers('partial')).toEqual({ prefix: '', suffix: '+est' })
   expect(flagMarkers('estimated')).toEqual({ prefix: '~', suffix: '' })
+  expect(flagMarkers('recorded')).toEqual({ prefix: '~', suffix: '' })
+  expect(flagExplanation('recorded')).toContain('Recorded per call')
+  expect(flagMarkers('unknown')).toEqual({ prefix: '', suffix: '' })
+  expect(flagExplanation('unknown')).toContain('Unknown')
   expect(flagMarkers(undefined)).toEqual({ prefix: '', suffix: '' })
   expect(flagExplanation('partial')).toContain('Partly reported')
   expect(flagExplanation(undefined)).toBe('')
@@ -34,6 +41,26 @@ test('agent split', () => {
   expect(agentCostSplit({ cost: { usd: 1 }, agents })).toEqual({ main: 0.5, agents: 0.5 })
   expect(agentCostSplit({ cost: { usd: 1 } })).toEqual({ main: 1, agents: 0 })
   expect(agentCostSplit({ cost: { usd: 0.1 }, agents }).main).toBe(0)
+})
+
+test('a rail row is unknown only when every session is, and nothing else is billed', () => {
+  expect(groupFlag(2, 2, 0)).toBe('unknown')
+  expect(groupFlag(3, 2, 1.5)).toBeUndefined()
+  expect(groupFlag(2, 2, 0.4)).toBeUndefined()
+  expect(groupFlag(0, 0, 0)).toBeUndefined()
+  expect(groupFlag(2)).toBeUndefined()
+})
+
+test('unknown sessions are named in the cost sentences', () => {
+  expect(unknownNote(0)).toBe('')
+  expect(unknownNote(1)).toContain('1 session did work but recorded no cost: it is in no total')
+  expect(unknownNote(2)).toContain('2 sessions did work but recorded no cost: they are in no total')
+  expect(spendBasis(2, 0)).toBe('Dollars are recomputed from token counts')
+  expect(spendBasis(1, 1)).not.toContain('recomputed')
+  expect(spendBasis(3, 1)).toContain('1 session of the tree recorded no cost')
+  expect(spendBasis(1, 0, 1)).toBe('Dollars are the per-call figures the harness recorded (its own estimate)')
+  expect(spendBasis(3, 1, 2)).not.toContain('recomputed')
+  expect(spendBasis(3, 0, 1)).toContain('except 1 session whose per-call figures the harness recorded')
 })
 
 test('backing sentence', () => {
@@ -99,5 +126,8 @@ test('cost segments carry the estimates', () => {
 test('weakest flag', () => {
   expect(weakestFlag(['exact', 'partial'])).toBe('partial')
   expect(weakestFlag(['exact', 'estimated', 'partial'])).toBe('estimated')
+  expect(weakestFlag(['exact', 'recorded', 'partial'])).toBe('recorded')
+  expect(weakestFlag(['recorded', 'estimated'])).toBe('estimated')
+  expect(weakestFlag(['estimated', 'unknown', 'exact'])).toBe('unknown')
   expect(weakestFlag([])).toBeUndefined()
 })

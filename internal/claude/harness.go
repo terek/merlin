@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/terek/merlin/internal/catalog"
 	"github.com/terek/merlin/internal/claude/digest"
 	"github.com/terek/merlin/internal/claude/discover"
 	"github.com/terek/merlin/internal/harness"
@@ -41,8 +40,11 @@ func New(configDir string, pricer digest.Pricer) *Harness {
 	}
 }
 
+// Name is the harness name in session keys and storage paths.
+const Name = discover.Harness
+
 // Name implements harness.Harness.
-func (h *Harness) Name() string { return discover.Harness }
+func (h *Harness) Name() string { return Name }
 
 // ParserVersion implements harness.Harness.
 func (h *Harness) ParserVersion() int { return digest.ParserVersion }
@@ -121,7 +123,7 @@ func (h *Harness) Locate(ref harness.SessionRef) (harness.Session, bool, error) 
 // LiveSessions implements harness.Harness: the sessions in <config>/sessions/<pid>.json
 // whose process is alive.
 func (h *Harness) LiveSessions() ([]harness.SessionRef, error) {
-	reg, err := catalog.ReadRegistry(h.Name(), h.registryDir, nil)
+	reg, err := readRegistry(h.registryDir, nil)
 	if err != nil {
 		return nil, err
 	}

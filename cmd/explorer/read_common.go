@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
@@ -24,19 +23,8 @@ import (
 	"github.com/terek/merlin/internal/store"
 )
 
-// claudeHarness is the harness whose registry of live sessions is read (Codex keeps none).
-const claudeHarness = "claude"
-
-// harnessTitle is a harness's product name.
-func harnessTitle(h string) string {
-	switch h {
-	case "claude":
-		return "Claude Code"
-	case "codex":
-		return "Codex"
-	}
-	return h
-}
+// harnessTitle is a harness's product name; an unlisted harness is named by its name.
+func harnessTitle(h string) string { return describeHarness(h).Title }
 
 // world is everything a read command needs: the catalog over all digests, the digests
 // themselves (doctor reads the error stubs), the live registry and the current time.
@@ -108,11 +96,7 @@ func loadWorld(name string) (*world, error) {
 		}
 		w.cat.Upsert(d)
 	}
-	cfg, err := paths.ClaudeConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	reg, err := catalog.ReadRegistry(claudeHarness, filepath.Join(cfg, "sessions"), aliveFunc())
+	reg, err := liveRegistry()
 	if err != nil {
 		reg = catalog.Registry{}
 	}
@@ -432,7 +416,9 @@ func commas(s string) string {
 // tokens (estimated), "*" after one that is partly recomputed (partial).
 func marked(v float64, flag catalog.CostFlag) string {
 	switch flag {
-	case catalog.CostEstimated:
+	case catalog.CostUnknown:
+		return "—"
+	case catalog.CostEstimated, catalog.CostRecorded:
 		return "≈" + usd(v)
 	case catalog.CostPartial:
 		return usd(v) + "*"
@@ -451,7 +437,7 @@ func moneyFlag(m catalog.Money) catalog.CostFlag {
 	return catalog.CostExact
 }
 
-const costLegend = "cost notation: ≈ estimated from tokens (no reported figure)   * partly estimated (some spend outside the harness's reported windows)"
+const costLegend = "cost notation: ≈ estimated from tokens, or recorded per call by the harness (no reported figure)   * partly estimated (some spend outside the harness's reported windows)   — unknown (work, but no billed message)"
 
 // snip collapses whitespace and cuts to n runes.
 func snip(s string, n int) string {
@@ -543,13 +529,11 @@ func shellQuote(s string) string {
 }
 
 // resumeCommand is what to type to pick a session up again, from the directory it was
-// started in (Claude Code finds a session by that directory).
+// started in (Claude Code finds a session by that directory). Empty when the harness has
+// no resume command.
 func resumeCommand(harness, project, id string) string {
-	resume := "claude --resume " + id
-	if harness == "codex" {
-		resume = "codex resume " + id
-	}
-	if project == "" {
+	resume := describeHarness(harness).ResumeCommand(id)
+	if resume == "" || project == "" {
 		return resume
 	}
 	return "cd " + shellQuote(project) + " && " + resume

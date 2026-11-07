@@ -125,11 +125,12 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 			t := &d.Turns[k]
 			var others []int32
 			if t.UUID != "" {
-				if o, shared := v.turnOwner[t.UUID]; shared {
+				tk := scoped(s.key.Harness, t.UUID)
+				if o, shared := v.turnOwner[tk]; shared {
 					if int(o) != s.idx {
 						continue
 					}
-					others = v.turnHolders[t.UUID]
+					others = v.turnHolders[tk]
 				}
 			}
 			add(FieldPrompt, t.Index, t.StartedAt, promptText(t), t.Abandoned, others)
@@ -138,7 +139,7 @@ func (c *Catalog) Search(query string, opt SearchOptions) []Hit {
 		for k := range d.Compactions {
 			cp := &d.Compactions[k]
 			var others []int32
-			if key := compactionKey(cp); key != "" {
+			if key := compactionKey(s.key.Harness, cp); key != "" {
 				if o, shared := v.compOwner[key]; shared {
 					if int(o) != s.idx {
 						continue

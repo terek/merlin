@@ -79,6 +79,9 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 			p.Cost.ReportedUSD += s.Cost.ReportedUSD
 			p.Cost.AttributedUSD += s.Cost.UncoveredUSD
 			p.Cost.TotalUSD += s.Cost.BestUSD
+			if s.Cost.Flag == catalog.CostUnknown {
+				p.UnknownSessions++
+			}
 			if s.LastActivityAt.After(p.LastActivityAt) {
 				p.LastActivityAt = s.LastActivityAt
 			}
@@ -574,6 +577,10 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			out.Backing.Exact++
 		case catalog.CostPartial:
 			out.Backing.Partial++
+		case catalog.CostRecorded:
+			out.Backing.Recorded++
+		case catalog.CostUnknown:
+			out.Backing.Unknown++
 		default:
 			out.Backing.Estimated++
 		}

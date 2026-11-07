@@ -182,6 +182,9 @@ type ProjectSummary struct {
 	ScriptedRuns   int           `json:"scriptedRuns"` // counted, never listed
 	LastActivityAt time.Time     `json:"lastActivityAt,omitzero"`
 	Cost           catalog.Money `json:"cost"`
+	// UnknownSessions counts the sessions whose cost is unknown (flag unknown); a project in
+	// which every session is unknown shows a dash, not $0.
+	UnknownSessions int `json:"unknownSessions,omitempty"`
 }
 
 // RepoList is the body of GET /api/repos: the repositories sessions count under, most
@@ -298,9 +301,14 @@ type CostPart struct {
 
 // CostBacking counts the sessions in a cost table by how their cost is backed.
 type CostBacking struct {
-	Exact        int `json:"exact"`
-	Partial      int `json:"partial"`
-	Estimated    int `json:"estimated"`
+	Exact     int `json:"exact"`
+	Partial   int `json:"partial"`
+	Estimated int `json:"estimated"`
+	// Recorded counts sessions with no reported window whose priced messages all carry the
+	// harness's own per-call figure (Pi).
+	Recorded int `json:"recorded,omitempty"`
+	// Unknown counts sessions with work but no billed message: their cost is unknown, not 0.
+	Unknown      int `json:"unknown,omitempty"`
 	ScriptedRuns int `json:"scriptedRuns"`
 	// LowerBound counts the sessions, of any flag, whose best cost is a lower bound.
 	LowerBound int `json:"lowerBound,omitempty"`

@@ -23,7 +23,12 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 - **Cost.** `bestUSD` is the figure to show and to sum. `flag` says how it is backed:
   `exact` (the harness reported it for the whole session), `partial` (reported, but some owned
   spend lies outside the reported windows and is recomputed from tokens), `estimated` (nothing
-  reported; recomputed from tokens). `reportedUSD` + `uncoveredUSD` + `estimatedUncoveredUSD` =
+  reported; recomputed from tokens), `recorded` (no reported windows, but every priced owned message
+  carries the harness's own per-call figure, `Message.recorded`: Pi's catalog estimate, not an
+  invoice, so it keeps the `~` marker; a mix of recorded and recomputed messages stays `estimated`), `unknown` (the session has no billed message and no reported
+  window, yet a turn or agent shows work: a final text or tool calls; `bestUSD` is 0 but the cost
+  is not known to be 0. Show an em dash, not $0; it adds nothing to any total, and `backing.unknown`
+  and `merlin doctor` count such sessions). `reportedUSD` + `uncoveredUSD` + `estimatedUncoveredUSD` =
   `bestUSD`. `overheadUSD` is spend the harness reported that no transcript message explains; it
   is a session-level figure and is never spread over agents or turns, except through the
   estimates below. `inheritedUSD` is history copied from another session that the other session
@@ -69,6 +74,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 
 | Route | Returns |
 |---|---|
+| `GET /api/harnesses` | `HarnessList` |
 | `GET /api/projects` | `ProjectList` |
 | `GET /api/repos` | `RepoList` |
 | `GET /api/groups?by=` | `GroupList` |
@@ -80,13 +86,35 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/moments` | `moments.Report` (experimental) |
 | `GET /api/events` | `text/event-stream` |
 
+## GET /api/harnesses
+
+What differs per harness, from the daemon's one list (`cmd/explorer/harnesses.go`). The web UI
+reads its product names, badges and resume commands here and keeps none of its own. No parameters.
+
+```json
+{
+  "harnesses": [
+    { "name": "claude", "title": "Claude Code", "resume": "claude --resume {id}" },
+    { "name": "codex", "title": "Codex", "resume": "codex resume {id}", "badge": "codex" }
+  ]
+}
+```
+
+`resume` is the command that picks a session up again, with `{id}` for the session id; absent when
+the harness has none. `badge` is the short tag shown beside a session; absent for Claude Code. A
+harness that has sessions but is not in the list appears with its own name as `title` and `badge`
+and no `resume`: nothing is borrowed from another harness. The CLI does the same (`merlin show`
+prints no Resume section, JSON has no `resume`).
+
 ## GET /api/projects
 
 Projects with session counts, last activity and cost, most recently active first. No parameters.
 `cost` is the sum of the best costs of the project's sessions plus its scripted runs. A project is
 a directory: sessions of every harness started there are counted together, and `harnesses` lists
 which (`harness` and `projectKey` are those of the first in name order). Filtering `/api/sessions`
-or `/api/cost` by `project` (the directory) selects them all.
+or `/api/cost` by `project` (the directory) selects them all. `unknownSessions` (omitted when 0)
+counts the project's sessions with cost flag `unknown`; when it equals `sessions` and `cost` is 0,
+show a dash, not $0.
 
 ```json
 {
@@ -883,6 +911,8 @@ parts. Without `split` nothing changes in the response: no `split` key anywhere.
   "backing": {"exact": 1, "partial": 0, "estimated": 33, "scriptedRuns": 1}
 }
 ```
+
+`backing.unknown` (omitted when 0) counts the sessions flagged `unknown`. `backing.recorded` (omitted when 0) counts those flagged `recorded`.
 
 (One row shown; the real response has a row per kind.)
 
