@@ -9,12 +9,17 @@
 //              light tint under it (the context carried); the area always stops at the end of a turn
 //              or a piece of work
 //   marks      a diamond is a cache miss, a vertical mark a compaction (red on a cold cache)
-//   main rows  each turn a thick stretch of the baseline; a dot for every prompt a person typed (hollow
+//   main rows  each turn a stretch of the baseline as heavy as its model's tier (a hairline between turns);
+//              the model's name where it changes; a dot for every prompt a person typed (hollow
 //              if typed while a turn ran); a bracket with the total over each decision, its start reaching
 //              down to the dot
 //   agents     one light frame over an agent's work (its start down to the baseline, its top, a stem
-//              at its end), each piece of work joined to the row that sent it (launch) and to the turn each of its reports came in (dashed); an addressable
-//              agent keeps a row of its own, the others share rows when they do not overlap
+//              at its end); an addressable agent keeps a row of its own, the others share rows when they
+//              do not overlap
+//   spines     from the row that launched an agent (a fork: from the top of its parent's context, with
+//              what it copied hatched in its row), an elbow onto its baseline, and along it over its
+//              life, weighted by model tier, faint, full for the work in focus; the reports of that
+//              work are dashed lines to the turns they came in
 //   breaks     time in which nothing ran is squeezed into a narrow band, with its length on the axis
 //   overhead   under a session's rows, a hatched band over each reported window for what the harness
 //              reported and no message explains: labelled with its dollars, on no scale, as it belongs
@@ -35,20 +40,27 @@ import {
   clockTicks,
   detailAt,
   HOLD_MS,
+  inheritedContext,
   type Lane,
   mergeBusy,
+  mergeWeighted,
+  modelMarks,
   type Point,
   packLanes,
+  pointAt,
   pxPerTurn,
   type Row,
   sliceTimeline,
   slotLength,
   slotText,
   splitHeld,
+  TIER_WEIGHT,
   type Timeline,
   type TurnSpan,
+  tierSegments,
   timeAxis,
   turnPlace,
+  turnTier,
   type Win,
 } from './timeline'
 import type { Overhead, Tree } from './tree'
@@ -81,6 +93,16 @@ const COLOR: Record<KindKey | 'main', string> = {
 }
 const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
 
+/** Whether a run of points holds the point `p` (the run may start earlier, at the start of its turn or piece of work). */
+const holds = (run: readonly Point[], p: Point | undefined) => !!p && p.t >= run[0].t && p.t <= run[run.length - 1].t
+
+/** The radius of the elbow where a spine turns from the sender's row onto its own baseline. */
+const ELBOW_R = 6
+/** A spine at rest; at full strength for the work in focus. */
+const SPINE_OPACITY = 0.35
+/** The vertical part of a spine, whatever the weight of its horizontal part. */
+const SPINE_W = 1.25
+
 /** How strongly the context an agent carries over a pause is tinted, under its dotted line. */
 const HELD_TINT = 0.08
 
@@ -98,21 +120,6 @@ const edgeChevron = (x: number, y: number, side: 'l' | 'r') =>
   side === 'l'
     ? `M${f1(x + 4)} ${f1(y - 4)}L${f1(x)} ${f1(y)}L${f1(x + 4)} ${f1(y + 4)}Z`
     : `M${f1(x - 4)} ${f1(y - 4)}L${f1(x)} ${f1(y)}L${f1(x - 4)} ${f1(y + 4)}Z`
-
-/** The last point at or before `t`. */
-function pointAt(points: readonly Point[], t: number): Point | undefined {
-  let lo = 0
-  let hi = points.length - 1
-  let best: Point | undefined
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    if (points[mid].t <= t) {
-      best = points[mid]
-      lo = mid + 1
-    } else hi = mid - 1
-  }
-  return best
-}
 
 /**
  * Consecutive points with no pause longer than HOLD_MS between them, and none of the times in
@@ -279,8 +286,41 @@ export function TimePlot({
 
   // ---- who is where
   const mainRow = (branch: number) => layout.find((g) => g.row.main && g.row.branch === branch)
-  const rowByName = new Map<string, Layout>()
-  for (const g of layout) for (const l of g.row.lanes) if (l.agent?.name) rowByName.set(l.agent.name, g)
+  const laneByName = new Map<string, { g: Layout; l: Lane }>()
+  for (const g of layout) for (const l of g.row.lanes) if (l.agent?.name) laneByName.set(l.agent.name, { g, l })
+  /** The row and lane that sent a piece of work: the one its inbox names, else its branch's main row. */
+  const senderOf = (l: Lane, u: Unit): { g: Layout; l: Lane } | undefined => {
+    const named = u.from ? laneByName.get(u.from) : undefined
+    if (named) return named
+    const g = mainRow(l.branch)
+    return g ? { g, l: g.row.lanes[0] } : undefined
+  }
+  // a lane's context before the window cut it: where a fork branches from
+  const fullLane = new Map(timeline.lanes.map((l) => [l.key, l]))
+  const ownPoints = (key: string) => fullLane.get(key)?.series.find((x) => x.own)?.points ?? []
+  /** When a forked session left its parent: the end of the last turn it copied (a continuation: when it began). */
+  const forkMoment = (branch: number): number => {
+    const b = tree.branches[branch]
+    const link = b.detail.lineage.parent
+    const next = b.parent !== undefined && link ? tree.branches[b.parent].model.cols[link.atTurn + 1] : undefined
+    const t = ms(next?.turn.startedAt)
+    return Number.isFinite(t) ? t - 1 : Number.POSITIVE_INFINITY
+  }
+  /** What a fork copied from its parent, and the parent's colour: the part of its first context that is not its own. */
+  const inheritOf = (l: Lane): { tokens: number; color: string } | undefined => {
+    const own = ownPoints(l.key)
+    if (own.length === 0) return undefined
+    if (l.main) {
+      const b = tree.branches[l.branch]
+      if (b.parent === undefined || b.kind !== 'fork') return undefined
+      const tokens = inheritedContext(ownPoints(`${b.parent}/main`), forkMoment(l.branch), own[0].tokens)
+      return tokens > 0 ? { tokens, color: COLOR.main } : undefined
+    }
+    const u = l.units[0]
+    const from = l.kind === 'fork' && u && !u.woken ? senderOf(l, u) : undefined
+    const tokens = from ? inheritedContext(ownPoints(from.l.key), u.startMs, own[0].tokens) : 0
+    return from && tokens > 0 ? { tokens, color: COLOR[from.l.kind] } : undefined
+  }
   const unitRef = (l: Lane, u: Unit): UnitRef => ({ branch: l.branch, id: u.id })
   const isOn = (l: Lane, u: Unit) => [hoverUnit, selectedUnit].some((r) => r && r.branch === l.branch && r.id === u.id)
   // a turn of no width can still be hovered
@@ -391,8 +431,11 @@ export function TimePlot({
       })
       .join('')
 
+  const colors = [...new Set(Object.values(COLOR))]
+  const hatchOf = (color: string) => `url(#${hatch}-${colors.indexOf(color)})`
   const drawLane = (g: Layout, l: Lane) => {
     const color = COLOR[l.kind]
+    const inherited = inheritOf(l)
     const own = l.series.find((s) => s.own)
     // an agent waits between its turns or pieces of work (for a message), however short the wait
     const starts = l.main ? l.turns.map((t) => t.t0) : l.units.map((u) => u.startMs)
@@ -467,6 +510,18 @@ export function TimePlot({
         {/* the context: an area while the agent works, dotted while it holds it over a pause */}
         {runs.map((run, i) => (
           <g key={run[0].t}>
+            {/* a fork's first context starts with the part it copied from its parent: hatched in the parent's colour */}
+            {i === 0 && inherited && holds(run, ownPoints(l.key)[0]) && (
+              <rect
+                x={axis.x(run[0].t)}
+                y={yCtx(g, inherited.tokens)}
+                width={Math.max(1.5, axis.x(run[run.length - 1].t) - axis.x(run[0].t))}
+                height={g.base - yCtx(g, inherited.tokens)}
+                fill={hatchOf(inherited.color)}
+              >
+                <title>{`${formatTokens(inherited.tokens)} of context copied from the parent`}</title>
+              </rect>
+            )}
             <path d={area(g, run)} fill={color} fillOpacity={0.22} />
             <path d={line(g, run)} fill="none" stroke={color} strokeWidth={1.25} strokeLinejoin="round" />
             {runs[i + 1] && (
@@ -644,25 +699,32 @@ export function TimePlot({
               </g>
             )
           })}
-        {/* an addressable agent's life: from its launch to its last piece of work */}
-        {g.row.lanes.map(
-          (l) =>
-            l.kind === 'addressable' &&
-            Number.isFinite(l.t0) && (
-              <line
-                key={`life${l.key}`}
-                x1={axis.x(l.t0)}
-                x2={axis.x(l.t1)}
-                y1={g.base}
-                y2={g.base}
-                stroke={COLOR.addressable}
-                strokeOpacity={0.5}
-                strokeWidth={1}
-                strokeDasharray="3 3"
-              />
-            ),
-        )}
         {g.row.lanes.map((l) => drawLane(g, l))}
+        {/* where a main row's model changes (and where the window starts): its name, just above the baseline */}
+        {main &&
+          (() => {
+            let end = Number.NEGATIVE_INFINITY
+            return modelMarks(main.runs, modelLabel).map((m) => {
+              const x = axis.x(m.t) + 2
+              if (x < end + 14) return null
+              end = x + m.text.length * 4.9
+              return (
+                <text
+                  key={`mm${m.t}`}
+                  x={x}
+                  y={g.base - 6}
+                  fontSize={9}
+                  fill="var(--muted)"
+                  stroke="var(--surface)"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                  pointerEvents="none"
+                >
+                  {m.text}
+                </text>
+              )
+            })
+          })()}
         {/* the spend per slot, down from the baseline */}
         {[...slots[i].entries()].map(([k, s]) => {
           let off = 0
@@ -697,7 +759,7 @@ export function TimePlot({
           y1={g.base + 0.5}
           y2={g.base + 0.5}
           stroke={main ? 'var(--faint)' : 'var(--line)'}
-          strokeWidth={1}
+          strokeWidth={main ? 0.75 : 1}
         />
         {/* a main row's turns, and their numbers */}
         {main?.turns.map((s) => {
@@ -707,10 +769,18 @@ export function TimePlot({
           const label = detail === 'band' || x - lastTurnX >= String(s.col.index).length * 5.5 + 6
           if (label) lastTurnX = x
           const xe = Math.max(x + 1.5, axis.x(s.t1) - 0.75)
+          const weight = TIER_WEIGHT[turnTier(main.runs, s.t0, s.t1)]
           return (
             <g key={s.col.index} pointerEvents="none">
               {detail !== 'band' && (
-                <line x1={x + 0.75} x2={xe} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--text)" strokeWidth={3} />
+                <line
+                  x1={x + 0.75}
+                  x2={xe}
+                  y1={g.base + 0.5}
+                  y2={g.base + 0.5}
+                  stroke="var(--text)"
+                  strokeWidth={weight}
+                />
               )}
               <line x1={x} x2={x} y1={g.base - 4} y2={g.base + 5} stroke="var(--text)" strokeWidth={1} />
               {label && (
@@ -721,21 +791,28 @@ export function TimePlot({
             </g>
           )
         })}
-        {/* too many turns for a mark each: they are one thick band, turns closer than a few pixels joined */}
-        {main && detail === 'band' && (
-          <path
-            pointerEvents="none"
-            d={mergeBusy(
-              main.turns.map((s) => ({ t0: axis.x(s.t0), t1: Math.max(axis.x(s.t0) + 1.5, axis.x(s.t1)) })),
-              BAND_GAP_PX,
-            )
-              .map((r) => `M${f1(r.t0)} ${g.base + 0.5}H${f1(r.t1)}`)
-              .join('')}
-            stroke="var(--text)"
-            strokeWidth={3}
-            fill="none"
-          />
-        )}
+        {/* too many turns for a mark each: they are one thick band, turns closer than a few pixels joined, as heavy as the heaviest model in it */}
+        {main &&
+          detail === 'band' &&
+          mergeWeighted(
+            main.turns.map((s) => ({
+              t0: axis.x(s.t0),
+              t1: Math.max(axis.x(s.t0) + 1.5, axis.x(s.t1)),
+              weight: TIER_WEIGHT[turnTier(main.runs, s.t0, s.t1)],
+            })),
+            BAND_GAP_PX,
+          ).map((r) => (
+            <line
+              key={r.t0}
+              pointerEvents="none"
+              x1={r.t0}
+              x2={r.t1}
+              y1={g.base + 0.5}
+              y2={g.base + 0.5}
+              stroke="var(--text)"
+              strokeWidth={r.weight}
+            />
+          ))}
         {/* a person's messages: a dot on the baseline, hollow for one typed while a turn ran */}
         {main?.turns.flatMap((s) =>
           [
@@ -766,11 +843,86 @@ export function TimePlot({
     )
   }
 
-  // ---- launches, messages and reports between the rows
-  // only for the work in focus: hovered or selected, or launched in the turn under the cursor or pinned
+  // ---- spines, launches and reports between the rows
+  // the work in focus: hovered or selected, or launched or reported in the turn under the cursor or pinned
   const focusTurns = [cursor, pinned].filter((p): p is Pin => !!p)
   const inFocus = (l: Lane, u: Unit) =>
     isOn(l, u) || focusTurns.some((p) => p.branch === l.branch && (u.launch === p.col || u.reports.includes(p.col)))
+  /** A vertical from `y0` on the sender's row down (or up) to the baseline `y1`, turning right with an elbow. */
+  const elbow = (x: number, y0: number, y1: number) => {
+    const r = Math.min(ELBOW_R, Math.abs(y1 - y0))
+    const d = y1 >= y0 ? 1 : -1
+    return `M${f1(x)} ${f1(y0)}V${f1(y1 - d * r)}Q${f1(x)} ${f1(y1)} ${f1(x + r)} ${f1(y1)}`
+  }
+  /**
+   * An agent's spine: from the sender's row at the moment of launch (a fork: from the top of the
+   * parent's context then, a sub-agent: from its baseline) down, with an elbow, onto the agent's own
+   * baseline, and along it for the agent's life, as heavy as the tier of the model it ran on.
+   */
+  const laneSpine = (g: Layout, l: Lane) => {
+    const u0 = l.units.reduce<Unit | undefined>((m, u) => (!m || u.startMs < m.startMs ? u : m), undefined)
+    const t0 = u0 && Number.isFinite(u0.startMs) ? u0.startMs : l.t0
+    if (!Number.isFinite(t0)) return null
+    const xa = axis.x(t0)
+    const xb = Math.max(xa + 1.5, axis.x(l.t1))
+    const early = range !== undefined && t0 < range.lo
+    const from = u0 && !u0.woken && !early ? senderOf(l, u0) : undefined
+    const color = COLOR[l.kind]
+    const on = l.units.some((u) => inFocus(l, u))
+    // a fork branches from the top of its parent's context, any other agent from its baseline
+    const ctx = from && l.kind === 'fork' ? pointAt(ownPoints(from.l.key), t0)?.tokens : undefined
+    const y0 = from && from.g !== g ? (ctx ? yCtx(from.g, ctx) : from.g.base) : undefined
+    const turn = y0 !== undefined ? Math.min(ELBOW_R, Math.abs(g.base - y0)) : 0
+    return (
+      <g key={`s${l.key}`} opacity={on ? 1 : SPINE_OPACITY} pointerEvents="none">
+        {y0 !== undefined && (
+          <path d={elbow(xa, y0, g.base)} fill="none" stroke={color} strokeWidth={SPINE_W} strokeLinecap="round" />
+        )}
+        {tierSegments(l.runs, t0, l.t1).map((sg, k, all) => {
+          const x0 = k === 0 ? xa + turn : axis.x(sg.t0)
+          const x1 = Math.max(k === all.length - 1 ? xb : axis.x(sg.t1), x0)
+          return (
+            <line
+              key={sg.t0}
+              x1={x0}
+              x2={x1}
+              y1={g.base}
+              y2={g.base}
+              stroke={sg.tier === 'unknown' ? 'var(--muted)' : color}
+              strokeWidth={TIER_WEIGHT[sg.tier]}
+            />
+          )
+        })}
+        {early && <path d={edgeChevron(X0, g.base, 'l')} fill={color} />}
+      </g>
+    )
+  }
+  /** A forked or continued session's spine: from its parent's row when it began, in the text colour. */
+  const branchSpine = (g: Layout) => {
+    const b = tree.branches[g.row.branch]
+    const parent = b.parent !== undefined ? mainRow(b.parent) : undefined
+    const l = g.row.lanes[0]
+    if (!parent || !Number.isFinite(l.t0)) return null
+    const ctx = b.kind === 'fork' ? pointAt(ownPoints(`${b.parent}/main`), forkMoment(g.row.branch))?.tokens : undefined
+    const first = l.turns[0]?.col.index
+    const on = focusTurns.some((p) => p.branch === g.row.branch && p.col === first)
+    return (
+      <path
+        key={`s${l.key}`}
+        d={elbow(axis.x(l.t0), ctx ? yCtx(parent, ctx) : parent.base, g.base)}
+        fill="none"
+        stroke="var(--text)"
+        strokeWidth={SPINE_W}
+        strokeLinecap="round"
+        opacity={on ? 1 : SPINE_OPACITY}
+        pointerEvents="none"
+      >
+        <title>{b.kind === 'continuation' ? 'continued in a new session' : 'forked into a new session'}</title>
+      </path>
+    )
+  }
+  const spines = layout.map((g) => (g.row.main ? branchSpine(g) : g.row.lanes.map((l) => laneSpine(g, l))))
+  // the reports of the work in focus, and the launch of its later pieces (the first one is the spine)
   const connectors = layout.flatMap((g) =>
     g.row.main
       ? []
@@ -780,12 +932,12 @@ export function TimePlot({
             .map((u) => {
               const color = COLOR[l.kind]
               const on = isOn(l, u)
+              const first = l.units.every((x) => x.startMs >= u.startMs)
               // work its own background tasks woke was sent by nobody: no line comes down to it
-              const from = u.woken ? undefined : (u.from && rowByName.get(u.from)) || mainRow(l.branch)
+              const sender = u.woken || first ? undefined : senderOf(l, u)
+              const from = sender?.g
               const to = mainRow(l.branch)
               const [a] = uX(u)
-              // started before the window: its line runs along the left edge, with a chevron
-              const early = range !== undefined && u.startMs < range.lo
               const fy = from ? from.base : g.top
               return (
                 <g key={`c${l.key}/${u.id}`} pointerEvents="none" opacity={on ? 1 : 0.7}>
@@ -798,9 +950,8 @@ export function TimePlot({
                         y2={from.top < g.top ? g.top - 3 : g.bottom + 3}
                         stroke={color}
                         strokeWidth={on ? 1.5 : 1}
-                        strokeDasharray={early ? '4 2' : undefined}
                       />
-                      {from.top < g.top && !early && (
+                      {from.top < g.top && (
                         <path
                           d={`M${f1(a - 3)} ${g.top - 5}L${f1(a)} ${g.top}L${f1(a + 3)} ${g.top - 5}Z`}
                           fill={color}
@@ -808,7 +959,6 @@ export function TimePlot({
                       )}
                     </>
                   )}
-                  {early && <path d={edgeChevron(a, g.top + 4, 'l')} fill={color} />}
                   {to &&
                     arrivals(u).map((t) => {
                       // a report in a turn outside the window: the line runs to the edge, with a chevron
@@ -841,26 +991,6 @@ export function TimePlot({
             }),
         ),
   )
-  // a forked or continued session starts off its parent's row
-  const forks = layout.flatMap((g) => {
-    const b = tree.branches[g.row.branch]
-    const parent = b.parent !== undefined ? mainRow(b.parent) : undefined
-    const l = g.row.lanes[0]
-    if (!g.row.main || !parent || !Number.isFinite(l.t0)) return []
-    const x = axis.x(l.t0)
-    return [
-      <path
-        key={`f${l.key}`}
-        d={`M${f1(x)} ${parent.base}V${g.base}`}
-        stroke="var(--text)"
-        strokeWidth={1.25}
-        fill="none"
-        opacity={0.6}
-      >
-        <title>{b.kind === 'continuation' ? 'continued in a new session' : 'forked into a new session'}</title>
-      </path>,
-    ]
-  })
 
   // ---- pinned turn, its decision, the cursor
   const pinMarks = (() => {
@@ -1062,8 +1192,21 @@ export function TimePlot({
             <pattern id={hatch} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
               <line x1={0} y1={0} x2={0} y2={5} stroke="var(--muted)" strokeWidth={1.25} strokeOpacity={0.55} />
             </pattern>
+            {colors.map((c, k) => (
+              <pattern
+                key={c}
+                id={`${hatch}-${k}`}
+                width={4}
+                height={4}
+                patternUnits="userSpaceOnUse"
+                patternTransform="rotate(45)"
+              >
+                <line x1={0} y1={0} x2={0} y2={4} stroke={c} strokeWidth={1.1} strokeOpacity={0.6} />
+              </pattern>
+            ))}
           </defs>
           {pinMarks}
+          {spines}
           {layout.map(drawRow)}
           {strips.flatMap((s) =>
             overheads[s.branch].map((o, k) => {
@@ -1104,7 +1247,6 @@ export function TimePlot({
               )
             }),
           )}
-          {forks}
           {connectors}
           {crossX !== undefined && (
             <g pointerEvents="none">

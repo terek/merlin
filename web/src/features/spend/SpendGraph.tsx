@@ -463,11 +463,15 @@ export function SpendGraph({
         of a session or an agent it launched: above its line, the context each call was sent with (one scale for every
         row, so the tall ones are the expensive ones to carry), dotted where the agent held it over a pause (faint while
         a main agent waited for a message), with the context it carried lightly tinted; below it, what the row spent in
-        each slot of time, on one dollar scale. A light frame spans an agent's work; each piece of it has a line from
-        the row that sent it (none when its own background work woke it) and a dashed one to each turn its report came
-        in; an addressable agent keeps a row of its own, one-shot agents share rows. A dot is a message you sent (hollow
-        if typed while a turn ran), and the bracket rising from it totals everything up to your next one. A diamond is a
-        cache miss, a red mark a compaction on a cold cache, an amber dashed one on a warm cache.
+        each slot of time, on one dollar scale. A light frame spans an agent's work. A faint spine leads from the row
+        that launched an agent, down with a rounded elbow, then along the agent's baseline for its life (full strength
+        for the work in focus; a dashed line goes to each turn its report came in); its weight is the model's price,
+        heavy 3.5 px, mid 2 px, light 1 px, and a main row's turns are weighted the same, with the model's name where it
+        changes. A fork leaves from the top of its parent's context, and a hatched band in its row is the context it
+        copied; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot
+        agents share rows. A dot is a message you sent (hollow if typed while a turn ran), and the bracket rising from
+        it totals everything up to your next one. A diamond is a cache miss, a red mark a compaction on a cold cache, an
+        amber dashed one on a warm cache.
         {overhead &&
           ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
         {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}

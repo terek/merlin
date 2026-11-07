@@ -1060,3 +1060,107 @@ export function bracketed(
   for (const f of focus) if (f !== undefined) out.add(f)
   return out
 }
+
+// ---- topology and model tier ----------------------------------------------------------
+
+/** The last point at or before `t`. */
+export function pointAt(points: readonly Point[], t: number): Point | undefined {
+  let lo = 0
+  let hi = points.length - 1
+  let best: Point | undefined
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    if (points[mid].t <= t) {
+      best = points[mid]
+      lo = mid + 1
+    } else hi = mid - 1
+  }
+  return best
+}
+
+/**
+ * The context a fork copied from its parent: the parent's context at the moment of the fork
+ * (`parent`: its own points, in time order), capped at the fork's first context, which holds it. 0 when
+ * the parent has no call by then (it is outside the window) or the fork has no call.
+ */
+export function inheritedContext(parent: readonly Point[], t: number, first: number): number {
+  const p = pointAt(parent, t)
+  return p && first > 0 ? Math.min(p.tokens, first) : 0
+}
+
+/** The stroke width in pixels of a model tier: what it costs to run, as weight. */
+export const TIER_WEIGHT: Record<Tier, number> = { heavy: 3.5, mid: 2, light: 1, unknown: 1 }
+
+/** Tiers from the heaviest to the lightest, to compare them. */
+const TIER_RANK: Record<Tier, number> = { heavy: 3, mid: 2, light: 1, unknown: 0 }
+
+/** The heavier of two tiers. */
+export const heavierTier = (a: Tier, b: Tier): Tier => (TIER_RANK[b] > TIER_RANK[a] ? b : a)
+
+/** A stretch of time on one tier. */
+export interface TierSegment {
+  t0: number
+  t1: number
+  tier: Tier
+}
+
+/**
+ * A spine from `t0` to `t1` cut by the model `runs` of its lane: a segment per run, from where the run
+ * starts to where the next one does (a gap between two runs keeps the weight of the one before; the
+ * first run's tier reaches back to `t0`). Without runs it is one stretch of the unknown tier.
+ */
+export function tierSegments(runs: readonly ModelRun[], t0: number, t1: number): TierSegment[] {
+  if (!(t1 >= t0)) return []
+  if (runs.length === 0) return [{ t0, t1, tier: 'unknown' }]
+  const out: TierSegment[] = []
+  runs.forEach((r, i) => {
+    const a = i === 0 ? t0 : Math.max(t0, r.t0)
+    const b = Math.min(t1, runs[i + 1] ? Math.max(t0, runs[i + 1].t0) : t1)
+    if (b > a) out.push({ t0: a, t1: b, tier: r.tier })
+  })
+  if (out.length === 0) out.push({ t0, t1, tier: runs[0].tier })
+  return out
+}
+
+/**
+ * The tier a main-row turn ran on: the heaviest of the runs that hold a call of it (`t0` to `t1`), else
+ * the run that was current at its start (the first one before any), else unknown.
+ */
+export function turnTier(runs: readonly ModelRun[], t0: number, t1: number): Tier {
+  let tier: Tier | undefined
+  for (const r of runs) if (r.t1 >= t0 && r.t0 <= t1) tier = tier ? heavierTier(tier, r.tier) : r.tier
+  if (tier) return tier
+  const before = runs.findLast((r) => r.t0 <= t0)
+  return (before ?? runs[0])?.tier ?? 'unknown'
+}
+
+/** Stretches with a weight, sorted, those no more than `gap` apart joined; a joined stretch takes the heaviest weight. */
+export function mergeWeighted<T extends { t0: number; t1: number; weight: number }>(
+  items: readonly T[],
+  gap = 0,
+): { t0: number; t1: number; weight: number }[] {
+  const out: { t0: number; t1: number; weight: number }[] = []
+  for (const s of [...items]
+    .filter((x) => Number.isFinite(x.t0) && Number.isFinite(x.t1))
+    .sort((x, y) => x.t0 - y.t0)) {
+    const top = out[out.length - 1]
+    if (top && s.t0 - top.t1 <= gap) {
+      top.t1 = Math.max(top.t1, s.t1)
+      top.weight = Math.max(top.weight, s.weight)
+    } else out.push({ t0: s.t0, t1: Math.max(s.t0, s.t1), weight: s.weight })
+  }
+  return out
+}
+
+/**
+ * Where a lane's model label goes: the start of its first run, and every run on another model than the
+ * one before. `label` names a model; two runs that read the same are one.
+ */
+export function modelMarks(runs: readonly ModelRun[], label: (m: string) => string): { t: number; text: string }[] {
+  const out: { t: number; text: string }[] = []
+  for (const r of runs) {
+    const text = label(r.model)
+    if (r.model && text !== out[out.length - 1]?.text) out.push({ t: r.t0, text })
+  }
+  return out
+}

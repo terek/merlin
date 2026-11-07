@@ -387,8 +387,16 @@ From top to bottom:
     and not to a slot, turn or agent in it. Hover reads the window's reported and covered figures. The
     legend's "Not explained by messages" entry adds the bands up, and the legend's percentages are
     of messages plus overhead, which is the header's figure;
-  - on a main row each **turn** is a thick stretch of the baseline from its start to its end, with a
-    tick where it starts (the baseline is thin where no turn runs). A turn starts at
+  - on a main row each **turn** is a stretch of the baseline from its start to its end, as heavy as
+    the tier of the model it ran on (3.5 px heavy, 2 px mid, 1 px light or unpriced; the heaviest
+    tier of the runs that hold its calls, else the run current at its start; `turnTier`), with a
+    tick where it starts. The baseline where no turn runs is a hairline (0.75 px, faint). In the
+    band level of detail the merged band takes the heaviest weight of the turns it joins
+    (`mergeWeighted`). The colour stays the text colour. Where the main agent's model changes
+    (`lane.runs`), and where its first call in the window is, the model's short name (`Fable 5.1`)
+    is written small (9 px, muted, surface-coloured halo) just above the baseline at that point; a
+    label that would come within 14 px of the one before is left out, and a change to a name that
+    reads the same is no change (`modelMarks`); A turn starts at
     `turn.startedAt` and ends at the last thing that ran in it (a call of the main agent or of any
     agent, or a piece of work starting or ending) up to the harness's `endedAt` and before the next
     turn starts;
@@ -397,13 +405,13 @@ From top to bottom:
     decision, but it steered that turn). From each typed prompt that starts a turn, a bracket rises
     and runs over the row with the total of everything up to the next one (a **decision**); and the
     turn numbers where they fit. A forked or continued session has a main row of its own with only
-    its own turns, starting with a line from its parent's row; nothing is merged across session ids;
+    its own turns, starting with a spine from its parent's row (below); nothing is merged across
+    session ids;
   - an agent's work is one light frame, in its kind's colour, from the start of its first **piece
     of agent work** to the last call of its last: its start down to the baseline, its top, and a short
     stem at its end, like a decision's bracket turned round (no fill, so the context tint under it
     reads alone; its pieces show in the context, an area while they run, dotted between them). A
-    sub-agent solid, a fork with a notch, a workflow dashed, an addressable agent with a dashed
-    lifeline along its baseline. The frame carries the agent's name, its main model (the model of most of its calls, as `Sonnet 5.5`)
+    sub-agent solid, a fork with a notch, a workflow dashed. The frame carries the agent's name, its main model (the model of most of its calls, as `Sonnet 5.5`)
     and its spend, `name · Sonnet 5.5 · $1.20`; where room is short the model goes first, then the
     spend. A piece is one of the
     agent's turns (`agent.turns`): a sub-agent or fork has one, an addressable agent (a Claude Code
@@ -412,12 +420,36 @@ From top to bottom:
     its agents inside. Agents are packed into rows by their whole life (an addressable agent keeps
     its row over its pauses). The rows have no labels: the plot takes the full width, with only the
     context scale to its left, and each agent is named on its frame;
-  - the line from the row that sent a piece of work (the main row, or the sender its inbox names;
-    none for work the agent's own background tasks woke after it reported) and a dashed line to each
-    turn a report of it came in are drawn only for the work in focus: hovered, selected, or launched
-    or reported in the turn under the cursor or pinned. An agent's turns are its pieces of work: a
-    message from the agent that launched it, or a notification that wakes it after it finished, starts
-    a new one (the harness writes these as `isMeta` records with an `origin`);
+  - **spines** show who launched whom. Every agent lane, and every forked or continued session's main
+    row, has a spine: a path that starts on its sender's row at the moment of launch (the main row of
+    its branch, or the row of the agent a later message names as its sender, `u.from`; for a forked
+    or continued session, the main row of its parent session at the moment the new session begins),
+    runs vertically to the agent's row, turns with a rounded elbow (radius 6 px) onto its baseline and
+    runs along it over the agent's life, from its first launch to its last activity. It is in the
+    lane's kind colour (a session's in the text colour), faint (35%) and drawn under the areas and
+    frames; at full strength for the work in focus: hovered, selected, or launched or reported in the
+    turn under the cursor or pinned (a session's: when its first turn is). Agents packed into one row
+    each have their own segment. The horizontal part is as heavy as the model tier of the run the
+    agent was on, segment by segment along `lane.runs` (3.5 px heavy, 2 px mid, 1 px light, 1 px grey
+    unpriced; the gap between two runs keeps the weight of the one before; `tierSegments`), so a
+    cheap worker under an expensive main agent is a thin line and a fork on the parent's model a
+    heavy one. The vertical part is 1.25 px whatever the weight. A forked session's spine has no
+    horizontal part: its turns on the main row carry the weight. A swarm launched at one moment is
+    one trunk of overlapping spines. A piece of work that began before the window starts at the left
+    edge with a chevron and no elbow. A later piece of work of the same agent (a teammate woken again)
+    keeps a thin line from its sender, drawn only when it is in focus; none for work the agent's own
+    background tasks woke (`woken`). The report lines stay as they were: a dashed line to each turn
+    a report came in, only for the work in focus. An agent's turns are its pieces of work: a
+    message from the agent that launched it, or a notification that wakes it after it finished,
+    starts a new one (the harness writes these as `isMeta` records with an `origin`);
+  - **a fork copies its parent's context**: its spine does not start at the parent's baseline but at
+    the top of the parent's context at that moment (the parent's own last context at or before the
+    launch; for a forked session, at the end of the last turn it copied, `lineage.parent.atTurn`),
+    and in the fork's row the first run of its context shows the part it inherited, the parent's
+    context then capped at the fork's first context (`inheritedContext`), as a light hatched band in
+    the parent's colour under the fork's own area, so the copied context and the growth on top of
+    it can be told apart. A sub-agent (clean context) and a continuation branch from the parent's
+    baseline and have no hatch;
   - hover reads the clock, the context of the row under the pointer and the slot's spend; between
     two turns it reads "between turns 0 and 1: main agent idle 38 min" and pins nothing. A click
     pins the turn or selects the piece of work; arrow keys move by turn.

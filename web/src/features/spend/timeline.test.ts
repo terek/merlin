@@ -16,9 +16,14 @@ import {
   dragWindow,
   episodes,
   GAP_MS,
+  heavierTier,
+  inheritedContext,
   type Lane,
   MIN_WINDOW_MS,
+  type ModelRun,
   mergeBusy,
+  mergeWeighted,
+  modelMarks,
   packLanes,
   parseTime,
   pxPerTurn,
@@ -33,10 +38,13 @@ import {
   splitDays,
   splitHeld,
   stepWindow,
+  TIER_WEIGHT,
   type Timeline,
+  tierSegments,
   tierSpend,
   timeAxis,
   turnPlace,
+  turnTier,
   windowDay,
 } from './timeline'
 import { buildTree } from './tree'
@@ -740,5 +748,66 @@ describe('level of detail', () => {
     const some = bracketed(decs, 'top', [3, undefined])
     expect([...some].sort((a, b) => a - b)).toEqual([3, 12, 13, 14, 15, 16, 17, 18, 19])
     expect(bracketed(decs, 'band', []).size).toBe(8)
+  })
+})
+
+describe('topology and model tier', () => {
+  const run = (t0: number, t1: number, model: string, tier: ModelRun['tier']): ModelRun => ({ t0, t1, model, tier })
+  const pts = [
+    { t: 10, tokens: 1000 },
+    { t: 20, tokens: 5000 },
+  ]
+  test('a fork inherits the parent context at the launch, capped at its first context', () => {
+    expect(inheritedContext(pts, 15, 9000)).toBe(1000)
+    expect(inheritedContext(pts, 25, 9000)).toBe(5000)
+    expect(inheritedContext(pts, 25, 3000)).toBe(3000)
+    expect(inheritedContext(pts, 5, 3000)).toBe(0)
+    expect(inheritedContext(pts, 25, 0)).toBe(0)
+  })
+  test('weights by tier, heavy to light', () => {
+    expect(TIER_WEIGHT.heavy).toBeGreaterThan(TIER_WEIGHT.mid)
+    expect(TIER_WEIGHT.mid).toBeGreaterThan(TIER_WEIGHT.light)
+    expect(heavierTier('light', 'mid')).toBe('mid')
+    expect(heavierTier('heavy', 'unknown')).toBe('heavy')
+  })
+  test('a spine is cut by the runs, a gap keeps the weight before it', () => {
+    const runs = [run(10, 20, 'a', 'heavy'), run(40, 50, 'b', 'light')]
+    expect(tierSegments(runs, 0, 60)).toEqual([
+      { t0: 0, t1: 40, tier: 'heavy' },
+      { t0: 40, t1: 60, tier: 'light' },
+    ])
+    expect(tierSegments(runs, 0, 30)).toEqual([{ t0: 0, t1: 30, tier: 'heavy' }])
+    expect(tierSegments([], 0, 5)).toEqual([{ t0: 0, t1: 5, tier: 'unknown' }])
+    expect(tierSegments(runs, 5, 5)).toEqual([{ t0: 5, t1: 5, tier: 'heavy' }])
+  })
+  test('a turn takes the heaviest tier of its calls, else the run it was in', () => {
+    const runs = [run(10, 20, 'a', 'mid'), run(21, 30, 'b', 'heavy'), run(100, 110, 'c', 'light')]
+    expect(turnTier(runs, 5, 15)).toBe('mid')
+    expect(turnTier(runs, 15, 25)).toBe('heavy')
+    expect(turnTier(runs, 50, 60)).toBe('heavy')
+    expect(turnTier(runs, 0, 5)).toBe('mid')
+    expect(turnTier([], 0, 5)).toBe('unknown')
+  })
+  test('merged stretches take the heaviest weight', () => {
+    expect(
+      mergeWeighted(
+        [
+          { t0: 10, t1: 12, weight: 1 },
+          { t0: 0, t1: 5, weight: 2 },
+          { t0: 6, t1: 8, weight: 3.5 },
+        ],
+        1,
+      ),
+    ).toEqual([
+      { t0: 0, t1: 8, weight: 3.5 },
+      { t0: 10, t1: 12, weight: 1 },
+    ])
+  })
+  test('model labels sit where the model changes, once per name', () => {
+    const runs = [run(1, 2, 'x-1', 'heavy'), run(3, 4, 'x-1-dated', 'heavy'), run(5, 6, 'y', 'light')]
+    expect(modelMarks(runs, (m) => m.replace('-dated', ''))).toEqual([
+      { t: 1, text: 'x-1' },
+      { t: 5, text: 'y' },
+    ])
   })
 })

@@ -26,6 +26,7 @@ import { agentRole } from '../../lib/agent'
 import { idleText } from '../../lib/compaction'
 import { formatDuration } from '../../lib/format'
 import { ENCRYPTED, inboxBody, turnPrompt } from '../../lib/inbox'
+import { modelLabel } from '../../lib/models'
 import type { Tier } from '../../lib/tiers'
 
 /** What the dollars bought. `reread` is a cache miss: context that had been cached and was billed again in full. */
@@ -238,7 +239,7 @@ export function missText(r: Reread): string {
     case 'idle':
       return r.gapMs !== undefined ? `after ${idleText(r.gapMs)} idle` : 'after the cache had expired'
     case 'model':
-      return r.fromModel ? `on a switch from ${r.fromModel}` : 'on a model switch'
+      return r.fromModel ? `on a switch from ${modelLabel(r.fromModel)}` : 'on a model switch'
     case 'fast':
       return r.fast ? 'on turning fast mode on' : 'on turning fast mode off'
     default:
