@@ -18,10 +18,37 @@ This project uses **bd** (beads) for issue tracking. Run `bd prime` for full wor
 ```bash
 bd ready              # Find available work
 bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
+bd update <id> --claim --actor <seat>  # Claim work atomically; <seat> = the persona you work for
 bd close <id>         # Complete work
 bd dolt push          # Push beads data to remote
 ```
+
+Without `--actor` every claim is recorded as the user, and a second agent's claim of the same
+bead also succeeds.
+
+## Worktrees
+
+The repository is a bare container: `~/work/merlin/.bare` holds git, and every checkout is a
+worktree beside it.
+
+- `~/work/merlin/main/` is the user's checkout of `main`; agents do not edit there. Work reaches
+  `main` by push from a seat.
+- Commit and push are allowed. Commit on your seat's branch. To land: `git fetch`,
+  `git rebase origin/main`, run the checks, then `git push origin HEAD:main` (fast-forward only;
+  never force-push `main`). This repository opts in to the beads team-maintainer profile,
+  `bd dolt push` included. Tags make releases: push one only when the user asks.
+- `~/work/merlin/<seat>/` belongs to one persona (seat) and its workers; stay in yours and never
+  edit another seat's. A task gets a branch `<seat>/<topic>` cut from `origin/main`
+  (`git switch -c <seat>/<topic> origin/main`); between tasks the worktree sits detached on
+  `origin/main`.
+- The beads database lives in `main/.beads`. Every other worktree reaches it through an ignored
+  `.beads/redirect` containing `../main/.beads`; without it bd silently creates a second
+  database. From the container root, use `bd -C main ...`.
+- New seat: from `~/work/merlin`, `git worktree add --relative-paths --detach <seat> origin/main`,
+  then inside it `chmod 700 .beads && echo ../main/.beads > .beads/redirect` and
+  `(cd web && bun install --frozen-lockfile)`.
+- Git commands do not work at the container root (it is bare); run them inside a worktree. The
+  stash is shared by all worktrees.
 
 ## Non-Interactive Shell Commands
 

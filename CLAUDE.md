@@ -12,7 +12,7 @@ same directory: never read, change or remove anything else there.
 
 ## Commands
 
-Run from the repository root.
+Run from the root of your worktree (see Worktrees).
 
 ```
 make build      # bin/merlin with the web UI embedded (needs bun)
@@ -23,6 +23,26 @@ make web-check  # web/: tsc, Biome, bun test
 ```
 
 Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin`.
+
+## Worktrees
+
+The repository is a bare container: `~/work/merlin/.bare` holds git, and every checkout is a
+worktree beside it.
+
+- `~/work/merlin/main/` is the user's checkout of `main`; agents do not edit there. Work reaches
+  `main` by push from a seat (see Rules).
+- `~/work/merlin/<seat>/` belongs to one persona (seat) and its workers; stay in yours and never
+  edit another seat's. A task gets a branch `<seat>/<topic>` cut from `origin/main`
+  (`git switch -c <seat>/<topic> origin/main`); between tasks the worktree sits detached on
+  `origin/main`.
+- The beads database lives in `main/.beads`. Every other worktree reaches it through an ignored
+  `.beads/redirect` containing `../main/.beads`; without it bd silently creates a second
+  database. From the container root, use `bd -C main ...`.
+- New seat: from `~/work/merlin`, `git worktree add --relative-paths --detach <seat> origin/main`,
+  then inside it `chmod 700 .beads && echo ../main/.beads > .beads/redirect` and
+  `(cd web && bun install --frozen-lockfile)`.
+- Git commands do not work at the container root (it is bare); run them inside a worktree. The
+  stash is shared by all worktrees.
 
 ## Rules
 
@@ -55,7 +75,10 @@ Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin`.
   or into any committed file. Write fixture text by hand.
 - **JSON conventions:** camelCase keys, RFC 3339 UTC timestamps, USD as float64, token
   counts as int64, `omitempty` on optional fields.
-- **Do not commit or push.** Leave changes in the working tree.
+- **Commit and push.** Commit on your seat's branch. To land: `git fetch`, `git rebase origin/main`,
+  run the checks, then `git push origin HEAD:main` (fast-forward only; never force-push `main`).
+  This repository opts in to the beads team-maintainer profile, `bd dolt push` included. Tags make
+  releases: push one only when the user asks.
 
 ## Web UI (`web/`)
 
@@ -93,10 +116,13 @@ before touching `web/`.
 
 ```
 bd show <id>                    # the task, its acceptance criteria and dependencies
-bd update <id> --claim          # when you start
+bd update <id> --claim --actor <seat>   # when you start; <seat> = the persona you work for
 bd comment <id> --file note.md  # long notes go through a file, not the command line
 bd close <id> --reason "..."    # when acceptance criteria are met and make test passes
 ```
+
+Without `--actor` every claim is recorded as the user, and a second agent's claim of the same
+bead also succeeds.
 
 Close a bead only when its acceptance criteria hold and `make test` and `make vet` pass.
 If you cannot finish, leave it open and comment with what is done and what blocks you.
