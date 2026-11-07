@@ -120,6 +120,7 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
         <SpendGraph
           tree={tree}
           home={homeIndex}
+          current={home.summary.key}
           pinned={pinned}
           onPin={pin}
           selectedUnit={unit}

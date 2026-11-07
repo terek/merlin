@@ -1281,6 +1281,23 @@ export function inheritedContext(parent: readonly Point[], t: number, first: num
 /** The stroke width in pixels of a model tier: what it costs to run, as weight. */
 export const TIER_WEIGHT: Record<Tier, number> = { heavy: 3.5, mid: 2, light: 1, unknown: 1 }
 
+/** The weight of a branch's spine: its first model's tier; the middle weight when that is missing or unknown. */
+export const branchWeight = (tier: Tier | undefined): number =>
+  tier && tier !== 'unknown' ? TIER_WEIGHT[tier] : TIER_WEIGHT.mid
+
+/**
+ * What a session of a tree is to the others, said in a few words: the trunk is the original, a fork names
+ * the turn it left at, a continuation is just continued. The session the page is about is marked.
+ */
+export function branchRole(
+  kind: 'fork' | 'continuation' | undefined,
+  atTurn: number | undefined,
+  current: boolean,
+): string {
+  const role = kind === undefined ? 'original' : kind === 'continuation' ? 'continued' : `fork of turn ${atTurn ?? '?'}`
+  return current ? `${role} · this session` : role
+}
+
 /** Tiers from the heaviest to the lightest, to compare them. */
 const TIER_RANK: Record<Tier, number> = { heavy: 3, mid: 2, light: 1, unknown: 0 }
 

@@ -6,6 +6,8 @@ import {
   barSpan,
   boundsOf,
   bracketed,
+  branchRole,
+  branchWeight,
   buildTimeline,
   centerWindow,
   clampWindow,
@@ -908,5 +910,26 @@ describe('swarms', () => {
       { ...a.calls[0], usd: 0.2, tier: 'light' },
     ]
     expect(mergeSwarm('x', [a, mk('b', 0, 10)]).runs[0].tier).toBe('heavy')
+  })
+})
+
+describe('branchRole', () => {
+  test('names the trunk, a fork by its turn and a continuation', () => {
+    expect(branchRole(undefined, undefined, false)).toBe('original')
+    expect(branchRole('fork', 2, false)).toBe('fork of turn 2')
+    expect(branchRole('continuation', 5, false)).toBe('continued')
+  })
+  test('marks the session the page is about', () => {
+    expect(branchRole('fork', 2, true)).toBe('fork of turn 2 · this session')
+    expect(branchRole(undefined, undefined, true)).toBe('original · this session')
+  })
+})
+
+describe('branchWeight', () => {
+  test('is the tier weight, the middle one when missing or unknown', () => {
+    expect(branchWeight('heavy')).toBe(TIER_WEIGHT.heavy)
+    expect(branchWeight('light')).toBe(TIER_WEIGHT.light)
+    expect(branchWeight('unknown')).toBe(TIER_WEIGHT.mid)
+    expect(branchWeight(undefined)).toBe(TIER_WEIGHT.mid)
   })
 })

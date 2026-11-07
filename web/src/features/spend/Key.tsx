@@ -4,6 +4,7 @@
 import { type ReactNode, useId } from 'react'
 import { TIER_SERIES } from './model'
 import {
+  BranchNode,
   CHIP,
   COLOR,
   COMPACT_MARK,
@@ -268,6 +269,7 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
           <rect x={7} y={5} width={W - 7} height={B - 5} fill={`url(#${id}-inh)`} />
           <path d={elbowPath(7, 3, B)} fill="none" stroke={COLOR.fork} strokeWidth={SPINE_W} strokeLinecap="round" />
           <line x1={7 + ELBOW_R} x2={W - 1} y1={B} y2={B} stroke={COLOR.fork} strokeWidth={TIER_WEIGHT.mid} />
+          <BranchNode x={7} y={3} color={COLOR.fork} />
         </Entry>
       )}
       {f.agents && <Entry label="agent's work (frame)">{frame('sub')}</Entry>}
@@ -303,10 +305,17 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
       {f.sessions && (
         <Entry
           label="forked or continued session"
-          title="A session's spine leaves its parent's row, in the text colour"
+          title="A session's spine bends down from its parent's row, as heavy as its model; a dot where a fork left, a ring for a continuation"
         >
-          <path d={elbowPath(4, 1, B)} fill="none" stroke="var(--text)" strokeWidth={SPINE_W} opacity={0.7} />
-          <line x1={4 + ELBOW_R} x2={W - 1} y1={B} y2={B} stroke="var(--faint)" strokeWidth={0.75} />
+          <path
+            d={elbowPath(5, 3, B)}
+            fill="none"
+            stroke={COLOR.main}
+            strokeWidth={TIER_WEIGHT.mid}
+            strokeLinecap="round"
+          />
+          <line x1={5 + ELBOW_R} x2={W - 1} y1={B} y2={B} stroke={COLOR.main} strokeWidth={TIER_WEIGHT.mid} />
+          <BranchNode x={5} y={3} color={COLOR.main} />
         </Entry>
       )}
       <Entry label="break" title="Time in which nothing ran, left out">

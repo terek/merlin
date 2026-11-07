@@ -305,7 +305,7 @@ From top to bottom:
     (solid, hollow), the decision bracket (and the pinned one), turn weights by tier, the idle hairline, the
     spend per slot, the agent spine with its elbow, a fork with the context it copied, the agent frame
     (sub-agent, fork notch, workflow dashed), the swarm "+", the report line, a forked or continued session's
-    spine, the break band and the overhead hatching. Marks the tree cannot have are left out (`keyFacts`:
+    spine with its node, the break band and the overhead hatching. Marks the tree cannot have are left out (`keyFacts`:
     cache misses, each kind of compaction, queued prompts, agents, forks, workflows, swarms, reports, sessions,
     overhead). The samples use the constants and patterns TimeView.tsx exports and draws with (widths,
     dashes, opacities, tints, the hatching, `elbowPath`), so a change to the plot's look changes its key.
@@ -462,15 +462,19 @@ From top to bottom:
     or continued session, the main row of its parent session at the moment the new session begins),
     runs vertically to the agent's row, turns with a rounded elbow (radius 6 px) onto its baseline and
     runs along it over the agent's life, from its first launch to its last activity. It is in the
-    lane's kind colour (a session's in the text colour), faint (35%) and drawn under the areas and
+    lane's kind colour, faint (35%) and drawn under the areas and
     frames; at full strength for the work in focus: hovered, selected, or launched or reported in the
-    turn under the cursor or pinned (a session's: when its first turn is). Agents packed into one row
+    turn under the cursor or pinned. Context-carrying branches are skeleton, not detail: a forked or
+    continued session's spine and an agent fork's are always at full strength, a clean-context
+    sub-agent's stays faint. Agents packed into one row
     each have their own segment. The horizontal part is as heavy as the model tier of the run the
     agent was on, segment by segment along `lane.runs` (3.5 px heavy, 2 px mid, 1 px light, 1 px grey
     unpriced; the gap between two runs keeps the weight of the one before; `tierSegments`), so a
     cheap worker under an expensive main agent is a thin line and a fork on the parent's model a
-    heavy one. The vertical part is 1.25 px whatever the weight. A forked session's spine has no
-    horizontal part: its turns on the main row carry the weight. A swarm of 4 or more is one row with one spine
+    heavy one. The vertical part of an agent's spine is 1.25 px whatever the weight. A forked or continued
+    session's spine is the main line bending down: `--main` colour, as heavy as the tier of its first
+    model run (mid when unknown), on a `--surface` halo 4 px wider so that it passes in front of the
+    agent rows it crosses; it has no horizontal part: its turns on the main row carry the weight. A swarm of 4 or more is one row with one spine
     (above); fewer launched at one moment are a trunk of overlapping spines. A piece of work that began before the window starts at the left
     edge with a chevron and no elbow. A later piece of work of the same agent (a teammate woken again)
     keeps a thin line from its sender, drawn only when it is in focus; none for work the agent's own
@@ -478,6 +482,13 @@ From top to bottom:
     a report came in, only for the work in focus. An agent's turns are its pieces of work: a
     message from the agent that launched it, or a notification that wakes it after it finished,
     starts a new one (the harness writes these as `isMeta` records with an `origin`);
+  - **branch nodes and labels**: where a fork or agent fork leaves its parent's row a filled dot
+    (r 4.5, 2 px surface outline, in `--main` or the fork colour) marks the start of the spine; a continuation
+    has a ring (surface fill, 1.75 px `--main` outline). The session's dot has a tooltip ("Forked at turn 27:
+    28 turns copied into “…”", "Continued in “…”"); it is left out when it falls outside the window. In a
+    tree of more than one session the first model label of each main row is prefixed with its role in
+    the text colour, semibold: `original`, `fork of turn N` or `continued`, plus ` · this session` for
+    the session the page was opened on (`TimePlot`'s `current`; `branchRole`);
   - **a fork copies its parent's context**: its spine does not start at the parent's baseline but at
     the top of the parent's context at that moment (the parent's own last context at or before the
     launch; for a forked session, at the end of the last turn it copied, `lineage.parent.atTurn`),

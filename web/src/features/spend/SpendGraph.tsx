@@ -3,6 +3,7 @@
 // piece of agent work are the page's; the panels under the card open them.
 import { type KeyboardEvent, useMemo, useState } from 'react'
 import { usePrices } from '../../api/queries'
+import type { SessionKey } from '../../api/types'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
 import { spendBasis } from '../../lib/cost'
 import { formatCount, formatDuration, formatMoney, formatPercent, formatTokens, plural } from '../../lib/format'
@@ -71,6 +72,8 @@ export interface SpendGraphProps {
   unknownSessions?: number
   /** Sessions of the tree whose dollars the harness recorded per call (flag recorded). */
   recordedSessions?: number
+  /** The session the page is about: its main row is marked in the plot. */
+  current?: SessionKey
 }
 
 /** A tree with more activity than this gets the overview even when it ran on one day. */
@@ -258,6 +261,7 @@ export function SpendGraph({
   initialWindow,
   unknownSessions = 0,
   recordedSessions = 0,
+  current,
 }: SpendGraphProps) {
   const [split, setSplit] = useState<Split>(initialSplit)
   const [cursor, setCursor] = useState<Pin | null>(
@@ -448,6 +452,7 @@ export function SpendGraph({
         onPin={onPin}
         onSelectUnit={onSelectUnit}
         onKey={onKey}
+        current={current}
         turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} split={split} /> : null}
       />
       <Key facts={facts} className="mt-2" />

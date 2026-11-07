@@ -34,6 +34,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import type { SessionKey } from '../../api/types'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
@@ -46,6 +47,8 @@ import {
   BAND_GAP_PX,
   barSpan,
   bracketed,
+  branchRole,
+  branchWeight,
   clockTicks,
   collapseSwarms,
   detailAt,
@@ -75,7 +78,7 @@ import {
   turnTier,
   type Win,
 } from './timeline'
-import type { Overhead, Tree } from './tree'
+import { type Overhead, shortTitle, type Tree } from './tree'
 import { useWidth } from './useWidth'
 
 /** Room left of the plot for the context scale. */
@@ -234,6 +237,38 @@ export interface TimePlotProps {
   onKey: (e: KeyboardEvent<HTMLDivElement>) => void
   /** The turn or piece of work under the cursor, pinned or selected (lines under the pointer's own); null if none. */
   turnLines: ReactNode
+  /** The session the page is about: its main row is marked "this session". */
+  current?: SessionKey
+}
+
+/** Where a branch leaves its parent's row: a dot (a fork, with the context it copied), a ring (a continuation). */
+export const NODE_R = 4.5
+export function BranchNode({
+  x,
+  y,
+  color,
+  ring = false,
+  tip,
+}: {
+  x: number
+  y: number
+  color: string
+  ring?: boolean
+  tip?: string
+}) {
+  return (
+    <circle
+      cx={x}
+      cy={y}
+      r={NODE_R}
+      fill={ring ? 'var(--surface)' : color}
+      stroke={ring ? color : 'var(--surface)'}
+      strokeWidth={ring ? 1.75 : 2}
+      pointerEvents={tip ? 'all' : 'none'}
+    >
+      {tip && <title>{tip}</title>}
+    </circle>
+  )
 }
 
 export function TimePlot({
@@ -251,6 +286,7 @@ export function TimePlot({
   onSelectUnit,
   onKey,
   turnLines,
+  current,
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
@@ -849,10 +885,15 @@ export function TimePlot({
         {main &&
           (() => {
             let end = Number.NEGATIVE_INFINITY
-            return modelMarks(main.runs, modelLabel).map((m) => {
+            const br = tree.branches[g.row.branch]
+            const own = !!current && br.key.harness === current.harness && br.key.id === current.id
+            const lead =
+              tree.branches.length > 1 ? branchRole(br.kind, br.detail.lineage.parent?.atTurn, own) : undefined
+            return modelMarks(main.runs, modelLabel).map((m, k) => {
               const x = axis.x(m.t) + 2
               if (x < end + 14) return null
-              end = x + m.text.length * 4.9
+              const role = k === 0 && lead ? `${lead} · ` : ''
+              end = x + (role.length + m.text.length) * 4.9
               return (
                 <text
                   key={`mm${m.t}`}
@@ -865,6 +906,11 @@ export function TimePlot({
                   paintOrder="stroke"
                   pointerEvents="none"
                 >
+                  {role && (
+                    <tspan fill="var(--text)" fontWeight={600}>
+                      {role}
+                    </tspan>
+                  )}
                   {m.text}
                 </text>
               )
@@ -1009,7 +1055,8 @@ export function TimePlot({
     const early = range !== undefined && t0 < range.lo
     const from = u0 && !u0.woken && !early ? senderOf(l, u0) : undefined
     const color = COLOR[l.kind]
-    const on = l.units.some((u) => inFocus(l, u)) || (!!hot && hot.key === l.key)
+    // a fork carries its parent's context: structure, at full strength; a clean worker is light
+    const on = l.kind === 'fork' || l.units.some((u) => inFocus(l, u)) || (!!hot && hot.key === l.key)
     // a fork branches from the top of its parent's context, any other agent from its baseline
     const ctx = from && l.kind === 'fork' ? pointAt(ownPoints(from.l.key), t0)?.tokens : undefined
     const y0 = from && from.g !== g ? (ctx ? yCtx(from.g, ctx) : from.g.base) : undefined
@@ -1019,6 +1066,7 @@ export function TimePlot({
         {y0 !== undefined && (
           <path d={elbow(xa, y0, g.base)} fill="none" stroke={color} strokeWidth={SPINE_W} strokeLinecap="round" />
         )}
+        {y0 !== undefined && l.kind === 'fork' && <BranchNode x={xa} y={y0} color={color} />}
         {tierSegments(l.runs, t0, l.t1).map((sg, k, all) => {
           const x0 = k === 0 ? xa + turn : axis.x(sg.t0)
           const x1 = Math.max(k === all.length - 1 ? xb : axis.x(sg.t1), x0)
@@ -1038,31 +1086,48 @@ export function TimePlot({
       </g>
     )
   }
-  /** A forked or continued session's spine: from its parent's row when it began, in the text colour. */
+  /**
+   * A forked or continued session's spine: the main line bending down from its parent's row when it began,
+   * as heavy as the model it ran on, with a node where it leaves. It is skeleton, so it is never dimmed.
+   */
   const branchSpine = (g: Layout) => {
     const b = tree.branches[g.row.branch]
     const parent = b.parent !== undefined ? mainRow(b.parent) : undefined
     const l = g.row.lanes[0]
     if (!parent || !Number.isFinite(l.t0)) return null
     const ctx = b.kind === 'fork' ? pointAt(ownPoints(`${b.parent}/main`), forkMoment(g.row.branch))?.tokens : undefined
-    const first = l.turns[0]?.col.index
-    const on = focusTurns.some((p) => p.branch === g.row.branch && p.col === first)
+    const x = axis.x(l.t0)
+    const y = ctx ? yCtx(parent, ctx) : parent.base
+    const d = elbow(x, y, g.base)
+    const w = branchWeight(l.runs[0]?.tier)
+    const link = b.detail.lineage.parent
+    const name = `“${shortTitle(b.title)}”`
+    const tip =
+      b.kind === 'continuation'
+        ? `Continued in ${name}`
+        : link
+          ? `Forked at turn ${link.atTurn}: ${link.sharedTurns} turns copied into ${name}`
+          : `Forked into ${name}`
     return (
-      <path
-        key={`s${l.key}`}
-        d={elbow(axis.x(l.t0), ctx ? yCtx(parent, ctx) : parent.base, g.base)}
-        fill="none"
-        stroke="var(--text)"
-        strokeWidth={SPINE_W}
-        strokeLinecap="round"
-        opacity={on ? 1 : SPINE_OPACITY}
-        pointerEvents="none"
-      >
-        <title>{b.kind === 'continuation' ? 'continued in a new session' : 'forked into a new session'}</title>
-      </path>
+      <g key={`s${l.key}`}>
+        <path
+          d={d}
+          fill="none"
+          stroke="var(--surface)"
+          strokeWidth={w + 4}
+          strokeLinecap="round"
+          pointerEvents="none"
+        />
+        <path d={d} fill="none" stroke={COLOR.main} strokeWidth={w} strokeLinecap="round" pointerEvents="none">
+          <title>{b.kind === 'continuation' ? 'continued in a new session' : 'forked into a new session'}</title>
+        </path>
+        {x >= X0 && x <= X1 && <BranchNode x={x} y={y} color={COLOR.main} ring={b.kind === 'continuation'} tip={tip} />}
+      </g>
     )
   }
-  const spines = layout.map((g) => (g.row.main ? branchSpine(g) : g.row.lanes.map((l) => laneSpine(g, l))))
+  // an agent's spine runs under the rows; a session's branch is skeleton and passes over them
+  const spines = layout.map((g) => (g.row.main ? null : g.row.lanes.map((l) => laneSpine(g, l))))
+  const branches = layout.map((g) => (g.row.main ? branchSpine(g) : null))
   // the reports of the work in focus, and the launch of its later pieces (the first one is the spine)
   const reported = new Set<string>()
   const connectors = layout.flatMap((g) =>
@@ -1379,6 +1444,7 @@ export function TimePlot({
           {pinMarks}
           {spines}
           {layout.map(drawRow)}
+          {branches}
           {strips.flatMap((s) =>
             overheads[s.branch].map((o, k) => {
               const [a, b] = overX(o)
