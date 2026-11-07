@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 17,
+  "parserVersion": 18,
   "source": [
     {
       "path": "projects/-home-dev-acme-team/09090909-0000-4000-8000-000000000001.jsonl",
@@ -187,7 +187,13 @@
                 "usd": 0.0092
               }
             }
-          }
+          },
+          "workDirs": [
+            {
+              "dir": "/home/dev/acme/team",
+              "commands": 1
+            }
+          ]
         },
         {
           "index": 1,

@@ -264,6 +264,10 @@ const (
 	ByBranch
 	ByBead
 	ByFamily
+	// ByCheckout and ByRemote put a session's whole spend under its primary checkout or remote
+	// (location.go), like ByRepo.
+	ByCheckout
+	ByRemote
 )
 
 // facet reports whether the dimension needs the groupings.
@@ -277,6 +281,8 @@ type Row struct {
 	Model    string `json:"model,omitempty"`
 	Kind     string `json:"kind,omitempty"`
 	Repo     string `json:"repo,omitempty"`
+	Checkout string `json:"checkout,omitempty"`
+	Remote   string `json:"remote,omitempty"`
 	Branch   string `json:"branch,omitempty"` // repository#branch (SplitBranchKey)
 	Bead     string `json:"bead,omitempty"`
 	Family   string `json:"family,omitempty"` // the root bead of the family
@@ -330,12 +336,16 @@ type Filter struct {
 	// DayFrom and DayTo (local dates, inclusive) restrict rollups and scripted lines to
 	// spend on those days. They do not select sessions.
 	DayFrom, DayTo string
-	// Repo keeps the sessions that count under a repository (the main repository's
-	// directory, NoneFilter for none); Worktree those that worked in a linked worktree;
-	// Branch those with a turn on a branch; Bead those that worked on a bead or on one below
-	// it in its family, or, when it is a bead prefix (merlin), on any bead of that prefix.
-	// See places.go.
-	Repo, Worktree, Branch, Bead string
+	// Repo keeps the sessions that count under a repository (its git common dir), Checkout
+	// those under a checkout and Remote those under a remote; NoneFilter selects the sessions
+	// with none. Touched widens the most specific of them from the primary value to every value
+	// the session touched: Checkout when it is set (Repo and Remote then stay primary), else Repo
+	// and Remote (a none filter stays primary). Branch keeps those with a
+	// turn on a branch; Bead those that worked on a bead or on one below it in its family,
+	// or, when it is a bead prefix (merlin), on any bead of that prefix. See places.go and
+	// location.go.
+	Repo, Checkout, Remote, Branch, Bead string
+	Touched                              bool
 
 	facet func(Filter, *sess) bool // set by Catalog.prepare when one of the three is
 }

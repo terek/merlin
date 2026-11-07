@@ -124,6 +124,10 @@ export interface SessionSummary {
   prs?: PRLink[]
   /** The repository the session counts under (its start directory's, else where most work happened). */
   repo?: RepoRef
+  /** The checkout it counts under (top of a working tree); none in a bare repository or outside git. */
+  checkout?: string
+  /** The normalised origin URL of its repository. */
+  remote?: string
   /** Beads the session worked on (any bd call but show), most spent on first. */
   beads?: BeadBrief[]
 }
@@ -131,7 +135,7 @@ export interface SessionSummary {
 // ---- groupings: repositories, branches, beads (docs/beads-and-repos.md §5) -------------
 
 export interface RepoRef {
-  /** The main repository's directory: the key of `repo=`. */
+  /** The git common dir (`/home/dev/acme/.git`): the key of `repo=`. Show `name`, never the key's base. */
   repo: string
   name: string
   remote?: string
@@ -160,11 +164,14 @@ export interface BeadShare extends BeadRef {
 }
 
 export interface SessionPlaces {
+  /** The primary values: where it counts. */
   repo?: RepoRef
-  /** Linked worktrees of `repo` the session worked in. */
-  worktrees?: string[]
-  /** Every repository it touched. */
+  checkout?: string
+  remote?: string
+  /** Every checkout, repository and remote it touched, the primary ones included. */
+  checkouts?: string[]
   repos?: RepoRef[]
+  remotes?: string[]
   /** Branches its turns ran on, with the share of its best cost. */
   branches?: { name: string; usd: number }[]
   beads?: BeadShare[]
@@ -172,9 +179,12 @@ export interface SessionPlaces {
   noBeadUSD: number
 }
 
-export interface WorktreeGroup {
-  top: string
+export interface CheckoutGroup {
+  /** The checkout's directory: the key of `checkout=`. */
+  checkout: string
   name: string
+  /** A linked worktree (not the main checkout). */
+  worktree?: boolean
   gone?: boolean
   sessions: number
   /** Best costs of the sessions that worked in it (also what they spent elsewhere). */
@@ -195,12 +205,31 @@ export interface RepoGroup extends RepoRef {
   sessions: number
   lastActivityAt?: string
   cost: Money
-  worktrees?: WorktreeGroup[]
+  checkouts?: CheckoutGroup[]
   branches?: BranchGroup[]
 }
 
 export interface RepoList {
   repos: RepoGroup[]
+}
+
+/** The location keys GET /api/groups groups by. */
+export type GroupDim = 'dir' | 'checkout' | 'repo' | 'remote'
+
+/** One value of a location key; the group with `key: ""` (none) is last. */
+export interface Group {
+  key: string
+  /** The display name: a repository's name, a directory's base name, the remote itself. */
+  name: string
+  remote?: string
+  gone?: boolean
+  sessions: number
+  lastActivityAt?: string
+  cost: Money
+}
+
+export interface GroupList {
+  groups: Group[]
 }
 
 export interface BeadGroup extends BeadRef {
@@ -792,7 +821,19 @@ export interface SearchResult {
 
 // ---- cost -----------------------------------------------------------------------------
 
-export type CostBy = 'project' | 'day' | 'model' | 'kind' | 'repo' | 'branch' | 'bead' | 'family' | 'session'
+export type CostBy =
+  | 'project'
+  | 'day'
+  | 'model'
+  | 'kind'
+  | 'repo'
+  | 'checkout'
+  | 'remote'
+  | 'dir'
+  | 'branch'
+  | 'bead'
+  | 'family'
+  | 'session'
 export type CostSplit = 'project' | 'model' | 'kind'
 
 /** One slice of a row when the table is requested with `split=`. */
@@ -975,9 +1016,12 @@ export interface SessionFilters {
   since?: string
   until?: string
   limit?: number
-  /** Groupings: a repository (main repository directory, `-` for none), a worktree, a branch, a bead or family root. */
+  /** Groupings: a repository (git common dir), a checkout or a remote (`-` for none of it), a branch, a bead or family root. */
   repo?: string
-  worktree?: string
+  checkout?: string
+  remote?: string
+  /** `1`: the most specific of checkout, repo and remote also selects the sessions that only touched it. */
+  touched?: string
   branch?: string
   bead?: string
 }
@@ -989,6 +1033,9 @@ export interface CostParams {
   until?: string
   project?: string
   repo?: string
+  checkout?: string
+  remote?: string
+  touched?: string
   bead?: string
   limit?: number
 }

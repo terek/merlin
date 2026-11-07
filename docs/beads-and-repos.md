@@ -4,6 +4,12 @@ Status: built 2026-10-28 (epic `merlin-t8s.48`; validation in [validation.md](va
 "Bead events, registry and repositories"). §1–4 cover what is extracted and stored; §5 how the
 catalog, API and UI use it (`merlin-t8s.49`).
 
+**Repositories were redesigned** in [location.md](location.md) (epic `merlin-t8s.53`, built and
+validated 2026-11-07): several keys (`dir`, `checkout`, `repo`, `remote`) replace the one `repo`
+value. location.md is now the reference for the repository half: §3.2 and the repository rules of §5
+below describe the code as it was, apart from the `repos.json` fields and the beads lookup, which
+location.md §3 and §5 keep. The beads parts here still apply as written.
+
 ## 1. Why
 
 Two ways to tie sessions together beyond "the directory it started in":
@@ -94,6 +100,11 @@ split by branch. Both fields come in the same parser bump (Claude 15 → 16, Cod
 
 ### 3.2 Repository resolver: `<MERLIN_HOME>/repos.json`
 
+**Replaced by [location.md](location.md) §3–5, built.** The format below is version 1 and the
+resolver rules are the old ones; only the `beads` lookup is unchanged and still described here. What
+exists only in location.md: `checkout`, `gitCommonDir`, normalised `remote`, `inferred`, the
+version 2 file and the migration, and gone-directory inference.
+
 Maps a directory to the repository it belongs to. Not pure (it reads the disk), so it is a cache
 beside the digests, harness-neutral, in `internal/repos`.
 
@@ -170,6 +181,9 @@ harness-neutral, in `internal/beads`.
    docs/validation.md.
 
 ## 5. Use: groupings and cost per bead (built 2026-10-28, `merlin-t8s.49`)
+
+The repository rules below (one repository per session, worktrees, `repo` as the main directory) are
+superseded by [location.md](location.md) §7–8; the bead and branch rules stand.
 
 The daemon hands the catalog the repository lookups and bead snapshots (`catalog.Places`) at start
 and whenever a refresh changes them; only the groupings are recomputed, never the sessions or their

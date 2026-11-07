@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 17,
+  "parserVersion": 18,
   "source": [
     {
       "path": "projects/-home-dev-acme-s13c-fork-marked/13131313-0000-4000-8000-000000000006.jsonl",
@@ -87,7 +87,13 @@
           }
         }
       },
-      "costWithAgents": 0.0141
+      "costWithAgents": 0.0141,
+      "workDirs": [
+        {
+          "dir": "/home/dev/acme",
+          "edits": 1
+        }
+      ]
     },
     {
       "index": 1,

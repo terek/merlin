@@ -4,6 +4,7 @@ import {
   apiFilters,
   buildDayGroups,
   cachedTitles,
+  clearPlace,
   countLabel,
   fieldLabel,
   groupHits,
@@ -87,13 +88,37 @@ describe('filters in the URL', () => {
     const p = writeFilters(new URLSearchParams(), { group: 'bead', repo: '/r', branch: 'main', bead: 'x-a.1' })
     expect(readFilters(p)).toEqual({ ...NO_FILTERS, group: 'bead', repo: '/r', branch: 'main', bead: 'x-a.1' })
     expect(readFilters(new URLSearchParams('group=nope')).group).toBe('')
-    expect(apiFilters({ ...NO_FILTERS, group: 'repo', repo: '/r', worktree: '/r/w' })).toEqual({
+    expect(apiFilters({ ...NO_FILTERS, group: 'repo', repo: '/r', checkout: '/r/w', touched: '1' })).toEqual({
       repo: '/r',
-      worktree: '/r/w',
+      checkout: '/r/w',
+      touched: '1',
     })
+    expect(apiFilters({ ...NO_FILTERS, remote: 'h/r' })).toEqual({ remote: 'h/r' })
     expect(hasFilters({ ...NO_FILTERS, group: 'bead' })).toBe(false)
     expect(hasFilters({ ...NO_FILTERS, bead: 'x' })).toBe(true)
     expect(showsScripted({ ...NO_FILTERS, repo: '/r' })).toBe(false)
+  })
+  test('checkout, remote and touched round trip; dir is the default group', () => {
+    const p = writeFilters(new URLSearchParams(), { group: 'checkout', checkout: '/r/w', touched: '1' })
+    expect(p.toString()).toBe('group=checkout&checkout=%2Fr%2Fw&touched=1')
+    expect(readFilters(p)).toEqual({ ...NO_FILTERS, group: 'checkout', checkout: '/r/w', touched: '1' })
+    expect(readFilters(new URLSearchParams('group=remote&remote=-')).remote).toBe('-')
+    expect(readFilters(new URLSearchParams('group=dir')).group).toBe('')
+    expect(writeFilters(new URLSearchParams('group=dir&x=1'), {}).toString()).toBe('x=1')
+  })
+  test('touched is only sent with a place, and clears with it', () => {
+    expect(apiFilters({ ...NO_FILTERS, touched: '1' })).toEqual({})
+    const p = new URLSearchParams('group=repo&repo=%2Fr&checkout=%2Fr%2Fw&touched=1')
+    const cleared = readFilters(writeFilters(p, clearPlace('checkout')))
+    expect(cleared).toEqual({ ...NO_FILTERS, group: 'repo', repo: '/r' })
+    expect(readFilters(writeFilters(p, clearPlace('repo')))).toEqual({ ...NO_FILTERS, group: 'repo' })
+    expect(readFilters(writeFilters(new URLSearchParams('remote=h&touched=1'), clearPlace('remote'))).touched).toBe('')
+  })
+  test('an old worktree= is ignored and dropped', () => {
+    const p = new URLSearchParams('repo=%2Fr&worktree=%2Fr%2Fw')
+    expect(readFilters(p)).toEqual({ ...NO_FILTERS, repo: '/r' })
+    expect(apiFilters(readFilters(p))).toEqual({ repo: '/r' })
+    expect(writeFilters(p, { branch: 'x' }).has('worktree')).toBe(false)
   })
   test('unknown values count as not set; empty values are removed', () => {
     expect(readFilters(new URLSearchParams('state=ended&kind=sdk&since=1y')).state).toBe('')

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 17,
+  "parserVersion": 18,
   "source": [
     {
       "path": "projects/-home-dev-acme-rewind/14141414-0000-4000-8000-000000000001.jsonl",
@@ -208,7 +208,13 @@
           }
         }
       },
-      "costWithAgents": 0.00362
+      "costWithAgents": 0.00362,
+      "workDirs": [
+        {
+          "dir": "/home/dev/acme/rewind",
+          "commands": 2
+        }
+      ]
     }
   ],
   "messages": [

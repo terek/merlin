@@ -13,6 +13,7 @@ import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
 import { sessionPath, shortProject } from '../../lib/paths'
+import { placeLabels, remoteLabels } from '../../lib/places'
 import { dayStart, shortDate } from '../../lib/time'
 import {
   Bar,
@@ -30,6 +31,7 @@ import {
   SkeletonRows,
 } from '../../ui'
 import type { Column } from '../../ui/layout'
+import { parseRepoCut, placePath, type RepoCut } from './cuts'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
 import {
   type Bucket,
@@ -81,9 +83,20 @@ export function CostPage() {
   const byProject = useCost({ by: 'project', ...q })
   const byModel = useCost({ by: 'model', ...q })
   const byKind = head
-  const repoCut = sp.get('repocut') === 'branch' ? 'branch' : 'repo'
+  const repoCut = parseRepoCut(sp.get('repocut'))
   const beadCut = sp.get('beadcut') === 'bead' ? 'bead' : 'family'
   const byRepo = useCost({ by: repoCut, limit: 30, ...q })
+  const repoLabels = useMemo(() => {
+    const rows = byRepo.data?.rows ?? []
+    if (repoCut === 'remote') {
+      const short = remoteLabels(rows.map((r) => r.key))
+      return new Map(rows.map((r, i) => [r.key, short[i] || r.label || r.key]))
+    }
+    if (repoCut !== 'repo' && repoCut !== 'checkout') return new Map<string, string>()
+    // two repositories or checkouts of one name show enough of their path to tell them apart
+    const labels = placeLabels(rows.map((r) => ({ key: r.key, name: r.label ?? r.key })))
+    return new Map(rows.map((r, i) => [r.key, labels[i]]))
+  }, [byRepo.data, repoCut])
   const byBead = useCost({ by: beadCut, limit: 30, ...q })
   const navigate = useNavigate()
   const top = useCost({ by: 'session', limit: 50, ...q })
@@ -232,28 +245,25 @@ export function CostPage() {
               flush
               actions={
                 <SegmentedControl
-                  label="Repository or branch"
+                  label="Cut by repository, checkout, remote or branch"
                   value={repoCut}
                   onChange={(v) => set({ repocut: v === 'repo' ? undefined : v })}
-                  options={[
-                    { value: 'repo', label: 'Repository', title: 'Each session under its repository' },
-                    {
-                      value: 'branch',
-                      label: 'Branch',
-                      title: 'Each session split over the branches its turns ran on',
-                    },
-                  ]}
+                  options={REPO_CUTS}
                 />
               }
             >
               <CutTable
                 query={byRepo}
-                name={repoCut === 'branch' ? 'Branch' : 'Repository'}
-                label={(r) => <GroupLabel row={r} mono={repoCut === 'branch'} />}
+                name={REPO_CUTS.find((c) => c.value === repoCut)?.name ?? 'Repository'}
+                label={(r) => (
+                  <GroupLabel
+                    row={r}
+                    mono={repoCut === 'branch' || repoCut === 'remote'}
+                    text={repoLabels.get(r.key)}
+                  />
+                )}
                 onPick={(r) => navigate(placePath(repoCut, r.key))}
-                footer={() =>
-                  'A session counts under the repository it started in, else the one most of its work was in; a branch gets the part of its cost spent on turns on that branch.'
-                }
+                footer={() => REPO_CUT_NOTE[repoCut]}
               />
             </Card>
             <Card
@@ -466,29 +476,33 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
   return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
 }
 
-/** The Sessions page narrowed to a repository, a branch (key "repository#branch") or a bead. */
-function placePath(cut: 'repo' | 'branch' | 'bead', key: string): string {
-  const p = new URLSearchParams()
-  if (cut === 'bead') {
-    p.set('group', 'bead')
-    p.set('bead', key)
-  } else {
-    p.set('group', 'repo')
-    const hash = key.lastIndexOf('#')
-    const repo = cut === 'branch' && hash >= 0 ? key.slice(0, hash) : key
-    p.set('repo', repo || '-')
-    if (cut === 'branch' && hash >= 0 && key.slice(hash + 1)) p.set('branch', key.slice(hash + 1))
-  }
-  return `/?${p.toString()}`
+const REPO_CUTS: { value: RepoCut; label: string; name: string; title: string }[] = [
+  { value: 'repo', label: 'Repository', name: 'Repository', title: 'Each session under its repository' },
+  { value: 'checkout', label: 'Checkout', name: 'Checkout', title: 'Each session under the checkout it worked in' },
+  { value: 'remote', label: 'Remote', name: 'Remote', title: 'Each session under its origin remote' },
+  {
+    value: 'branch',
+    label: 'Branch',
+    name: 'Branch',
+    title: 'Each session split over the branches its turns ran on',
+  },
+]
+
+const REPO_CUT_NOTE: Record<RepoCut, string> = {
+  repo: 'A session counts under the repository most of its edits were in, else its commands, else the one it started in.',
+  checkout: 'A session counts under the checkout of that repository it worked in most; none in a bare repository.',
+  remote: 'A session counts under the remote of its repository; several clones of one remote are one row.',
+  branch:
+    'A session counts under the repository it worked in; a branch gets the part of its cost spent on turns on that branch.',
 }
 
 /** A grouping row's name: the label the API gives, the id first for beads; none in italics. */
-function GroupLabel({ row, mono, id }: { row: CostRow; mono?: boolean; id?: boolean }) {
+function GroupLabel({ row, mono, id, text }: { row: CostRow; mono?: boolean; id?: boolean; text?: string }) {
   if (!row.key) return <span className="text-muted italic">{row.label}</span>
   return (
     <span title={row.label ? `${row.key}\n${row.label}` : row.key}>
       {id && <span className="mr-1.5 font-mono text-meta text-muted">{row.key}</span>}
-      <span className={mono ? 'font-mono text-meta' : undefined}>{row.label || row.key}</span>
+      <span className={mono ? 'font-mono text-meta' : undefined}>{text || row.label || row.key}</span>
     </span>
   )
 }

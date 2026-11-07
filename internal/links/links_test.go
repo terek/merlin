@@ -14,9 +14,13 @@ func TestDirs(t *testing.T) {
 	d := &model.SessionDigest{
 		Project: "/w/acme", Cwd: "/w/acme/sub", Cwds: []string{"/w/acme", "/w/acme/sub", "relative"},
 		Beads: []model.BeadEvent{{Cwd: "/w/other"}, {}},
-		Turns: []model.Turn{{FilesTouched: []string{"/w/acme/src/a.go", "/w/acme/src/b.go", "c.go"}}},
+		Turns: []model.Turn{{
+			FilesTouched: []string{"/w/acme/src/a.go", "/w/acme/src/b.go", "c.go"},
+			WorkDirs:     []model.WorkDir{{Dir: "/w/acme-wt", Edits: 1}, {Dir: "rel", Commands: 1}},
+		}},
+		Agents: []model.Agent{{Turns: []model.AgentTurn{{WorkDirs: []model.WorkDir{{Dir: "/w/agent/", Commands: 2}}}}}},
 	}
-	want := []string{"/w/acme", "/w/acme/src", "/w/acme/sub", "/w/other"}
+	want := []string{"/w/acme", "/w/acme-wt", "/w/acme/src", "/w/acme/sub", "/w/agent", "/w/other"}
 	if got := Dirs(d); !slices.Equal(got, want) {
 		t.Errorf("Dirs = %q, want %q", got, want)
 	}
@@ -36,13 +40,14 @@ func TestRefresh(t *testing.T) {
 	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 	x := Open(home)
 	res, err := x.Refresh([]string{repo, filepath.Join(repo, "gone")}, now)
-	if err != nil || res != (Result{Resolved: 1, Databases: 1}) {
+	if err != nil || res != (Result{Resolved: 2, Databases: 1}) { // the repository, and the deleted directory inferred from it
 		t.Fatalf("first refresh = %+v, %v", res, err)
 	}
-	// Nothing changed: nothing resolved or written; a deleted database keeps its snapshot.
+	// A new process looks at the recorded repository again and sees its database gone (one
+	// entry changes); the snapshot stays, and no database is read.
 	os.RemoveAll(filepath.Join(repo, ".beads"))
 	res, err = Open(home).Refresh(nil, now.Add(time.Minute))
-	if err != nil || res != (Result{}) {
+	if err != nil || res != (Result{Resolved: 1}) {
 		t.Errorf("second refresh = %+v, %v", res, err)
 	}
 	if all := Open(home).Beads.All(); len(all) != 1 || all[0].Issues[0].ID != "x-a1" {

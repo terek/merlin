@@ -418,22 +418,51 @@ was retired and deleted on 2026-10-03; it is in the git history before that date
 turn that launched it, the context along the path to the session in focus) was replaced by the time
 view and deleted on 2026-10-25.
 
-### The rail's groupings (added 2026-10-28)
+### The rail's groupings (added 2026-10-28, location keys 2026-11-07)
 
-The rail switches between **Projects** (the start directory, as before), **Repos** and **Beads**
-(`group=repo|bead` in the URL; switching clears the rail's filters). Repos lists each repository with
-its sessions and cost; the selected one opens into its worktrees (`worktree=`) and branches
-(`branch=`, with the cost spent on each). Beads lists the bead prefixes (merlin for merlin-t8s.48: in
-practice one project's bead database; `merlin-t8s.51`, which replaced the list of every family root),
-the one with the most recently active session first, each with its sessions and the cost they spent
-on its beads; picking one (`bead=merlin`) lists every session that worked on a bead of it, newest
-first. A single bead picked elsewhere (`bead=<id>`, a bead and everything below it, from a session's
-bead tags or the Session page) shows as a two-line entry (title over id) under its prefix. A grouping filter that
-the rail does not show (collapsed, or another grouping) is a chip in the toolbar. Tree rows show the
-first two beads their sessions worked on (status dot and id) and how many more.
-The Session page header has a line for where the session worked (`places`): its repository and
-worktrees, its branches with their cost when there are several, and its beads (six, then "more")
-with the cost spent on each and "no bead" for the rest; each links to the Sessions page so filtered.
+The rail's switch is a picker (a native menu: five choices do not fit 240px as a segmented
+control): **Directory** (the start directory, as before), **Checkout**, **Repository**, **Remote**
+and **Beads** (`group=dir|checkout|repo|remote|bead` in the URL; `dir` is the default and is left
+out; switching clears the rail's filters). Directory keeps `/api/projects`, Repository `/api/repos`
+and Beads `/api/beads`; Checkout and Remote read `/api/groups?by=`. Every row is the sessions that
+count under one primary value (docs/location.md §7): `checkout=Y` or `remote=Z`, with no `touched`.
+The group of none (`key: ""`) is the last row, in italics, and selects `-` (`repo=-`, `checkout=-`,
+`remote=-`).
+
+Repository lists each repository with its sessions and cost; the selected one opens into its
+checkouts (`checkout=`, a linked worktree marked ⌥, a gone one struck through) and branches
+(`branch=`, with the cost spent on each). A checkout row of an open repository counts the sessions
+of that repository that touched it, so it links `repo=X&checkout=Y&touched=1`. Beads lists the bead
+prefixes (merlin for merlin-t8s.48: in practice one project's bead database), the one with the most
+recently active session first, each with its sessions and the cost they spent on its beads; picking
+one (`bead=merlin`) lists every session that worked on a bead of it, newest first. A single bead
+picked elsewhere (`bead=<id>`, a bead and everything below it, from a session's bead tags or the
+Session page) shows as a two-line entry (title over id) under its prefix.
+
+Names: a repository's key is a git common dir (`…/acme/.git`), so a name is never cut from a key; the
+list shows the API's `name`. Two rows of one list with the same name (two clones, several bare layouts
+that each have a checkout `main`) show the fewest trailing directories of their paths that tell them
+apart (`acme/main`, `ops/main`); `lib/places.ts` `placeLabels` does it for the rail, the Cost page and
+the Session page, and leaves unique names short. Remotes in the rail, the Cost cut and the filter chip show
+without their host (`github.com/acme/app` as `acme/app`, a local path as its last two directories;
+`remoteLabels`), because a truncated row would read only the shared host; two remotes that would get one
+label keep their whole string, and the tooltip and every link hold the whole remote. The Session page
+header shows remotes whole. The repository chip looks
+its name up in `/api/repos` and, until that loads, uses `repoName`, the rule of `repos.Name` in Go.
+
+A grouping filter that the rail does not show (collapsed, or another grouping) is a chip in the
+toolbar, with the icon of its kind (repository, checkout, remote). `touched=1` round-trips through the
+URL and marks the most specific place chip "+ touched"; the chip's state goes with the filter: clearing
+the checkout, remote or repository chip also clears `touched`, so no orphan is left to widen what stays
+(`clearPlace` in `features/sessions/model.ts`). An old `worktree=` is not read and is dropped at the
+next change. Tree rows show the first two beads their sessions worked on (status dot and id) and how
+many more.
+
+The Session page header has a line for where the session worked (`places`): the checkout, repository
+and remote it counts under, then "also" and the other values it touched (three, then "+N more"), each
+linking to the Sessions page grouped by it with `touched=1` so the session you came from is in the
+list; then its branches with their cost when there are several, and its beads (six, then "more") with
+the cost spent on each and "no bead" for the rest.
 
 ## 10. Cost page (`/cost`)
 
@@ -453,9 +482,12 @@ with the cost spent on each and "no bead" for the rest; each links to the Sessio
 - **Top sessions** (`by=session`, limit 50): title, project, last activity, compaction calls ("1 cold
   · ~$3.48"), cost with flag, linking
   to the session. Scripted runs are the `scripted:<project>` rows, not links.
-- **By repository** (repository or branch, `repocut=branch`) and **By bead** (family or bead,
+- **By repository** (repository, checkout, remote or branch, `repocut=checkout|remote|branch`, the
+  repository cut by default; the old `repocut=branch` URLs work) and **By bead** (family or bead,
   `beadcut=bead`), limit 30 each, with a footnote saying how a session's cost is split. A row opens
-  the Sessions page grouped and filtered to it.
+  the Sessions page grouped and filtered to it: a repository, checkout or remote row counts primary
+  values, so it links `group=…&repo|checkout|remote=<key>` with no `touched` (none is `-`); two rows
+  with one name show enough of their path to tell them apart.
 - Selecting a project row sets the `project` filter; selecting a day bar narrows the range to it.
 
 ## 11. As built

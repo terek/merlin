@@ -148,6 +148,7 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 
 		var texts []string // texts of the turn's messages that have any, in order
 		var files uniq
+		work := workSet{}
 		for _, mi := range ts.msgs {
 			bm := billed[mi]
 			if bm == nil {
@@ -171,11 +172,18 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 				t.ToolsByName[tu.name]++
 				files.add(tu.file)
 			}
+			for _, c := range bm.st.work {
+				work.add(c)
+			}
+			if w := msgWork(bm.st); len(w) > 0 {
+				res.MsgWork = append(res.MsgWork, MessageWork{MessageID: bm.st.id, Dirs: w})
+			}
 			if txt := strings.Join(bm.st.texts, "\n"); strings.TrimSpace(txt) != "" {
 				texts = append(texts, txt)
 			}
 		}
 		t.FilesTouched = files.copy()
+		t.WorkDirs = work.list()
 		t.FinalText = finalText(texts)
 		t.CostWithAgents = t.Cost.USD
 		res.Turns[i] = t
@@ -317,4 +325,13 @@ func (b *Builder) beadEvents() []model.BeadEvent {
 		out = append(out, c.ev)
 	}
 	return out
+}
+
+// msgWork is the work dirs of one message's calls.
+func msgWork(m *msgState) []model.WorkDir {
+	w := workSet{}
+	for _, c := range m.work {
+		w.add(c)
+	}
+	return w.list()
 }

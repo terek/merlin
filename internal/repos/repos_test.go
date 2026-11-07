@@ -37,6 +37,7 @@ func layout(t *testing.T) string {
 		t.Fatal(err)
 	}
 	acme := filepath.Join(root, "acme")
+	write(t, filepath.Join(acme, ".git", "HEAD"), "ref: refs/heads/main\n")
 	write(t, filepath.Join(acme, ".git", "config"), "[core]\n\tbare = false\n[remote \"origin\"]\n\turl = git@example.com:dev/acme.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n")
 	write(t, filepath.Join(acme, ".beads", "metadata.json"), `{"project_id":"p-acme"}`)
 	mkdir(t, filepath.Join(acme, "src", "deep"))
@@ -54,6 +55,7 @@ func layout(t *testing.T) string {
 	write(t, filepath.Join(root, "plain", ".beads", "metadata.json"), `{}`)
 	mkdir(t, filepath.Join(root, "plain", "sub"))
 
+	write(t, filepath.Join(root, "other", ".git", "HEAD"), "ref: refs/heads/main\n")
 	write(t, filepath.Join(root, "other", ".git", "config"), "")
 	write(t, filepath.Join(root, "other", ".beads", "redirect"), "../acme/.beads\n")
 	return root
@@ -62,14 +64,14 @@ func layout(t *testing.T) string {
 func TestResolve(t *testing.T) {
 	root := layout(t)
 	j := func(p ...string) string { return filepath.Join(append([]string{root}, p...)...) }
-	acme := Repo{Top: j("acme"), Repo: j("acme"), Remote: "git@example.com:dev/acme.git", Beads: j("acme", ".beads")}
+	acme := Repo{Checkout: j("acme"), GitCommonDir: j("acme", ".git"), Remote: "example.com/dev/acme", Beads: j("acme", ".beads")}
 	tests := map[string]Repo{
 		j("acme"):                  acme,
 		j("acme", "src", "deep"):   acme,
-		j("acme-wt", "feat"):       {Top: j("acme-wt", "feat"), Repo: j("acme"), Worktree: true, Remote: "git@example.com:dev/acme.git", Beads: j("acme", ".beads")},
-		j("acme", "vendor", "lib"): {Top: j("acme", "vendor", "lib"), Repo: j("acme", "vendor", "lib"), Remote: "https://example.com/lib.git", Beads: j("acme", ".beads")},
+		j("acme-wt", "feat"):       {Checkout: j("acme-wt", "feat"), GitCommonDir: j("acme", ".git"), Worktree: true, Remote: "example.com/dev/acme", Beads: j("acme", ".beads")},
+		j("acme", "vendor", "lib"): {Checkout: j("acme", "vendor", "lib"), GitCommonDir: j("acme", ".git", "modules", "lib"), Remote: "example.com/lib", Beads: j("acme", ".beads")},
 		j("plain", "sub"):          {Beads: j("plain", ".beads")},
-		j("other"):                 {Top: j("other"), Repo: j("other"), Beads: j("acme", ".beads")},
+		j("other"):                 {Checkout: j("other"), GitCommonDir: j("other", ".git"), Beads: j("acme", ".beads")},
 	}
 	for dir, want := range tests {
 		got, ok := Resolve(dir)
@@ -108,7 +110,7 @@ func TestCache(t *testing.T) {
 		t.Errorf("refresh after removal changed %d, want 1", n)
 	}
 	r, ok := c2.Lookup(wt)
-	if !ok || !r.Gone || r.Repo != filepath.Join(root, "acme") || !r.Worktree {
+	if !ok || !r.Gone || r.GitCommonDir != filepath.Join(root, "acme", ".git") || !r.Worktree {
 		t.Errorf("removed worktree = %+v, %v", r, ok)
 	}
 	if err := c2.Save(); err != nil {

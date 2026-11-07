@@ -63,6 +63,9 @@ type FileResult struct {
 	// then the calls still without a result (by time, then tool_use id). MessageID and Turn
 	// are the calling message's id and turn; Assemble sets the agent fields.
 	Beads []model.BeadEvent
+	// MsgWork is the work dirs of the calls of each billed message that made any, in message
+	// order. Assemble attributes an agent's to the turn that owns the message.
+	MsgWork []MessageWork
 
 	// Cwds, GitBranches, Versions, Entrypoints and SessionKinds are the unique values of
 	// the corresponding envelope fields over all records, in first-appearance order. A
@@ -217,4 +220,10 @@ type ForkContextRef struct {
 	ParentSessionID string
 	ParentLastUUID  string
 	ContextLength   int64
+}
+
+// MessageWork is where the calls of one message edited files and ran commands.
+type MessageWork struct {
+	MessageID string
+	Dirs      []model.WorkDir
 }

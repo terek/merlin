@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 17,
+  "parserVersion": 18,
   "source": [
     {
       "path": "projects/-home-dev-acme-subbg/07070707-0000-4000-8000-000000000001.jsonl",
@@ -212,7 +212,13 @@
                 "usd": 0.0092
               }
             }
-          }
+          },
+          "workDirs": [
+            {
+              "dir": "/home/dev/acme/subbg",
+              "commands": 1
+            }
+          ]
         }
       ],
       "cost": {

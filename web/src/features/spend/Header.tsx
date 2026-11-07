@@ -1,6 +1,6 @@
 // The parts of the Session page around the spend tree: the header, the resume command, the
 // banners, the family list and the parser's diagnostics.
-import { FolderGit2, GitBranch, GitPullRequest, TriangleAlert } from 'lucide-react'
+import { FolderGit2, FolderOpen, GitBranch, GitPullRequest, Globe, TriangleAlert } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useJustChanged } from '../../api/events'
@@ -9,6 +9,7 @@ import { cn } from '../../lib/cn'
 import { approxMoney } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
+import { type PlaceEntry, placeLink, sessionPlaces } from '../../lib/places'
 import { isRunning, prName, promptCount, sameKey, sessionTitle } from '../../lib/session'
 import { fullTime, parseTime, spanMs } from '../../lib/time'
 import {
@@ -61,48 +62,76 @@ export interface TreeStats {
 
 /** How many beads the header lists before "more". */
 const BEADS_SHOWN = 6
+/** How many of the other places a session touched the header lists before "more". */
+const PLACES_SHOWN = 3
 
 /** The Sessions page narrowed to one repository (and branch) or bead. */
-function placeLink(p: Record<string, string>): string {
+function placeSearch(p: Record<string, string>): string {
   return `/?${new URLSearchParams(p).toString()}`
 }
 
+const PLACE_ICON = { checkout: FolderOpen, repo: FolderGit2, remote: Globe }
+const PLACE_WORD = { checkout: 'checkout', repo: 'repository', remote: 'remote' }
+
+/** One place of the session: a link to the sessions that touched it, so this one is in the list. */
+function PlaceLink({ place }: { place: PlaceEntry }) {
+  const Icon = PLACE_ICON[place.kind]
+  return (
+    <Link
+      to={placeLink(place.kind, place.key, true)}
+      className={cn(
+        'inline-flex min-w-0 max-w-80 items-center gap-1',
+        place.kind === 'remote' && 'font-mono text-meta',
+      )}
+      title={`${place.key}\n${place.primary ? `Where this session counts: its ${PLACE_WORD[place.kind]}` : `Touched, but counts elsewhere`}\nThe sessions that worked in this ${PLACE_WORD[place.kind]}, this one included`}
+    >
+      <Icon size={12} aria-hidden className="shrink-0" />
+      <span className={cn('truncate', place.gone && 'line-through')}>{place.label}</span>
+    </Link>
+  )
+}
+
 /**
- * Where the session worked: its repository and worktrees, the branches its turns ran on and the
- * beads it worked on, each with the share of its cost spent there. Each links to the sessions of
- * the same place.
+ * Where the session worked: the checkout, repository and remote it counts under, then the other
+ * ones it touched (a few, then "more"), the branches its turns ran on and the beads it worked on,
+ * each with the share of its cost spent there. Each links to the Sessions page so filtered.
  */
 function Places({ places }: { places: SessionPlaces }) {
-  const { repo, worktrees = [], branches = [], beads = [] } = places
+  const { repo, branches = [], beads = [] } = places
   const [all, setAll] = useState(false)
-  if (!repo && beads.length === 0) return null
+  const [allPlaces, setAllPlaces] = useState(false)
+  const { primary, others } = sessionPlaces(places)
+  if (primary.length === 0 && others.length === 0 && beads.length === 0) return null
   const shown = all ? beads : beads.slice(0, BEADS_SHOWN)
+  const shownOthers = allPlaces ? others : others.slice(0, PLACES_SHOWN)
   return (
     <div className="space-y-0.5 text-sec text-muted">
-      {repo && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <Link
-            to={placeLink({ group: 'repo', repo: repo.repo })}
-            className="inline-flex items-center gap-1"
-            title={`${repo.repo}${repo.remote ? `\n${repo.remote}` : ''}\nThe sessions of this repository`}
-          >
-            <FolderGit2 size={12} aria-hidden />
-            {repo.name}
-          </Link>
-          {worktrees.map((w) => (
-            <Link
-              key={w}
-              to={placeLink({ group: 'repo', repo: repo.repo, worktree: w })}
-              title={`Worked in the worktree ${w}`}
-            >
-              ⌥ {w.slice(w.lastIndexOf('/') + 1)}
-            </Link>
+      {(primary.length > 0 || others.length > 0) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          {primary.map((e) => (
+            <PlaceLink key={`${e.kind}:${e.key}`} place={e} />
           ))}
-          {branches.length > 1 &&
+          {others.length > 0 && (
+            <>
+              <span className="text-faint" title="Places the session touched but does not count under">
+                also
+              </span>
+              {shownOthers.map((e) => (
+                <PlaceLink key={`${e.kind}:${e.key}`} place={e} />
+              ))}
+              {others.length > shownOthers.length && (
+                <button type="button" className="text-accent hover:underline" onClick={() => setAllPlaces(true)}>
+                  +{others.length - shownOthers.length} more
+                </button>
+              )}
+            </>
+          )}
+          {repo &&
+            branches.length > 1 &&
             branches.map((b) => (
               <Link
                 key={b.name}
-                to={placeLink({ group: 'repo', repo: repo.repo, branch: b.name })}
+                to={placeSearch({ group: 'repo', repo: repo.repo, branch: b.name })}
                 className="inline-flex items-center gap-1 font-mono"
                 title={`Spent on turns on ${b.name}`}
               >
@@ -117,7 +146,7 @@ function Places({ places }: { places: SessionPlaces }) {
           {shown.map((b) => (
             <Link
               key={b.id}
-              to={placeLink({ group: 'bead', bead: b.id })}
+              to={placeSearch({ group: 'bead', bead: b.id })}
               className="inline-flex min-w-0 max-w-96 items-center gap-1.5"
               title={`${b.id}${b.title ? ` — ${b.title}` : ''}\n${b.status ?? ''} · ${b.ops.join(', ')}\nThe sessions that worked on it`}
             >

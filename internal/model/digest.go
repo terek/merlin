@@ -253,6 +253,17 @@ type Turn struct {
 	Cost           Cost     `json:"cost"`
 	CostWithAgents float64  `json:"costWithAgents"`
 	Spawned        []string `json:"spawned,omitempty"` // agent ids
+	// WorkDirs is where the turn edited files and ran commands, sorted by directory.
+	WorkDirs []WorkDir `json:"workDirs,omitempty"`
+}
+
+// WorkDir counts the tool calls of a turn (or agent turn) that worked in one absolute
+// directory: calls that edit a file in it (Edits) and shell calls that run in it (Commands). A
+// call counts once, whether or not it succeeded. Reads do not count.
+type WorkDir struct {
+	Dir      string `json:"dir"`
+	Edits    int64  `json:"edits,omitempty"`
+	Commands int64  `json:"commands,omitempty"`
 }
 
 // QueuedPrompt is a prompt that arrived while a turn was running: a message the user typed
@@ -367,6 +378,9 @@ type AgentTurn struct {
 	ToolCalls         int64            `json:"toolCalls"`
 	ToolsByName       map[string]int64 `json:"toolsByName,omitempty"`
 	Cost              Cost             `json:"cost"`
+	// WorkDirs is where the agent edited files and ran commands in this turn, sorted by
+	// directory. Calls of messages the agent does not own (a fork's copied history) are left out.
+	WorkDirs []WorkDir `json:"workDirs,omitempty"`
 }
 
 // WorkflowRun is one run of a workflow script, launched by one tool call. Its agents are

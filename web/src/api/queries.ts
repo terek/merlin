@@ -2,6 +2,7 @@
 //
 //   ['projects']                          useProjects
 //   ['repos']                             useRepos
+//   ['groups', by]                        useGroups
 //   ['beads']                             useBeads
 //   ['sessions', filters]                 useSessions       (infinite, pages of SessionList)
 //   ['trees', filters]                    useTrees          (infinite, pages of TreeList)
@@ -24,6 +25,8 @@ import type {
   BeadList,
   CostParams,
   CostTable,
+  GroupDim,
+  GroupList,
   MomentsReport,
   ProjectList,
   RepoList,
@@ -39,6 +42,7 @@ export const STALE_MS = 30_000
 export const queryKeys = {
   projects: () => ['projects'] as const,
   repos: () => ['repos'] as const,
+  groups: (by: GroupDim) => ['groups', by] as const,
   beads: () => ['beads'] as const,
   sessions: (filters: SessionFilters) => ['sessions', filters] as const,
   trees: (filters: SessionFilters) => ['trees', filters] as const,
@@ -77,11 +81,21 @@ export function useProjects(): UseQueryResult<ProjectList> {
   })
 }
 
-/** The repositories sessions count under, with their worktrees and branches. */
-export function useRepos(): UseQueryResult<RepoList> {
+/** The repositories sessions count under, with their checkouts and branches. */
+export function useRepos(enabled = true): UseQueryResult<RepoList> {
   return useQuery({
     queryKey: queryKeys.repos(),
     queryFn: ({ signal }) => get<RepoList>('/api/repos', undefined, signal),
+    enabled,
+  })
+}
+
+/** The values of one location key (checkout, remote, ...) and the sessions that count under each. */
+export function useGroups(by: GroupDim, enabled = true): UseQueryResult<GroupList> {
+  return useQuery({
+    queryKey: queryKeys.groups(by),
+    queryFn: ({ signal }) => get<GroupList>('/api/groups', { by }, signal),
+    enabled,
   })
 }
 

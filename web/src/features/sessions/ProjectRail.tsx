@@ -1,15 +1,16 @@
-// The rail: what the list is narrowed to, grouped by project (the directory a session started
-// in), by repository (with its worktrees and branches) or by bead prefix (merlin for
-// merlin-t8s.48: in practice a project's bead database). Each grouping is a facet: a session keeps
-// its identity, the rail only filters the list.
+// The rail: what the list is narrowed to, grouped by directory (where a session started), by
+// checkout, by repository (opened into its checkouts and branches), by remote or by bead prefix
+// (merlin for merlin-t8s.48: in practice a project's bead database). Each grouping is a facet: a
+// session keeps its identity, the rail only filters the list.
 
 import { CircleDot, FolderGit2, GitBranch, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Fragment } from 'react'
-import { useBeads, useProjects, useRepos } from '../../api/queries'
-import type { BeadBrief, RepoGroup } from '../../api/types'
+import { useBeads, useGroups, useProjects, useRepos } from '../../api/queries'
+import type { BeadBrief, GroupDim, RepoGroup } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatCount, formatMoney, plural } from '../../lib/format'
-import { BeadStatus, IconButton, Money, ProjectName, QueryBoundary, SegmentedControl, SkeletonRows } from '../../ui'
+import { placeLabels, remoteLabels } from '../../lib/places'
+import { BeadStatus, IconButton, Money, ProjectName, QueryBoundary, Select, SkeletonRows } from '../../ui'
 import { type GroupBy, type PageFilters, PLACE_FILTERS } from './model'
 
 function Item({
@@ -54,14 +55,12 @@ function Item({
   )
 }
 
-const GROUPS: { value: GroupBy; label: string; title: string }[] = [
-  { value: '', label: 'Projects', title: 'The directory each session started in' },
-  {
-    value: 'repo',
-    label: 'Repos',
-    title: 'The git repository each session worked in, with its worktrees and branches',
-  },
-  { value: 'bead', label: 'Beads', title: 'The beads (bd issues) sessions worked on, by prefix' },
+const GROUPS: { value: GroupBy; label: string }[] = [
+  { value: '', label: 'Directory' },
+  { value: 'checkout', label: 'Checkout' },
+  { value: 'repo', label: 'Repository' },
+  { value: 'remote', label: 'Remote' },
+  { value: 'bead', label: 'Beads' },
 ]
 
 export function ProjectRail({
@@ -87,11 +86,12 @@ export function ProjectRail({
   return (
     <aside className="sticky top-11 flex h-[calc(100vh-44px)] w-rail shrink-0 flex-col border-r border-line bg-surface">
       <div className="flex h-10 shrink-0 items-center justify-between gap-1 pr-1 pl-2">
-        <SegmentedControl
+        <Select
           label="Group sessions by"
           value={filters.group}
           onChange={(group) => onChange({ ...PLACE_FILTERS, group })}
           options={GROUPS}
+          className="min-w-0 flex-1"
         />
         <IconButton label="Hide the rail" onClick={onToggle}>
           <PanelLeftClose size={15} />
@@ -101,7 +101,9 @@ export function ProjectRail({
         aria-label={GROUPS.find((g) => g.value === filters.group)?.label}
         className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-3"
       >
-        {filters.group === 'repo' ? (
+        {filters.group === 'checkout' || filters.group === 'remote' ? (
+          <GroupList by={filters.group} filters={filters} onChange={onChange} />
+        ) : filters.group === 'repo' ? (
           <RepoList filters={filters} onChange={onChange} />
         ) : filters.group === 'bead' ? (
           <BeadList filters={filters} onChange={onChange} />
@@ -162,12 +164,22 @@ function RepoList({ filters, onChange }: { filters: PageFilters; onChange: (patc
       {(d) => {
         const count = d.repos.reduce((n, r) => n + r.sessions, 0)
         const usd = d.repos.reduce((n, r) => n + r.cost.totalUSD, 0)
+        const labels = placeLabels(d.repos.map((r) => ({ key: r.repo, name: r.name })))
         return (
           <ul className="space-y-px">
             <Item active={!filters.repo} onClick={() => onChange(PLACE_FILTERS)} name="All" count={count} usd={usd} />
-            {d.repos.map((r) => {
+            {d.repos.map((r, i) => {
               const open = filters.repo === repoParam(r)
-              return <RepoItem key={r.repo || '-'} repo={r} open={open} filters={filters} onChange={onChange} />
+              return (
+                <RepoItem
+                  key={r.repo || '-'}
+                  repo={r}
+                  label={labels[i]}
+                  open={open}
+                  filters={filters}
+                  onChange={onChange}
+                />
+              )
             })}
           </ul>
         )
@@ -178,27 +190,32 @@ function RepoList({ filters, onChange }: { filters: PageFilters; onChange: (patc
 
 function RepoItem({
   repo,
+  label,
   open,
   filters,
   onChange,
 }: {
   repo: RepoGroup
+  /** The name to show: the repository's, with enough of its path when another has the same. */
+  label: string
   open: boolean
   filters: PageFilters
   onChange: (patch: Partial<PageFilters>) => void
 }) {
   const select = { ...PLACE_FILTERS, repo: repoParam(repo) }
   const branches = repo.branches ?? []
+  const checkouts = repo.checkouts ?? []
+  const checkoutLabels = placeLabels(checkouts.map((c) => ({ key: c.checkout, name: c.name })))
   return (
     <>
       <Item
-        active={open && !filters.worktree && !filters.branch}
+        active={open && !filters.checkout && !filters.branch}
         onClick={() => onChange(select)}
         name={
           <>
             <FolderGit2 size={12} className="shrink-0 text-faint" />
             <span className={cn('truncate', !repo.repo && 'italic text-muted', repo.gone && 'line-through')}>
-              {repo.name}
+              {label}
             </span>
           </>
         }
@@ -211,16 +228,22 @@ function RepoItem({
         }
       />
       {open &&
-        (repo.worktrees ?? []).map((w) => (
+        checkouts.map((c, i) => (
           <Item
-            key={w.top}
+            key={c.checkout}
             level={1}
-            active={filters.worktree === w.top}
-            onClick={() => onChange({ ...select, worktree: w.top })}
-            name={<span className={cn('truncate', w.gone && 'line-through')}>⌥ {w.name}</span>}
-            count={w.sessions}
-            usd={w.bestUSD}
-            title={`Worktree ${w.top}${w.gone ? ' (removed)' : ''}: the sessions that worked in it and their whole cost`}
+            active={filters.checkout === c.checkout}
+            // the sessions of this repository that touched the checkout, as the count says
+            onClick={() => onChange({ ...select, checkout: c.checkout, touched: '1' })}
+            name={
+              <span className={cn('truncate', c.gone && 'line-through')}>
+                {c.worktree ? '⌥ ' : ''}
+                {checkoutLabels[i]}
+              </span>
+            }
+            count={c.sessions}
+            usd={c.bestUSD}
+            title={`${c.worktree ? 'Linked worktree' : 'Checkout'} ${c.checkout}${c.gone ? ' (no longer on disk)' : ''}\nThe sessions of this repository that worked in it, and their whole cost`}
           />
         ))}
       {open &&
@@ -242,6 +265,64 @@ function RepoItem({
           />
         ))}
     </>
+  )
+}
+
+const NONE_TEXT: Record<GroupDim, string> = {
+  dir: 'Sessions with no directory',
+  checkout: 'Sessions that worked in no checkout (a bare repository, or outside git)',
+  repo: 'Sessions in no git repository Merlin knows',
+  remote: 'Sessions whose repository has no origin remote',
+}
+
+/** The checkouts or the remotes sessions count under (`/api/groups`); a row is a primary value. */
+function GroupList({
+  by,
+  filters,
+  onChange,
+}: {
+  by: 'checkout' | 'remote'
+  filters: PageFilters
+  onChange: (patch: Partial<PageFilters>) => void
+}) {
+  const query = useGroups(by)
+  const selected = filters[by]
+  return (
+    <QueryBoundary
+      query={query}
+      skeleton={<SkeletonRows rows={8} height={28} />}
+      isEmpty={(d) => d.groups.length === 0}
+      empty={<p className="px-2 py-3 text-sec text-muted">{`No ${by}s known yet.`}</p>}
+    >
+      {(d) => {
+        const count = d.groups.reduce((n, g) => n + g.sessions, 0)
+        const usd = d.groups.reduce((n, g) => n + g.cost.totalUSD, 0)
+        const labels =
+          by === 'remote'
+            ? remoteLabels(d.groups.map((g) => g.key)).map((l, i) => l || d.groups[i].name)
+            : placeLabels(d.groups.map((g) => ({ key: g.key, name: g.name })))
+        return (
+          <ul className="space-y-px">
+            <Item active={!selected} onClick={() => onChange(PLACE_FILTERS)} name="All" count={count} usd={usd} />
+            {d.groups.map((g, i) => (
+              <Item
+                key={g.key || '-'}
+                active={selected === (g.key || '-')}
+                onClick={() => onChange({ ...PLACE_FILTERS, [by]: g.key || '-' })}
+                name={
+                  <span className={cn('truncate', !g.key && 'italic text-muted', g.gone && 'line-through')}>
+                    {labels[i]}
+                  </span>
+                }
+                count={g.sessions}
+                usd={g.cost.totalUSD}
+                title={g.key ? `${g.key}${g.gone ? '\n(no longer on disk)' : ''}` : NONE_TEXT[by]}
+              />
+            ))}
+          </ul>
+        )
+      }}
+    </QueryBoundary>
   )
 }
 

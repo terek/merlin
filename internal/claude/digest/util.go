@@ -2,9 +2,13 @@ package digest
 
 import (
 	"encoding/json"
+	"path"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/terek/merlin/internal/claude/transcript"
+	"github.com/terek/merlin/internal/model"
 )
 
 // uniq is an ordered set of strings: first appearance order, empty strings ignored.
@@ -98,4 +102,58 @@ func bashScript(blk transcript.Block) (string, bool) {
 	}
 	_ = json.Unmarshal(blk.Input, &in) // a mistyped input leaves it empty
 	return in.Command, in.Command != ""
+}
+
+// workCall is one call of a message that edits a file (edit) or runs a shell command, and the
+// directory it works in. A call in a relative or unknown directory is not counted.
+type workCall struct {
+	dir  string
+	abs  bool
+	edit bool
+}
+
+// workSet counts work calls per directory.
+type workSet map[string]*model.WorkDir
+
+func (w workSet) add(c workCall) {
+	if !c.abs {
+		return
+	}
+	dir := path.Clean(c.dir)
+	e := w[dir]
+	if e == nil {
+		e = &model.WorkDir{Dir: dir}
+		w[dir] = e
+	}
+	if c.edit {
+		e.Edits++
+	} else {
+		e.Commands++
+	}
+}
+
+// list is the counts sorted by directory; nil when there are none.
+func (w workSet) list() []model.WorkDir {
+	if len(w) == 0 {
+		return nil
+	}
+	out := make([]model.WorkDir, 0, len(w))
+	for _, e := range w {
+		out = append(out, *e)
+	}
+	slices.SortFunc(out, func(a, b model.WorkDir) int { return strings.Compare(a.Dir, b.Dir) })
+	return out
+}
+
+// merge adds the counts of ds into w.
+func (w workSet) merge(ds []model.WorkDir) {
+	for _, d := range ds {
+		e := w[d.Dir]
+		if e == nil {
+			e = &model.WorkDir{Dir: d.Dir}
+			w[d.Dir] = e
+		}
+		e.Edits += d.Edits
+		e.Commands += d.Commands
+	}
 }

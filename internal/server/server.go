@@ -70,6 +70,7 @@ func New(o Options) *API {
 	a := &API{o: o, mux: http.NewServeMux()}
 	a.route("/api/projects", a.handleProjects)
 	a.route("/api/repos", a.handleRepos)
+	a.route("/api/groups", a.handleGroups)
 	a.route("/api/beads", a.handleBeads)
 	a.route("/api/sessions", a.handleSessions)
 	a.route("/api/sessions/{harness}/{id}", a.handleSession)

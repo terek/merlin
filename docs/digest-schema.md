@@ -239,6 +239,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `cost` | attributed cost of the main agent in this turn |
 | `costWithAgents` | dollars including agents spawned in this turn |
 | `spawned` | ids of agents spawned in this turn |
+| `workDirs` | where the main agent edited files and ran commands in this turn, as `WorkDir`, sorted by `dir`; omitted when there is nothing to list |
 
 ## Agent
 
@@ -300,6 +301,21 @@ The turns' messages, tool calls and costs add up to the agent's.
 | `toolCalls` | tool calls it made |
 | `toolsByName` | tool calls per tool name |
 | `cost` | attributed cost of its messages |
+| `workDirs` | where it edited files and ran commands in this turn, as `WorkDir`, sorted by `dir`. Only calls of messages the agent owns count (the messages a fork copied from its parent are the parent's), unlike `toolCalls` |
+
+## WorkDir
+
+What a turn or agent turn did in one directory. A call counts once, whether or not it succeeded;
+reads (Read, Grep, Glob) do not count. Only absolute directories are listed: a relative file path,
+a `cd` to a relative directory with no known working directory, or a `cd` to a variable is ignored.
+Directories are cleaned (`/a/b/` is `/a/b`). The list is a function of the session's files and
+is sorted by `dir`.
+
+| key | meaning |
+|---|---|
+| `dir` | the directory |
+| `edits` | calls that edited a file in it (the file's parent directory). Claude Code: Edit, Write, NotebookEdit (not MultiEdit, which the digest does not treat as an edit tool). Codex: each path of a file change, a move's target included. Omitted when 0 |
+| `commands` | shell calls that ran in it: the directory of the call's first command, which is the leading `cd` when there is one, else the working directory of the call (Claude Code: Bash and the record's `cwd`; Codex: command execution and its `cwd`). Omitted when 0 |
 
 ## QueuedPrompt
 

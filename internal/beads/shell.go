@@ -38,6 +38,17 @@ func commands(script, cwd string) []command {
 	return out
 }
 
+// RunDir is the directory the first command of a script runs in: the directory of a leading
+// `cd` when there is one, else cwd. It is "" when that cannot be known (a cd to a variable, a
+// relative cd from an unknown directory) and when the script runs no command at all (a bare
+// `cd`). The directory is not checked for being absolute.
+func RunDir(script, cwd string) string {
+	if cmds := commands(script, cwd); len(cmds) > 0 {
+		return cmds[0].cwd
+	}
+	return ""
+}
+
 // expandLoops unrolls `for X in a b c; do …; done` over literal words: the body's commands
 // once per value, with $X and ${X} replaced. A loop over anything else (a substitution, a
 // glob, no list) is left as it is.

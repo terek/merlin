@@ -22,19 +22,26 @@ import { daysBefore, localDay, localDayOf } from '../../lib/time'
 export type StateFilter = '' | 'running' | 'recent'
 export type KindFilter = '' | 'interactive' | 'background'
 export type SinceFilter = '' | '7d' | '30d'
-/** What the rail groups by: projects (''), repositories or bead families. */
-export type GroupBy = '' | 'repo' | 'bead'
+/** What the rail groups by: directories (''), checkouts, repositories, remotes or bead prefixes. */
+export type GroupBy = '' | 'checkout' | 'repo' | 'remote' | 'bead'
+/** `1`: the most specific of checkout, repo and remote also selects the sessions that only touched it. */
+export type TouchedFilter = '' | '1'
 
 /**
- * What the URL holds: `group` (the rail), `project`, `repo`, `worktree`, `branch`, `bead`, `state`,
- * `kind`, `since` and `q`. Empty string = not set.
+ * What the URL holds: `group` (the rail), `project`, `repo`, `checkout`, `remote`, `touched`,
+ * `branch`, `bead`, `state`, `kind`, `since` and `q`. Empty string = not set. (`group=dir` is the
+ * default and reads as ''; an old `worktree=` is not read.)
  */
 export interface PageFilters {
   group: GroupBy
   project: string
-  /** A main repository's directory, `-` for sessions in none. */
+  /** A repository's git common dir, `-` for sessions in none. */
   repo: string
-  worktree: string
+  /** A checkout's directory, `-` for sessions in none. */
+  checkout: string
+  /** A normalised remote, `-` for sessions in none. */
+  remote: string
+  touched: TouchedFilter
   branch: string
   /** A bead id: the sessions that worked on it or on a bead below it. */
   bead: string
@@ -48,7 +55,9 @@ export const NO_FILTERS: PageFilters = {
   group: '',
   project: '',
   repo: '',
-  worktree: '',
+  checkout: '',
+  remote: '',
+  touched: '',
   branch: '',
   bead: '',
   state: '',
@@ -58,7 +67,15 @@ export const NO_FILTERS: PageFilters = {
 }
 
 /** The filters the rail sets; switching what it groups by clears them. */
-export const PLACE_FILTERS = { project: '', repo: '', worktree: '', branch: '', bead: '' } as const
+export const PLACE_FILTERS = {
+  project: '',
+  repo: '',
+  checkout: '',
+  remote: '',
+  touched: '',
+  branch: '',
+  bead: '',
+} as const
 
 const pick = <T extends string>(v: string | null, allowed: readonly T[], none: T): T =>
   allowed.includes(v as T) ? (v as T) : none
@@ -66,10 +83,12 @@ const pick = <T extends string>(v: string | null, allowed: readonly T[], none: T
 /** Reads the filters; a value the page does not know counts as not set. */
 export function readFilters(p: URLSearchParams): PageFilters {
   return {
-    group: pick(p.get('group'), ['repo', 'bead'], ''),
+    group: pick(p.get('group'), ['checkout', 'repo', 'remote', 'bead'], ''),
     project: p.get('project') ?? '',
     repo: p.get('repo') ?? '',
-    worktree: p.get('worktree') ?? '',
+    checkout: p.get('checkout') ?? '',
+    remote: p.get('remote') ?? '',
+    touched: pick(p.get('touched'), ['1'], ''),
     branch: p.get('branch') ?? '',
     bead: p.get('bead') ?? '',
     state: pick(p.get('state'), ['running', 'recent'], ''),
@@ -82,6 +101,8 @@ export function readFilters(p: URLSearchParams): PageFilters {
 /** A copy of `p` with `patch` applied; empty values are removed so the URL stays short. */
 export function writeFilters(p: URLSearchParams, patch: Partial<PageFilters>): URLSearchParams {
   const next = new URLSearchParams(p)
+  next.delete('worktree') // retired: ignored, and dropped at the next change
+  if (next.get('group') === 'dir') next.delete('group')
   for (const [k, v] of Object.entries(patch)) {
     if (v) next.set(k, v)
     else next.delete(k)
@@ -91,7 +112,16 @@ export function writeFilters(p: URLSearchParams, patch: Partial<PageFilters>): U
 
 /** True when anything but the search is set (the "clear filters" button). */
 export const hasFilters = (f: PageFilters) =>
-  Boolean(f.project || f.repo || f.worktree || f.branch || f.bead || f.state || f.kind || f.since)
+  Boolean(f.project || f.repo || f.checkout || f.remote || f.branch || f.bead || f.state || f.kind || f.since)
+
+/**
+ * The patch that clears a place filter. `touched` belongs to the places, so it goes with them: a
+ * `touched=1` left behind would widen whichever of repo, checkout and remote stays. Clearing the
+ * repository clears the checkout and branch, which belong to it.
+ */
+export function clearPlace(which: 'repo' | 'checkout' | 'remote'): Partial<PageFilters> {
+  return which === 'repo' ? { repo: '', checkout: '', branch: '', touched: '' } : { [which]: '', touched: '' }
+}
 
 /** The `since` preset as the local date the API takes. */
 export function sinceDate(since: SinceFilter, now: Date = new Date()): string | undefined {
@@ -104,7 +134,9 @@ export function apiFilters(f: PageFilters, now: Date = new Date()): SessionFilte
   const out: SessionFilters = {}
   if (f.project) out.project = f.project
   if (f.repo) out.repo = f.repo
-  if (f.worktree) out.worktree = f.worktree
+  if (f.checkout) out.checkout = f.checkout
+  if (f.remote) out.remote = f.remote
+  if ((f.repo || f.checkout || f.remote) && f.touched) out.touched = f.touched
   if (f.branch) out.branch = f.branch
   if (f.bead) out.bead = f.bead
   if (f.state) out.state = f.state
@@ -198,7 +230,8 @@ export function buildDayGroups(trees: TreeSummary[], scripted: ScriptedLine[], m
 }
 
 /** Scripted runs are neither interactive nor background nor in a liveness state: a filter hides them. */
-export const showsScripted = (f: PageFilters) => !f.state && !f.kind && !f.repo && !f.worktree && !f.branch && !f.bead
+export const showsScripted = (f: PageFilters) =>
+  !f.state && !f.kind && !f.repo && !f.checkout && !f.remote && !f.branch && !f.bead
 
 /** The beads of a tree's sessions, each once: the newest session's first, most spent on first. */
 export function treeBeads(t: TreeSummary): BeadBrief[] {

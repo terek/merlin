@@ -73,7 +73,18 @@ describe('matchesFilters', () => {
     expect(matchesFilters({ repo: '/o' }, g)).toBe(false)
     expect(matchesFilters({ repo: '-' }, g)).toBe(false)
     expect(matchesFilters({ repo: '-' }, s)).toBe(true)
-    expect(matchesFilters({ worktree: '/r/.wt/one' }, g)).toBe(true)
+    expect(matchesFilters({ checkout: '/r/.wt/one' }, { ...g, checkout: '/r/.wt/one' })).toBe(true)
+    expect(matchesFilters({ checkout: '/r/other' }, { ...g, checkout: '/r/.wt/one' })).toBe(false)
+    expect(matchesFilters({ checkout: '-' }, g)).toBe(true)
+    expect(matchesFilters({ remote: 'h/r' }, { ...g, remote: 'h/r' })).toBe(true)
+    expect(matchesFilters({ remote: 'h/o' }, { ...g, remote: 'h/r' })).toBe(false)
+    // touched: the widened value is not judged, the primary ones still are
+    const t = { ...g, checkout: '/r/a' }
+    expect(matchesFilters({ checkout: '/r/b' }, t)).toBe(false)
+    expect(matchesFilters({ checkout: '/r/b', touched: '1' }, t)).toBe(true)
+    expect(matchesFilters({ repo: '/r', checkout: '/r/b', touched: '1' }, t)).toBe(true)
+    expect(matchesFilters({ repo: '/o', checkout: '/r/b', touched: '1' }, t)).toBe(false)
+    expect(matchesFilters({ checkout: '-', touched: '1' }, t)).toBe(false)
     expect(matchesFilters({ branch: 'dev' }, g)).toBe(false)
     expect(matchesFilters({ bead: 'x-a' }, g)).toBe(true)
     expect(matchesFilters({ bead: 'x-a.1' }, g)).toBe(true)
@@ -208,7 +219,14 @@ describe('applyEvent', () => {
     expect(ids(running)).toEqual(['b', 'a'])
     expect(running?.pages[0].total).toBe(2)
     expect(qc.getQueryData<SessionDetail>(['session', 'claude', 'b'])?.summary.state).toBe('busy')
-    expect(calls).toEqual(['["session","claude","b"]', '["projects"]', '["repos"]', '["beads"]', '["cost"]'])
+    expect(calls).toEqual([
+      '["session","claude","b"]',
+      '["projects"]',
+      '["repos"]',
+      '["groups"]',
+      '["beads"]',
+      '["cost"]',
+    ])
     expect(changed).toEqual(['b'])
   })
 

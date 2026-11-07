@@ -3,14 +3,15 @@
 // lines, search grouped by tree, keyboard navigation. Live updates arrive through
 // the shared cache layer and re-render the rows in place.
 
-import { FolderOpen, Search, X } from 'lucide-react'
+import { FolderGit2, FolderOpen, Globe, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useBeads, useSearch, useTrees } from '../../api/queries'
+import { useBeads, useRepos, useSearch, useTrees } from '../../api/queries'
 import type { TreeSummary } from '../../api/types'
 import { plural } from '../../lib/format'
 import { useDebounced, useDocumentTitle, useInView } from '../../lib/hooks'
-import { sessionPath, shortProject } from '../../lib/paths'
+import { baseName, sessionPath, shortProject } from '../../lib/paths'
+import { remoteLabels, repoName } from '../../lib/places'
 import { keyString } from '../../lib/session'
 import { dayLabelOf } from '../../lib/time'
 import { useShortcut } from '../../shell/useShortcut'
@@ -31,6 +32,7 @@ import { MomentsInvite } from '../moments/MomentsInvite'
 import {
   apiFilters,
   buildDayGroups,
+  clearPlace,
   countLabel,
   type DayGroup,
   groupHits,
@@ -118,13 +120,31 @@ export function SessionsPage() {
   const searching = term.length >= 2
 
   // ---- data ----
-  const { project, repo, worktree, branch, bead, state, kind, since } = filters
+  const { project, repo, checkout, remote, touched, branch, bead, state, kind, since } = filters
   // a bead filter names a bead, or a prefix (merlin) for every bead of it
   const beadList = useBeads(!!bead)
   const beadPrefix = !!bead && !!beadList.data?.prefixes?.some((p) => p.prefix === bead)
-  const listFilters: PageFilters = { ...NO_FILTERS, project, repo, worktree, branch, bead, state, kind, since }
+  // a repository filter shows the repository's name: the key alone is a git common dir (`…/.git`)
+  const repoList = useRepos(!!repo && repo !== '-')
+  const repoLabel = repoList.data?.repos.find((r) => r.repo === repo)?.name ?? repoName(repo)
+  const listFilters: PageFilters = {
+    ...NO_FILTERS,
+    project,
+    repo,
+    checkout,
+    remote,
+    touched,
+    branch,
+    bead,
+    state,
+    kind,
+    since,
+  }
   // biome-ignore lint/correctness/useExhaustiveDependencies: listFilters is rebuilt from these each render
-  const api = useMemo(() => apiFilters(listFilters), [project, repo, worktree, branch, bead, state, kind, since])
+  const api = useMemo(
+    () => apiFilters(listFilters),
+    [project, repo, checkout, remote, touched, branch, bead, state, kind, since],
+  )
   const { state: _state, ...searchFilters } = api
   const sessions = useTrees(api)
   const search = useSearch(term, searchFilters)
@@ -193,6 +213,17 @@ export function SessionsPage() {
     document.querySelector(`[data-nav-id="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
+  // with `touched`, the most specific place also selects the sessions that only touched it
+  const wide = !filters.touched
+    ? undefined
+    : filters.checkout && filters.checkout !== '-'
+      ? 'checkout'
+      : filters.repo && filters.repo !== '-'
+        ? 'repo'
+        : filters.remote && filters.remote !== '-'
+          ? 'remote'
+          : undefined
+  const touchedNote = filters.touched ? '\nAlso the sessions that only touched it' : ''
   const clearFilters = () => setFilters({ ...PLACE_FILTERS, state: '', kind: '', since: '' })
 
   return (
@@ -243,15 +274,36 @@ export function SessionsPage() {
           {filters.repo && (collapsed || filters.group !== 'repo') && (
             <FilterChip
               label="repository"
-              title={filters.repo === '-' ? 'Sessions in no repository' : filters.repo}
-              onClear={() => setFilters({ repo: '', worktree: '', branch: '' })}
+              title={filters.repo === '-' ? 'Sessions in no repository' : `${filters.repo}${touchedNote}`}
+              onClear={() => setFilters(clearPlace('repo'))}
             >
-              {filters.repo === '-' ? 'no repository' : shortProject(filters.repo)}
+              <ChipIcon icon={FolderGit2} />
+              {filters.repo === '-' ? 'no repository' : repoLabel}
+              {wide === 'repo' && <Touched />}
             </FilterChip>
           )}
-          {filters.worktree && (
-            <FilterChip label="worktree" title={filters.worktree} onClear={() => setFilters({ worktree: '' })}>
-              ⌥ {shortProject(filters.worktree)}
+          {filters.checkout && (collapsed || filters.group !== 'checkout') && (
+            <FilterChip
+              label="checkout"
+              title={filters.checkout === '-' ? 'Sessions in no checkout' : `${filters.checkout}${touchedNote}`}
+              onClear={() => setFilters(clearPlace('checkout'))}
+            >
+              <ChipIcon icon={FolderOpen} />
+              {filters.checkout === '-' ? 'no checkout' : baseName(filters.checkout)}
+              {wide === 'checkout' && <Touched />}
+            </FilterChip>
+          )}
+          {filters.remote && (collapsed || filters.group !== 'remote') && (
+            <FilterChip
+              label="remote"
+              title={
+                filters.remote === '-' ? 'Sessions whose repository has no remote' : `${filters.remote}${touchedNote}`
+              }
+              onClear={() => setFilters(clearPlace('remote'))}
+            >
+              <ChipIcon icon={Globe} />
+              {filters.remote === '-' ? 'no remote' : remoteLabels([filters.remote])[0]}
+              {wide === 'remote' && <Touched />}
             </FilterChip>
           )}
           {filters.branch && (
@@ -324,6 +376,20 @@ export function SessionsPage() {
   )
 }
 
+/** The kind of a place filter, as the Session page's header draws it. */
+function ChipIcon({ icon: Icon }: { icon: typeof FolderGit2 }) {
+  return <Icon size={11} aria-hidden className="mr-1 inline-block align-[-1px]" />
+}
+
+/** Marks the chip of a place that also selects the sessions that only touched it. */
+function Touched() {
+  return (
+    <span className="ml-1 text-muted" title="Also the sessions that only touched it">
+      + touched
+    </span>
+  )
+}
+
 /** An active filter in the toolbar, with a button that clears it. */
 function FilterChip({
   label,
@@ -386,8 +452,8 @@ function ListView({
             </EmptyState>
           ) : (
             <EmptyState icon={<FolderOpen size={20} />} title="No sessions yet">
-              Merlin lists the sessions it finds under ~/.claude and ~/.codex. Start Claude Code or Codex in a project
-              and the first one shows up here within a few seconds.
+              Merlin lists the sessions it finds under ~/.claude, ~/.codex and ~/.pi/agent. Start Claude Code, Codex or
+              Pi in a project and the first one shows up here within a few seconds.
             </EmptyState>
           )
         }

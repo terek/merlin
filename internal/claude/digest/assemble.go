@@ -249,6 +249,28 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 		}
 		return x.ToolUseID < y.ToolUseID
 	})
+
+	// Work dirs of the agents' turns: only the calls of messages the agent owns.
+	for i, a := range ags {
+		byMsg := make(map[string][]model.WorkDir, len(a.res.MsgWork))
+		for _, w := range a.res.MsgWork {
+			byMsg[w.MessageID] = w.Dirs
+		}
+		perTurn := map[int]workSet{}
+		for j, m := range owned[i] {
+			k := msgTurns[i][j]
+			if k < 0 || k >= len(agents[i].Turns) || len(byMsg[m.ID]) == 0 {
+				continue
+			}
+			if perTurn[k] == nil {
+				perTurn[k] = workSet{}
+			}
+			perTurn[k].merge(byMsg[m.ID])
+		}
+		for k, w := range perTurn {
+			agents[i].Turns[k].WorkDirs = w.list()
+		}
+	}
 	asm.Agents = agents
 	mergeDiagnostics(&asm.Diagnostics, main, ags)
 	return asm

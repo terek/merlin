@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"strings"
 	"time"
 
@@ -164,6 +165,7 @@ type turnRec struct {
 	ToolCalls    int64
 	ToolsByName  map[string]int64
 	Files        []string
+	Work         []workCall // edits and shell calls, with the directory each worked in
 	LinesAdded   int64
 	LinesRemoved int64
 	Review       bool // entered review mode
@@ -644,6 +646,14 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 			tr.FinalText = strings.Join(parts, "\n")
 		}
 	case "FileChange":
+		// Every path counts as an edit, whatever the outcome: the design counts calls.
+		for path := range it.Changes {
+			c := it.Changes[path]
+			tr.Work = append(tr.Work, workCall{dir: pathpkg.Dir(fileURLPath(path)), edit: true})
+			if c.MovePath != nil && *c.MovePath != "" {
+				tr.Work = append(tr.Work, workCall{dir: pathpkg.Dir(fileURLPath(*c.MovePath)), edit: true})
+			}
+		}
 		if it.Status != "" && it.Status != "completed" {
 			return
 		}
@@ -682,6 +692,9 @@ func (p *parser) command(id string, argv json.RawMessage, cwd, status, output st
 	script := shellScript(argv)
 	if script == "" {
 		return
+	}
+	if p.cur >= 0 {
+		t.Turns[p.cur].Work = append(t.Turns[p.cur].Work, workCall{dir: beads.RunDir(script, fileURLPath(cwd))})
 	}
 	res := &beads.Result{Output: output, Failed: (exit != nil && *exit != 0) || (status != "" && status != "completed")}
 	var msg string

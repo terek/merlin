@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/terek/merlin/internal/beads"
-	"github.com/terek/merlin/internal/links"
 	"github.com/terek/merlin/internal/model"
 	"github.com/terek/merlin/internal/repos"
 )
@@ -34,16 +33,19 @@ func (c *Catalog) SetPlaces(p Places) {
 	c.mu.Unlock()
 }
 
-// NoBead is the key of the spend no bead accounts for, NoRepo that of sessions in no known
-// repository and NoBranch that of turns with no branch.
+// NoBead is the key of the spend no bead accounts for, NoRepo, NoCheckout and NoRemote those of
+// sessions with no primary repository, checkout or remote, and NoBranch that of turns with no
+// branch.
 const (
-	NoBead   = ""
-	NoRepo   = ""
-	NoBranch = ""
+	NoBead     = ""
+	NoRepo     = ""
+	NoBranch   = ""
+	NoCheckout = ""
+	NoRemote   = ""
 )
 
-// RepoRef names a repository: Repo is the main repository's directory (the key), Name its
-// base name.
+// RepoRef names a repository: Repo is its git common dir (the key), Name its display name
+// (repos.Name). Gone: no entry with this repository is live.
 type RepoRef struct {
 	Repo   string `json:"repo"`
 	Name   string `json:"name"`
@@ -76,14 +78,16 @@ type BranchShare struct {
 	USD  float64 `json:"usd"`
 }
 
-// SessionPlaces is where one session worked. Repo is the repository it counts under: that of
-// the directory it started in, else the one most of its work happened in. Repos lists every
-// repository it touched. Beads and Branches split the best cost; NoBeadUSD is the part no bead
-// accounts for.
+// SessionPlaces is where one session worked. Repo, Checkout and Remote are the values it counts
+// under (location.go); Checkouts, Repos and Remotes list every value it touched. Beads and
+// Branches split the best cost; NoBeadUSD is the part no bead accounts for.
 type SessionPlaces struct {
 	Repo      *RepoRef      `json:"repo,omitempty"`
-	Worktrees []string      `json:"worktrees,omitempty"` // linked worktrees of Repo it worked in
+	Checkout  string        `json:"checkout,omitempty"`
+	Remote    string        `json:"remote,omitempty"`
+	Checkouts []string      `json:"checkouts,omitempty"`
 	Repos     []RepoRef     `json:"repos,omitempty"`
+	Remotes   []string      `json:"remotes,omitempty"`
 	Branches  []BranchShare `json:"branches,omitempty"`
 	Beads     []BeadShare   `json:"beads,omitempty"`
 	NoBeadUSD float64       `json:"noBeadUSD"`
@@ -107,19 +111,28 @@ type facets struct {
 	bead   map[string]*BeadRef // id -> bead, for the ids the registry knows
 	prefix map[string]string   // bead id prefix -> database key
 	dbAt   map[string]string   // .beads directory -> database key
-	repo   map[string]RepoRef  // main repository dir -> ref
+	repo   map[string]RepoRef  // git common dir -> ref
 	ses    []sessFacets        // by sess.idx
+
+	// What Places says is alive: a value is gone when no entry with it is live (not gone, not
+	// inferred). worktree: checkouts that are linked worktrees; checkoutRepo: the repo of each
+	// checkout the entries name (the first in directory order).
+	liveRepo, liveCheckout, liveRemote map[string]bool
+	worktree                           map[string]bool
+	checkoutRepo                       map[string]string
 }
 
 // sessFacets is what the groupings know of one session.
 type sessFacets struct {
-	repo      string   // primary repository (key), NoRepo for none
-	worktrees []string // linked worktrees of repo it worked in, sorted
-	repos     []string // every repository touched, sorted
-	branches  []string // in order of first use
-	beads     []string // beads worked on (any bd call but show), sorted
-	ops       map[string][]model.BeadOp
-	lastOn    map[string]time.Time // bead -> last bd call on it
+	// Primary values (location.go): they never contradict, the checkout is inside the repo and
+	// the remote is the repo's.
+	repo, checkout, remote string
+	// Every value touched: the primary and start-directory values and those of its own activity.
+	checkouts, repos, remotes []string // sorted, no duplicates
+	branches                  []string // in order of first use
+	beads                     []string // beads worked on (any bd call but show), sorted
+	ops                       map[string][]model.BeadOp
+	lastOn                    map[string]time.Time // bead -> last bd call on it
 	// Spend weights: the attributed cost of the owned messages, by day and then by bead or
 	// branch key. all sums over days.
 	beadW, branchW     map[string]map[string]float64
@@ -147,7 +160,7 @@ func (c *Catalog) views() (*view, *facets) {
 // prepare returns the view and f with its grouping filters resolved; the groupings too when
 // need is set or the filter uses them (nil otherwise).
 func (c *Catalog) prepare(f Filter, need bool) (*view, *facets, Filter) {
-	filters := f.Repo != "" || f.Worktree != "" || f.Branch != "" || f.Bead != ""
+	filters := f.Repo != "" || f.Checkout != "" || f.Remote != "" || f.Branch != "" || f.Bead != ""
 	if !need && !filters {
 		return c.view(), nil, f
 	}
@@ -183,18 +196,7 @@ func buildFacets(v *view, p Places, gen int) *facets {
 				Parent: is.Parent, Root: rootOf(is.ID, parent), Database: db.Key}
 		}
 	}
-	for _, r := range p.Repos {
-		if k := repoKey(r); k != "" {
-			ref := RepoRef{Repo: k, Name: filepath.Base(k), Remote: r.Remote}
-			if old, ok := fv.repo[k]; ok && old.Remote != "" {
-				ref.Remote = old.Remote
-			}
-			if r.Gone && (r.Top == k || r.Top == "") {
-				ref.Gone = true
-			}
-			fv.repo[k] = ref
-		}
-	}
+	fv.indexRepos()
 	fv.ses = make([]sessFacets, len(v.sessions))
 	for _, s := range v.sessions {
 		fv.ses[s.idx] = fv.session(s)
@@ -220,73 +222,12 @@ func rootOf(id string, parent map[string]string) string {
 	return id
 }
 
-func repoKey(r repos.Repo) string {
-	if r.Repo != "" {
-		return r.Repo
-	}
-	return r.Top
-}
-
 // session derives the groupings of one session.
 func (fv *facets) session(s *sess) sessFacets {
 	d := s.d
 	sf := sessFacets{ops: map[string][]model.BeadOp{}, lastOn: map[string]time.Time{}}
 
-	// Repositories: the one the session started in, else the one most of its directories
-	// (working directories, bd calls, changed files) lie in.
-	look := func(dir string) (repos.Repo, bool) {
-		if dir == "" {
-			return repos.Repo{}, false
-		}
-		r, ok := fv.places.Repos[filepath.Clean(dir)]
-		return r, ok && repoKey(r) != ""
-	}
-	for _, dir := range links.Dirs(d) {
-		if r, ok := look(dir); ok && !slices.Contains(sf.repos, repoKey(r)) {
-			sf.repos = append(sf.repos, repoKey(r))
-		}
-	}
-	slices.Sort(sf.repos)
-	start, ok := look(d.Project)
-	if !ok {
-		start, ok = look(d.Cwd)
-	}
-	if ok {
-		sf.repo = repoKey(start)
-	} else {
-		votes := map[string]int{}
-		vote := func(dir string) {
-			if r, ok := look(dir); ok {
-				votes[repoKey(r)]++
-			}
-		}
-		for _, c := range d.Cwds {
-			vote(c)
-		}
-		for _, e := range d.Beads {
-			vote(e.Cwd)
-		}
-		for _, t := range d.Turns {
-			for _, f := range t.FilesTouched {
-				if filepath.IsAbs(f) {
-					vote(filepath.Dir(f))
-				}
-			}
-		}
-		best := 0
-		for _, k := range sf.repos { // sorted: ties go to the first
-			if votes[k] > best {
-				sf.repo, best = k, votes[k]
-			}
-		}
-	}
-
-	for _, dir := range links.Dirs(d) {
-		if r, ok := look(dir); ok && r.Worktree && repoKey(r) == sf.repo && !slices.Contains(sf.worktrees, r.Top) {
-			sf.worktrees = append(sf.worktrees, r.Top)
-		}
-	}
-	slices.Sort(sf.worktrees)
+	sf.repo, sf.checkout, sf.remote, sf.checkouts, sf.repos, sf.remotes = fv.locate(s)
 	for _, t := range d.Turns {
 		if t.GitBranch != "" && !slices.Contains(sf.branches, t.GitBranch) {
 			sf.branches = append(sf.branches, t.GitBranch)
@@ -512,10 +453,11 @@ func (fv *facets) beadSpans(s *sess) (func(*model.Message) []string, []model.Bea
 // selects reports whether a session passes the grouping parts of a filter.
 func (fv *facets) selects(f Filter, s *sess) bool {
 	sf := &fv.ses[s.idx]
-	if f.Repo == NoneFilter && sf.repo != NoRepo || f.Repo != "" && f.Repo != NoneFilter && sf.repo != f.Repo {
-		return false
-	}
-	if f.Worktree != "" && !slices.Contains(sf.worktrees, f.Worktree) {
+	// Touched widens the most specific location filter: with a checkout set, repo and remote
+	// stay primary.
+	wide := f.Touched && f.Checkout == ""
+	if !matches(f.Repo, sf.repo, sf.repos, wide) || !matches(f.Checkout, sf.checkout, sf.checkouts, f.Touched) ||
+		!matches(f.Remote, sf.remote, sf.remotes, wide) {
 		return false
 	}
 	if f.Branch != "" && !slices.Contains(sf.branches, f.Branch) {
@@ -525,6 +467,21 @@ func (fv *facets) selects(f Filter, s *sess) bool {
 		return false
 	}
 	return true
+}
+
+// matches reports whether a session passes a repo, checkout or remote filter: want is empty
+// (no filter), NoneFilter (no primary value) or a value, which has to be the primary one, or
+// with touched one of the listed.
+func matches(want, primary string, listed []string, touched bool) bool {
+	switch {
+	case want == "":
+		return true
+	case want == NoneFilter:
+		return primary == ""
+	case touched:
+		return slices.Contains(listed, want)
+	}
+	return primary == want
 }
 
 // within reports whether bead id is anc or lies below it; anc can also be a prefix, which
@@ -548,15 +505,16 @@ func (fv *facets) within(id, anc string) bool {
 
 // share splits amount over the keys of w in proportion; an empty w gives it all to none.
 func share(w map[string]float64, amount float64, none string, f func(key string, part float64)) {
+	keys := slices.Sorted(maps.Keys(w)) // in key order: a float sum depends on the order
 	var sum float64
-	for _, x := range w {
-		sum += x
+	for _, k := range keys {
+		sum += w[k]
 	}
 	if sum <= 0 {
 		f(none, amount)
 		return
 	}
-	for _, k := range slices.Sorted(maps.Keys(w)) {
+	for _, k := range keys {
 		if w[k] > 0 {
 			f(k, amount*w[k]/sum)
 		}
@@ -570,7 +528,7 @@ func (fv *facets) sessionPlaces(s *sess) SessionPlaces {
 		r := fv.repoRef(sf.repo)
 		p.Repo = &r
 	}
-	p.Worktrees = sf.worktrees
+	p.Checkout, p.Remote, p.Checkouts, p.Remotes = sf.checkout, sf.remote, sf.checkouts, sf.remotes
 	for _, k := range sf.repos {
 		p.Repos = append(p.Repos, fv.repoRef(k))
 	}
@@ -598,7 +556,7 @@ func (fv *facets) repoRef(k string) RepoRef {
 	if r, ok := fv.repo[k]; ok {
 		return r
 	}
-	return RepoRef{Repo: k, Name: filepath.Base(k)}
+	return RepoRef{Repo: k, Name: repos.Name(k)}
 }
 
 // splitKey returns the weights a dimension splits a session's spend by on a day: the day's,
@@ -622,15 +580,16 @@ func branchKey(repo, branch string) string {
 	return repo + "#" + branch
 }
 
-// SplitBranchKey undoes the join of a ByBranch row key.
+// SplitBranchKey undoes the join of a ByBranch row key. It splits at the first #: a branch name
+// may contain one, a directory rarely does.
 func SplitBranchKey(k string) (repo, branch string) {
-	if i := strings.LastIndexByte(k, '#'); i >= 0 {
+	if i := strings.IndexByte(k, '#'); i >= 0 {
 		return k[:i], k[i+1:]
 	}
 	return "", k
 }
 
-// NoneFilter as Filter.Repo keeps the sessions in no known repository.
+// NoneFilter as Filter.Repo, Checkout or Remote keeps the sessions with no primary value.
 const NoneFilter = "-"
 
 // RepoGroup is one repository with the sessions that count under it (SessionPlaces.Repo).
@@ -640,15 +599,17 @@ type RepoGroup struct {
 	Sessions       int             `json:"sessions"`
 	LastActivityAt time.Time       `json:"lastActivityAt,omitzero"`
 	Money          Money           `json:"cost"`
-	Worktrees      []WorktreeGroup `json:"worktrees,omitempty"`
+	Checkouts      []CheckoutGroup `json:"checkouts,omitempty"`
 	Branches       []BranchGroup   `json:"branches,omitempty"`
 }
 
-// WorktreeGroup is a linked worktree of a repository and the sessions that worked in it.
-// BestUSD sums their best costs, also what they spent outside the worktree.
-type WorktreeGroup struct {
-	Top            string    `json:"top"`
+// CheckoutGroup is a checkout of a repository and the sessions that touched it (not only
+// those that count under it). Worktree marks a linked one. BestUSD sums their best costs, also
+// what they spent outside the checkout.
+type CheckoutGroup struct {
+	Checkout       string    `json:"checkout"`
 	Name           string    `json:"name"`
+	Worktree       bool      `json:"worktree,omitempty"`
 	Gone           bool      `json:"gone,omitempty"`
 	Sessions       int       `json:"sessions"`
 	BestUSD        float64   `json:"bestUSD"`
@@ -669,7 +630,7 @@ type BranchGroup struct {
 func (c *Catalog) Repos(f Filter) []RepoGroup {
 	v, fv, f := c.prepare(f, true)
 	groups := map[string]*RepoGroup{}
-	wts := map[string]map[string]*WorktreeGroup{}
+	wts := map[string]map[string]*CheckoutGroup{}
 	brs := map[string]map[string]*BranchGroup{}
 	for _, s := range v.sessions {
 		if !f.selects(s, "") {
@@ -683,7 +644,7 @@ func (c *Catalog) Repos(f Filter) []RepoGroup {
 				g.RepoRef = fv.repoRef(sf.repo)
 			}
 			groups[sf.repo] = g
-			wts[sf.repo], brs[sf.repo] = map[string]*WorktreeGroup{}, map[string]*BranchGroup{}
+			wts[sf.repo], brs[sf.repo] = map[string]*CheckoutGroup{}, map[string]*BranchGroup{}
 		}
 		c := &s.info.Cost
 		g.Money.add(c.ReportedUSD, c.UncoveredUSD+c.EstimatedUncoveredUSD)
@@ -693,13 +654,11 @@ func (c *Catalog) Repos(f Filter) []RepoGroup {
 		}
 		g.Sessions++
 		g.LastActivityAt = later(g.LastActivityAt, last)
-		for _, top := range sf.worktrees {
+		for _, top := range fv.checkoutsOf(sf) {
 			w := wts[sf.repo][top]
 			if w == nil {
-				w = &WorktreeGroup{Top: top, Name: filepath.Base(top)}
-				if r, ok := fv.places.Repos[top]; ok {
-					w.Gone = r.Gone
-				}
+				w = &CheckoutGroup{Checkout: top, Name: filepath.Base(top), Worktree: fv.worktree[top]}
+				w.Gone = fv.goneCheckout(top)
 				wts[sf.repo][top] = w
 			}
 			w.Sessions++
@@ -729,9 +688,15 @@ func (c *Catalog) Repos(f Filter) []RepoGroup {
 	out := make([]RepoGroup, 0, len(groups))
 	for k, g := range groups {
 		for _, w := range wts[k] {
-			g.Worktrees = append(g.Worktrees, *w)
+			g.Checkouts = append(g.Checkouts, *w)
 		}
-		sort.Slice(g.Worktrees, func(i, j int) bool { return g.Worktrees[i].LastActivityAt.After(g.Worktrees[j].LastActivityAt) })
+		sort.Slice(g.Checkouts, func(i, j int) bool {
+			a, b := g.Checkouts[i], g.Checkouts[j]
+			if !a.LastActivityAt.Equal(b.LastActivityAt) {
+				return a.LastActivityAt.After(b.LastActivityAt)
+			}
+			return a.Checkout < b.Checkout
+		})
 		for _, b := range brs[k] {
 			g.Branches = append(g.Branches, *b)
 		}

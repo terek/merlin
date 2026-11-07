@@ -26,6 +26,16 @@ import type {
   TreeSummary,
 } from '../src/api/types'
 import { buildDataset, type Dataset, makeRng, messagesOf, order, type Sess } from './gen'
+import {
+  assignPlaces,
+  costKey,
+  costLabel,
+  groups,
+  type PlaceFilter,
+  placeFilterOf,
+  placeMatches,
+  repos,
+} from './places'
 
 const port = Number(process.env.MOCK_PORT ?? 7452)
 // Written by a throwaway program over synthetic digests (no real history); see docs/moments.md.
@@ -33,6 +43,7 @@ const mockMoments: MomentsReport = await Bun.file(new URL('./moments.json', impo
 const MIN = 60_000
 
 const ds: Dataset = buildDataset(Math.floor(Date.now() / 3_600_000) * 3_600_000 + 30 * MIN)
+assignPlaces(ds.sessions)
 
 // ---- helpers --------------------------------------------------------------------------
 
@@ -86,6 +97,8 @@ interface Filter {
   states: State[]
   since?: number
   until?: number
+  /** repo, checkout, remote and touched (dev/places.ts). */
+  place: PlaceFilter
 }
 
 function filterOf(u: URL): Filter {
@@ -107,6 +120,7 @@ function filterOf(u: URL): Filter {
     states,
     since: parseTime('since', u.searchParams.get('since')),
     until: parseTime('until', u.searchParams.get('until'), true),
+    place: placeFilterOf(u),
   }
 }
 
@@ -117,7 +131,7 @@ function matches(f: Filter, s: SessionSummary): boolean {
   const at = Date.parse(s.lastActivityAt ?? '')
   if (f.since !== undefined && at < f.since) return false
   if (f.until !== undefined && at >= f.until) return false
-  return true
+  return placeMatches(f.place, s)
 }
 
 const visible = () => ds.sessions.filter((s) => s.summary.kind !== 'sdk')
@@ -272,6 +286,19 @@ function dayInRange(day: string, since: number | undefined, until: number | unde
   return day >= from && day <= to
 }
 
+function groupList(u: URL): unknown {
+  const by = u.searchParams.get('by')
+  if (by !== 'dir' && by !== 'checkout' && by !== 'repo' && by !== 'remote')
+    throw new BadRequest(`by=${JSON.stringify(by)}: use dir, checkout, repo or remote`)
+  const f = filterOf(u)
+  return groups(
+    by,
+    visible()
+      .map((s) => s.summary)
+      .filter((s) => matches(f, s)),
+  )
+}
+
 function sessionDetail(harness: string, id: string, u: URL): Response {
   if (harness !== 'claude') return fail(404, 'not_found', `no such harness: ${harness}`)
   let s = ds.byId.get(id)
@@ -395,18 +422,23 @@ interface Contribution {
   /** Sessions this contribution stands for (a scripted line stands for `count`). */
   count: number
   scripted: boolean
+  /** The session's summary (not set for scripted lines): the location keys read off it. */
+  summary?: SessionSummary
   /** A compaction call: no spend of its own, an estimate on the side. */
   comp?: CompactionTally
 }
 
 function costTable(u: URL): CostTable {
   const by = (u.searchParams.get('by') ?? 'project') as CostBy
-  if (!['project', 'day', 'model', 'kind', 'session'].includes(by))
-    throw new BadRequest(`by=${JSON.stringify(by)}: use project, day, model, kind or session`)
+  if (!['project', 'day', 'model', 'kind', 'session', 'dir', 'checkout', 'repo', 'remote', 'branch'].includes(by))
+    throw new BadRequest(
+      `by=${JSON.stringify(by)}: use project, day, model, kind, session, dir, checkout, repo, remote or branch`,
+    )
   const split = u.searchParams.get('split') as 'project' | 'model' | 'kind' | null
   if (split && !['project', 'model', 'kind'].includes(split))
     throw new BadRequest(`split=${JSON.stringify(split)}: use project, model or kind`)
   const project = u.searchParams.get('project') || undefined
+  const place = placeFilterOf(u)
   const since = parseTime('since', u.searchParams.get('since'))
   const until = parseTime('until', u.searchParams.get('until'), true)
   const limit = u.searchParams.has('limit') ? limitParam(u, 0) : by === 'session' ? 100 : 0
@@ -418,6 +450,7 @@ function costTable(u: URL): CostTable {
   for (const s of visible()) {
     const p = s.summary
     if (project && project !== p.project && project !== p.projectKey) continue
+    if (!placeMatches(place, p)) continue
     if (by === 'session') {
       const at = Date.parse(p.lastActivityAt ?? '')
       if ((since !== undefined && at < since) || (until !== undefined && at >= until)) continue
@@ -438,6 +471,7 @@ function costTable(u: URL): CostTable {
         reported: e.reported,
         count: 1,
         scripted: false,
+        summary: p,
       })
     }
     for (const c of s.detail.digest.compactions ?? []) {
@@ -458,6 +492,7 @@ function costTable(u: URL): CostTable {
         reported: covered,
         count: 0,
         scripted: false,
+        summary: p,
         comp: {
           calls: 1,
           cold: c.call.cache === 'cold' ? 1 : 0,
@@ -497,8 +532,15 @@ function costTable(u: URL): CostTable {
     })
   }
 
+  const placeDims = ['dir', 'checkout', 'repo', 'remote', 'branch']
   const keyOf = (c: Contribution, dim: CostBy | 'project' | 'model' | 'kind'): string =>
-    dim === 'session' ? c.session : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
+    dim === 'session'
+      ? c.session
+      : placeDims.includes(dim) && c.summary
+        ? costKey(dim as 'dir', c.summary)
+        : placeDims.includes(dim)
+          ? ''
+          : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
   const rows = new Map<string, CostRow & { ids: Set<string>; parts: Map<string, CostSplitEntry> }>()
   for (const c of cs) {
     const k = keyOf(c, by)
@@ -506,7 +548,7 @@ function costTable(u: URL): CostTable {
     if (!row) {
       row = {
         key: k,
-        label: by === 'session' ? c.label : undefined,
+        label: by === 'session' ? c.label : placeDims.includes(by) ? costLabel(by as 'dir', k) : undefined,
         flag: by === 'session' ? c.flag : undefined,
         harness: by === 'session' && !c.scripted ? 'claude' : undefined,
         project: by === 'session' ? c.project : undefined,
@@ -692,8 +734,9 @@ function route(req: Request): Response {
   const p = u.pathname.replace(/\/+$/, '')
   try {
     if (p === '/api/projects') return json(200, projects())
-    // The mock has no repositories or bead databases: the rail shows their empty states.
-    if (p === '/api/repos') return json(200, { repos: [] })
+    // The mock has repositories (dev/places.ts) but no bead databases: the rail shows their empty state.
+    if (p === '/api/repos') return json(200, repos(visible().map((s) => s.summary)))
+    if (p === '/api/groups') return json(200, groupList(u))
     if (p === '/api/beads') return json(200, { prefixes: [], families: [], databases: 0 })
     if (p === '/api/sessions') return json(200, sessionsList(u))
     const m = /^\/api\/sessions\/([^/]+)\/([^/]+)$/.exec(p)

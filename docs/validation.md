@@ -329,3 +329,88 @@ of their bead events.
   close coverage from 588 to 602).
 - `cd ~/work/acme` expands `~` to the home directory the session's working directory is under
   (the digest may not read `$HOME`); 141 events had no `cwd` before.
+
+## Location keys (2026-11-07)
+
+Bead `merlin-t8s.53.7`. Design: [location.md](location.md). `merlin scan` (parser: Claude 18, Codex 7)
+over the real `~/.claude` and `~/.codex`, read-only, into a scratch `MERLIN_HOME` that held copies of
+`claude/`, `codex/`, `beads/` and the version 1 `repos.json`. Nothing was served. The scan took 2.0 s
+for 3,425 sessions (3,133 of them scripted runs). The real `repos.json` has the same SHA-1 before and
+after (`7d562930…`); nothing else in the real home was touched. The numbers come from a temporary Go
+program in the module (calling `catalog`, `links` and `repos`, deleted afterwards) and `os.Stat` on the
+real paths. The history has grown since 2026-11-06 (3,422 to 3,425 digests, $6,431 to $6,612 on the
+comparable set), and `workDirs` now names more directories (see "Directories").
+
+**Migration.** The version 1 file has 299 entries, 62 gone, 60 of those with a repository. All 60
+become `gitCommonDir` = old `repo` + `/.git` (250 of 250 entries with a `repo` took that shape; none
+needed the `.bare` or `HEAD` rules), keep a checkout, and share their common dir with a live entry, so
+they still group under their repositories. The one session that starts in a gone version 1 directory
+keeps its repository. The file saved as version 2. No credential reaches it: no remote value holds
+`@`, `token` or `://`; those strings occur only in directory names (10 keys with `@`, 7 with `token`).
+After the scan it holds 810 entries: 391 live, 62 gone, 357 inferred; 280 linked worktrees; 719 with a
+common dir. A second scan changed nothing (`repos.json` byte-identical, 1 session reprocessed, the
+one whose source is missing).
+
+**Directories** (against §9 of the design, which counted the directories the digests named before
+`workDirs`; the same set now has 472 directories):
+
+| | §9 (11-06) | measured |
+|---|---|---|
+| directories | 461 | 472 |
+| gone | 224 | 224 |
+| never recorded | 162 | 162 |
+| recovered | 91 (32 under a recorded checkout, 59 sibling worktrees) | 91 (28 and 63, see below) |
+| unknown | 71 (all but 3 temporary) | 73 (all but 2 temporary) |
+
+The split between ancestor and sibling is read back from the entries (a checkout still on disk means
+the ancestor rule), so it is approximate; the total is exact. With the directories `workDirs` adds
+(edits by agents, `cd` in commands) the set is 989: 598 gone, 536 of them never recorded; 357
+recovered (259 sibling, 98 ancestor); 181 unknown, 176 of them temporary directories. Of the 391
+live ones, 89 are in no repository.
+
+**Sessions with no repository.** 76 of 3,425 (9 empty, 41 scripted runs in scratch directories), against
+82 (9 empty). Five are the sessions that started in a deleted subdirectory of a live repository and
+regain their repository, as §9 expected; one more is not traced. Each of the 76 also has no entry for
+its start directory, so no session's activity placed it in a repository its start directory is not in.
+Among the 292 sessions the list shows (not scripted) 35 have none, 9 empty.
+
+**Checkout and repository flips.** On the 268 non-scripted Claude sessions ($6,612): 19 ($240) count
+under a checkout other than their start directory's, and 1 of them ($3) under another repository.
+§9 simulated 19 ($227 of $6,431) and 1 ($3) on 264 sessions: the same counts, with the history's
+growth in dollars. All 19 had a checkout for their start directory (none went from none to one).
+
+**Totals.** $6,710.42 in all. `cost` by project (33 rows), repo (11), checkout (30), remote (9), branch
+(23), bead (578), family (268), day and model each add up to it within 2e-11, and so do `groups` by
+dir (42), checkout (30), repo (11) and remote (9); each counts 292 sessions.
+
+**Gone flags against the disk** (the check from the review of `.53.4`). Every repository (10 with
+sessions, 14 in the cache) and every checkout (29 with sessions, 76 in the cache) agrees with
+`os.Stat` of its path: 0 repositories shown gone that exist, 0 shown live that are missing, and the
+same for checkouts. The known risk (a repository whose entries are all gone while it still exists)
+does not occur here. The check covered 14 repositories, so it says little about a machine with many
+removed worktrees; that is for `.53.8`.
+
+**Remotes.** 12 distinct in the cache, 8 among sessions that count. 11 are `host/owner/repo`, 1 is a
+local path (the vendored clone). None keeps a user, a scheme, a `.git` suffix or a port; no two remotes
+differ only by case. No two repositories share a remote on this machine, so splitting by normalising
+cannot show here, and 2 repositories have no origin. 14 repositories in all.
+
+**Display names.** 0 of 14 come out as `.git`, `.bare` or empty; 0 collide.
+
+**Beads.** The `beads` value of every version 1 directory equals the new one: 237 live and 62 gone, 0
+differences (104 directories are new, since `workDirs` named more). The bead rollups (578 beads, 268
+families) are identical, row by row, to the same data under the migrated version 1 cache alone, and both
+add up to $6,710.42. This compares old data under the new code, not the old binary, which no longer
+builds.
+
+**`workDirs`.** 241 of the 261 non-scripted sessions with turns have it (92%); the 20 without use the §6
+fallback. None of the 3,133 scripted runs has any. Versions: 3,400 Claude digests on 18 and all 25 Codex
+on 7. One older digest (version 9, source gone) shares its id with a current one and so is shadowed in
+the catalog.
+
+**Determinism.** Groups by the four keys and the rollups by project, repo, checkout, remote and branch
+are identical across three runs (a rebuild, a second `SetPlaces`, a fresh load). The bead and family
+rollups and a session's bead shares are not: they differ in the last digit (about 1e-15 dollars) from run
+to run, because `share` in `internal/catalog/places.go` summed its weights in map order. That code is
+older than the location keys and had no visible effect. It now sums in key order
+(`TestShareIsDeterministic`); this run was not repeated after that fix.

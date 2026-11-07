@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/terek/merlin/internal/beads"
@@ -11,11 +12,11 @@ import (
 // placesFixture: one repository /r with a bead database (x-e is the parent of x-a), another
 // repository /o with a database of its own (y-z), a worktree of /r, and a non-repository /h.
 func placesFixture() Places {
-	r := repos.Repo{Top: "/r", Repo: "/r", Beads: "/r/.beads"}
-	wt := repos.Repo{Top: "/r/.wt/one", Repo: "/r", Worktree: true, Beads: "/r/.beads"}
+	r := repos.Repo{Checkout: "/r", GitCommonDir: "/r/.git", Beads: "/r/.beads"}
+	wt := repos.Repo{Checkout: "/r/.wt/one", GitCommonDir: "/r/.git", Worktree: true, Beads: "/r/.beads"}
 	return Places{
 		Repos: map[string]repos.Repo{"/r": r, "/r/src": r, "/r/.wt/one": wt,
-			"/o": {Top: "/o", Repo: "/o", Beads: "/o/.beads"}},
+			"/o": {Checkout: "/o", GitCommonDir: "/o/.git", Beads: "/o/.beads"}},
 		Beads: []beads.Database{
 			{Key: "db-o", Dirs: []string{"/o/.beads"}, Prefixes: []string{"y"}, Issues: []beads.Issue{{ID: "y-z"}}},
 			{Key: "db-r", Dirs: []string{"/r/.beads"}, Prefixes: []string{"x"}, Issues: []beads.Issue{
@@ -66,11 +67,11 @@ func TestPlacesBeadShares(t *testing.T) {
 	if !ok {
 		t.Fatal("no places")
 	}
-	if p.Repo == nil || p.Repo.Repo != "/r" {
-		t.Fatalf("repo = %+v, want /r (most of the work, though it started in /h)", p.Repo)
+	if p.Repo == nil || p.Repo.Repo != "/r/.git" {
+		t.Fatalf("repo = %+v, want /r/.git (most of the work, though it started in /h)", p.Repo)
 	}
-	if len(p.Worktrees) != 1 || p.Worktrees[0] != "/r/.wt/one" {
-		t.Errorf("worktrees = %v", p.Worktrees)
+	if !slices.Contains(p.Checkouts, "/r/.wt/one") {
+		t.Errorf("checkouts = %v", p.Checkouts)
 	}
 	got := map[string]float64{}
 	for _, b := range p.Beads {
@@ -106,13 +107,13 @@ func TestPlacesFiltersAndRollups(t *testing.T) {
 		f    Filter
 		want int
 	}{
-		{Filter{Repo: "/r"}, 1},
-		{Filter{Repo: "/o"}, 1},
+		{Filter{Repo: "/r/.git"}, 1},
+		{Filter{Repo: "/o/.git"}, 1},
 		{Filter{Repo: NoneFilter}, 0},
 		{Filter{Bead: "x-e"}, 1}, // the family: x-a lies below it
 		{Filter{Bead: "y-z"}, 0},
 		{Filter{Branch: "main"}, 1},
-		{Filter{Worktree: "/r/.wt/one"}, 1},
+		{Filter{Checkout: "/r/.wt/one", Touched: true}, 1},
 	} {
 		if n := len(c.List(tc.f, Liveness{}).Sessions); n != tc.want {
 			t.Errorf("List(%+v) = %d sessions, want %d", tc.f, n, tc.want)
@@ -158,7 +159,7 @@ func TestPlacesFiltersAndRollups(t *testing.T) {
 		}
 	}
 	rs := c.Repos(Filter{})
-	if len(rs) != 2 || len(rs[0].Worktrees)+len(rs[1].Worktrees) != 1 {
+	if len(rs) != 2 || len(rs[0].Checkouts)+len(rs[1].Checkouts) != 3 {
 		t.Errorf("repos = %+v", rs)
 	}
 }

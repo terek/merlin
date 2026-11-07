@@ -11,6 +11,7 @@ import (
 
 	"github.com/terek/merlin/internal/catalog"
 	"github.com/terek/merlin/internal/model"
+	"github.com/terek/merlin/internal/repos"
 )
 
 // summarize turns the catalog's view of a session into the summary the API shows.
@@ -32,7 +33,7 @@ func summarize(cat *catalog.Catalog, in catalog.SessionInfo, state catalog.State
 		s.Lineage.Parent, s.Lineage.ParentKind = &p, in.Parent.Kind
 	}
 	if p, ok := cat.Places(in.Key); ok {
-		s.Repo = p.Repo
+		s.Repo, s.Checkout, s.Remote = p.Repo, p.Checkout, p.Remote
 		for _, b := range p.Beads {
 			s.Beads = append(s.Beads, BeadBrief{ID: b.ID, Title: b.Title, Status: b.Status, Root: b.Root})
 		}
@@ -101,6 +102,33 @@ func (a *API) handleRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.json(w, http.StatusOK, RepoList{Repos: cat.Repos(catalog.Filter{})})
+}
+
+func (a *API) handleGroups(w http.ResponseWriter, r *http.Request) {
+	cat := a.cat(w)
+	if cat == nil {
+		return
+	}
+	q := r.URL.Query()
+	by := catalog.GroupBy(q.Get("by"))
+	if !slices.Contains([]catalog.GroupBy{catalog.GroupDir, catalog.GroupCheckout, catalog.GroupRepo, catalog.GroupRemote}, by) {
+		a.badParam(w, "by=%q: use dir, checkout, repo or remote", by)
+		return
+	}
+	f, err := a.filter(q)
+	if err != nil {
+		a.paramError(w, err)
+		return
+	}
+	groups, err := cat.Groups(by, f)
+	if err != nil {
+		a.paramError(w, err)
+		return
+	}
+	if groups == nil {
+		groups = []catalog.Group{}
+	}
+	a.json(w, http.StatusOK, GroupList{Groups: groups})
 }
 
 func (a *API) handleBeads(w http.ResponseWriter, r *http.Request) {
@@ -369,7 +397,8 @@ func (a *API) dayOf(t time.Time) string { return t.In(a.loc()).Format(dayLayout)
 // costDims are the dimensions of GET /api/cost.
 var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel,
 	"kind": catalog.ByKind, "repo": catalog.ByRepo, "branch": catalog.ByBranch, "bead": catalog.ByBead,
-	"family": catalog.ByFamily}
+	"family": catalog.ByFamily, "checkout": catalog.ByCheckout, "remote": catalog.ByRemote,
+	"dir": catalog.ByProject} // dir is project under another name
 
 // rowKey is the value of a rollup row along the named dimension.
 func rowKey(dim string, r catalog.Row) string { return r.Key(costDims[dim]) }
@@ -387,7 +416,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	split := q.Get("split")
 	dim, isDim := costDims[by]
 	if !isDim && by != "session" {
-		a.badParam(w, "by=%q: use project, day, model, kind, repo, branch, bead, family or session", by)
+		a.badParam(w, "by=%q: use project, dir, day, model, kind, repo, checkout, remote, branch, bead, family or session", by)
 		return
 	}
 	var splitDim catalog.Dim
@@ -400,7 +429,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		case by == "session":
 			a.badParam(w, "split cannot be combined with by=session")
 			return
-		case split == by:
+		case split == by || sd == dim && isDim:
 			a.badParam(w, "split=%q must differ from by", split)
 			return
 		}
@@ -423,8 +452,11 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	f := catalog.Filter{Project: q.Get("project"), Repo: q.Get("repo"), Worktree: q.Get("worktree"),
-		Branch: q.Get("branch"), Bead: q.Get("bead")}
+	f, err := groupFilter(q)
+	if err != nil {
+		a.paramError(w, err)
+		return
+	}
 	out := CostTable{By: by, Split: split, Project: f.Project, Rows: []CostRow{}}
 	if !since.IsZero() {
 		out.Since = &since
@@ -555,25 +587,41 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	a.json(w, http.StatusOK, out)
 }
 
-// groupLabel names a cost row of a grouping dimension (repo, branch, bead, family).
+// groupLabel names a cost row of a grouping dimension (dir, repo, checkout, remote, branch,
+// bead, family). A repository key is a git common dir: its name is repos.Name, never its base.
 func groupLabel(cat *catalog.Catalog, by, key string) (string, string) {
 	switch by {
+	case "dir":
+		if key == "" {
+			return key, "no directory"
+		}
+		return key, filepath.Base(key)
+	case "checkout":
+		if key == catalog.NoCheckout {
+			return key, "no checkout"
+		}
+		return key, filepath.Base(key)
+	case "remote":
+		if key == catalog.NoRemote {
+			return key, "no remote"
+		}
+		return key, key
 	case "repo":
 		if key == catalog.NoRepo {
 			return key, "no repository"
 		}
-		return key, filepath.Base(key)
+		return key, repos.Name(key)
 	case "branch":
 		repo, branch := catalog.SplitBranchKey(key)
 		switch {
 		case repo == catalog.NoRepo && branch == catalog.NoBranch:
 			return key, "no repository or branch"
 		case branch == catalog.NoBranch:
-			return key, filepath.Base(repo) + " · no branch"
+			return key, repos.Name(repo) + " · no branch"
 		case repo == catalog.NoRepo:
 			return key, branch
 		}
-		return key, filepath.Base(repo) + " · " + branch
+		return key, repos.Name(repo) + " · " + branch
 	}
 	if key == catalog.NoBead {
 		return key, "no bead"

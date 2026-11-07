@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 6
+const ParserVersion = 7
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -229,6 +229,7 @@ func mainTurn(tr *turnRec, index int) model.Turn {
 		ToolCalls:    tr.ToolCalls,
 		ToolsByName:  cloneCounts(tr.ToolsByName),
 		FilesTouched: slices.Clone(tr.Files),
+		WorkDirs:     workDirs(tr.Work),
 	}
 	if t.DurationMs == 0 && tr.Ended && !tr.StartedAt.IsZero() {
 		t.DurationMs = tr.EndedAt.Sub(tr.StartedAt).Milliseconds()
@@ -386,6 +387,7 @@ func (b *builder) buildAgents() {
 				Interrupted: tr.AbortReason != "",
 				ToolCalls:   tr.ToolCalls,
 				ToolsByName: cloneCounts(tr.ToolsByName),
+				WorkDirs:    workDirs(tr.Work),
 			}
 			if i == 0 {
 				at.Origin, at.Prompt, at.PromptEncrypted = model.OriginSpawn, a.Prompt, a.PromptEncrypted

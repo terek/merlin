@@ -32,7 +32,8 @@ func Open(home string) *Index {
 }
 
 // Dirs returns the directories a digest names: where the session started, every working
-// directory it had, where its bd calls ran, and the directories of the files it changed.
+// directory it had, where its bd calls ran, the directories of the files it changed, and the
+// workDirs of its turns and agent turns.
 func Dirs(d *model.SessionDigest) []string {
 	var out []string
 	add := func(p string) {
@@ -52,6 +53,16 @@ func Dirs(d *model.SessionDigest) []string {
 		for _, f := range t.FilesTouched {
 			if filepath.IsAbs(f) {
 				add(filepath.Dir(f))
+			}
+		}
+		for _, w := range t.WorkDirs {
+			add(w.Dir)
+		}
+	}
+	for _, a := range d.Agents {
+		for _, t := range a.Turns {
+			for _, w := range t.WorkDirs {
+				add(w.Dir)
 			}
 		}
 	}

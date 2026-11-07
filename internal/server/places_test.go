@@ -10,7 +10,7 @@ import (
 
 func TestGroupingEndpoints(t *testing.T) {
 	r := newRig(t)
-	acme := repos.Repo{Top: "/home/dev/acme", Repo: "/home/dev/acme", Remote: "git@example.com:acme.git"}
+	acme := repos.Repo{Checkout: "/home/dev/acme", GitCommonDir: "/home/dev/acme/.git", Remote: "git@example.com:acme.git"}
 	r.cat.SetPlaces(catalog.Places{Repos: map[string]repos.Repo{
 		"/home/dev/acme/fork": acme, "/home/dev/acme/nest": acme,
 	}})
@@ -19,16 +19,16 @@ func TestGroupingEndpoints(t *testing.T) {
 	if code := r.get("/api/repos", &rl); code != 200 {
 		t.Fatalf("repos: %d", code)
 	}
-	if len(rl.Repos) != 2 || rl.Repos[0].Repo != "/home/dev/acme" || rl.Repos[0].Name != "acme" || rl.Repos[1].Repo != "" {
+	if len(rl.Repos) != 2 || rl.Repos[0].Repo != "/home/dev/acme/.git" || rl.Repos[0].Name != "acme" || rl.Repos[1].Repo != "" {
 		t.Fatalf("repos = %+v", rl.Repos)
 	}
 	var l SessionList
-	r.get("/api/sessions?repo=/home/dev/acme", &l)
+	r.get("/api/sessions?repo=/home/dev/acme/.git", &l)
 	if l.Total != rl.Repos[0].Sessions || l.Total == 0 {
 		t.Errorf("sessions in acme = %d, the repository lists %d", l.Total, rl.Repos[0].Sessions)
 	}
 	for _, s := range l.Sessions {
-		if s.Repo == nil || s.Repo.Repo != "/home/dev/acme" {
+		if s.Repo == nil || s.Repo.Repo != "/home/dev/acme/.git" {
 			t.Errorf("%s: repo = %+v", s.Key, s.Repo)
 		}
 	}

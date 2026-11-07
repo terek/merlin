@@ -53,8 +53,13 @@ export function matchesFilters(f: SessionFilters, s: SessionSummary): boolean {
   if (until !== undefined && at >= until) return false
   // The groupings, as far as a summary tells: a bead filter also matches beads below the one
   // named, which only the daemon knows past the family's root.
-  if (f.repo && (f.repo === '-' ? Boolean(s.repo) : s.repo?.repo !== f.repo)) return false
-  if (f.worktree && !(s.cwd === f.worktree || s.cwd?.startsWith(`${f.worktree}/`))) return false
+  // `touched` widens the most specific of checkout, repo and remote to every session that touched
+  // the value, which a summary does not list: that value is not judged here (a new row may be
+  // listed that the daemon would not list, until the next refetch). `-` stays primary.
+  const wide = f.touched === '1' ? [f.checkout, f.repo, f.remote].find((v) => v && v !== '-') : undefined
+  const off = (want: string | undefined, have: string | undefined) =>
+    Boolean(want) && want !== wide && (want === '-' ? Boolean(have) : have !== want)
+  if (off(f.repo, s.repo?.repo) || off(f.checkout, s.checkout) || off(f.remote, s.remote)) return false
   if (f.branch && s.branch !== f.branch) return false
   if (f.bead && !s.beads?.some((b) => b.id === f.bead || b.root === f.bead)) return false
   return true
@@ -62,7 +67,16 @@ export function matchesFilters(f: SessionFilters, s: SessionSummary): boolean {
 
 /** No filter at all: the list every session of the default kinds is in. */
 export const isUnfiltered = (f: SessionFilters) =>
-  !f.project && !f.state && !f.kind && !f.since && !f.until && !f.repo && !f.worktree && !f.branch && !f.bead
+  !f.project &&
+  !f.state &&
+  !f.kind &&
+  !f.since &&
+  !f.until &&
+  !f.repo &&
+  !f.checkout &&
+  !f.remote &&
+  !f.branch &&
+  !f.bead
 
 const activity = (s: SessionSummary) => (s.lastActivityAt ? Date.parse(s.lastActivityAt) : 0)
 
@@ -290,6 +304,7 @@ export function applyEvent<K extends keyof EventMap>(
       invalidate(['session', key.harness, key.id])
       invalidate(['projects'])
       invalidate(['repos'])
+      invalidate(['groups'])
       invalidate(['beads'])
       invalidate(['cost'])
       sink.changed?.(key)

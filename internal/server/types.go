@@ -101,10 +101,12 @@ type SessionSummary struct {
 	PRs []model.PRLink `json:"prs,omitempty"`
 	// Repo is the repository the session counts under; Beads the beads it worked on, most
 	// spent on first (catalog.SessionPlaces). Both omitted when unknown.
-	Repo    *catalog.RepoRef `json:"repo,omitempty"`
-	Beads   []BeadBrief      `json:"beads,omitempty"`
-	Cost    CostBrief        `json:"cost"`
-	Lineage LineageBrief     `json:"lineage"`
+	Repo     *catalog.RepoRef `json:"repo,omitempty"`
+	Checkout string           `json:"checkout,omitempty"`
+	Remote   string           `json:"remote,omitempty"`
+	Beads    []BeadBrief      `json:"beads,omitempty"`
+	Cost     CostBrief        `json:"cost"`
+	Lineage  LineageBrief     `json:"lineage"`
 }
 
 // BeadBrief names a bead a session worked on.
@@ -186,6 +188,11 @@ type ProjectSummary struct {
 // recently active first, then the group of sessions in none (empty repo).
 type RepoList struct {
 	Repos []catalog.RepoGroup `json:"repos"`
+}
+
+// GroupList is the body of GET /api/groups.
+type GroupList struct {
+	Groups []catalog.Group `json:"groups"`
 }
 
 // BeadList is the body of GET /api/beads: the bead prefixes sessions worked on, the one with

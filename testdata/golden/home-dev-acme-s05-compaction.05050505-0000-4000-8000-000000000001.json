@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 17,
+  "parserVersion": 18,
   "source": [
     {
       "path": "projects/-home-dev-acme-s05-compaction/05050505-0000-4000-8000-000000000001.jsonl",
@@ -141,7 +141,13 @@
           }
         }
       },
-      "costWithAgents": 0.013999999999999999
+      "costWithAgents": 0.013999999999999999,
+      "workDirs": [
+        {
+          "dir": "/home/dev/acme/s05-compaction",
+          "edits": 1
+        }
+      ]
     },
     {
       "index": 1,

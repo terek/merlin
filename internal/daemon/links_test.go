@@ -22,6 +22,7 @@ func TestRescanRefreshesLinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, content := range map[string]string{
+		filepath.Join(repo, ".git", "HEAD"):            "ref: refs/heads/main\n",
 		filepath.Join(repo, ".git", "config"):          "[remote \"origin\"]\n\turl = git@example.com:dev/acme.git\n",
 		filepath.Join(repo, ".beads", "metadata.json"): `{"project_id":"p-links"}`,
 		filepath.Join(repo, ".beads", "issues.jsonl"):  `{"_type":"issue","id":"acme-a1","title":"A","status":"open"}` + "\n",
@@ -50,7 +51,7 @@ func TestRescanRefreshesLinks(t *testing.T) {
 		_, err2 := os.Stat(filepath.Join(home, beads.RegistryDir, "p-links.json"))
 		return err1 == nil && err2 == nil
 	})
-	if rp, ok := repos.Open(home).Lookup(repo); !ok || rp.Remote != "git@example.com:dev/acme.git" || rp.Beads != filepath.Join(repo, ".beads") {
+	if rp, ok := repos.Open(home).Lookup(repo); !ok || rp.Remote != "example.com/dev/acme" || rp.Beads != filepath.Join(repo, ".beads") {
 		t.Errorf("repo = %+v, %v", rp, ok)
 	}
 	if db, ok := beads.OpenRegistry(home).ForDir(filepath.Join(repo, ".beads")); !ok || len(db.Issues) != 1 {

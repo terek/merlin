@@ -71,6 +71,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 |---|---|
 | `GET /api/projects` | `ProjectList` |
 | `GET /api/repos` | `RepoList` |
+| `GET /api/groups?by=` | `GroupList` |
 | `GET /api/beads` | `BeadList` |
 | `GET /api/sessions` | `SessionList` |
 | `GET /api/sessions/{harness}/{id}` | `SessionDetail` |
@@ -135,14 +136,17 @@ Session summaries, newest last activity first: no turns, no messages. Meant for 
 | `limit` | page size, 1 to 500, default 50 |
 | `cursor` | the `nextCursor` of the previous page |
 | `by` | `session` (the default) or `tree`: see [By tree](#by-tree) |
-| `repo` | a main repository's directory (`repos[].repo`): the sessions that count under it; `-` for the sessions in no repository |
-| `worktree` | a linked worktree's directory: the sessions that worked in it |
+| `repo` | a repository's git common dir (`repos[].repo`, `groups[].key`): the sessions that count under it; `-` for the sessions with none |
+| `checkout` | a checkout's directory: the sessions that count under it; `-` for the sessions with none |
+| `remote` | a normalised remote (`github.com/acme/app`): the sessions that count under it; `-` for the sessions with none |
+| `touched` | `1` or `0` (also `true`, `false`; default 0). With `1`, the most specific of `checkout`, `repo` and `remote` selects every session that touched the value, not only those that count under it: with `checkout` set only it widens, and `repo` and `remote` stay primary (so `repo=X&checkout=Y&touched=1` is the sessions under X that touched Y, as `checkouts[].sessions` counts). `-` still selects the primary none |
 | `branch` | a branch name: the sessions with a turn on it (combine with `repo`) |
 | `bead` | a bead id: the sessions that worked on it or on a bead below it in its family (any bd call but `show`); or a bead prefix (`merlin`): the sessions that worked on any bead of it |
 
-The grouping filters (`repo`, `worktree`, `branch`, `bead`) are facets: see
-[Groupings](#groupings-get-apirepos-and-get-apibeads). They apply to `/api/search` and
-`/api/cost` too.
+The grouping filters (`repo`, `checkout`, `remote`, `touched`, `branch`, `bead`) are facets: see
+[Groupings](#groupings-get-apirepos-and-get-apibeads) and [Location keys](#location-keys). They
+apply to `/api/groups`, `/api/search` and `/api/cost` too. The old `worktree=` is gone: use
+`checkout=` with `touched=1`.
 
 `total` counts all sessions matching the filters, over all pages. `nextCursor` is set while more
 follow; it encodes a position (last activity, key), so paging stays correct when sessions are
@@ -788,9 +792,9 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 
 | Parameter | Meaning |
 |---|---|
-| `by` | `project` (default), `day`, `model`, `kind`, `repo`, `branch`, `bead`, `family` or `session` |
+| `by` | `project` (default), `dir` (the same as `project`), `day`, `model`, `kind`, `repo`, `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
 | `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
-| `project`, `repo`, `worktree`, `branch`, `bead` | as for `/api/sessions` |
+| `project`, `repo`, `checkout`, `remote`, `touched`, `branch`, `bead` | as for `/api/sessions` (the same parser reads them) |
 | `limit` | cut the rows (1 to 500). Default: none; `by=session` defaults to 100. `total` is not affected; `truncated` says rows were cut |
 | `split` | `project`, `model` or `kind`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
 
@@ -890,9 +894,10 @@ key stays `(harness, id)` and its `project` the start directory. They come from 
 lookups and bead databases Merlin keeps ([beads-and-repos.md](beads-and-repos.md)); until those
 are known, every session is in no repository and on no bead.
 
-- **Repository** (`summary.repo`): that of the directory the session started in, else the one
-  most of its directories (working directories, bd calls, changed files) lie in. One per session,
-  so a `by=repo` table adds up. A worktree counts under its main repository.
+- **Repository** (`summary.repo`): the git common dir its work happened in, by the rule under
+  [Location keys](#location-keys). One per session, so a `by=repo` table adds up. A linked worktree
+  counts under its main repository. The key is a path inside the repository (`/home/dev/acme/.git`):
+  a client must show `name`, never derive a name from the key (the base of the key is `.git`).
 - **Branches**: the `gitBranch` of its turns. `by=branch` splits a session's best cost over its
   branches in proportion to the attributed cost of its messages (an agent's messages go with the
   turn that launched it). Row keys are `<repository>#<branch>`.
@@ -911,8 +916,9 @@ Every grouped table adds up to the same total as `by=project`.
 
 `GET /api/repos` (`RepoList`): `repos[]` with `repo` (the key), `name`, `remote`, `gone`,
 `sessions` (not scripted runs), `lastActivityAt`, `cost` (`Money`: their best costs, scripted runs
-included), `worktrees[]` (`top`, `name`, `gone`, `sessions`, `bestUSD`: the whole cost of the
-sessions that worked in it) and `branches[]` (`name`, `sessions`, `usd`: the share spent on it).
+included), `checkouts[]` (`checkout`, `name`, `worktree` when it is a linked one, `gone`, `sessions`,
+`bestUSD`: every checkout of the repository that sessions touched, and the whole cost of those
+sessions) and `branches[]` (`name`, `sessions`, `usd`: the share spent on it).
 Most recently active first; the group with `repo: ""` (no repository) last.
 
 `GET /api/beads` (`BeadList`, optional `repo=`): `prefixes[]`, the one with the most recently active
@@ -926,10 +932,37 @@ with `root` (a `BeadRef`: `id`, `title`, `type`, `status`, `parent`, `root`, `da
 family in the database) and `beads[]` (the root and every member a session worked on, in id order,
 each with `sessions`, `usd`, `lastActivityAt`); `databases` is how many bead databases are known.
 
-A session summary carries `repo` (`RepoRef`) and `beads[]` (`id`, `title`, `status`, `root`; most
-spent on first). The detail carries `places`: `repo`, `worktrees`, `repos` (every repository it
-touched), `branches[]` (`name`, `usd`), `beads[]` (`BeadRef` with `usd` and `ops`, the bd operations
-it ran) and `noBeadUSD`.
+A session summary carries `repo` (`RepoRef`), `checkout`, `remote` and `beads[]` (`id`, `title`,
+`status`, `root`; most spent on first). The detail carries `places`: `repo`, `checkout`, `remote`,
+`checkouts[]`, `repos[]` (`RepoRef`) and `remotes[]` (every value it touched, sorted),
+`branches[]` (`name`, `usd`), `beads[]` (`BeadRef` with `usd` and `ops`, the bd operations it ran)
+and `noBeadUSD`.
+
+### Location keys
+
+Design: [location.md](location.md). A session counts under one value per key, so every table adds
+up; the other values it touched are listed in its detail.
+
+| Key | Meaning |
+|---|---|
+| `dir` | the directory it started in (`project`) |
+| `checkout` | top of a working tree; none in a bare repository |
+| `repo` | the git common dir, the object store (`/home/dev/acme/.git`) |
+| `remote` | the normalised origin URL |
+
+The primary rule (location.md §7), over what it did in its own turns and agents' turns, leaving out
+copied history: the `repo` with the most file edits, else the most shell commands, else that of the
+start directory; the `checkout` the same way inside that repo, else the start directory's if it is in
+that repo; the `remote` is the repo's. Edits outrank commands, ties go to the start directory's value
+and then to the first in sort order, and a directory in no repository counts for nothing. A session
+therefore never has a checkout outside its repo.
+
+`GET /api/groups?by=dir|checkout|repo|remote` (`GroupList`): `groups[]` with `key`, `name` (the
+display name: `repos.Name` for a repo, the base name of a directory, the remote itself), `remote`,
+`gone` (no live entry has this value), `sessions` (not scripted runs), `lastActivityAt` and `cost`
+(`Money`, scripted runs included), most recently active first and the group with `key: ""` last. It
+takes the filters of `/api/sessions`. A missing or unknown `by` is a 400 naming the four values.
+Two clones of one remote are two groups under `repo` and one under `remote`.
 
 ## GET /api/moments
 

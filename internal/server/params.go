@@ -108,12 +108,27 @@ func parseLimit(q url.Values, def int) (int, error) {
 	return n, nil
 }
 
+// groupFilter reads the filters on where a session worked: project, repo, checkout, remote,
+// branch, bead and touched. Every route that filters sessions reads them here.
+func groupFilter(q url.Values) (catalog.Filter, error) {
+	f := catalog.Filter{Project: q.Get("project"), Repo: q.Get("repo"), Checkout: q.Get("checkout"),
+		Remote: q.Get("remote"), Branch: q.Get("branch"), Bead: q.Get("bead")}
+	switch v := q.Get("touched"); v {
+	case "", "0", "false":
+	case "1", "true":
+		f.Touched = true
+	default:
+		return f, fmt.Errorf("touched=%q: use 1 or 0", v)
+	}
+	return f, nil
+}
+
 // filter reads the filters the list and search endpoints share.
 func (a *API) filter(q url.Values) (catalog.Filter, error) {
-	var f catalog.Filter
-	var err error
-	f.Project = q.Get("project")
-	f.Repo, f.Worktree, f.Branch, f.Bead = q.Get("repo"), q.Get("worktree"), q.Get("branch"), q.Get("bead")
+	f, err := groupFilter(q)
+	if err != nil {
+		return f, err
+	}
 	if f.Kinds, err = parseKinds(q); err != nil {
 		return f, err
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -90,6 +91,7 @@ type msgState struct {
 	turn      int
 	texts     []string
 	tools     []toolUse
+	work      []workCall
 	toolIDs   map[string]struct{}
 	synthetic bool
 }
@@ -595,15 +597,21 @@ func (b *Builder) assistant(r *transcript.Record, ts time.Time, pos int) {
 				m.toolIDs[blk.ID] = struct{}{}
 			}
 			m.tools = append(m.tools, toolUse{name: blk.Name, file: touchedFile(blk)})
+			cwd := r.Cwd
+			if cwd == "" {
+				cwd = b.lastCwd
+			}
+			if f := touchedFile(blk); f != "" {
+				m.work = append(m.work, workCall{dir: path.Dir(f), abs: path.IsAbs(f), edit: true})
+			} else if script, ok := bashScript(blk); ok {
+				d := beads.RunDir(script, cwd)
+				m.work = append(m.work, workCall{dir: d, abs: path.IsAbs(d)})
+			}
 			if blk.IsAgentSpawn() {
 				b.spawn(blk, m, ts)
 			}
 			if script, ok := bashScript(blk); ok && blk.ID != "" {
 				if _, dup := b.bash[blk.ID]; !dup {
-					cwd := r.Cwd
-					if cwd == "" {
-						cwd = b.lastCwd
-					}
 					b.bash[blk.ID] = bashCall{script: script, cwd: cwd, msg: idx, at: ts}
 				}
 			}
