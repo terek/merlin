@@ -26,12 +26,15 @@ import { agentRole } from '../../lib/agent'
 import { idleText } from '../../lib/compaction'
 import { formatDuration } from '../../lib/format'
 import { ENCRYPTED, inboxBody, turnPrompt } from '../../lib/inbox'
+import type { Tier } from '../../lib/tiers'
 
 /** What the dollars bought. `reread` is a cache miss: context that had been cached and was billed again in full. */
 export type ClassKey = 'output' | 'read' | 'write' | 'reread' | 'input'
 /** Who spent them. `reread` is taken out of whoever paid it. */
 export type KindKey = 'main' | 'reread' | 'compact' | 'subagent' | 'addressable' | 'fork'
-export type Split = 'kind' | 'class'
+export type Split = 'kind' | 'class' | 'tier'
+/** The split a `?split=` value names; anything else is by who. */
+export const splitParam = (v: string | null): Split => (v === 'class' || v === 'tier' ? v : 'kind')
 export type Tone = 'series-1' | 'series-2' | 'series-3' | 'series-4' | 'series-5' | 'series-other'
 
 export interface SeriesDef<K extends string = string> {
@@ -58,6 +61,28 @@ export const CLASS_SERIES: SeriesDef<ClassKey>[] = [
   { key: 'write', label: 'Cache write', color: 'var(--series-2)', tone: 'series-2' },
   { key: 'reread', label: 'Cache miss', color: 'var(--series-5)', tone: 'series-5' },
   { key: 'input', label: 'Uncached input', color: 'var(--series-other)', tone: 'series-other' },
+]
+
+/**
+ * By model tier (lib/tiers.ts): one hue, the strongest for the heavy models and fading to the lightest for the
+ * light ones, each step mixed into the page surface so that it reads in both themes; the unpriced are grey.
+ * Stacked heavy first. The hue is the forks' and the output's, which no other tier of the split shares.
+ */
+export const TIER_SERIES: SeriesDef<Tier>[] = [
+  { key: 'heavy', label: 'Heavy models', color: 'var(--series-4)', tone: 'series-4' },
+  {
+    key: 'mid',
+    label: 'Mid models',
+    color: 'color-mix(in srgb, var(--series-4) 58%, var(--surface))',
+    tone: 'series-4',
+  },
+  {
+    key: 'light',
+    label: 'Light models',
+    color: 'color-mix(in srgb, var(--series-4) 28%, var(--surface))',
+    tone: 'series-4',
+  },
+  { key: 'unknown', label: 'Unpriced', color: 'var(--series-other)', tone: 'series-other' },
 ]
 
 const KIND_BY_KEY = new Map<string, SeriesDef>(KIND_SERIES.map((s) => [s.key, s]))

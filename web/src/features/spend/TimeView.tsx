@@ -22,9 +22,10 @@
 import { type KeyboardEvent, type PointerEvent, useId, useMemo, useRef, useState } from 'react'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
+import { modelLabel } from '../../lib/models'
 import { niceTicks } from '../context/chart'
 import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
-import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, type Unit } from './model'
+import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, TIER_SERIES, type Unit } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
@@ -78,7 +79,7 @@ const OVER_GAP = 6
 const COLOR: Record<KindKey | 'main', string> = {
   ...(Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<KindKey, string>),
 }
-const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES }
+const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
 
 /** How strongly the context an agent carries over a pause is tinted, under its dotted line. */
 const HELD_TINT = 0.08
@@ -424,12 +425,11 @@ export function TimePlot({
             const label = l.title
             const cost = formatMoney(l.usd)
             const room = b - a - (l.kind === 'fork' ? 9 : 4) - 4
-            const text =
-              room >= (label.length + cost.length + 3) * 5.6
-                ? `${label}${label ? ' · ' : ''}${cost}`
-                : room >= label.length * 5.6
-                  ? label
-                  : ''
+            // name · model · cost; the model goes first when room is short, then the cost
+            const fits = (s: string) => room >= s.length * 5.6
+            const withCost = [label, cost].filter(Boolean).join(' · ')
+            const withModel = [label, l.model && modelLabel(l.model), cost].filter(Boolean).join(' · ')
+            const text = fits(withModel) ? withModel : fits(withCost) ? withCost : fits(label) ? label : ''
             return (
               <g>
                 <path

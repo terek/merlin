@@ -10,6 +10,7 @@
 // Pure; TimeView.tsx draws what this returns.
 
 import type { Agent, Compaction } from '../../api/types'
+import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import {
   addMessage,
   agentSeries,
@@ -48,6 +49,21 @@ export interface Call {
   kind: KindKey
   /** Dollars of `usd` that were a cache miss. */
   reread: number
+  /** The model the message was billed on, as recorded. */
+  model: string
+  /** Its tier by price (lib/tiers.ts), for the split by model tier. */
+  tier: Tier
+}
+
+/**
+ * A stretch of a lane's calls on one model: from the first call of a run of consecutive calls on the same
+ * model to the last (`t0 === t1` for one call). What a lane's model looks like over time.
+ */
+export interface ModelRun {
+  t0: number
+  t1: number
+  model: string
+  tier: Tier
 }
 
 /** A point of an agent's context: a call and the prompt it was sent with. */
@@ -99,6 +115,10 @@ export interface Lane {
   /** Its turns (main lanes). */
   turns: TurnSpan[]
   calls: Call[]
+  /** Its calls grouped by consecutive model, in time order (`modelRuns`). */
+  runs: ModelRun[]
+  /** The model of most of its calls (by count; the earlier on a tie); empty without calls. */
+  model: string
   series: Series[]
   misses: Miss[]
   compactions: LaneCompaction[]
@@ -119,7 +139,7 @@ export interface Timeline {
 }
 
 /** Everything that ran, as lanes: per branch its main lane, then its agents' lanes in launch order. */
-export function buildTimeline(tree: Tree): Timeline {
+export function buildTimeline(tree: Tree, prices?: Prices): Timeline {
   const lanes: Lane[] = []
   const spans: [number, number][] = []
   for (const b of tree.branches) {
@@ -182,6 +202,8 @@ export function buildTimeline(tree: Tree): Timeline {
         byClass: bucket.byClass,
         kind: a?.kind === 'compact' ? 'compact' : lane.main ? 'main' : (lane.kind as KindKey),
         reread: bucket.reread,
+        model: msg.model,
+        tier: tierOf(msg.model, prices),
       })
       lane.usd += msg.usd
       spans.push([t, t])
@@ -240,11 +262,38 @@ export function buildTimeline(tree: Tree): Timeline {
     for (const lane of [main, ...agentLanes]) {
       lane.calls.sort((x, y) => x.t - y.t)
       lane.compactions.sort((x, y) => x.t - y.t)
+      lane.runs = modelRuns(lane.calls)
+      lane.model = mainModel(lane.calls)
       measure(lane)
     }
     lanes.push(main, ...agentLanes.filter((l) => l.calls.length > 0 || l.units.length > 0))
   }
   return withBounds(lanes, spans)
+}
+
+/** Consecutive calls (in time order) on the same model, as runs. */
+export function modelRuns(calls: readonly Pick<Call, 't' | 'model' | 'tier'>[]): ModelRun[] {
+  const out: ModelRun[] = []
+  for (const c of calls) {
+    const last = out[out.length - 1]
+    if (last && last.model === c.model) last.t1 = c.t
+    else out.push({ t0: c.t, t1: c.t, model: c.model, tier: c.tier })
+  }
+  return out
+}
+
+/** The model most of the calls were on (by count, the earlier on a tie); '' for no calls. */
+export function mainModel(calls: readonly Pick<Call, 'model'>[]): string {
+  const n = new Map<string, number>()
+  for (const c of calls) if (c.model) n.set(c.model, (n.get(c.model) ?? 0) + 1)
+  let best = ''
+  let most = 0
+  for (const [m, k] of n)
+    if (k > most) {
+      best = m
+      most = k
+    }
+  return best
 }
 
 /** Sets a lane's first and last moment and its largest context from what is on it. */
@@ -293,6 +342,8 @@ function mkLane(
     units: [],
     turns: [],
     calls: [],
+    runs: [],
+    model: '',
     series: [],
     misses: [],
     compactions: [],
@@ -444,14 +495,45 @@ export const slotLength = (axis: TimeAxis, minPx: number) =>
 /** "30 s", "5 min", "1 h" */
 export const slotText = (ms: number) => (ms < MIN ? `${ms / 1000} s` : ms < HOUR ? `${ms / MIN} min` : `${ms / HOUR} h`)
 
-/** Adds a call to a bar's parts: by token class, or by who with the cache miss apart; and to its total. */
+/**
+ * Adds a call to a bar's parts: by token class, by model tier (the whole call, cache miss included: the tier
+ * is about the model, not about what went wrong), or by who with the cache miss apart; and to its total.
+ */
 export function addCall(bar: Record<string, number>, c: Call, split: Split) {
   if (split === 'class') for (const [key, v] of Object.entries(c.byClass)) bar[key] = (bar[key] ?? 0) + v
+  else if (split === 'tier') bar[c.tier] = (bar[c.tier] ?? 0) + c.usd
   else {
     bar[c.kind] = (bar[c.kind] ?? 0) + c.usd - c.reread
     bar.reread = (bar.reread ?? 0) + c.reread
   }
   bar.total = (bar.total ?? 0) + c.usd
+}
+
+/** What one tier spent: its dollars, and on which models, the most expensive first. */
+export interface TierSpend {
+  tier: Tier
+  usd: number
+  models: { model: string; usd: number }[]
+}
+
+/** What the timeline's calls spent by model tier (only tiers with dollars), in the order of `TIERS`. */
+export function tierSpend(tl: Timeline): TierSpend[] {
+  const by = new Map<Tier, Map<string, number>>()
+  for (const l of tl.lanes)
+    for (const c of l.calls) {
+      const m = by.get(c.tier) ?? new Map<string, number>()
+      m.set(c.model, (m.get(c.model) ?? 0) + c.usd)
+      by.set(c.tier, m)
+    }
+  return TIERS.flatMap((tier) => {
+    const m = by.get(tier)
+    if (!m) return []
+    const models = [...m]
+      .map(([model, usd]) => ({ model, usd }))
+      .sort((a, b) => b.usd - a.usd || (a.model < b.model ? -1 : 1))
+    const usd = models.reduce((s, x) => s + x.usd, 0)
+    return usd > 0 ? [{ tier, usd, models }] : []
+  })
 }
 
 // ---- days -----------------------------------------------------------------------------
@@ -584,10 +666,13 @@ const MAX_PAD_MS = 30 * MIN
 export function sliceTimeline(tl: Timeline, lo: number, hi: number): Timeline {
   const on = (t: number) => t >= lo && t < hi
   const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
-  const lanes = tl.lanes.map((l) =>
-    measure({
+  const lanes = tl.lanes.map((l) => {
+    const calls = l.calls.filter((c) => on(c.t))
+    return measure({
       ...l,
-      calls: l.calls.filter((c) => on(c.t)),
+      calls,
+      runs: modelRuns(calls),
+      model: mainModel(calls),
       turns: l.turns.filter((s) => on(s.t0)),
       units: l.units.filter(
         (u) => Number.isFinite(u.startMs) && u.startMs < hi && (Number.isFinite(u.endMs) ? u.endMs : u.startMs) >= lo,
@@ -596,8 +681,8 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number): Timeline {
       misses: l.misses.filter((m) => on(m.t)),
       compactions: l.compactions.filter((c) => on(c.t)),
       usd: l.calls.reduce((s, c) => s + (on(c.t) ? c.usd : 0), 0),
-    }),
-  )
+    })
+  })
   const busy = new Set(
     lanes.filter((l) => l.calls.length > 0 || l.units.length > 0 || l.turns.length > 0).map((l) => l.branch),
   )

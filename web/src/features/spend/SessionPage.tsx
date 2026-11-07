@@ -18,6 +18,7 @@ import { sessionPath } from '../../lib/paths'
 import { sessionTitle } from '../../lib/session'
 import { EmptyState, ErrorState, Id, ProjectName, QueryBoundary, RelTime, Skeleton, SkeletonRows } from '../../ui'
 import { Banners, Diagnostics, FamilyStrip, ResumeBox, SessionHeader } from './Header'
+import { splitParam } from './model'
 import { type Pin, SpendGraph, type UnitRef } from './SpendGraph'
 import { parseHash, resolveTarget } from './session'
 import { DecisionPanel, TopDecisions, TurnInspector } from './TurnInspector'
@@ -123,7 +124,7 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
           onPin={pin}
           selectedUnit={unit}
           onSelectUnit={selectUnit}
-          initialSplit={params.get('split') === 'class' ? 'class' : 'kind'}
+          initialSplit={splitParam(params.get('split'))}
           initialCursor={num(params.get('cursor')) ?? undefined}
           initialWindow={{ lo: parseTime(params.get('from')), hi: parseTime(params.get('to')) }}
           unknownSessions={details.filter((d) => d.cost.flag === 'unknown').length}

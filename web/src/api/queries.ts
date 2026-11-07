@@ -10,6 +10,7 @@
 //   ['search', q, filters]                useSearch
 //   ['cost', params]                      useCost
 //   ['moments']                           useMoments
+//   ['prices']                            usePrices
 
 import {
   keepPreviousData,
@@ -29,6 +30,7 @@ import type {
   GroupDim,
   GroupList,
   MomentsReport,
+  PriceList,
   ProjectList,
   RepoList,
   SearchResult,
@@ -53,6 +55,7 @@ export const queryKeys = {
   search: (q: string, filters: SessionFilters) => ['search', q, filters] as const,
   cost: (params: CostParams) => ['cost', params] as const,
   moments: () => ['moments'] as const,
+  prices: () => ['prices'] as const,
 }
 
 /** Drops undefined and empty values, so that equal filters give equal keys. */
@@ -207,5 +210,14 @@ export function useMoments(): UseQueryResult<MomentsReport> {
   return useQuery({
     queryKey: queryKeys.moments(),
     queryFn: ({ signal }) => get<MomentsReport>('/api/moments', undefined, signal),
+  })
+}
+
+/** The price table the daemon prices messages with; it does not change while the daemon runs. */
+export function usePrices(): UseQueryResult<PriceList> {
+  return useQuery({
+    queryKey: queryKeys.prices(),
+    queryFn: ({ signal }) => get<PriceList>('/api/prices', undefined, signal),
+    staleTime: Number.POSITIVE_INFINITY,
   })
 }

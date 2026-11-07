@@ -2,9 +2,11 @@
 // the readout of what is under the cursor and the key handling. The pinned turn and the selected
 // piece of agent work are the page's; the panels under the card open them.
 import { type KeyboardEvent, useMemo, useState } from 'react'
+import { usePrices } from '../../api/queries'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
 import { spendBasis } from '../../lib/cost'
 import { formatCount, formatDuration, formatMoney, formatPercent, formatTokens, plural } from '../../lib/format'
+import { modelLabel } from '../../lib/models'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
 import { Card, ModelName, SegmentedControl } from '../../ui'
@@ -18,6 +20,7 @@ import {
   type Part,
   type Split,
   stepParts,
+  TIER_SERIES,
   turnList,
   type Unit,
   unitParts,
@@ -32,6 +35,7 @@ import {
   defaultWindow,
   revealWindow,
   splitDays,
+  tierSpend,
   type Win,
 } from './timeline'
 import type { Branch, Tree } from './tree'
@@ -284,7 +288,9 @@ export function SpendGraph({
   )
 
   // a tree that ran long, or on more than one day, is shown a window at a time, picked in the overview
-  const timeline = useMemo(() => buildTimeline(tree), [tree])
+  const prices = usePrices().data?.models // until it arrives (or if it fails) tiers go by the model's family
+  const timeline = useMemo(() => buildTimeline(tree, prices), [tree, prices])
+  const byTier = useMemo(() => tierSpend(timeline), [timeline])
   const days = useMemo(() => splitDays(timeline), [timeline])
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
   const overview = days.length > 1 || activeMs(timeline) > OVERVIEW_MIN_MS
@@ -362,15 +368,31 @@ export function SpendGraph({
           options={[
             { value: 'kind', label: 'By who', title: 'Main agent, agents by kind, cache misses' },
             { value: 'class', label: 'By token class', title: 'Output, cache reads and writes, uncached input' },
+            {
+              value: 'tier',
+              label: 'By model tier',
+              title:
+                'Heavy, mid and light models, by what their input costs (heavy from $4 per million tokens, light up to $1)',
+            },
           ]}
         />
       }
     >
       <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sec">
-        {(split === 'kind' ? tree.byKind : tree.byClass).map((p) => (
+        {(split === 'tier'
+          ? byTier.map((t) => {
+              const def = TIER_SERIES.find((s) => s.key === t.tier) ?? TIER_SERIES[3]
+              const names = [...new Set(t.models.map((m) => modelLabel(m.model)))]
+              return { key: t.tier, color: def.color, label: def.label, usd: t.usd, names }
+            })
+          : (split === 'kind' ? tree.byKind : tree.byClass).map((p) => ({ ...p, names: [] as string[] }))
+        ).map((p) => (
           <span key={p.key} className="inline-flex items-center gap-1.5">
             <Swatch color={p.color} />
-            <span>{p.label}</span>
+            <span>
+              {p.label}
+              {p.names.length > 0 && <span className="text-muted"> ({p.names.join(', ')})</span>}
+            </span>
             <span className="font-mono">{formatMoney(p.usd)}</span>
             <span className="text-faint">{formatPercent(p.usd, grand)}</span>
           </span>

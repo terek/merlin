@@ -290,7 +290,7 @@ From top to bottom:
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
-  by when it happened. A legend split by who or by token class, a line adding up the compactions, and
+  by when it happened. A legend split by who, by token class or by model tier, a line adding up the compactions, and
   a readout above the plot of the turn or piece of work under the cursor.
   - stretches longer than 10 minutes in which nothing ran (no call, no turn, no piece of agent work)
     are squeezed into a narrow grey **break** labelled with its length; with more than 12 such
@@ -403,7 +403,9 @@ From top to bottom:
     stem at its end, like a decision's bracket turned round (no fill, so the context tint under it
     reads alone; its pieces show in the context, an area while they run, dotted between them). A
     sub-agent solid, a fork with a notch, a workflow dashed, an addressable agent with a dashed
-    lifeline along its baseline. The frame carries the agent's name and spend. A piece is one of the
+    lifeline along its baseline. The frame carries the agent's name, its main model (the model of most of its calls, as `Sonnet 5.5`)
+    and its spend, `name · Sonnet 5.5 · $1.20`; where room is short the model goes first, then the
+    spend. A piece is one of the
     agent's turns (`agent.turns`): a sub-agent or fork has one, an addressable agent (a Claude Code
     teammate, a Codex agent) one per message or task that set it working again (from a daemon without
     `turns`: one per message it was sent); a workflow run (`digest.workflows`) is one piece with all
@@ -431,6 +433,21 @@ From top to bottom:
     opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
     fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
     colour.
+- **The third split, by model tier** (`?split=tier`): a bar and the legend are split by what the
+  model of each call costs, from `GET /api/prices` (`lib/tiers.ts`, `tierOf`). By its **input price
+  per million tokens**: **heavy** from $4, **light** up to $1, **mid** in between, **unpriced** for a
+  model the table does not know. The model name is resolved as the daemon does (no `[1m]`, a dated id,
+  an alias); while the table is loading or failed, and for a model it does not price, the tier goes by
+  the family in the name (Fable and Opus heavy, Sonnet mid, Haiku light; Codex `astra` heavy, `sol`
+  mid, `luna` light), and unpriced when even that does not tell. The whole call goes in its tier,
+  its cache miss included (the miss is a fact about the cache, not about the model; the other splits
+  show it). The tiers are one hue, strongest for heavy and lightest for light, the unpriced grey. The
+  legend lists each tier with its dollars, its percent and, after the label, the models in it as
+  short names, the most expensive first: `Heavy models (Opus 5.5, Fable 5.1) $20.10 72%`. The line
+  under the plot that reads a turn or a piece of work keeps its split by who in this view. The
+  timeline keeps for each call its model and tier, and for each row its **model runs** (consecutive
+  calls on one model, `{ t0, t1, model, tier }`) and its main model, for drawing the weight of a line
+  by model;
 - **Decision panel**: the pinned turn's decision, its total split by who, then every step and every
   piece of agent work in it, most expensive first, and the compactions after its turns. A decision
   is only "everything between two typed prompts": work an earlier prompt asked for is counted where
@@ -448,7 +465,7 @@ From top to bottom:
 Addresses: `#t<n>` pins turn n (a copied turn on the session that ran it), `#a<agentId>` opens that
 agent's piece of work (a nested agent opens the piece it is inside), `#c<n>` pins the turn of
 compaction n; search results and the Cost page link with these. `?pin=`, `?unit=`, `?split=class`
-and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harness/:id` redirects
+(or `tier`) and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harness/:id` redirects
 here.
 
 The previous page (a timeline of every turn with Cost, Agents and Context cards in a side panel)

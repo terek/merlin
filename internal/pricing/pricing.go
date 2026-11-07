@@ -208,6 +208,22 @@ func (t *Table) Lookup(name string) (resolved string, p Price, ok bool) {
 	return "", Price{}, false
 }
 
+// Models returns a copy of the table's entries by exact name (overrides applied), for
+// display. Long-context prices, fast-mode flags and notes are in the entries too.
+func (t *Table) Models() map[string]Price {
+	out := make(map[string]Price, len(t.models))
+	for n, p := range t.models {
+		out[n] = p
+	}
+	return out
+}
+
+// Multipliers returns the factors of Input that a 5-minute and a 1-hour cache
+// write cost, and the fast-mode multiplier.
+func (t *Table) Multipliers() (write5m, write1h, fast float64) {
+	return t.w5m, t.w1h, t.fastMult
+}
+
 // Cost prices one API message. fast applies the fast-mode multiplier when the model is
 // listed for it. ok is false when the model is unknown (the result is then zero and the
 // caller must report the model as unpriced); Synthetic returns zero cost with ok true.

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Agent, AgentTurn, Message, SessionDetail, Turn } from '../../api/types'
 import type { Col } from './model'
 import {
+  addCall,
   barSpan,
   boundsOf,
   bracketed,
@@ -33,6 +34,7 @@ import {
   splitHeld,
   stepWindow,
   type Timeline,
+  tierSpend,
   timeAxis,
   turnPlace,
   windowDay,
@@ -254,6 +256,85 @@ describe('buildTimeline', () => {
   })
 })
 
+describe('model tiers on a timeline', () => {
+  const prices = {
+    'opus-x': { input: 5, output: 25, cacheRead: 0.5 },
+    'haiku-x': { input: 1, output: 5, cacheRead: 0.1 },
+  }
+  const detail = session('t', {
+    turns: [turn(0, 0, 30)],
+    messages: [
+      msg('m0', 0, 20_000, { turn: 0, model: 'opus-x' }),
+      msg('m1', 1, 21_000, { turn: 0, model: 'opus-x' }),
+      msg('w0', 2, 10_000, { agentId: 'w', agentTurn: 0, model: 'haiku-x' }),
+      msg('w1', 3, 11_000, { agentId: 'w', agentTurn: 0, model: 'claude-sonnet-9[1m]' }),
+      msg('w2', 4, 12_000, { agentId: 'w', agentTurn: 0, model: 'haiku-x' }),
+      msg('w3', 5, 13_000, { agentId: 'w', agentTurn: 0, model: 'haiku-x' }),
+      msg('m2', 10, 22_000, { turn: 0, model: 'opus-x' }),
+      msg('m3', 11, 22_000, { turn: 0, model: 'mystery' }),
+    ],
+    agents: [
+      agent('w', { addressable: true, spawnTurn: 0, startedAt: at(2), endedAt: at(6), turns: [agentTurn(0, 2, 6, 0)] }),
+    ],
+  })
+  const [main, worker] = buildTimeline(buildTree([detail]), prices).lanes
+
+  test('a call knows its model and its tier', () => {
+    expect(main.calls.map((c) => [c.model, c.tier])).toEqual([
+      ['opus-x', 'heavy'],
+      ['opus-x', 'heavy'],
+      ['opus-x', 'heavy'],
+      ['mystery', 'unknown'],
+    ])
+    // a model the table does not price falls back to its family by name
+    expect(worker.calls.map((c) => c.tier)).toEqual(['light', 'mid', 'light', 'light'])
+  })
+
+  test('without prices every call falls back to the family rule', () => {
+    const own = buildTimeline(buildTree([detail])).lanes
+    expect(own[0].calls.map((c) => c.tier)).toEqual(['unknown', 'unknown', 'unknown', 'unknown'])
+    expect(own[1].calls.map((c) => c.tier)).toEqual(['unknown', 'mid', 'unknown', 'unknown'])
+  })
+
+  test('a lane has its runs of consecutive calls on one model, and its main model', () => {
+    expect(worker.runs.map((r) => [r.model, r.tier, r.t0, r.t1])).toEqual([
+      ['haiku-x', 'light', Date.parse(at(2)), Date.parse(at(2))],
+      ['claude-sonnet-9[1m]', 'mid', Date.parse(at(3)), Date.parse(at(3))],
+      ['haiku-x', 'light', Date.parse(at(4)), Date.parse(at(5))],
+    ])
+    expect(worker.model).toBe('haiku-x')
+    expect(main.runs.map((r) => [r.model, r.t0, r.t1])).toEqual([
+      ['opus-x', Date.parse(at(0)), Date.parse(at(10))],
+      ['mystery', Date.parse(at(11)), Date.parse(at(11))],
+    ])
+    expect(main.model).toBe('opus-x')
+  })
+
+  test('a slice recomputes them from the calls it keeps', () => {
+    const tl = buildTimeline(buildTree([detail]), prices)
+    const s = sliceTimeline(tl, Date.parse(at(3)), Date.parse(at(4)))
+    expect(s.lanes.find((l) => !l.main)?.runs.map((r) => r.model)).toEqual(['claude-sonnet-9[1m]'])
+    expect(s.lanes.find((l) => !l.main)?.model).toBe('claude-sonnet-9[1m]')
+  })
+
+  test('the tier spend lists each tier with its models, most expensive first', () => {
+    const tl = buildTimeline(buildTree([detail]), prices)
+    const ts = tierSpend(tl)
+    expect(ts.map((x) => x.tier)).toEqual(['heavy', 'mid', 'light', 'unknown'])
+    expect(ts[0].models.map((m) => m.model)).toEqual(['opus-x'])
+    expect(ts[0].usd).toBeCloseTo(ts[0].models[0].usd, 9)
+    expect(ts[2].models.map((m) => m.model)).toEqual(['haiku-x'])
+  })
+
+  test('the split by tier puts the whole call, cache miss included, in its tier', () => {
+    const bar: Record<string, number> = {}
+    const c = { usd: 1, reread: 0.4, tier: 'mid', kind: 'main', byClass: {} } as unknown as Lane['calls'][number]
+    addCall(bar, c, 'tier')
+    addCall(bar, { ...c, usd: 2, reread: 0, tier: 'heavy' }, 'tier')
+    expect(bar).toEqual({ mid: 1, heavy: 2, total: 3 })
+  })
+})
+
 describe('packLanes', () => {
   const lane = (key: string, kind: Lane['kind'], t0: number, t1: number, main = false): Lane =>
     ({
@@ -266,6 +347,8 @@ describe('packLanes', () => {
       units: [],
       turns: [],
       calls: [],
+      runs: [],
+      model: '',
       series: [],
       misses: [],
       compactions: [],

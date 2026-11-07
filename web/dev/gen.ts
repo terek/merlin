@@ -144,6 +144,9 @@ export const PRICE: Record<string, { in: number; out: number; cr: number; cw: nu
   'claude-sonnet-5-5': { in: 3, out: 15, cr: 0.3, cw: 3.75 },
   'claude-haiku-4-5-20251001': { in: 1, out: 5, cr: 0.1, cw: 1.25 },
   'claude-haiku-5-5': { in: 1, out: 5, cr: 0.1, cw: 1.25 },
+  'gpt-6-astra': { in: 10, out: 50, cr: 1, cw: 10 },
+  'gpt-6-sol': { in: 2, out: 10, cr: 0.2, cw: 2 },
+  'gpt-6-luna': { in: 0.1, out: 0.5, cr: 0.01, cw: 0.1 },
 }
 const ALIAS: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',

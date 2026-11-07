@@ -5,7 +5,7 @@
 // time when it is a day).
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
 import { formatDuration, formatMoney } from '../../lib/format'
-import { CLASS_SERIES, KIND_SERIES, type Split } from './model'
+import { CLASS_SERIES, KIND_SERIES, type Split, TIER_SERIES } from './model'
 import {
   boundsOf,
   centerWindow,
@@ -41,7 +41,7 @@ const GRAB = 7
 /** The most breaks the strip makes: more idle stretches are squeezed together. */
 const STRIP_BREAKS = 16
 
-const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES }
+const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
 
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })

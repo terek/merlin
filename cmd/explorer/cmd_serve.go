@@ -97,7 +97,7 @@ func runServe(args []string) int {
 		return fail(err)
 	}
 
-	d.Handle("/api/", server.New(apiOptions(d)).Handler())
+	d.Handle("/api/", server.New(apiOptions(d, pricer)).Handler())
 	d.Handle("/", webui.Handler())
 	if webui.Built() {
 		fmt.Fprintf(os.Stderr, "merlin: UI at http://127.0.0.1:%d/\n", *port)
@@ -135,8 +135,9 @@ func refreshHooks(t hookTarget) (string, error) {
 
 // apiOptions wires the JSON API to the daemon: its catalog, its event bus, the indexing
 // counters of its engine and the registry of running sessions.
-func apiOptions(d *daemon.Daemon) server.Options {
+func apiOptions(d *daemon.Daemon, pricer *pricing.Table) server.Options {
 	return server.Options{
+		Prices:    pricer,
 		Catalog:   d.Catalog,
 		Subscribe: d.Events().Subscribe,
 		Harnesses: harnessInfos(),

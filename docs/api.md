@@ -75,6 +75,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | Route | Returns |
 |---|---|
 | `GET /api/harnesses` | `HarnessList` |
+| `GET /api/prices` | `PriceList` |
 | `GET /api/projects` | `ProjectList` |
 | `GET /api/repos` | `RepoList` |
 | `GET /api/groups?by=` | `GroupList` |
@@ -106,6 +107,32 @@ the harness has none. `badge` is the short tag shown beside a session; absent fo
 harness that has sessions but is not in the list appears with its own name as `title` and `badge`
 and no `resume`: nothing is borrowed from another harness. The CLI does the same (`merlin show`
 prints no Resume section, JSON has no `resume`).
+
+## GET /api/prices
+
+The price table the daemon prices messages with (`internal/pricing`: the embedded `prices.json`
+with the `prices` section of `config.json` applied), so that the web UI keeps no prices of its own.
+No parameters; it needs no catalog and answers while indexing.
+
+```json
+{
+  "unit": "USD per million tokens",
+  "cacheWrite5mMultiplier": 1.25,
+  "cacheWrite1hMultiplier": 2,
+  "fastMultiplier": 2,
+  "models": {
+    "claude-opus-5-5": { "input": 4, "output": 20, "cacheRead": 0.2, "status": "verified" },
+    "claude-haiku-4-5-20251001": { "input": 1, "output": 5, "cacheRead": 0.1, "status": "verified" }
+  }
+}
+```
+
+`models` is keyed by the table's exact names. A message's model resolves to an entry as the daemon
+does: without a `[1m]` suffix, then exactly, then without a trailing `-YYYYMMDD`, then by an entry's
+`aliases` (other spellings of its name, absent when none), then to an entry stored with a date. A
+model that resolves to none is unpriced. `status` is `verified` or `assumed`. `long`, when present,
+is the price of a request whose input is above `long.above` tokens. Cache writes cost `input`
+times the multipliers; `fastMultiplier` applies to fast-mode calls of the models the table lists.
 
 ## GET /api/projects
 

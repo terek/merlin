@@ -25,7 +25,7 @@ import type {
   TreeList,
   TreeSummary,
 } from '../src/api/types'
-import { buildDataset, type Dataset, makeRng, messagesOf, order, type Sess } from './gen'
+import { buildDataset, type Dataset, makeRng, messagesOf, order, PRICE, type Sess } from './gen'
 import {
   assignPlaces,
   costKey,
@@ -740,6 +740,19 @@ function route(req: Request): Response {
           { name: 'claude', title: 'Claude Code', resume: 'claude --resume {id}' },
           { name: 'codex', title: 'Codex', resume: 'codex resume {id}', badge: 'codex' },
         ],
+      })
+    if (p === '/api/prices')
+      return json(200, {
+        unit: 'USD per million tokens',
+        cacheWrite5mMultiplier: 1.25,
+        cacheWrite1hMultiplier: 2,
+        fastMultiplier: 2,
+        models: Object.fromEntries(
+          Object.entries(PRICE).map(([n, x]) => [
+            n,
+            { input: x.in, output: x.out, cacheRead: x.cr, status: 'verified' },
+          ]),
+        ),
       })
     if (p === '/api/projects') return json(200, projects())
     // The mock has repositories (dev/places.ts) but no bead databases: the rail shows their empty state.

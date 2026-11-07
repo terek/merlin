@@ -24,3 +24,17 @@ export function modelLabel(name: string): string {
   if (g) return `GPT-${g[1]}${g[2] ? ` ${cap(g[2])}` : ''}`
   return name
 }
+
+const GPT_FAMILY = /^gpt-\d+(?:\.\d+)?-(astra|sol|luna)(?:-|$)/
+
+/**
+ * The family a model name belongs to, by name alone: "fable", "opus", "sonnet", "haiku" (any of the
+ * spellings `modelLabel` reads, dated ids and `[1m]` included) or a GPT size, "astra", "sol", "luna".
+ * undefined for anything else.
+ */
+export function modelFamily(name: string): string | undefined {
+  const n = NEW_STYLE.exec(name) ?? OLD_STYLE.exec(name)
+  if (n) return n[1] && FAMILIES.has(n[1]) ? n[1] : n[3]
+  if (FAMILIES.has(name)) return name
+  return GPT_FAMILY.exec(name.replace(/\[[^\]]*\]$/, ''))?.[1]
+}

@@ -1097,3 +1097,27 @@ export interface CostParams {
   bead?: string
   limit?: number
 }
+
+// ---- GET /api/prices -------------------------------------------------------------------
+
+/** One model's price in USD per million tokens (internal/server/prices.go). */
+export interface PriceEntry {
+  input: number
+  output: number
+  cacheRead: number
+  /** "verified" or "assumed". */
+  status?: string
+  /** Other spellings of the model's name. */
+  aliases?: string[]
+  /** The price of a request whose input is above `above` tokens. */
+  long?: { above: number; input: number; output: number; cacheRead: number }
+}
+
+export interface PriceList {
+  unit: string
+  cacheWrite5mMultiplier: number
+  cacheWrite1hMultiplier: number
+  fastMultiplier: number
+  /** By the table's exact names. */
+  models: Record<string, PriceEntry>
+}
