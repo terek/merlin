@@ -10,6 +10,7 @@
 // Pure; TimeView.tsx draws what this returns.
 
 import type { Agent, Compaction } from '../../api/types'
+import { modelLabel } from '../../lib/models'
 import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import {
   addMessage,
@@ -127,6 +128,8 @@ export interface Lane {
   peak: number
   t0: number
   t1: number
+  /** Set on an agent lane that belongs to a swarm (`collapseSwarms`), and on the lane standing for a collapsed one. */
+  swarm?: SwarmInfo
 }
 
 export interface Timeline {
@@ -921,6 +924,193 @@ export function packLanes(lanes: readonly Lane[], x: (t: number) => number, gapP
     }
   }
   return rows
+}
+
+// ---- swarms -----------------------------------------------------------------------------
+
+/** Fewer one-shot agents launched together than this are not a swarm. */
+export const SWARM_MIN = 4
+/** Agents of a swarm overlap or come within this of one another. */
+export const SWARM_GAP_MS = 10_000
+
+/** One swarm of the full timeline: its agents' lanes, found by `findSwarms`. */
+export interface Swarm {
+  /** Stable: the branch, the sender, the turn of launch and the first agent. */
+  id: string
+  keys: string[]
+}
+
+/** What a lane knows of the swarm it belongs to, or stands for. */
+export interface SwarmInfo {
+  id: string
+  /** The lane stands for the whole swarm (otherwise it is one agent of an expanded one). */
+  collapsed: boolean
+  /** The first agent of an expanded swarm: it carries the collapse chip. */
+  first: boolean
+  count: number
+  /** Agent types with how many of each, the most first. */
+  types: [string, number][]
+  /** Models of the calls, the most expensive first. */
+  models: string[]
+  /** "Haiku 5.5" when all calls ran on one model, else "mixed"; empty without calls. */
+  modelText: string
+  /** Of a collapsed swarm: the largest context of its agents over time (`swarmEnvelope`). */
+  envelope: Point[]
+}
+
+const isOneShot = (l: Lane) =>
+  !l.main &&
+  l.agent?.kind === 'subagent' &&
+  l.kind === 'subagent' &&
+  l.units.length === 1 &&
+  !l.units[0].woken &&
+  Number.isFinite(l.t0) &&
+  Number.isFinite(l.t1)
+
+/**
+ * The swarms of a timeline's lanes: at least `min` one-shot agents (sub-agents: not addressable, not a
+ * fork, not a workflow) launched by the same sender in the same turn of the main row, whose lives overlap
+ * or come within `gapMs` of one another (a chain: each joins what it overlaps). Find them on the whole
+ * timeline, before a window cuts it, so that a swarm keeps its id.
+ */
+export function findSwarms(lanes: readonly Lane[], min = SWARM_MIN, gapMs = SWARM_GAP_MS): Swarm[] {
+  const groups = new Map<string, Lane[]>()
+  for (const l of lanes) {
+    if (!isOneShot(l)) continue
+    const key = `${l.branch}/${l.units[0].from ?? 'main'}/${l.units[0].launch}`
+    groups.set(key, [...(groups.get(key) ?? []), l])
+  }
+  const out: Swarm[] = []
+  for (const [key, mine] of groups) {
+    mine.sort((a, b) => a.t0 - b.t0)
+    let run: Lane[] = []
+    let end = Number.NEGATIVE_INFINITY
+    const flush = () => {
+      if (run.length >= min) out.push({ id: `${key}/${run[0].agent?.id ?? run[0].key}`, keys: run.map((l) => l.key) })
+      run = []
+    }
+    for (const l of mine) {
+      if (run.length > 0 && l.t0 > end + gapMs) flush()
+      run.push(l)
+      end = run.length === 1 ? l.t1 : Math.max(end, l.t1)
+    }
+    flush()
+  }
+  return out
+}
+
+/** Types, models and the label of a swarm's agents. */
+function summarize(id: string, members: readonly Lane[], collapsed: boolean, first: boolean): SwarmInfo {
+  const count = members.length
+  const types = new Map<string, number>()
+  for (const l of members) {
+    const t = l.agent?.agentType ?? l.agent?.name ?? 'agent'
+    types.set(t, (types.get(t) ?? 0) + 1)
+  }
+  const usd = new Map<string, number>()
+  for (const l of members) for (const c of l.calls) if (c.model) usd.set(c.model, (usd.get(c.model) ?? 0) + c.usd)
+  const models = [...usd].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).map(([m]) => m)
+  const labels = new Set(models.map(modelLabel))
+  return {
+    id,
+    collapsed,
+    first,
+    count,
+    types: [...types].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)),
+    models,
+    modelText: labels.size === 0 ? '' : labels.size === 1 ? [...labels][0] : 'mixed',
+    envelope: collapsed ? swarmEnvelope(members) : [],
+  }
+}
+
+/** The tier most of the calls' dollars went on (the heavier on a tie); unknown without calls. */
+export function dominantTier(calls: readonly Pick<Call, 'tier' | 'usd'>[]): Tier {
+  const by = new Map<Tier, number>()
+  for (const c of calls) by.set(c.tier, (by.get(c.tier) ?? 0) + c.usd)
+  let best: Tier = 'unknown'
+  let most = -1
+  for (const [t, v] of by) if (v > most || (v === most && heavierTier(best, t) === t)) [best, most] = [t, v]
+  return best
+}
+
+/**
+ * The largest context any of the agents carries at each moment, as a step run: each agent counts from
+ * its first call to its last, and the run drops when the last one is over.
+ */
+export function swarmEnvelope(members: readonly Lane[]): Point[] {
+  const own = members.map((l) => (l.series.find((s) => s.own) ?? l.series[0])?.points ?? []).filter((p) => p.length > 0)
+  const times = [...new Set(own.flatMap((p) => [...p.map((x) => x.t), p[p.length - 1].t + 1]))].sort((a, b) => a - b)
+  const out: Point[] = []
+  for (const t of times) {
+    let v = 0
+    for (const p of own) if (t >= p[0].t && t <= p[p.length - 1].t) v = Math.max(v, pointAt(p, t)?.tokens ?? 0)
+    if (out.length === 0 ? v > 0 : out[out.length - 1].tokens !== v) out.push({ t, tokens: v })
+  }
+  return out
+}
+
+/** One lane standing for a whole swarm's agents (a window may have cut some of them). */
+export function mergeSwarm(id: string, members: readonly Lane[]): Lane {
+  const info = summarize(id, members, true, false)
+  const calls = members.flatMap((l) => l.calls).sort((a, b) => a.t - b.t)
+  const t0 = Math.min(...members.map((l) => l.t0))
+  const t1 = Math.max(...members.map((l) => l.t1))
+  const units = members.flatMap((l) => l.units)
+  const types = info.types
+  const lane = mkLane(`${members[0].branch}/swarm:${id}`, members[0].branch, false, undefined, 'subagent', '')
+  lane.title = types.length === 1 ? `${info.count} × ${types[0][0]}` : `${info.count} agents`
+  lane.units = units
+  lane.calls = calls
+  lane.model = info.models.length === 1 ? info.models[0] : mainModel(calls)
+  // one run on the swarm's dominant tier: its spine is as heavy as most of its spend
+  lane.runs = Number.isFinite(t0) ? [{ t0, t1, model: lane.model, tier: dominantTier(calls) }] : []
+  lane.series = envelopeSeries(members)
+  lane.misses = members.flatMap((l) => l.misses).sort((a, b) => a.t - b.t)
+  lane.compactions = members.flatMap((l) => l.compactions).sort((a, b) => a.t - b.t)
+  lane.usd = members.reduce((s, l) => s + l.usd, 0)
+  lane.peak = Math.max(0, ...members.map((l) => l.peak))
+  lane.t0 = t0
+  lane.t1 = t1
+  lane.swarm = info
+  return lane
+}
+
+/** The agents' contexts as lines (not owned: no area), every one of every agent. */
+const envelopeSeries = (members: readonly Lane[]): Series[] =>
+  members.flatMap((l) => l.series.map((s) => ({ ...s, own: false })))
+
+/**
+ * `lanes` with each swarm in `swarms` that still has two agents in them (a window cuts agents away)
+ * turned into one lane, or, when its id is in `expanded`, left as the individual lanes with the swarm
+ * noted on each (the first one carries the collapse chip). The swarm's lane takes its first agent's place.
+ */
+export function collapseSwarms(
+  lanes: readonly Lane[],
+  swarms: readonly Swarm[],
+  expanded: ReadonlySet<string>,
+): Lane[] {
+  const byKey = new Map(lanes.map((l) => [l.key, l]))
+  const swap = new Map<string, Lane | null>()
+  for (const s of swarms) {
+    const members = s.keys.flatMap((k) => byKey.get(k) ?? [])
+    if (members.length < 2) continue
+    if (expanded.has(s.id)) {
+      const info = summarize(s.id, members, false, false)
+      for (const [i, m] of members.entries()) swap.set(m.key, { ...m, swarm: { ...info, first: i === 0 } })
+    } else {
+      for (const [i, m] of members.entries()) swap.set(m.key, i === 0 ? mergeSwarm(s.id, members) : null)
+    }
+  }
+  return lanes.flatMap((l) => {
+    const r = swap.get(l.key)
+    return r === undefined ? [l] : r ? [r] : []
+  })
+}
+
+/** The swarm a piece of work belongs to, by its id: the id of the swarm among `swarms`, if any. */
+export function swarmOfUnit(lanes: readonly Lane[], swarms: readonly Swarm[], branch: number, unitId: string) {
+  const lane = lanes.find((l) => l.branch === branch && l.units.some((u) => u.id === unitId))
+  return lane ? swarms.find((s) => s.keys.includes(lane.key)) : undefined
 }
 
 /**

@@ -420,6 +420,22 @@ From top to bottom:
     its agents inside. Agents are packed into rows by their whole life (an addressable agent keeps
     its row over its pauses). The rows have no labels: the plot takes the full width, with only the
     context scale to its left, and each agent is named on its frame;
+  - a **swarm** (bead `merlin-zls.4`) is one row until opened: at least 4 one-shot sub-agents (not
+    addressable, not forks, not workflows; each with a single piece of work) launched by the same sender
+    in the same turn of the main row, whose lives overlap or come within 10 s of one another
+    (`findSwarms`, on the whole timeline, so a window keeps its ids; id = branch, sender, launch turn,
+    first agent). Its row is as tall as the swarm's largest context. It draws each agent's context as a
+    thin line (35%) under a light envelope of their largest (`swarmEnvelope`), the spend of all of them
+    summed per slot on the usual dollar scale, one spine from the sender at the first launch weighted by
+    the tier most of the swarm's dollars went on (`dominantTier`), one frame over the swarm's whole span
+    labelled `25 × Explore · Haiku 5.5 · $0.60` (`25 agents` for mixed types, `mixed` for mixed models;
+    the model, then the spend, go first when room is short), and the agents' misses and compactions.
+    Hover reads count, types, models, spend and the span in the line above the plot. A click on the
+    frame or its "+" chip, or Enter while the pointer is over it, opens the swarm into its agents' own
+    rows, packed as any (`collapseSwarms`); a "−" chip left of the first agent's frame, or Enter while
+    one of its pieces of work is selected, folds it again. Selecting a piece of work of a collapsed
+    swarm (`#a<agentId>`) opens it. A window that cuts a swarm keeps it one row while two of its agents
+    remain; the state is the plot's own and is not kept in the address;
   - **spines** show who launched whom. Every agent lane, and every forked or continued session's main
     row, has a spine: a path that starts on its sender's row at the moment of launch (the main row of
     its branch, or the row of the agent a later message names as its sender, `u.from`; for a forked
@@ -434,8 +450,8 @@ From top to bottom:
     unpriced; the gap between two runs keeps the weight of the one before; `tierSegments`), so a
     cheap worker under an expensive main agent is a thin line and a fork on the parent's model a
     heavy one. The vertical part is 1.25 px whatever the weight. A forked session's spine has no
-    horizontal part: its turns on the main row carry the weight. A swarm launched at one moment is
-    one trunk of overlapping spines. A piece of work that began before the window starts at the left
+    horizontal part: its turns on the main row carry the weight. A swarm of 4 or more is one row with one spine
+    (above); fewer launched at one moment are a trunk of overlapping spines. A piece of work that began before the window starts at the left
     edge with a chevron and no elbow. A later piece of work of the same agent (a teammate woken again)
     keeps a thin line from its sender, drawn only when it is in focus; none for work the agent's own
     background tasks woke (`woken`). The report lines stay as they were: a dashed line to each turn

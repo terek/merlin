@@ -469,9 +469,10 @@ export function SpendGraph({
         heavy 3.5 px, mid 2 px, light 1 px, and a main row's turns are weighted the same, with the model's name where it
         changes. A fork leaves from the top of its parent's context, and a hatched band in its row is the context it
         copied; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot
-        agents share rows. A dot is a message you sent (hollow if typed while a turn ran), and the bracket rising from
-        it totals everything up to your next one. A diamond is a cache miss, a red mark a compaction on a cold cache, an
-        amber dashed one on a warm cache.
+        agents share rows, and four or more launched together are one swarm row (click it, marked +, to open it; − folds
+        it). A dot is a message you sent (hollow if typed while a turn ran), and the bracket rising from it totals
+        everything up to your next one. A diamond is a cache miss, a red mark a compaction on a cold cache, an amber
+        dashed one on a warm cache.
         {overhead &&
           ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
         {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}

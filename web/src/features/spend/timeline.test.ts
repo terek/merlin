@@ -9,12 +9,14 @@ import {
   buildTimeline,
   centerWindow,
   clampWindow,
+  collapseSwarms,
   contextEnvelope,
   dayAt,
   defaultWindow,
   detailAt,
   dragWindow,
   episodes,
+  findSwarms,
   GAP_MS,
   heavierTier,
   inheritedContext,
@@ -22,6 +24,7 @@ import {
   MIN_WINDOW_MS,
   type ModelRun,
   mergeBusy,
+  mergeSwarm,
   mergeWeighted,
   modelMarks,
   packLanes,
@@ -809,5 +812,101 @@ describe('topology and model tier', () => {
       { t: 1, text: 'x-1' },
       { t: 5, text: 'y' },
     ])
+  })
+})
+
+describe('swarms', () => {
+  const mk = (
+    id: string,
+    t0: number,
+    t1: number,
+    o: { launch?: number; kind?: string; units?: number; type?: string; tokens?: number; model?: string } = {},
+  ): Lane =>
+    ({
+      key: `0/${id}`,
+      branch: 0,
+      main: false,
+      kind: o.kind ?? 'subagent',
+      agent: { id, kind: o.kind ?? 'subagent', agentType: o.type ?? 'Explore' },
+      t0,
+      t1,
+      units: Array.from({ length: o.units ?? 1 }, (_, i) => ({
+        id: `${id}#${i}`,
+        launch: o.launch ?? 3,
+        woken: false,
+        startMs: t0,
+        endMs: t1,
+      })),
+      turns: [],
+      calls: [{ t: t0 + 1, usd: 0.1, model: o.model ?? 'claude-haiku-4-5', tier: 'light' }],
+      runs: [],
+      model: '',
+      series: [{ agentId: id, own: true, points: [{ t: t0 + 1, tokens: o.tokens ?? 100 }] }],
+      misses: [],
+      compactions: [],
+      usd: 0.1,
+      peak: o.tokens ?? 100,
+      title: id,
+    }) as unknown as Lane
+  const five = (o = {}) => ['a', 'b', 'c', 'd', 'e'].map((id, i) => mk(id, i * 100, i * 100 + 500, o))
+
+  test('four or more overlapping one-shot agents of one turn are a swarm; three are not', () => {
+    expect(findSwarms(five()).map((s) => s.keys.length)).toEqual([5])
+    expect(findSwarms(five().slice(0, 3))).toEqual([])
+    expect(findSwarms(five())[0].id).toBe('0/main/3/a')
+  })
+  test('forks, teammates, workflows and agents with later work stay individual', () => {
+    const odd = [
+      mk('f', 0, 500, { kind: 'fork' }),
+      mk('t', 0, 500, { kind: 'addressable' }),
+      mk('m', 0, 500, { units: 2 }),
+    ]
+    expect(findSwarms([...five().slice(0, 3), ...odd])).toEqual([])
+  })
+  test('another turn, or a long gap, splits a swarm', () => {
+    const split = [...five().slice(0, 3), mk('x', 0, 500, { launch: 4 })]
+    expect(findSwarms(split)).toEqual([])
+    const far = [...five().slice(0, 4), ...['p', 'q', 'r', 'u'].map((id) => mk(id, 100_000, 100_500))]
+    expect(findSwarms(far).map((s) => s.keys.length)).toEqual([4, 4])
+  })
+  test('collapse makes one lane, with the sum, the span and the label; expanded keeps the lanes', () => {
+    const lanes = [...five(), mk('z', 0, 10, { launch: 9 })]
+    const swarms = findSwarms(lanes)
+    const c = collapseSwarms(lanes, swarms, new Set())
+    expect(c.map((l) => l.key)).toEqual([`0/swarm:${swarms[0].id}`, '0/z'])
+    expect(c[0].title).toBe('5 × Explore')
+    expect(c[0].usd).toBeCloseTo(0.5)
+    expect([c[0].t0, c[0].t1]).toEqual([0, 900])
+    expect(c[0].units).toHaveLength(5)
+    expect(c[0].runs[0].tier).toBe('light')
+    expect(c[0].swarm?.modelText).toBe('Haiku 4.5')
+    const e = collapseSwarms(lanes, swarms, new Set([swarms[0].id]))
+    expect(e.map((l) => [l.key, l.swarm?.first])).toEqual([
+      ['0/a', true],
+      ['0/b', false],
+      ['0/c', false],
+      ['0/d', false],
+      ['0/e', false],
+      ['0/z', undefined],
+    ])
+  })
+  test('the envelope is the largest context at each moment; a cut swarm stays one lane', () => {
+    const lanes = ['a', 'b', 'c', 'd'].map((id, i) => mk(id, i * 10, i * 10 + 50, { tokens: (i + 1) * 100 }))
+    const swarms = findSwarms(lanes)
+    const m = mergeSwarm(swarms[0].id, lanes)
+    expect(m.swarm?.envelope.map((p) => p.tokens)).toEqual([100, 0, 200, 0, 300, 0, 400, 0])
+    // the window cut two agents away: two remain, still one lane; one remaining is no swarm
+    expect(collapseSwarms(lanes.slice(2), swarms, new Set())).toHaveLength(1)
+    expect(collapseSwarms(lanes.slice(3), swarms, new Set())).toHaveLength(1)
+    expect(collapseSwarms(lanes.slice(3), swarms, new Set())[0].swarm).toBeUndefined()
+  })
+  test('the dominant tier is by spend', () => {
+    const a = mk('a', 0, 10)
+    a.calls = [
+      { ...a.calls[0], usd: 1, tier: 'heavy' },
+      { ...a.calls[0], usd: 0.2, tier: 'light' },
+      { ...a.calls[0], usd: 0.2, tier: 'light' },
+    ]
+    expect(mergeSwarm('x', [a, mk('b', 0, 10)]).runs[0].tier).toBe('heavy')
   })
 })

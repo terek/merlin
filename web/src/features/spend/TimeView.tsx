@@ -24,7 +24,7 @@
 //   overhead   under a session's rows, a hatched band over each reported window for what the harness
 //              reported and no message explains: labelled with its dollars, on no scale, as it belongs
 //              to the whole window and not to any slot, turn or agent in it
-import { type KeyboardEvent, type PointerEvent, useId, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type PointerEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
@@ -38,7 +38,9 @@ import {
   barSpan,
   bracketed,
   clockTicks,
+  collapseSwarms,
   detailAt,
+  findSwarms,
   HOLD_MS,
   inheritedContext,
   type Lane,
@@ -54,6 +56,7 @@ import {
   slotLength,
   slotText,
   splitHeld,
+  swarmOfUnit,
   TIER_WEIGHT,
   type Timeline,
   type TurnSpan,
@@ -75,6 +78,8 @@ const TURNS_H = 13
 /** The largest context of the tree is this tall. */
 const CTX_FULL = 84
 const CTX_MIN = 12
+/** A collapsed swarm's row is at least this tall: its label, and a few pixels of lines under it. */
+const SWARM_MIN_H = 24
 /** The most expensive slot of the tree is this tall. */
 const SPEND_FULL = 40
 const SPEND_MIN = 5
@@ -105,6 +110,9 @@ const SPINE_W = 1.25
 
 /** How strongly the context an agent carries over a pause is tinted, under its dotted line. */
 const HELD_TINT = 0.08
+
+/** The chip on the frame of a swarm: "+" on a collapsed one, "−" on the first agent of an expanded one. */
+const CHIP = 12
 
 const f1 = (n: number) => n.toFixed(1)
 const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
@@ -197,7 +205,22 @@ export function TimePlot({
   const X0 = LABEL_W
   const X1 = Math.max(X0 + 80, width - MR)
   const axis = useMemo(() => timeAxis(tl.spans, X0, X1), [tl, X1])
-  const rows = useMemo(() => packLanes(tl.lanes, axis.x), [tl, axis])
+  // swarms (found on the whole timeline, so that a window keeps their ids) are one row each until opened
+  const swarms = useMemo(() => findSwarms(timeline.lanes), [timeline])
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
+  const toggle = (id: string) =>
+    setOpen((o) => {
+      const n = new Set(o)
+      if (!n.delete(id)) n.add(id)
+      return n
+    })
+  // a piece of work selected on the page opens the swarm it is in
+  useEffect(() => {
+    const sw = selectedUnit ? swarmOfUnit(timeline.lanes, swarms, selectedUnit.branch, selectedUnit.id) : undefined
+    if (sw) setOpen((o) => (o.has(sw.id) ? o : new Set(o).add(sw.id)))
+  }, [selectedUnit, timeline, swarms])
+  const shownLanes = useMemo(() => collapseSwarms(tl.lanes, swarms, open), [tl, swarms, open])
+  const rows = useMemo(() => packLanes(shownLanes, axis.x), [shownLanes, axis])
   const slot = slotLength(axis, SLOT_PX)
 
   // ---- the spend per slot of every row, on one dollar scale
@@ -253,7 +276,9 @@ export function TimePlot({
     if (i > 0) y += row.main ? BRANCH_GAP : ROW_GAP
     const top = y
     const peak = Math.max(...row.lanes.map((l) => l.peak))
-    const ctxH = Math.max(CTX_MIN, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
+    // a swarm's row has room for its frame label and a few pixels of lines under it
+    const minH = row.lanes.some((l) => l.swarm?.collapsed) ? SWARM_MIN_H : CTX_MIN
+    const ctxH = Math.max(minH, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
     const maxS = Math.max(0, ...[...slots[i].values()].map((s) => s.total))
     const spendH = Math.max(SPEND_MIN, Math.ceil(maxS * kUsd) + 2) + (row.main ? TURNS_H : 0)
     layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })
@@ -346,6 +371,27 @@ export function TimePlot({
     return [a, Math.max(a + 3, axis.x(Number.isFinite(u.endMs) ? u.endMs : u.startMs))]
   }
 
+  /** Where a swarm lane's frame is, left to right (with its chip to the left of it). */
+  const frameX = (l: Lane): [number, number] => {
+    const xs = l.units.map(uX)
+    return [Math.min(...xs.map(([a]) => a)), Math.max(...xs.map(([, b]) => b))]
+  }
+  const chipX = (l: Lane) => Math.max(X0, frameX(l)[0] - CHIP - 3)
+  /** The collapsed swarm lane of row `k` under `x`, over its frame and its chip. */
+  const swarmAt = (k: number, x: number): Lane | undefined =>
+    layout[k]?.row.lanes.find((l) => {
+      if (!l.swarm?.collapsed) return false
+      return x >= chipX(l) && x <= frameX(l)[1] + 4
+    })
+  /** The collapsed swarm under the pointer. */
+  const hot = px ? swarmAt(px.row, px.x) : undefined
+  /** The expanded swarm whose collapse chip is at (x, y) of row `k`. */
+  const chipAt = (k: number, x: number, yy: number): string | undefined => {
+    const g = layout[k]
+    const l = g?.row.lanes.find((m) => m.swarm && !m.swarm.collapsed && m.swarm.first)
+    return l && x >= chipX(l) && x <= chipX(l) + CHIP && yy >= g.top && yy <= g.top + CHIP + 2 ? l.swarm?.id : undefined
+  }
+
   // ---- the pointer
   const hit = (clientX: number, clientY: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
@@ -362,6 +408,8 @@ export function TimePlot({
     if (g.row.main) {
       return { pin: turnOn(g.row.lanes[0], h.t), unit: null }
     }
+    // a collapsed swarm is read as a whole
+    if (swarmAt(h.row, h.x)) return { pin: turnOn(mainRow(g.row.lanes[0].branch)?.row.lanes[0], h.t), unit: null }
     // the piece of work under the pointer, or the nearest within a few pixels
     let best: { lane: Lane; unit: Unit; d: number } | undefined
     for (const l of g.row.lanes)
@@ -471,7 +519,8 @@ export function TimePlot({
             // name · model · cost; the model goes first when room is short, then the cost
             const fits = (s: string) => room >= s.length * 5.6
             const withCost = [label, cost].filter(Boolean).join(' · ')
-            const withModel = [label, l.model && modelLabel(l.model), cost].filter(Boolean).join(' · ')
+            const modelText = l.swarm?.collapsed ? l.swarm.modelText : l.model && modelLabel(l.model)
+            const withModel = [label, modelText, cost].filter(Boolean).join(' · ')
             const text = fits(withModel) ? withModel : fits(withCost) ? withCost : fits(label) ? label : ''
             return (
               <g>
@@ -500,9 +549,40 @@ export function TimePlot({
                 )}
                 {l.kind === 'fork' && <path d={`M${f1(a)} ${top}h7l-7 7z`} fill={color} />}
                 {text && (
-                  <text x={a + (l.kind === 'fork' ? 9 : 4)} y={top + 10} fontSize={9.5} fill="var(--muted)">
+                  <text
+                    x={a + (l.kind === 'fork' ? 9 : 4)}
+                    y={top + 10}
+                    fontSize={9.5}
+                    fill="var(--muted)"
+                    stroke="var(--surface)"
+                    strokeWidth={3}
+                    paintOrder="stroke"
+                  >
                     {text}
                   </text>
+                )}
+                {l.swarm && (l.swarm.collapsed || l.swarm.first) && (
+                  <g>
+                    <rect
+                      x={chipX(l)}
+                      y={top + 1}
+                      width={CHIP}
+                      height={CHIP}
+                      rx={3}
+                      fill="var(--surface)"
+                      stroke={color}
+                      strokeOpacity={0.7}
+                    />
+                    <path
+                      d={`M${f1(chipX(l) + 3)} ${top + 1 + CHIP / 2}h${CHIP - 6}${l.swarm.collapsed ? `M${f1(chipX(l) + CHIP / 2)} ${top + 4}v${CHIP - 6}` : ''}`}
+                      stroke={color}
+                      strokeWidth={1.25}
+                      fill="none"
+                    />
+                    <title>
+                      {l.swarm.collapsed ? `show the ${l.swarm.count} agents` : 'fold the swarm into one row'}
+                    </title>
+                  </g>
                 )}
               </g>
             )
@@ -554,6 +634,10 @@ export function TimePlot({
             )}
           </g>
         ))}
+        {/* a collapsed swarm: the largest context of its agents, lightly filled; each agent's own is a thin line */}
+        {l.swarm?.collapsed && l.swarm.envelope.length > 0 && (
+          <path d={area(g, l.swarm.envelope)} fill={color} fillOpacity={0.12} />
+        )}
         {/* its own sub-agents' contexts */}
         {l.series
           .filter((s) => !s.own)
@@ -565,7 +649,7 @@ export function TimePlot({
                 fill="none"
                 stroke={color}
                 strokeWidth={1}
-                strokeOpacity={0.6}
+                strokeOpacity={l.swarm?.collapsed ? 0.35 : 0.6}
               />
             )),
           )}
@@ -868,7 +952,7 @@ export function TimePlot({
     const early = range !== undefined && t0 < range.lo
     const from = u0 && !u0.woken && !early ? senderOf(l, u0) : undefined
     const color = COLOR[l.kind]
-    const on = l.units.some((u) => inFocus(l, u))
+    const on = l.units.some((u) => inFocus(l, u)) || (!!hot && hot.key === l.key)
     // a fork branches from the top of its parent's context, any other agent from its baseline
     const ctx = from && l.kind === 'fork' ? pointAt(ownPoints(from.l.key), t0)?.tokens : undefined
     const y0 = from && from.g !== g ? (ctx ? yCtx(from.g, ctx) : from.g.base) : undefined
@@ -923,6 +1007,7 @@ export function TimePlot({
   }
   const spines = layout.map((g) => (g.row.main ? branchSpine(g) : g.row.lanes.map((l) => laneSpine(g, l))))
   // the reports of the work in focus, and the launch of its later pieces (the first one is the spine)
+  const reported = new Set<string>()
   const connectors = layout.flatMap((g) =>
     g.row.main
       ? []
@@ -930,9 +1015,12 @@ export function TimePlot({
           l.units
             .filter((u) => inFocus(l, u))
             .map((u) => {
+              // a collapsed swarm draws one report line per turn its agents' reports came in
+              const seen = l.swarm?.collapsed ? reported : undefined
               const color = COLOR[l.kind]
               const on = isOn(l, u)
-              const first = l.units.every((x) => x.startMs >= u.startMs)
+              // a collapsed swarm has one spine for all its launches
+              const first = l.swarm?.collapsed || l.units.every((x) => x.startMs >= u.startMs)
               // work its own background tasks woke was sent by nobody: no line comes down to it
               const sender = u.woken || first ? undefined : senderOf(l, u)
               const from = sender?.g
@@ -960,32 +1048,40 @@ export function TimePlot({
                     </>
                   )}
                   {to &&
-                    arrivals(u).map((t) => {
-                      // a report in a turn outside the window: the line runs to the edge, with a chevron
-                      const edge = range && t < range.lo ? 'l' : range && t >= range.hi ? 'r' : undefined
-                      const xb = edge === 'l' ? X0 + 1 : edge === 'r' ? X1 - 1 : axis.x(t)
-                      return (
-                        <g key={t}>
-                          <line
-                            x1={xb}
-                            x2={xb}
-                            y1={g.top}
-                            y2={to.base + 5}
-                            stroke={color}
-                            strokeWidth={on ? 1.5 : 1}
-                            strokeDasharray="2 2"
-                          />
-                          <path
-                            d={
-                              edge
-                                ? edgeChevron(xb, to.base + 3, edge)
-                                : `M${f1(xb - 3)} ${to.base + 6}L${f1(xb)} ${to.base + 1.5}L${f1(xb + 3)} ${to.base + 6}Z`
-                            }
-                            fill={color}
-                          />
-                        </g>
-                      )
-                    })}
+                    arrivals(u)
+                      .filter((t) => {
+                        if (!seen) return true
+                        const k = `${l.key}/${t}`
+                        if (seen.has(k)) return false
+                        seen.add(k)
+                        return true
+                      })
+                      .map((t) => {
+                        // a report in a turn outside the window: the line runs to the edge, with a chevron
+                        const edge = range && t < range.lo ? 'l' : range && t >= range.hi ? 'r' : undefined
+                        const xb = edge === 'l' ? X0 + 1 : edge === 'r' ? X1 - 1 : axis.x(t)
+                        return (
+                          <g key={t}>
+                            <line
+                              x1={xb}
+                              x2={xb}
+                              y1={g.top}
+                              y2={to.base + 5}
+                              stroke={color}
+                              strokeWidth={on ? 1.5 : 1}
+                              strokeDasharray="2 2"
+                            />
+                            <path
+                              d={
+                                edge
+                                  ? edgeChevron(xb, to.base + 3, edge)
+                                  : `M${f1(xb - 3)} ${to.base + 6}L${f1(xb)} ${to.base + 1.5}L${f1(xb + 3)} ${to.base + 6}Z`
+                              }
+                              fill={color}
+                            />
+                          </g>
+                        )
+                      })}
                 </g>
               )
             }),
@@ -1076,7 +1172,7 @@ export function TimePlot({
       .pop()
     const place = g.row.main ? turnPlace(g.row.lanes[0].turns, crossT, slackMs) : undefined
     const between = place && 'after' in place ? place : undefined
-    return { g, s, ctx, between }
+    return { g, s, ctx, between, swarm: px && px.row === layout.indexOf(g) ? hot : undefined }
   })()
   const betweenText = (p: { after: TurnSpan; next?: TurnSpan }) =>
     p.next
@@ -1092,6 +1188,7 @@ export function TimePlot({
           <>
             <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
             {under.between && <span>{betweenText(under.between)}</span>}
+            {under.swarm?.swarm && <SwarmText l={under.swarm} />}
             {under.ctx && (
               <span>
                 {under.ctx.l.main ? 'main agent' : under.ctx.l.title}:{' '}
@@ -1134,15 +1231,33 @@ export function TimePlot({
         onClick={(e) => {
           const h = hit(e.clientX, e.clientY, e.currentTarget)
           if (!h) return
+          const box = e.currentTarget.getBoundingClientRect()
+          const chip = chipAt(h.row, h.x, e.clientY - box.top)
+          const sw = swarmAt(h.row, h.x)
+          if (chip || sw) {
+            toggle(chip ?? sw?.swarm?.id ?? '')
+            return
+          }
           const r = read(h)
           if (r.unit) onSelectUnit(r.unit)
           else if (r.pin) onPin(r.pin)
         }}
         onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            // Enter opens the swarm under the pointer, else opens or closes the one holding the selected work
+            const id =
+              hot?.swarm?.id ??
+              (selectedUnit ? swarmOfUnit(timeline.lanes, swarms, selectedUnit.branch, selectedUnit.id)?.id : undefined)
+            if (id) {
+              e.preventDefault()
+              toggle(id)
+              return
+            }
+          }
           setPx(null)
           onKey(e)
         }}
-        className="relative mt-1 cursor-crosshair rounded-badge"
+        className={`relative mt-1 rounded-badge ${hot ? 'cursor-pointer' : 'cursor-crosshair'}`}
       >
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
           {/* breaks: idle time left out */}
@@ -1264,6 +1379,22 @@ export function TimePlot({
         </svg>
       </div>
     </div>
+  )
+}
+
+/** What a collapsed swarm stands for, in one line. */
+function SwarmText({ l }: { l: Lane }) {
+  const sw = l.swarm
+  if (!sw) return null
+  const types = sw.types.length === 1 ? sw.types[0][0] : sw.types.map(([t, n]) => `${t} ×${n}`).join(', ')
+  const models = sw.models.map(modelLabel).filter((m, i, all) => all.indexOf(m) === i)
+  return (
+    <span>
+      swarm of <span className="font-mono text-text">{sw.count}</span> {types}
+      {models.length > 0 && `, ${models.join(' and ')}`}:{' '}
+      <span className="font-mono text-text">{formatMoney(l.usd)}</span>, {clock(l.t0)} to {clock(l.t1)} (
+      {formatDuration(l.t1 - l.t0)}); click to open
+    </span>
   )
 }
 
