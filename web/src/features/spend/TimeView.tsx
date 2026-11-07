@@ -28,12 +28,18 @@ import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, type Uni
 import type { Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
+  BAND_GAP_PX,
+  barSpan,
+  bracketed,
   clockTicks,
   type Day,
+  detailAt,
   HOLD_MS,
   type Lane,
+  mergeBusy,
   type Point,
   packLanes,
+  pxPerTurn,
   type Row,
   sliceTimeline,
   slotLength,
@@ -63,6 +69,8 @@ const ROW_GAP = 10
 const BRANCH_GAP = 20
 /** A spend bar is at least this wide. */
 const SLOT_PX = 4
+/** A spend bar is drawn at least this wide, centred on its calls. */
+const BAR_MIN_PX = 2
 /** The strip of overhead bands under a session's rows, and the gap above it. */
 const OVER_H = 14
 const OVER_GAP = 6
@@ -194,6 +202,29 @@ export function TimePlot({
       }),
     [rows, slot, split],
   )
+  // where each bar is drawn: over the part of its slot in which the row was running, not all of it
+  const bars = useMemo(
+    () =>
+      rows.map((r) => {
+        const busy = mergeBusy(
+          r.lanes.flatMap((l) =>
+            l.main ? l.turns : l.units.map((u) => ({ t0: u.startMs, t1: Math.max(u.startMs, u.endMs) })),
+          ),
+        )
+        const times = new Map<number, number[]>()
+        for (const l of r.lanes)
+          for (const c of l.calls) {
+            const k = Math.floor(c.t / slot)
+            const a = times.get(k)
+            if (a) a.push(c.t)
+            else times.set(k, [c.t])
+          }
+        const out = new Map<number, [number, number]>()
+        for (const [k, ts] of times) out.set(k, barSpan([k * slot, (k + 1) * slot], ts, busy, BAR_MIN_PX / axis.scale))
+        return out
+      }),
+    [rows, slot, axis],
+  )
   const maxSlot = Math.max(1e-9, ...slots.flatMap((m) => [...m.values()].map((s) => s.total)))
   const kUsd = SPEND_FULL / maxSlot
   const cTicks = niceTicks(tl.peak || 1, 4)
@@ -220,6 +251,23 @@ export function TimePlot({
     }
   })
   const height = y + 6
+  // how much room a turn has on the main row(s) decides how much of the turns and decisions is drawn
+  const detail = detailAt(
+    Math.min(
+      Number.POSITIVE_INFINITY,
+      ...rows.filter((r) => r.main).map((r) => pxPerTurn(r.lanes[0].turns.map((s) => axis.x(s.t0)))),
+    ),
+  )
+  // the token scale is labelled once: on the first row, and higher up on a row taller than it
+  const labelFrom: number[] = []
+  {
+    let done = 0
+    layout.forEach((g) => {
+      const n = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2).length
+      labelFrom.push(done)
+      done = Math.max(done, n)
+    })
+  }
   const yCtx = (g: Layout, v: number) => g.base - v * kCtx
 
   // ---- who is where
@@ -509,16 +557,46 @@ export function TimePlot({
     const main = g.row.main ? g.row.lanes[0] : undefined
     const b = tree.branches[g.row.branch]
     const ticks = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (main ? BRACKET_H : 0) - 2)
+    // the decisions that get a bracket, and the turns drawn one by one
+    const focusDec = (p: Pin | null | undefined) =>
+      p && p.branch === g.row.branch ? b.model.cols[p.col]?.decision : undefined
+    const shown = main
+      ? bracketed(
+          b.model.decisions.filter(
+            (d) => d.usd > 0 && main?.turns.some((s) => s.col.index >= d.start && s.col.index <= d.end),
+          ),
+          detail,
+          [focusDec(pinned), focusDec(cursor)],
+        )
+      : new Set<number>()
+    const isFocusTurn = (c: number) => [pinned, cursor].some((p) => p && p.branch === g.row.branch && p.col === c)
     const turnsY = g.bottom - 3
     let lastTurnX = Number.NEGATIVE_INFINITY
     return (
       <g key={g.row.lanes[0].key}>
-        {ticks.map((t) => (
+        {ticks.map((t, n) => (
           <g key={t}>
-            <line x1={X0} x2={X1} y1={yCtx(g, t)} y2={yCtx(g, t)} stroke="var(--line)" strokeWidth={1} />
-            <text x={X0 - 4} y={yCtx(g, t)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--faint)">
-              {formatTokens(t)}
-            </text>
+            <line
+              x1={X0}
+              x2={X1}
+              y1={yCtx(g, t)}
+              y2={yCtx(g, t)}
+              stroke="var(--line)"
+              strokeWidth={1}
+              strokeOpacity={n >= labelFrom[i] ? 1 : 0.4}
+            />
+            {n >= labelFrom[i] && (
+              <text
+                x={X0 - 4}
+                y={yCtx(g, t)}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fontSize={9}
+                fill="var(--faint)"
+              >
+                {formatTokens(t)}
+              </text>
+            )}
           </g>
         ))}
         {/* the decisions over a main row */}
@@ -527,7 +605,7 @@ export function TimePlot({
             const s0 =
               main.turns.find((s) => s.col.index === dec.start) ?? main.turns.find((s) => s.col.index >= dec.start)
             const s1 = [...main.turns].reverse().find((s) => s.col.index <= dec.end)
-            if (!s0 || !s1 || dec.usd <= 0 || s1.col.index < s0.col.index) return null
+            if (!s0 || !s1 || dec.usd <= 0 || s1.col.index < s0.col.index || !shown.has(dec.index)) return null
             const xa = axis.x(s0.t0) + 1
             const xb = Math.max(xa + 3, axis.x(s1.t1) - 1)
             const yy = g.top + 12
@@ -582,6 +660,9 @@ export function TimePlot({
         {/* the spend per slot, down from the baseline */}
         {[...slots[i].entries()].map(([k, s]) => {
           let off = 0
+          const [ta, tb] = bars[i].get(k) ?? [k * slot, (k + 1) * slot]
+          const bx0 = axis.x(ta)
+          const bx1 = Math.max(bx0 + BAR_MIN_PX, axis.x(tb))
           return (
             <g key={k}>
               {order.map((p) => {
@@ -591,9 +672,9 @@ export function TimePlot({
                 const r = (
                   <rect
                     key={p.key}
-                    x={axis.x(k * slot) + 0.5}
+                    x={bx0}
                     y={g.base + 1 + off}
-                    width={Math.max(1, axis.x((k + 1) * slot) - axis.x(k * slot) - 1)}
+                    width={bx1 - bx0}
                     height={Math.max(h, 0.6)}
                     fill={p.color}
                   />
@@ -615,12 +696,16 @@ export function TimePlot({
         {/* a main row's turns, and their numbers */}
         {main?.turns.map((s) => {
           const x = axis.x(s.t0)
-          const label = x - lastTurnX >= String(s.col.index).length * 5.5 + 6
+          // in the band, only the turn in focus has a mark and a number of its own
+          if (detail === 'band' && !isFocusTurn(s.col.index)) return null
+          const label = detail === 'band' || x - lastTurnX >= String(s.col.index).length * 5.5 + 6
           if (label) lastTurnX = x
           const xe = Math.max(x + 1.5, axis.x(s.t1) - 0.75)
           return (
             <g key={s.col.index} pointerEvents="none">
-              <line x1={x + 0.75} x2={xe} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--text)" strokeWidth={3} />
+              {detail !== 'band' && (
+                <line x1={x + 0.75} x2={xe} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--text)" strokeWidth={3} />
+              )}
               <line x1={x} x2={x} y1={g.base - 4} y2={g.base + 5} stroke="var(--text)" strokeWidth={1} />
               {label && (
                 <text x={x} y={turnsY} textAnchor="middle" fontSize={9} fill="var(--faint)">
@@ -630,6 +715,21 @@ export function TimePlot({
             </g>
           )
         })}
+        {/* too many turns for a mark each: they are one thick band, turns closer than a few pixels joined */}
+        {main && detail === 'band' && (
+          <path
+            pointerEvents="none"
+            d={mergeBusy(
+              main.turns.map((s) => ({ t0: axis.x(s.t0), t1: Math.max(axis.x(s.t0) + 1.5, axis.x(s.t1)) })),
+              BAND_GAP_PX,
+            )
+              .map((r) => `M${f1(r.t0)} ${g.base + 0.5}H${f1(r.t1)}`)
+              .join('')}
+            stroke="var(--text)"
+            strokeWidth={3}
+            fill="none"
+          />
+        )}
         {/* a person's messages: a dot on the baseline, hollow for one typed while a turn ran */}
         {main?.turns.flatMap((s) =>
           [

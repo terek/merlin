@@ -681,3 +681,104 @@ export function turnPlace(
   const s = turns[k]
   return t <= s.t1 + slack ? { turn: s } : { after: s, next: turns[k + 1] }
 }
+
+// ---- spend bars -----------------------------------------------------------------------
+
+/**
+ * Where a spend bar is drawn, in time. Spend is binned into slots of `[a, b)`, but a bar over the
+ * whole slot would start before the call it stands for (even before its agent was launched) and run
+ * past the end of a turn. It is drawn over the part of the slot in which the row was running: the
+ * slot intersected with the `busy` stretches (sorted, not overlapping) that hold one of its `calls`,
+ * from the first to the last of them; a call outside every stretch counts as a stretch of no length.
+ * When that is narrower than `minMs` it is widened to it, centred on the calls.
+ */
+export function barSpan(
+  slot: readonly [number, number],
+  calls: readonly number[],
+  busy: readonly { t0: number; t1: number }[],
+  minMs = 0,
+): [number, number] {
+  const [a, b] = slot
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  let first = Number.POSITIVE_INFINITY
+  let last = Number.NEGATIVE_INFINITY
+  for (const t of calls) {
+    first = Math.min(first, t)
+    last = Math.max(last, t)
+    // the last stretch that starts at or before t
+    let l = 0
+    let h = busy.length - 1
+    let k = -1
+    while (l <= h) {
+      const mid = (l + h) >> 1
+      if (busy[mid].t0 <= t) {
+        k = mid
+        l = mid + 1
+      } else h = mid - 1
+    }
+    const s = k >= 0 && t <= busy[k].t1 ? busy[k] : { t0: t, t1: t }
+    lo = Math.min(lo, Math.max(a, s.t0))
+    hi = Math.max(hi, Math.min(b, s.t1))
+  }
+  if (!Number.isFinite(first)) return [a, a]
+  if (hi < lo) [lo, hi] = [first, last]
+  if (hi - lo < minMs) {
+    const mid = (first + last) / 2
+    return [mid - minMs / 2, mid + minMs / 2]
+  }
+  return [lo, hi]
+}
+
+/** Stretches sorted by start, with those that overlap or touch joined. */
+export function mergeBusy(busy: readonly { t0: number; t1: number }[], gap = 0): { t0: number; t1: number }[] {
+  const out: { t0: number; t1: number }[] = []
+  for (const s of [...busy].filter((x) => Number.isFinite(x.t0) && Number.isFinite(x.t1)).sort((x, y) => x.t0 - y.t0)) {
+    const top = out[out.length - 1]
+    if (top && s.t0 - top.t1 <= gap) top.t1 = Math.max(top.t1, s.t1)
+    else out.push({ t0: s.t0, t1: Math.max(s.t0, s.t1) })
+  }
+  return out
+}
+
+// ---- level of detail ------------------------------------------------------------------
+
+/** Above this many pixels per turn, every decision and turn is drawn. */
+export const FULL_TURN_PX = 40
+/** Below it, turns are one merged band on the baseline instead of a mark each. */
+export const BAND_TURN_PX = 12
+/** How many decisions keep their bracket when there are too many turns for all of them. */
+export const TOP_DECISIONS = 8
+/** Turn stretches closer than this merge in the band. */
+export const BAND_GAP_PX = 3
+
+export type Detail = 'full' | 'top' | 'band'
+
+/** The median distance between the starts of consecutive turns: the room each has on the axis. */
+export function pxPerTurn(xs: readonly number[]): number {
+  const d = xs
+    .slice(1)
+    .map((x, i) => x - xs[i])
+    .sort((p, q) => p - q)
+  return d.length ? d[d.length >> 1] : Number.POSITIVE_INFINITY
+}
+
+/** How much of the turns and decisions is drawn at `px` pixels per turn. */
+export const detailAt = (px: number): Detail => (px > FULL_TURN_PX ? 'full' : px >= BAND_TURN_PX ? 'top' : 'band')
+
+/**
+ * The decisions that get a bracket: all of them in full detail; otherwise the `k` most expensive and
+ * those in `focus` (the hovered and the pinned turn's). The others show only their prompt dot.
+ */
+export function bracketed(
+  decisions: readonly { index: number; usd: number }[],
+  detail: Detail,
+  focus: readonly (number | undefined)[] = [],
+  k = TOP_DECISIONS,
+): Set<number> {
+  if (detail === 'full') return new Set(decisions.map((d) => d.index))
+  const top = [...decisions].sort((a, b) => b.usd - a.usd || a.index - b.index).slice(0, k)
+  const out = new Set(top.map((d) => d.index))
+  for (const f of focus) if (f !== undefined) out.add(f)
+  return out
+}

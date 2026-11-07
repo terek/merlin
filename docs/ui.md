@@ -326,7 +326,20 @@ From top to bottom:
     again) starts its area at that call. A one-shot sub-agent has a single piece of work, so this never shows on its row. An agent's own sub-agents are thin lines on its row;
   - below the baseline, what the row spent in each slot of time (a round length, at least 4 px wide),
     on one dollar scale for every row, split like the legend. A row pays for its agent's calls, its
-    sub-agents' calls and, for a main row, the compaction calls;
+    sub-agents' calls and, for a main row, the compaction calls. A bar is drawn only over the part of
+    its slot in which the row was running (`barSpan`): the slot cut to the turns (main row) or
+    pieces of work (agent row) that hold its calls, so it never starts before its agent was
+    launched or runs past the end of a turn; calls outside any of them give the span from the first
+    to the last call, and a bar narrower than 2 px is widened to 2 px, centred on its calls;
+  - the **token scale** is labelled once: its tick labels stand on the first row, and on a taller
+    row only for the ticks above the ones already labelled; the other rows keep faint gridlines;
+  - **level of detail** by the median room a turn has on the main row (`detailAt`): above 40 px
+    per turn every turn has its tick, thick stretch and number and every decision its bracket and
+    dollars. From 12 to 40 px the numbers still show only where they fit, and only the 8 most
+    expensive decisions in view (`bracketed`), plus those of the hovered or cursor turn and of the
+    pinned turn, have a bracket; the others show only their prompt dot. Below 12 px the turns are
+    one thick band on the baseline (stretches closer than 3 px merged), with a tick and number
+    only for the turn in focus, and the brackets are the same top 8 plus focus;
   - a diamond is a **cache miss**, on the call that missed: the part of an agent's previous prompt
     that its next message did not read from the cache, written to it again (Claude Code) or charged
     as plain input (Codex, whose cache has no writes). Each miss has a cause: idle longer than the

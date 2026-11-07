@@ -2,12 +2,17 @@ import { describe, expect, test } from 'bun:test'
 import type { Agent, AgentTurn, Message, SessionDetail, Turn } from '../../api/types'
 import type { Col } from './model'
 import {
+  barSpan,
+  bracketed,
   buildTimeline,
   dayAt,
+  detailAt,
   GAP_MS,
   type Lane,
   latestDay,
+  mergeBusy,
   packLanes,
+  pxPerTurn,
   sliceTimeline,
   slotLength,
   splitDays,
@@ -394,4 +399,62 @@ test('the first day shown is the last that spent more than next to nothing', () 
   expect(latestDay([{ total: 5 }, { total: 3 }, { total: 0.01 }])).toBe(1)
   expect(latestDay([{ total: 5 }, { total: 3 }])).toBe(1)
   expect(latestDay([{}, {}])).toBe(1)
+})
+
+describe('barSpan', () => {
+  const slot: [number, number] = [0, 300_000]
+  test('a bar covers the turn inside the slot, not the slot', () => {
+    // a turn from 100 s to 160 s, calls at 110 s and 150 s
+    expect(barSpan(slot, [110_000, 150_000], [{ t0: 100_000, t1: 160_000 }])).toEqual([100_000, 160_000])
+  })
+  test('it is cut at the slot', () => {
+    expect(barSpan(slot, [280_000], [{ t0: 200_000, t1: 500_000 }])).toEqual([200_000, 300_000])
+    expect(barSpan(slot, [10_000], [{ t0: -90_000, t1: 50_000 }])).toEqual([0, 50_000])
+  })
+  test('stretches without a call in the slot do not widen it', () => {
+    const busy = [
+      { t0: 0, t1: 20_000 },
+      { t0: 100_000, t1: 120_000 },
+      { t0: 200_000, t1: 220_000 },
+    ]
+    expect(barSpan(slot, [110_000], busy)).toEqual([100_000, 120_000])
+  })
+  test('calls outside every stretch are the span from the first to the last', () => {
+    expect(barSpan(slot, [40_000, 90_000], [])).toEqual([40_000, 90_000])
+  })
+  test('a tiny bar is widened, centred on the calls', () => {
+    expect(barSpan(slot, [100_000], [], 4_000)).toEqual([98_000, 102_000])
+    expect(barSpan(slot, [100_000, 101_000], [{ t0: 100_000, t1: 101_000 }], 4_000)).toEqual([98_500, 102_500])
+  })
+})
+
+test('mergeBusy joins stretches that overlap', () => {
+  expect(
+    mergeBusy([
+      { t0: 5, t1: 9 },
+      { t0: 0, t1: 6 },
+      { t0: 20, t1: 21 },
+    ]),
+  ).toEqual([
+    { t0: 0, t1: 9 },
+    { t0: 20, t1: 21 },
+  ])
+})
+
+describe('level of detail', () => {
+  test('the median room per turn picks the level', () => {
+    expect(pxPerTurn([0, 10, 20, 30, 200])).toBe(10)
+    expect(pxPerTurn([5])).toBe(Number.POSITIVE_INFINITY)
+    expect(detailAt(80)).toBe('full')
+    expect(detailAt(40)).toBe('top')
+    expect(detailAt(12)).toBe('top')
+    expect(detailAt(11.9)).toBe('band')
+  })
+  test('the dearest decisions and the ones in focus keep their bracket', () => {
+    const decs = Array.from({ length: 20 }, (_, i) => ({ index: i, usd: i === 3 ? 0.5 : 1 + i }))
+    expect(bracketed(decs, 'full').size).toBe(20)
+    const some = bracketed(decs, 'top', [3, undefined])
+    expect([...some].sort((a, b) => a - b)).toEqual([3, 12, 13, 14, 15, 16, 17, 18, 19])
+    expect(bracketed(decs, 'band', []).size).toBe(8)
+  })
 })
