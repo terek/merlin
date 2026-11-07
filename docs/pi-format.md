@@ -461,28 +461,46 @@ recorded here.
 | compactions on the path / with a recorded call | 63 / 18 |
 | lineage links in the catalog | 1 (the one fork; `lineage.fork` seen in 1 session). No false link: sessions that share an 8-hex entry id are not linked |
 | messages shared between sessions | 30 (the fork's copies, billed once), of 22,109 distinct message ids |
-| unpriced messages | 1,219 (59.4 M tokens) on 16 models: zero in Pi's catalog and unknown to our table (gpt-5.x codex, gemini-3.x, claude-opus-4.5 and 4.6 as github-copilot spells them, kimi, two local GGUF models) |
-| cost flags | recorded 731, estimated 80 (every billed message in them is unpriced, so none is a recorded one; `lowerBound`), unknown 2, exact 0, partial 0 |
+| unpriced messages | 311 on 7 models (181 + 12 + 8 on three local GGUF/llama.cpp models, 88 on gpt-5.3-codex-spark, 18 on kimi k2p5, 2 on gemini-3-pro-preview, 2 on kimi-k2.5-free): zero in Pi's catalog and with no source for a price. The first run had 1,219 (59.4 M tokens) on 16 models, mostly gpt-5.x codex, gemini-3.x and claude-opus-4.5 and 4.6 as github-copilot spells them; adding those prices (and the `claude-opus-4.5`, `claude-opus-4.6` aliases) raised the catalog's best cost from $1,096.43 to $1,114.78 (+$18.35, all of it on the 908 messages that were unpriced) |
+| cost flags | recorded 731, estimated 80 (every billed message in them is unpriced, so none is a recorded one; `lowerBound`), unknown 2, exact 0, partial 0. After the prices of merlin-1es.12: recorded 715, estimated 96 (16 sessions now mix Pi's figures with table prices, which the rule flags `estimated`) |
 | doctor coverage contradictions for Pi | 1: `links.beads` parsed but seen in 0 of 813 sessions (no `bd` call in the corpus; may be right) |
 
 **Total.** The catalog's best cost is $1,096.4338. The sum over the corpus of every assistant
 `usage.cost.total` ($1,094.3098) and every `compaction.usage.cost.total` ($2.1240, 18 records),
 with identical lines removed (so the 490 copied entries and the seven re-exports count once), is
 $1,096.4338: equal to the cent and to the fourth decimal. No `usage` entry, `branch_summary.usage`
-or `toolResult.usage` exists. Nothing came from our price table: every message with tokens and a
+or `toolResult.usage` exists. In that run nothing came from our price table: every message with tokens and a
 zero cost (1,219 after de-duplication) is on a model it does not know, so it is `Unpriced`, not priced. There is no difference to
 explain. The two figures were computed by separate code (the Go digest and a script over the raw
-lines).
+lines). With the prices added in merlin-1es.12 the best cost is $1,114.78: the same $1,096.43 from
+Pi's figures plus $18.35 from our table on 908 messages Pi has no price for.
 
-**Our table against Pi's figure.** Only 7 of the 49 models with a recorded cost are in our table:
-2,793 messages, Pi $286.06, our table $288.28, ratio 1.0078. By model: claude-fable-5 1.015 (754
-messages, $146.01 by Pi), and 1.000 for claude-opus-4-8, claude-opus-4-6, claude-opus-4-7,
-claude-sonnet-4-6, claude-haiku-4-5 and gpt-6-astra. The 1.5% on claude-fable-5 is not explained
-here (a cache-write rate or tier difference is the first thing to check). The other 42 models, 18,097
-messages and $810.38 of Pi's $1,096.43 (74%), have no entry in our table, among them claude-opus-4-5
-($239.32), gpt-5.4 ($228.40), gpt-5.6-sol, gpt-5.3-codex and gpt-5.2-codex; so the table cross-check
-covers a quarter of the spend. That is a gap in the table, not a parser finding, and the parser was
-not tuned to hide it.
+**Our table against Pi's figure.** The table now prices 26 provider/model pairs that carry a Pi
+cost: 20,351 messages and $1,085.29 of Pi's $1,094.31 on messages (99%; before, 7 models and 26%).
+Our price of the tokens (one script over the raw lines, identical lines removed) equals Pi's cost
+for 23 of the 26. By model:
+claude-fable-5 1.000 (746 messages, $145.35 by Pi), claude-opus-4-5 1.000 ($239.28, 4,353),
+gpt-5.3-codex, gpt-5.2-codex, gpt-5.5 and gpt-6-astra 1.000, and 1.000 for claude-opus-4-8, -4-6,
+-4-7, claude-sonnet-4-6, claude-haiku-4-5 and the other small ones. Three are off, each for a
+reason in the data. gpt-5.4 on openai-codex is 1.0995 ($223.59 by Pi, $245.84 ours): 103 of its
+4,353 messages have more than 272,000 input tokens, OpenAI's page bills them at the long-context
+rate and Pi's catalog has no tier for it; without those 103 the ratio is 1.000. gpt-5.6-sol is
+0.782 ($125.61 by Pi, $98.19 ours): Pi recorded 5 / 30 / 0.5 per million tokens on its July to
+September messages and the page now shows 4 / 20 / 0.4, labelled promotional until 2026-11-30, so our entry is `assumed`.
+gitlab-duo's gpt-5-codex is 0.676 ($0.15 vs $0.10): Pi recorded 2.5 / 10 and no cache read, which
+looks like GitLab's own price rather than OpenAI's. **The earlier 1.015 on claude-fable-5 was not a price difference.**
+Per class, Pi's costs on the 746 messages imply exactly 10, 50, 1.00 and 12.50 per million tokens
+for input, output, cache read and cache write (no 1h writes occur), the same as our table. The
+Go digest groups 754 messages under claude-fable-5 with 142,066 input and 29,287 output tokens
+more than the messages carry: those are the `compaction.usage` records of the session, which Pi
+priced at 1.75 / 14 (a gpt-5.x model) and we priced as the session's model, claude-fable-5. That
+adds $2.89 by our rates against $0.66 by Pi's, which is the $148.23 against $146.01 (the token and cost
+figures match to the cent). This is the guess described under Billed messages: a compaction's usage
+names no model, so the parser takes the nearest assistant message's, and here Pi's own cost shows a
+different model made the call. Totals use Pi's figure and are right; the per-model split is not
+(merlin-1es.9). The models Pi recorded a cost for and our table still lacks are the
+small ones (bedrock, gitlab-duo, antigravity and opencode spellings, glm, kimi, qwen, minimax,
+gemini-3-pro-high and -low).
 
 **Unknown sessions.** Two sessions have the flag `unknown`, where zero were expected: in both,
 every assistant message (5 and 4) has zero tokens and zero cost (one stopped by an abort), yet the

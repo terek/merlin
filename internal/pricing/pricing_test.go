@@ -225,3 +225,97 @@ func TestEmbeddedTableStatus(t *testing.T) {
 		}
 	}
 }
+
+func TestAliasLookup(t *testing.T) {
+	tab := Default()
+	for _, c := range []struct{ in, want string }{
+		{"claude-opus-4.5", "claude-opus-4-5"},
+		{"claude-opus-4.5[1m]", "claude-opus-4-5"},
+		{"claude-opus-4.6", "claude-opus-4-6"},
+		{"claude-opus-4-5-20251101", "claude-opus-4-5"},
+		{"claude-sonnet-4-20250514", "claude-sonnet-4"},
+	} {
+		got, p, ok := tab.Lookup(c.in)
+		if !ok || got != c.want || p.Input != 5 && c.want != "claude-sonnet-4" {
+			t.Errorf("Lookup(%q) = %q %v %v, want %q", c.in, got, p.Input, ok, c.want)
+		}
+	}
+	a, _ := tab.Cost("claude-opus-4.5", model.Tokens{Input: 1_000_000}, false)
+	b, _ := tab.Cost("claude-opus-4-5", model.Tokens{Input: 1_000_000}, false)
+	if a.USD != b.USD || a.USD != 5 {
+		t.Errorf("alias cost %v, exact %v", a.USD, b.USD)
+	}
+}
+
+func TestAliasExactWins(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// an override adds a model named like the built-in alias: the exact name wins over it
+	cfg := `{"prices": {"claude-opus-4.5": {"input": 1, "output": 2, "cacheRead": 0.1}}}`
+	if err := os.WriteFile(path, []byte(cfg), 0o644); err == nil {
+		_, err = Load(path)
+		if err == nil {
+			t.Fatal("a model named like another model's alias should be an error at load")
+		}
+	}
+	// the alias keeps working when an override replaces its target without naming aliases
+	cfg = `{"prices": {"claude-opus-4-5": {"input": 1, "output": 2, "cacheRead": 0.1}}}`
+	if err := os.WriteFile(path, []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tab, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, p, ok := tab.Lookup("claude-opus-4.5"); !ok || n != "claude-opus-4-5" || p.Input != 1 {
+		t.Errorf("alias after override: %q %v %v", n, p.Input, ok)
+	}
+}
+
+func TestAliasExactNameBeatsDateAlias(t *testing.T) {
+	tab, err := parse([]byte(`{"cacheWrite5mMultiplier":1.25,"cacheWrite1hMultiplier":2,"fastMultiplier":2,
+		"models":{"m-1":{"input":1,"output":1,"cacheRead":1,"aliases":["m.1"]},"m.1-20250101":{"input":2,"output":2,"cacheRead":2}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _, _ := tab.Lookup("m.1"); n != "m-1" {
+		t.Errorf("declared alias should come before a date-stripped name, got %q", n)
+	}
+	if n, _, _ := tab.Lookup("m-1"); n != "m-1" {
+		t.Errorf("exact name: %q", n)
+	}
+}
+
+func TestAliasCollisions(t *testing.T) {
+	const head = `{"cacheWrite5mMultiplier":1.25,"cacheWrite1hMultiplier":2,"fastMultiplier":2,"models":{`
+	for name, body := range map[string]string{
+		"alias is another model's name": `"a":{"input":1,"output":1,"cacheRead":1,"aliases":["b"]},"b":{"input":1,"output":1,"cacheRead":1}`,
+		"alias repeats own name":        `"a":{"input":1,"output":1,"cacheRead":1,"aliases":["a"]}`,
+		"alias declared twice":          `"a":{"input":1,"output":1,"cacheRead":1,"aliases":["x"]},"b":{"input":1,"output":1,"cacheRead":1,"aliases":["x"]}`,
+	} {
+		if _, err := parse([]byte(head + body + `}}`)); err == nil {
+			t.Errorf("%s: want an error at load", name)
+		}
+	}
+}
+
+func TestEmbeddedAliasesLoad(t *testing.T) {
+	// Default panics on a collision in the embedded table; also pin the long tiers added with it.
+	tab := Default()
+	for _, c := range []struct {
+		model string
+		tok   model.Tokens
+		want  float64
+	}{
+		{"gpt-5.4", model.Tokens{Input: 100_000, Output: 1_000_000, CacheRead: 100_000}, 0.25 + 15 + 0.025},
+		{"gpt-5.4", model.Tokens{Input: 300_000, Output: 1_000_000}, 5*0.3 + 22.5},
+		{"gpt-5.3-codex", model.Tokens{Input: 1_000_000, Output: 1_000_000, CacheRead: 1_000_000}, 15.925},
+		{"gemini-3.1-pro-preview", model.Tokens{Input: 250_000, Output: 1_000_000}, 4*0.25 + 18},
+	} {
+		mc, ok := tab.Cost(c.model, c.tok, false)
+		if !ok {
+			t.Fatalf("%s unpriced", c.model)
+		}
+		near(t, mc.USD, c.want)
+	}
+}

@@ -219,7 +219,7 @@ throwaway scripts printing numbers only).
 | compactions: `compacted` records / `context_compacted` events | 0 / 0 | 0 / 24 (2 threads) |
 | `turn_aborted`, `thread_settings_applied`, `EnteredReviewMode`, `FileChange`, task errors | 0 | 0 |
 | spawn/followup/send/interrupt calls, Fernet tokens | 0, 0 | 0, 0 |
-| cost | 2 sessions, 3 calls, model gpt-5.4, `unpriced` (no price in the table) | no cost: unknown on 4 sessions |
+| cost | 2 sessions, 3 calls, model gpt-5.4, `unpriced` when that run was made (the table has had gpt-5.4 since) | no cost: unknown on 4 sessions |
 | doctor coverage seen (of threads) | project 2/2, title 2/2, userText 2/2, finalText 2/2, tools 1/2, perMessage 2/2 | project 4/4, branch 4/4, title 4/4, userText 4/4, finalText 4/4, queued 2/4, tools 4/4, perMessage 0/4 |
 
 Before the change (version 7) the two datasets also showed `userText` 0 of 2 and 0 of 4,
@@ -248,8 +248,10 @@ The same `~/.codex` indexed read-only by parser 7 and parser 8 (scratch homes, n
   `token_usage_record`s also has `token_count`s with `info` (40 of 40 files), and the
   fallback stays off for them, so no call is billed twice.
 - **0.104–0.142:** 13 sessions went from no calls and no prompts to 339 calls and a prompt on every
-  turn. All 339 are on models without a price (`gpt-5.5` 330, `gpt-5.3-codex` 6, `gpt-5.2-codex` 3),
-  so the cost shows as a lower bound of $0.
+  turn. All 339 were on models the table then had no price for (`gpt-5.5` 330, `gpt-5.3-codex` 6,
+  `gpt-5.2-codex` 3), so the cost showed as a lower bound of $0. The table now prices all three: a
+  rescan has 0 unpriced messages and those 339 calls cost $32.56 (gpt-5.5 $32.52, gpt-5.3-codex $0.03,
+  gpt-5.2-codex $0.01).
 - **Invariant on the old form:** of the 17 old rollout files, 6 have no `token_count` `info`; in 10
   of the other 11 the per-call sum equals the final `total_token_usage`. The exception has two
   `thread_rolled_back` events and its calls sum to 8,211 tokens more than the final total: the

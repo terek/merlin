@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/terek/merlin/internal/model"
@@ -33,6 +34,10 @@ type Price struct {
 	// Long, when set, is the price of a long-context request: one whose input (uncached,
 	// cached and written) is more than Long.Above tokens is billed at it in full.
 	Long *LongPrice `json:"long,omitempty"`
+	// Aliases are other spellings of the model's name that providers use (a dot for a
+	// dash, a vendor prefix). An exact table name always wins over an alias; an alias that
+	// is another model's name or alias, or repeats the entry's own name, is an error.
+	Aliases []string `json:"aliases,omitempty"`
 }
 
 // LongPrice is a model's long-context price in USD per million tokens. Cache writes are
@@ -66,6 +71,7 @@ type Table struct {
 	w5m, w1h, fastMult float64
 	models             map[string]Price  // exact names, normalised
 	alias              map[string]string // date-stripped name -> exact name
+	named              map[string]string // declared alias -> exact name
 	fast               map[string]bool
 }
 
@@ -107,9 +113,14 @@ func Load(path string) (*Table, error) {
 			t.fast[name] = *p.Fast
 		}
 		p.Fast = nil
+		if p.Aliases == nil { // an override that names none keeps the table's aliases
+			p.Aliases = t.models[name].Aliases
+		}
 		t.models[name] = p
 	}
-	t.reindex()
+	if err := t.reindex(); err != nil {
+		return nil, fmt.Errorf("pricing: %s: %w", path, err)
+	}
 	return t, nil
 }
 
@@ -132,14 +143,36 @@ func parse(b []byte) (*Table, error) {
 	for _, n := range f.FastModels {
 		t.fast[n] = true
 	}
-	t.reindex()
+	if err := t.reindex(); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 
 // reindex rebuilds the date-stripped aliases so a table entry stored with a date
-// ("claude-haiku-4-5-20251001") is also found without it. Exact names always win.
-func (t *Table) reindex() {
+// ("claude-haiku-4-5-20251001") is also found without it, and the declared aliases. Exact
+// names always win. It fails when a declared alias collides with a model name or with
+// another model's alias.
+func (t *Table) reindex() error {
 	t.alias = make(map[string]string)
+	t.named = make(map[string]string)
+	names := make([]string, 0, len(t.models))
+	for n := range t.models {
+		names = append(names, n)
+	}
+	sort.Strings(names) // a deterministic error message
+	for _, n := range names {
+		for _, a := range t.models[n].Aliases {
+			a = strip1m(a)
+			if _, ok := t.models[a]; ok {
+				return fmt.Errorf("alias %q of %q is also a model name", a, n)
+			}
+			if prev, ok := t.named[a]; ok {
+				return fmt.Errorf("alias %q is declared by both %q and %q", a, prev, n)
+			}
+			t.named[a] = n
+		}
+	}
 	for n := range t.models {
 		if s := dateSuffix.ReplaceAllString(n, ""); s != n {
 			if _, exact := t.models[s]; !exact {
@@ -147,13 +180,15 @@ func (t *Table) reindex() {
 			}
 		}
 	}
+	return nil
 }
 
 func strip1m(name string) string { return strings.TrimSuffix(strings.TrimSpace(name), "[1m]") }
 
 // Lookup resolves a model name to its table name and price: it strips a "[1m]" suffix,
-// then tries the exact name, then the name without a trailing -YYYYMMDD. ok is false for
-// an unknown model, and for Synthetic, which is free rather than priced.
+// then tries the exact name, then the name without a trailing -YYYYMMDD, then a declared
+// alias, then a table name stored with a date. ok is false for an unknown model, and for
+// Synthetic, which is free rather than priced.
 func (t *Table) Lookup(name string) (resolved string, p Price, ok bool) {
 	n := strip1m(name)
 	if p, ok := t.models[n]; ok {
@@ -163,6 +198,9 @@ func (t *Table) Lookup(name string) (resolved string, p Price, ok bool) {
 		if p, ok := t.models[s]; ok {
 			return s, p, true
 		}
+	}
+	if full, ok := t.named[n]; ok {
+		return full, t.models[full], true
 	}
 	if full, ok := t.alias[n]; ok {
 		return full, t.models[full], true
