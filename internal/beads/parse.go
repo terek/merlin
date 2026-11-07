@@ -29,9 +29,13 @@ func Parse(script, cwd string, res *Result) []model.BeadEvent {
 		return nil
 	}
 	var calls []call
+	listCwd, listed := "", false
 	for _, c := range commands(script, cwd) {
 		if !isBd(c.words) {
 			continue
+		}
+		if isListCall(c.words) && !listed {
+			listCwd, listed = c.cwd, true
 		}
 		if ca, ok := parseCall(c.words); ok {
 			ca.ev.Cwd = c.cwd
@@ -67,13 +71,32 @@ func Parse(script, cwd string, res *Result) []model.BeadEvent {
 	for _, c := range calls {
 		out = append(out, o.match(c, res, len(calls)))
 	}
+	// bd list / bd ready with JSON output: one show event for the beads it printed.
+	if listed {
+		ev := model.BeadEvent{Op: model.BeadShow, Outcome: model.BeadOK, Cwd: listCwd}
+		for i := range o.conf {
+			cf := &o.conf[i]
+			if cf.used || cf.claimed || cf.kind != confJSON || cf.seen == nil || slices.Contains(ev.IDs, cf.id) {
+				continue
+			}
+			cf.claimed = true
+			ev.IDs = append(ev.IDs, cf.id)
+			ev.Seen = append(ev.Seen, *cf.seen)
+		}
+		if len(ev.IDs) > 0 {
+			out = append(out, ev)
+		}
+	}
 	// Confirmed writes no call accounts for.
 	for i := range o.conf {
 		cf := &o.conf[i]
 		if cf.used || named[cf.id] || cf.kind == confJSON || cf.kind == confBare {
 			continue
 		}
-		ev := model.BeadEvent{Op: cf.kind.op(), IDs: []string{cf.id}, Title: cf.title, Outcome: model.BeadOK, Cwd: cwd}
+		ev := model.BeadEvent{Op: cf.kind.op(), IDs: []string{cf.id}, Title: cf.title, Outcome: model.BeadOK, Cwd: cwd, OutputOnly: true}
+		if ev.Op == model.BeadClose {
+			ev.Title = defaultClosedTitle(cf.rest)
+		}
 		if cf.kind == confDep && cf.other != "" {
 			ev.IDs = append(ev.IDs, cf.other)
 			ev.DepType = cf.depType
@@ -87,6 +110,18 @@ func Parse(script, cwd string, res *Result) []model.BeadEvent {
 	return out
 }
 
+// isListCall reports whether a bd command is list or ready (after global flags).
+func isListCall(words []string) bool {
+	i := 1
+	for i < len(words) && strings.HasPrefix(words[i], "-") {
+		if !strings.Contains(words[i], "=") && valueFlags[words[i]] {
+			i++
+		}
+		i++
+	}
+	return i < len(words) && (words[i] == "list" || words[i] == "ready")
+}
+
 // isBd reports whether a command (wrappers such as xargs already stripped) runs bd.
 func isBd(words []string) bool {
 	return len(words) > 0 && (words[0] == "bd" || strings.HasSuffix(words[0], "/bd"))
@@ -97,6 +132,7 @@ type call struct {
 	ev          model.BeadEvent
 	byArgs      bool // the ids came from the arguments (else from the output)
 	explicitDep bool // dep add was given --type
+	reasonGiven bool // some reason flag was on the call, whatever its value
 }
 
 // valueFlags are the bd flags (global and per command) that take a separate value.
@@ -157,6 +193,59 @@ var reID = regexp.MustCompile(`^[a-z0-9][a-z0-9_]*(?:-[a-z0-9_]+)*-[a-z0-9]+(?:\
 // IsID reports whether s looks like a bead id.
 func IsID(s string) bool { return len(s) <= 80 && reID.MatchString(s) }
 
+// flagValues returns every value of a flag that may repeat, in order.
+func flagValues(words []string, name string) []string {
+	var out []string
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		if w == "--" {
+			break
+		}
+		if w == name && i+1 < len(words) {
+			out = append(out, words[i+1])
+			i++
+		} else if strings.HasPrefix(w, name+"=") {
+			out = append(out, w[len(name)+1:])
+		}
+	}
+	return out
+}
+
+// parsePriority reads 0–4 or P0–P4; anything else is nil.
+func parsePriority(s string) *int {
+	s = strings.TrimPrefix(strings.TrimPrefix(s, "P"), "p")
+	if len(s) != 1 || s[0] < '0' || s[0] > '4' {
+		return nil
+	}
+	n := int(s[0] - '0')
+	return &n
+}
+
+// parseDeps reads create --deps values: comma-separated "type:id" or bare ids.
+func parseDeps(values []string) []model.BeadDepRef {
+	var out []model.BeadDepRef
+	for _, v := range values {
+		for _, item := range strings.Split(v, ",") {
+			item = strings.TrimSpace(item)
+			typ, id := "", item
+			if k := strings.IndexByte(item, ':'); k >= 0 {
+				typ, id = strings.ToLower(strings.TrimSpace(item[:k])), strings.TrimSpace(item[k+1:])
+			}
+			if !IsID(id) {
+				continue
+			}
+			switch typ {
+			case "", "depends-on", "blocked-by":
+				typ = "blocks"
+			case "blocks":
+				typ = "blocked-by"
+			}
+			out = append(out, model.BeadDepRef{ID: id, Type: typ})
+		}
+	}
+	return out
+}
+
 func ids(pos []string, max int) []string {
 	var out []string
 	for _, p := range pos {
@@ -200,6 +289,14 @@ func parseCall(words []string) (call, bool) {
 		if id, ok := flag(flags, "--id"); ok && IsID(id) {
 			c.ev.IDs = []string{id}
 		}
+		c.ev.Type, _ = flag(flags, "--type", "-t")
+		if strings.HasPrefix(c.ev.Type, "$") {
+			c.ev.Type = ""
+		}
+		if p, ok := flag(flags, "--priority", "-p"); ok {
+			c.ev.Priority = parsePriority(p)
+		}
+		c.ev.Deps = parseDeps(flagValues(words[i+1:], "--deps"))
 	case "update", "claim":
 		c.ev.Op = model.BeadUpdate
 		c.ev.IDs = ids(pos, 0)
@@ -213,6 +310,7 @@ func parseCall(words []string) (call, bool) {
 			c.ev.Op = model.BeadClose
 		}
 		c.ev.Title, _ = flag(flags, "--title")
+		c.ev.Parent, _ = flag(flags, "--parent")
 	case "close", "done":
 		c.ev.Op, c.ev.Status = model.BeadClose, "closed"
 		c.ev.IDs = ids(pos, 0)
@@ -247,6 +345,7 @@ func parseCall(words []string) (call, bool) {
 	default:
 		return call{}, false
 	}
+	_, c.reasonGiven = flag(flags, "--reason", "-r", "--message", "-m", "--reason-file")
 	// A value that is a variable or a substitution says nothing.
 	for _, v := range []*string{&c.ev.Title, &c.ev.Reason} {
 		if strings.HasPrefix(*v, "$") {
@@ -319,7 +418,9 @@ type confirmation struct {
 	rest    string // close: what follows the id's " — " (title, then ": reason")
 	other   string // dep: the bead it depends on
 	depType string
-	used    bool
+	seen    *model.BeadSeen // JSON: the issue as printed
+	used    bool            // taken by a call
+	claimed bool            // a show call reported it in Seen
 }
 
 type output struct {
@@ -427,7 +528,32 @@ func (o *output) readJSON(s string) int {
 				return
 			}
 			title, _ := x["title"].(string)
-			o.conf = append(o.conf, confirmation{kind: confJSON, id: id, title: title})
+			sn := model.BeadSeen{ID: id, Title: title}
+			sn.Type, _ = x["issue_type"].(string)
+			sn.Status, _ = x["status"].(string)
+			if f, ok := x["priority"].(float64); ok && f >= 0 && f <= 9 && f == float64(int(f)) {
+				n := int(f)
+				sn.Priority = &n
+			}
+			if p, _ := x["parent"].(string); IsID(p) {
+				sn.Parent = p
+			}
+			if deps, ok := x["dependencies"].([]any); ok && sn.Parent == "" {
+				for _, d := range deps {
+					dm, _ := d.(map[string]any)
+					if t, _ := dm["type"].(string); t != "parent-child" {
+						continue
+					}
+					if iss, _ := dm["issue_id"].(string); iss != "" && iss != id {
+						continue
+					}
+					if p, _ := dm["depends_on_id"].(string); IsID(p) {
+						sn.Parent = p
+						break
+					}
+				}
+			}
+			o.conf = append(o.conf, confirmation{kind: confJSON, id: id, title: title, seen: &sn})
 		}
 	}
 	visit(v)
@@ -465,6 +591,14 @@ func (o *output) takeNew(kinds []confKind) *confirmation {
 	return nil
 }
 
+// defaultClosedTitle is the title of a close line that ends in bd's default reason, ": Closed".
+func defaultClosedTitle(rest string) string {
+	if t, ok := strings.CutSuffix(rest, ": Closed"); ok {
+		return strings.TrimSpace(t)
+	}
+	return ""
+}
+
 // match completes a call's event with what the output says about it. n is the number of bd
 // calls in the script.
 func (o *output) match(c call, res *Result, n int) model.BeadEvent {
@@ -477,6 +611,12 @@ func (o *output) match(c call, res *Result, n int) model.BeadEvent {
 		for _, id := range ev.IDs {
 			if strings.Contains(o.text, id) {
 				confirmed = append(confirmed, &confirmation{id: id})
+			}
+			for i := range o.conf {
+				if cf := &o.conf[i]; cf.kind == confJSON && cf.id == id && cf.seen != nil {
+					cf.claimed = true
+					ev.Seen = append(ev.Seen, *cf.seen)
+				}
 			}
 		}
 	case ev.Op == model.BeadDep:
@@ -514,6 +654,9 @@ func (o *output) match(c call, res *Result, n int) model.BeadEvent {
 		}
 	}
 	for _, cf := range confirmed {
+		if cf.kind == confJSON && cf.seen != nil && ev.Op != model.BeadShow {
+			ev.Seen = append(ev.Seen, *cf.seen)
+		}
 		switch {
 		case ev.Title == "" && cf.title != "":
 			ev.Title = cf.title
@@ -522,6 +665,8 @@ func (o *output) match(c call, res *Result, n int) model.BeadEvent {
 				if ev.Title == "" {
 					ev.Title = strings.TrimSuffix(cf.rest, ": "+ev.Reason)
 				}
+			} else if !c.reasonGiven && ev.Title == "" {
+				ev.Title = defaultClosedTitle(cf.rest)
 			}
 		}
 		if cf.kind == confDep && !c.explicitDep && cf.depType != "" {

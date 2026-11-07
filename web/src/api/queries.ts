@@ -22,6 +22,7 @@ import {
 import { daysBefore, localDay } from '../lib/time'
 import { ApiError, get } from './client'
 import type {
+  BeadDetail,
   BeadList,
   CostParams,
   CostTable,
@@ -44,6 +45,7 @@ export const queryKeys = {
   repos: () => ['repos'] as const,
   groups: (by: GroupDim) => ['groups', by] as const,
   beads: () => ['beads'] as const,
+  bead: (id: string) => ['bead', id] as const,
   sessions: (filters: SessionFilters) => ['sessions', filters] as const,
   trees: (filters: SessionFilters) => ['trees', filters] as const,
   session: (harness: string, id: string, messages = false) =>
@@ -105,6 +107,14 @@ export function useBeads(enabled = true): UseQueryResult<BeadList> {
     queryKey: queryKeys.beads(),
     queryFn: ({ signal }) => get<BeadList>('/api/beads', undefined, signal),
     enabled,
+  })
+}
+
+/** One bead: its family, the sessions that worked on it and every bd call that named it. */
+export function useBead(id: string): UseQueryResult<BeadDetail> {
+  return useQuery({
+    queryKey: queryKeys.bead(id),
+    queryFn: ({ signal }) => get<BeadDetail>(`/api/beads/${encodeURIComponent(id)}`, undefined, signal),
   })
 }
 

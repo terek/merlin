@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -107,6 +108,10 @@ func (a *API) handleRepos(w http.ResponseWriter, r *http.Request) {
 	a.json(w, http.StatusOK, RepoList{Repos: cat.Repos(catalog.Filter{})})
 }
 
+// groupKeys are the values of by= on GET /api/groups: four location keys, four bead keys.
+var groupKeys = []catalog.GroupBy{catalog.GroupDir, catalog.GroupCheckout, catalog.GroupRepo, catalog.GroupRemote,
+	catalog.GroupBeadDatabase, catalog.GroupPrefix, catalog.GroupFamily, catalog.GroupBead}
+
 func (a *API) handleGroups(w http.ResponseWriter, r *http.Request) {
 	cat := a.cat(w)
 	if cat == nil {
@@ -114,8 +119,12 @@ func (a *API) handleGroups(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	by := catalog.GroupBy(q.Get("by"))
-	if !slices.Contains([]catalog.GroupBy{catalog.GroupDir, catalog.GroupCheckout, catalog.GroupRepo, catalog.GroupRemote}, by) {
-		a.badParam(w, "by=%q: use dir, checkout, repo or remote", by)
+	if !slices.Contains(groupKeys, by) {
+		names := make([]string, len(groupKeys))
+		for i, k := range groupKeys {
+			names[i] = string(k)
+		}
+		a.badParam(w, "by=%q: use %s or %s", by, strings.Join(names[:len(names)-1], ", "), names[len(names)-1])
 		return
 	}
 	f, err := a.filter(q)
@@ -141,6 +150,21 @@ func (a *API) handleBeads(w http.ResponseWriter, r *http.Request) {
 	}
 	f := catalog.Filter{Repo: r.URL.Query().Get("repo")}
 	a.json(w, http.StatusOK, BeadList{Prefixes: cat.Prefixes(f), Families: cat.Families(f), Databases: cat.BeadDatabases()})
+}
+
+// handleBead serves GET /api/beads/{id}: one bead with its family, sessions and timeline.
+func (a *API) handleBead(w http.ResponseWriter, r *http.Request) {
+	cat := a.cat(w)
+	if cat == nil {
+		return
+	}
+	id := r.PathValue("id")
+	b, ok := cat.Bead(id)
+	if !ok {
+		a.fail(w, http.StatusNotFound, CodeNotFound, fmt.Sprintf("no such bead: %s", id))
+		return
+	}
+	a.json(w, http.StatusOK, b)
 }
 
 func (a *API) handleSessions(w http.ResponseWriter, r *http.Request) {

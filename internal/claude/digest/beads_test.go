@@ -64,7 +64,7 @@ func TestBeadEventsInAFile(t *testing.T) {
 	ip := func(i int) *int { return &i }
 	want := []model.BeadEvent{
 		{At: tsTime(t, 2), Turn: ip(0), MessageID: "msg_m1", ToolUseID: "toolu_b1", Op: model.BeadCreate,
-			IDs: []string{"acme-e1.1"}, Parent: "acme-e1", Title: "Widget", Cwd: "/home/dev/acme", Outcome: model.BeadOK},
+			IDs: []string{"acme-e1.1"}, Parent: "acme-e1", Type: "task", Title: "Widget", Cwd: "/home/dev/acme", Outcome: model.BeadOK},
 		{At: tsTime(t, 31), Turn: ip(1), MessageID: "msg_m3", ToolUseID: "toolu_b3", Op: model.BeadShow,
 			IDs: []string{"acme-e1.1"}, Cwd: "/home/dev/acme/sub", Outcome: model.BeadUnknown},
 	}

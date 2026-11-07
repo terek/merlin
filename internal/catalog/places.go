@@ -53,15 +53,16 @@ type RepoRef struct {
 	Gone   bool   `json:"gone,omitempty"`
 }
 
-// BeadRef is a bead as the registry knows it.
+// BeadRef is a bead as the fold knows it (registry snapshots and the sessions' bd calls).
 type BeadRef struct {
 	ID       string `json:"id"`
 	Title    string `json:"title,omitempty"`
 	Type     string `json:"type,omitempty"`
 	Status   string `json:"status,omitempty"`
 	Parent   string `json:"parent,omitempty"`
-	Root     string `json:"root"`     // the root of its family (itself when it has no parent)
-	Database string `json:"database"` // the registry key (project id)
+	Root     string `json:"root"`             // the root of its family (itself when it has no parent)
+	Database string `json:"database"`         // the folded database key: a project id, or "prefix:<p>"
+	Source   string `json:"source,omitempty"` // export, sessions or implied (beads.Issue.Source)
 }
 
 // BeadShare is a bead one session worked on, with the share of the session's best cost spent
@@ -108,7 +109,10 @@ type facets struct {
 	v      *view
 	gen    int
 	places Places
-	bead   map[string]*BeadRef // id -> bead, for the ids the registry knows
+	fold   *beads.Folded
+	bead   map[string]*BeadRef // id -> bead, for every bead the fold knows
+	kids   map[string][]string // id -> direct children, in id order
+	hint   map[string]string   // family root without a title -> title of its earliest titled member
 	prefix map[string]string   // bead id prefix -> database key
 	dbAt   map[string]string   // .beads directory -> database key
 	repo   map[string]RepoRef  // git common dir -> ref
@@ -173,35 +177,127 @@ func (c *Catalog) prepare(f Filter, need bool) (*view, *facets, Filter) {
 
 func buildFacets(v *view, p Places, gen int) *facets {
 	fv := &facets{v: v, gen: gen, places: p, bead: map[string]*BeadRef{}, prefix: map[string]string{},
-		repo: map[string]RepoRef{}, dbAt: map[string]string{}}
+		kids: map[string][]string{}, hint: map[string]string{}, repo: map[string]RepoRef{}, dbAt: map[string]string{}}
 	for i := range p.Beads {
-		db := &p.Beads[i]
-		for _, dir := range db.Dirs {
-			fv.dbAt[dir] = db.Key
-		}
-		for _, pre := range db.Prefixes {
-			if _, dup := fv.prefix[pre]; !dup {
-				fv.prefix[pre] = db.Key
-			}
-		}
-		parent := map[string]string{}
-		for _, is := range db.Issues {
-			parent[is.ID] = is.Parent
-		}
-		for _, is := range db.Issues {
-			if _, dup := fv.bead[is.ID]; dup {
-				continue // the same id in two databases: the first (by key) wins
-			}
-			fv.bead[is.ID] = &BeadRef{ID: is.ID, Title: is.Title, Type: is.Type, Status: is.Status,
-				Parent: is.Parent, Root: rootOf(is.ID, parent), Database: db.Key}
+		for _, dir := range p.Beads[i].Dirs {
+			fv.dbAt[dir] = p.Beads[i].Key
 		}
 	}
 	fv.indexRepos()
+
+	// Every owned bd call of every session (v.sessions is in (harness, id) order), in digest
+	// order, goes into the fold with the database its directory resolves to.
+	var events []beads.Observed
+	for _, s := range v.sessions {
+		name := s.key.Harness + "/" + s.key.ID
+		for _, e := range ownedBeads(s) {
+			events = append(events, beads.Observed{Session: name, DB: fv.hereOf(e.Cwd), Event: e})
+		}
+	}
+	fv.fold = beads.Fold(p.Beads, events)
+	fv.indexBeads()
+
 	fv.ses = make([]sessFacets, len(v.sessions))
 	for _, s := range v.sessions {
 		fv.ses[s.idx] = fv.session(s)
 	}
 	return fv
+}
+
+// indexBeads fills the bead, prefix, children and hint lookups from the folded databases.
+func (fv *facets) indexBeads() {
+	parent := map[string]string{}
+	issues := map[string]beads.Issue{}
+	for _, db := range fv.fold.Databases {
+		for _, pre := range db.Prefixes {
+			if _, dup := fv.prefix[pre]; !dup {
+				fv.prefix[pre] = db.Key
+			}
+		}
+		for _, is := range db.Issues {
+			parent[is.ID] = is.Parent
+			issues[is.ID] = is
+		}
+	}
+	ids := slices.Sorted(maps.Keys(issues))
+	for _, db := range fv.fold.Databases {
+		for _, is := range db.Issues {
+			fv.bead[is.ID] = &BeadRef{ID: is.ID, Title: is.Title, Type: is.Type, Status: is.Status,
+				Parent: is.Parent, Root: rootOf(is.ID, parent), Database: db.Key, Source: is.Source}
+		}
+	}
+	slices.SortFunc(ids, func(a, b string) int {
+		switch {
+		case idLess(a, b):
+			return -1
+		case idLess(b, a):
+			return 1
+		}
+		return 0
+	})
+	// The hint of a family whose root has no title: the title of its earliest member (by
+	// first sighting, then id) that has one.
+	earliest := map[string]beads.Issue{}
+	for _, id := range ids {
+		is := issues[id]
+		if is.Parent != "" {
+			fv.kids[is.Parent] = append(fv.kids[is.Parent], id)
+		}
+		root := fv.bead[id].Root
+		if is.Title == "" || issues[root].Title != "" {
+			continue
+		}
+		if cur, ok := earliest[root]; !ok || is.FirstSeen.Before(cur.FirstSeen) {
+			earliest[root] = is
+		}
+	}
+	for root, is := range earliest {
+		fv.hint[root] = is.Title
+	}
+}
+
+// hereOf is the registry key of the bead database at a directory: the .beads directory of its
+// repository entry. It is empty for no directory, no entry or no database.
+func (fv *facets) hereOf(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	if r, ok := fv.places.Repos[filepath.Clean(cwd)]; ok && r.Beads != "" {
+		return fv.dbAt[filepath.Clean(r.Beads)]
+	}
+	return ""
+}
+
+// ownedBeads is the session's bd calls in digest order, without those copied from the session
+// it was forked from or resumed out of.
+func ownedBeads(s *sess) []model.BeadEvent {
+	d := s.d
+	if len(d.Beads) == 0 {
+		return nil
+	}
+	owned := make(map[string]bool, len(s.own))
+	for _, m := range s.own {
+		owned[m.ID] = true
+	}
+	held := make(map[string]bool, len(d.Messages))
+	for i := range d.Messages {
+		held[d.Messages[i].ID] = true
+	}
+	var out []model.BeadEvent
+	for _, e := range d.Beads {
+		if e.MessageID != "" && held[e.MessageID] && !owned[e.MessageID] {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// names reports whether the call names bead id for the purposes of cost and spans (§6.6). A
+// call's own ids always count; so do those of a call that only a script's output names, unless
+// the directory has a database and the id belongs to another one (output quoted from elsewhere).
+func (fv *facets) names(e model.BeadEvent, id, here string) bool {
+	return !e.OutputOnly || here == "" || fv.fold.DatabaseOf(id) == here
 }
 
 // rootOf follows parent links to the top of a bead's family; a parent the database does not
@@ -299,7 +395,8 @@ type span struct {
 
 // beadSpans works out which beads each owned message of a session was spent on, and returns
 // the bd calls that count (not failed, not copied from another session, not show) with their
-// ids narrowed to beads the registry knows.
+// ids narrowed to the ones that count for the call (names). A bead needs no registry: the fold
+// knows every id a call names.
 //
 // Per thread (the main agent, each agent): a bead is worked on from its claim (bd update
 // --claim, or --status in_progress) to its close (or another status, or the thread's end).
@@ -310,41 +407,25 @@ type span struct {
 // the thread that launched it worked on at that time.
 func (fv *facets) beadSpans(s *sess) (func(*model.Message) []string, []model.BeadEvent) {
 	d := s.d
-	owned := make(map[string]bool, len(s.own))
-	for _, m := range s.own {
-		owned[m.ID] = true
-	}
-	held := map[string]bool{}
-	for i := range d.Messages {
-		held[d.Messages[i].ID] = true
-	}
 	var kept []model.BeadEvent
 	byThread := map[string][]model.BeadEvent{}
-	for _, e := range d.Beads {
+	for _, e := range ownedBeads(s) {
 		if e.Outcome == model.BeadFailed || e.Op == model.BeadShow {
 			continue
 		}
-		if e.MessageID != "" && held[e.MessageID] && !owned[e.MessageID] {
-			continue // copied from the session that made the call
-		}
-		// A call that ran in a repository with a bead database of its own names beads of
-		// that database: an id of another one is output quoted from elsewhere (a script
-		// printing old transcripts), not a call.
-		here := ""
-		if r, ok := fv.places.Repos[filepath.Clean(e.Cwd)]; ok && e.Cwd != "" && r.Beads != "" {
-			here = fv.dbAt[filepath.Clean(r.Beads)]
+		here := fv.hereOf(e.Cwd)
+		named := e.IDs
+		if e.Op == model.BeadDep && len(named) > 1 {
+			named = named[:1] // the dependency target is named, not worked on
 		}
 		var ids []string
-		for _, id := range e.IDs {
-			if b, ok := fv.bead[id]; ok && (here == "" || b.Database == here) {
+		for _, id := range named {
+			if _, ok := fv.bead[id]; ok && fv.names(e, id, here) {
 				ids = append(ids, id)
 			}
 		}
 		if len(ids) == 0 {
 			continue
-		}
-		if e.Op == model.BeadDep && len(ids) > 1 {
-			ids = ids[:1] // the dependency target is named, not worked on
 		}
 		e.IDs = ids
 		kept = append(kept, e)
@@ -739,10 +820,12 @@ type BeadGroup struct {
 
 // FamilyGroup is a bead family: a root bead and everything below it. Beads are the root and
 // the members some session worked on, in id order; Sessions counts the distinct sessions that
-// worked on any of them, USD sums their shares. Issues and Closed count the family in the
-// registry.
+// worked on any of them, USD sums their shares. Issues and Closed count the family as the fold
+// knows it (implied parents included). Hint names a family whose root has no title: the title of
+// its earliest member that has one.
 type FamilyGroup struct {
 	Root           BeadRef     `json:"root"`
+	Hint           string      `json:"hint,omitempty"`
 	Sessions       int         `json:"sessions"`
 	USD            float64     `json:"usd"`
 	LastActivityAt time.Time   `json:"lastActivityAt,omitzero"`
@@ -780,7 +863,7 @@ func (c *Catalog) Families(f Filter) []FamilyGroup {
 			b.LastActivityAt = later(b.LastActivityAt, sf.lastOn[id])
 			fam := fams[ref.Root]
 			if fam == nil {
-				fam = &FamilyGroup{Root: *fv.bead[ref.Root]}
+				fam = &FamilyGroup{Root: *fv.bead[ref.Root], Hint: fv.hint[ref.Root]}
 				fams[ref.Root] = fam
 				famSessions[ref.Root] = map[int]bool{}
 			}
@@ -891,15 +974,6 @@ func (c *Catalog) Prefixes(f Filter) []PrefixGroup {
 		return out[i].Prefix < out[j].Prefix
 	})
 	return out
-}
-
-// Bead returns a bead the registry knows.
-func (c *Catalog) Bead(id string) (BeadRef, bool) {
-	_, fv := c.views()
-	if b, ok := fv.bead[id]; ok {
-		return *b, true
-	}
-	return BeadRef{}, false
 }
 
 // idLess orders bead ids with their dotted numbers compared as numbers (x.2 before x.10).

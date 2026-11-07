@@ -11,6 +11,8 @@ func ev(op model.BeadOp, outcome model.BeadOutcome, ids ...string) model.BeadEve
 	return model.BeadEvent{Op: op, IDs: ids, Outcome: outcome}
 }
 
+func intp(n int) *int { return &n }
+
 func TestParse(t *testing.T) {
 	ok, failed, unknown := model.BeadOK, model.BeadFailed, model.BeadUnknown
 	with := func(e model.BeadEvent, f func(*model.BeadEvent)) model.BeadEvent { f(&e); return e }
@@ -82,7 +84,7 @@ func TestParse(t *testing.T) {
 			cwd:    "/w",
 			res:    &Result{Output: "✓ Created issue: acme-e1.3 — Add a widget\n  Priority: P2\n  Status: open\n"},
 			want: []model.BeadEvent{with(ev(model.BeadCreate, ok, "acme-e1.3"), func(e *model.BeadEvent) {
-				e.Title, e.Parent, e.Cwd = "Add a widget", "acme-e1", "/w"
+				e.Title, e.Parent, e.Cwd, e.Type, e.Priority = "Add a widget", "acme-e1", "/w", "task", intp(2)
 			})},
 		},
 		{
@@ -90,7 +92,9 @@ func TestParse(t *testing.T) {
 			script: "bd create --title='Cards' --description='x y' --json",
 			res: &Result{Output: "{\n  \"created_at\": \"2026-01-01T00:00:00Z\",\n  \"id\": \"cards-b2d\",\n  \"title\": \"Cards\"\n}\n" +
 				"beads: auto-export warning: no Dolt remote configured.\n"},
-			want: []model.BeadEvent{with(ev(model.BeadCreate, ok, "cards-b2d"), func(e *model.BeadEvent) { e.Title = "Cards" })},
+			want: []model.BeadEvent{with(ev(model.BeadCreate, ok, "cards-b2d"), func(e *model.BeadEvent) {
+				e.Title, e.Seen = "Cards", []model.BeadSeen{{ID: "cards-b2d", Title: "Cards"}}
+			})},
 		},
 		{
 			name:   "create captured in a variable, then used",
@@ -225,7 +229,7 @@ func TestParse(t *testing.T) {
 			cwd:    "/work/acme",
 			res:    &Result{Output: "landed feature-x\n✓ Closed acme-k4.2 — The feature: merged\n"},
 			want: []model.BeadEvent{with(ev(model.BeadClose, ok, "acme-k4.2"), func(e *model.BeadEvent) {
-				e.Status, e.Cwd = "closed", "/work/acme"
+				e.Status, e.Cwd, e.OutputOnly = "closed", "/work/acme", true
 			})},
 		},
 		{
@@ -243,6 +247,102 @@ func TestParse(t *testing.T) {
 			script: "echo acme-a acme-b | xargs -n1 bd close",
 			res:    &Result{Output: "✓ Closed acme-a — A\n✓ Closed acme-b — B\n"},
 			want:   []model.BeadEvent{with(ev(model.BeadClose, ok, "acme-a", "acme-b"), func(e *model.BeadEvent) { e.Status = "closed" })},
+		},
+		{
+			name:   "create with type, priority and deps",
+			script: `bd create --title "Plan" -t epic -p P1 --deps "blocks:x-1,parent-child:x-2,x-3" --deps depends-on:x-4,bogus`,
+			res:    &Result{Output: "✓ Created issue: x-9 — Plan\n"},
+			want: []model.BeadEvent{with(ev(model.BeadCreate, ok, "x-9"), func(e *model.BeadEvent) {
+				e.Title, e.Type, e.Priority = "Plan", "epic", intp(1)
+				e.Deps = []model.BeadDepRef{{ID: "x-1", Type: "blocked-by"}, {ID: "x-2", Type: "parent-child"},
+					{ID: "x-3", Type: "blocks"}, {ID: "x-4", Type: "blocks"}}
+			})},
+		},
+		{
+			name:   "create with a priority out of range",
+			script: `bd create --title "T" --type bug -p 7`,
+			res:    &Result{Output: "✓ Created issue: x-8 — T\n"},
+			want:   []model.BeadEvent{with(ev(model.BeadCreate, ok, "x-8"), func(e *model.BeadEvent) { e.Title, e.Type = "T", "bug" })},
+		},
+		{
+			name:   "update --parent",
+			script: "bd update acme-x1y --parent acme-e1",
+			res:    &Result{Output: "✓ Updated issue: acme-x1y — T\n"},
+			want: []model.BeadEvent{with(ev(model.BeadUpdate, ok, "acme-x1y"), func(e *model.BeadEvent) {
+				e.Parent, e.Title = "acme-e1", "T"
+			})},
+		},
+		{
+			name:   "close without a reason: title split from the default reason",
+			script: "bd close acme-x1y",
+			res:    &Result{Output: "✓ Closed acme-x1y — Fix: the form: Closed\n"},
+			want: []model.BeadEvent{with(ev(model.BeadClose, ok, "acme-x1y"), func(e *model.BeadEvent) {
+				e.Status, e.Title = "closed", "Fix: the form"
+			})},
+		},
+		{
+			name:   "close with a reason variable: no title from the line",
+			script: `bd close acme-x1y --reason "$R"`,
+			res:    &Result{Output: "✓ Closed acme-x1y — The form: Closed\n"},
+			want:   []model.BeadEvent{with(ev(model.BeadClose, ok, "acme-x1y"), func(e *model.BeadEvent) { e.Status = "closed" })},
+		},
+		{
+			name:   "close with a reason: existing rule",
+			script: `bd close acme-x1y --reason "done"`,
+			res:    &Result{Output: "✓ Closed acme-x1y — The form: done\n"},
+			want: []model.BeadEvent{with(ev(model.BeadClose, ok, "acme-x1y"), func(e *model.BeadEvent) {
+				e.Status, e.Reason, e.Title = "closed", "done", "The form"
+			})},
+		},
+		{
+			name:   "output-only close",
+			script: "tools/land.sh",
+			res:    &Result{Output: "✓ Closed acme-k4.2 — The feature: Closed\n"},
+			want: []model.BeadEvent{with(ev(model.BeadClose, ok, "acme-k4.2"), func(e *model.BeadEvent) {
+				e.Status, e.Title, e.OutputOnly = "closed", "The feature", true
+			})},
+		},
+		{
+			name:   "create --json: seen snapshot",
+			script: "bd create --title 'Cards' --json",
+			res: &Result{Output: `{"id":"cards-b2d","title":"Cards","issue_type":"task","status":"open","priority":2,` +
+				`"dependencies":[{"issue_id":"cards-b2d","depends_on_id":"cards-e1","type":"parent-child"}]}` + "\n"},
+			want: []model.BeadEvent{with(ev(model.BeadCreate, ok, "cards-b2d"), func(e *model.BeadEvent) {
+				e.Title = "Cards"
+				e.Seen = []model.BeadSeen{{ID: "cards-b2d", Title: "Cards", Type: "task", Status: "open", Priority: intp(2), Parent: "cards-e1"}}
+			})},
+		},
+		{
+			name:   "show --json",
+			script: "bd show acme-x1y --json",
+			res:    &Result{Output: `[{"id":"acme-x1y","title":"T","issue_type":"bug","status":"in_progress","priority":0,"parent":"acme-e1"}]` + "\n"},
+			want: []model.BeadEvent{with(ev(model.BeadShow, ok, "acme-x1y"), func(e *model.BeadEvent) {
+				e.Seen = []model.BeadSeen{{ID: "acme-x1y", Title: "T", Type: "bug", Status: "in_progress", Priority: intp(0), Parent: "acme-e1"}}
+			})},
+		},
+		{
+			name:   "list --json: one show event",
+			script: "bd list --json",
+			cwd:    "/w",
+			res: &Result{Output: `[{"id":"acme-a1","title":"A","status":"open","priority":1,"issue_type":"task"},` +
+				`{"id":"acme-b2","title":"B","status":"closed","priority":3,"issue_type":"epic"}]` + "\n"},
+			want: []model.BeadEvent{with(ev(model.BeadShow, ok, "acme-a1", "acme-b2"), func(e *model.BeadEvent) {
+				e.Seen = []model.BeadSeen{
+					{ID: "acme-a1", Title: "A", Type: "task", Status: "open", Priority: intp(1)},
+					{ID: "acme-b2", Title: "B", Type: "epic", Status: "closed", Priority: intp(3)},
+				}
+			})},
+		},
+		{
+			name:   "list without JSON: no event",
+			script: "bd list --status open",
+			res:    &Result{Output: "○ acme-a1 [P1] [task] - A\n"},
+		},
+		{
+			name:   "dep add --type parent-child",
+			script: "bd dep add acme-a acme-b -t parent-child",
+			res:    &Result{Output: "✓ Added dependency: acme-a (A) depends on acme-b (B) (blocks)\n"},
+			want:   []model.BeadEvent{with(ev(model.BeadDep, ok, "acme-a", "acme-b"), func(e *model.BeadEvent) { e.DepType = "parent-child" })},
 		},
 		{
 			name:   "absolute bd path, prefix with dashes",

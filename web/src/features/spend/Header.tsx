@@ -9,7 +9,7 @@ import type { SessionDetail, SessionPlaces } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { approxMoney } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
-import { sessionPath } from '../../lib/paths'
+import { beadPath, sessionPath } from '../../lib/paths'
 import { type PlaceEntry, placeLink, sessionPlaces } from '../../lib/places'
 import { isRunning, prName, promptCount, sameKey, sessionTitle } from '../../lib/session'
 import { fullTime, parseTime, spanMs } from '../../lib/time'
@@ -145,17 +145,24 @@ function Places({ places }: { places: SessionPlaces }) {
       {beads.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
           {shown.map((b) => (
-            <Link
-              key={b.id}
-              to={placeSearch({ group: 'bead', bead: b.id })}
-              className="inline-flex min-w-0 max-w-96 items-center gap-1.5"
-              title={`${b.id}${b.title ? ` — ${b.title}` : ''}\n${b.status ?? ''} · ${b.ops.join(', ')}\nThe sessions that worked on it`}
-            >
+            <span key={b.id} className="inline-flex min-w-0 max-w-96 items-center gap-1.5">
               <BeadStatus status={b.status} />
-              <span className="shrink-0 whitespace-nowrap font-mono text-meta">{b.id}</span>
-              <span className="min-w-0 truncate text-fg">{b.title}</span>
-              <Money usd={b.usd} dim />
-            </Link>
+              <Link
+                to={beadPath(b.id)}
+                className="shrink-0 whitespace-nowrap font-mono text-meta"
+                title={`${b.id}${b.title ? ` — ${b.title}` : ''}\n${b.status ?? ''} · ${b.ops.join(', ')}\nThe bead's page`}
+              >
+                {b.id}
+              </Link>
+              <Link
+                to={placeSearch({ group: 'bead', bead: b.id })}
+                className="inline-flex min-w-0 items-center gap-1.5"
+                title="The sessions that worked on it"
+              >
+                <span className="min-w-0 truncate text-fg">{b.title}</span>
+                <Money usd={b.usd} dim />
+              </Link>
+            </span>
           ))}
           {beads.length > shown.length && (
             <button type="button" className="text-accent hover:underline" onClick={() => setAll(true)}>

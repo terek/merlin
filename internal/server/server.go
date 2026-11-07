@@ -77,6 +77,7 @@ func New(o Options) *API {
 	a.route("/api/repos", a.handleRepos)
 	a.route("/api/groups", a.handleGroups)
 	a.route("/api/beads", a.handleBeads)
+	a.route("/api/beads/{id}", a.handleBead)
 	a.route("/api/sessions", a.handleSessions)
 	a.route("/api/sessions/{harness}/{id}", a.handleSession)
 	a.route("/api/search", a.handleSearch)

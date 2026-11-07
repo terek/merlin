@@ -108,7 +108,7 @@ func TestGroupsRoute(t *testing.T) {
 	}
 	for _, path := range []string{"/api/groups", "/api/groups?by=branch", "/api/groups?by=", "/api/groups?by=repo&touched=2"} {
 		e := r.wantError(path, 400, CodeInvalidParameter)
-		if !strings.HasPrefix(path, "/api/groups?by=repo") && !strings.Contains(e.Error.Message, "dir, checkout, repo or remote") {
+		if !strings.HasPrefix(path, "/api/groups?by=repo") && !strings.Contains(e.Error.Message, "dir, checkout, repo, remote, beadDatabase, prefix, family or bead") {
 			t.Errorf("%s: message %q does not name the allowed values", path, e.Error.Message)
 		}
 	}

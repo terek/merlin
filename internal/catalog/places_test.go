@@ -47,12 +47,14 @@ func beadSession() *model.SessionDigest {
 	}
 	failed := ev(9, "", model.BeadClose, "x-e")
 	failed.Outcome = model.BeadFailed
+	quoted := ev(6, "", model.BeadClose, "y-z") // ran in /r: only the script's output names it
+	quoted.OutputOnly = true
 	d.Beads = []model.BeadEvent{
 		ev(2, "", model.BeadClaim, "x-a"),
 		ev(3, "ag", model.BeadClaim, "x-c"),
 		ev(4, "ag", model.BeadClose, "x-c"),
 		ev(5, "", model.BeadClose, "x-a"),
-		ev(6, "", model.BeadClose, "y-z"), // ran in /r: quoted output
+		quoted,
 		ev(8, "", model.BeadClose, "x-b"),
 		failed,
 	}
@@ -149,7 +151,8 @@ func TestPlacesFiltersAndRollups(t *testing.T) {
 	if len(pres) != 1 || pres[0].Prefix != "x" {
 		t.Fatalf("prefixes = %+v, want x alone", pres)
 	}
-	if x := pres[0]; x.Sessions != 1 || x.Issues != 4 || x.Closed != 1 || x.Families != 3 || x.Database != "db-r" {
+	// Closed 3: the fold also applies the session's close calls (x-a, x-c; x-b the export has).
+	if x := pres[0]; x.Sessions != 1 || x.Issues != 4 || x.Closed != 3 || x.Families != 3 || x.Database != "db-r" {
 		t.Errorf("prefix x = %+v", x)
 	}
 	wantNear(t, "prefix x", pres[0].USD, 3.5+3.5+2)

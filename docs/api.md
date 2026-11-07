@@ -79,6 +79,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/repos` | `RepoList` |
 | `GET /api/groups?by=` | `GroupList` |
 | `GET /api/beads` | `BeadList` |
+| `GET /api/beads/{id}` | `BeadDetail` |
 | `GET /api/sessions` | `SessionList` |
 | `GET /api/sessions/{harness}/{id}` | `SessionDetail` |
 | `GET /api/search?q=` | `SearchResult` |
@@ -957,10 +958,50 @@ session first, each with `prefix` (merlin for merlin-t8s.48), `database`, `sessi
 (of the sessions), `issues` and `closed` (its beads in the database) and `families` (those sessions
 worked on); `bead=<prefix>` as a filter keeps every session that worked on a bead of the prefix.
 `families[]`, most recently worked on first, each
-with `root` (a `BeadRef`: `id`, `title`, `type`, `status`, `parent`, `root`, `database`),
+with `hint` (the title of its earliest member that has one, when the root has no title) and `root` (a
+`BeadRef`: `id`, `title`, `type`, `status`, `parent`, `root`, `database`, `source`),
 `sessions` (distinct), `usd`, `lastActivityAt` (the last bd call), `issues` and `closed` (the
 family in the database) and `beads[]` (the root and every member a session worked on, in id order,
 each with `sessions`, `usd`, `lastActivityAt`); `databases` is how many bead databases are known.
+
+`BeadRef.database` is the registry key of the bead database: a project id, or `prefix:<name>` for
+beads that only sessions' bd calls revealed. `BeadRef.source` says how the bead is known: `export`
+(the database's export), `sessions` (a bd call in some session) or `implied` (named only as the
+parent of another bead, so it may have no title).
+
+`GET /api/beads/{id}` (`BeadDetail`): one bead, with its family, the sessions that worked on it and
+every bd call that named it. 404 `not_found` when no database or session names it.
+
+```json
+{
+  "id": "acme-a1.1", "title": "Parse the config", "type": "task", "status": "closed",
+  "parent": "acme-a1", "root": "acme-a1", "database": "p-acme", "source": "export",
+  "priority": 2, "createdAt": "2026-10-01T10:00:00Z", "closedAt": "2026-10-01T10:40:00Z",
+  "closeReason": "done", "firstSeen": "2026-10-01T10:01:00Z", "lastSeen": "2026-10-01T10:40:00Z",
+  "ancestors": [{ "id": "acme-a1", "title": "Config", "type": "epic", "status": "open",
+                  "root": "acme-a1", "database": "p-acme", "source": "export" }],
+  "children": [{ "id": "acme-a1.1.1", "title": "Tests", "parent": "acme-a1.1", "root": "acme-a1",
+                 "database": "p-acme", "source": "sessions" }],
+  "sessions": [{ "harness": "claude", "id": "0f8e…", "title": "Wire up the parser",
+                 "project": "/home/dev/acme", "usd": 1.42, "ops": ["claim", "close"] }],
+  "timeline": [{ "at": "2026-10-01T10:01:00Z", "harness": "claude", "sessionId": "0f8e…",
+                 "agentId": "a1b2", "turn": 3, "agentTurn": 1, "op": "claim",
+                 "status": "in_progress", "outcome": "ok", "title": "Parse the config",
+                 "reason": "" }]
+}
+```
+
+`id`, `title`, `type`, `status`, `parent`, `root`, `database` and `source` are the `BeadRef`.
+`priority` (0 is most urgent), `createdAt`, `closedAt` and `closeReason` come from the database
+export and are left out when unknown. `firstSeen` and `lastSeen` are the first and last bd call that
+named the bead. `ancestors[]` is the parent chain (`BeadRef`s), the parent first and the family
+root last. `children[]` are the direct children in id order. `sessions[]` are those that ran any bd
+call on it but `show`, the largest `usd` first: `harness`, `id`, `title`, `project`, `usd` (its share
+of the session's best cost) and `ops` (the bd operations it ran on the bead, in order of first
+use). `timeline[]` is every bd call that named it, in time order across sessions and agents: `at`,
+`harness`, `sessionId`, `agentId` (empty for the main agent), `turn` and `agentTurn` (when known),
+`op`, `status` (the status the call set), `outcome` (`ok` or `failed`; failed calls are history
+too), `title` and `reason` (the close reason).
 
 A session summary carries `repo` (`RepoRef`), `checkout`, `remote` and `beads[]` (`id`, `title`,
 `status`, `root`; most spent on first). The detail carries `places`: `repo`, `checkout`, `remote`,
@@ -987,12 +1028,27 @@ that repo; the `remote` is the repo's. Edits outrank commands, ties go to the st
 and then to the first in sort order, and a directory in no repository counts for nothing. A session
 therefore never has a checkout outside its repo.
 
-`GET /api/groups?by=dir|checkout|repo|remote` (`GroupList`): `groups[]` with `key`, `name` (the
-display name: `repos.Name` for a repo, the base name of a directory, the remote itself), `remote`,
-`gone` (no live entry has this value), `sessions` (not scripted runs), `lastActivityAt` and `cost`
-(`Money`, scripted runs included), most recently active first and the group with `key: ""` last. It
-takes the filters of `/api/sessions`. A missing or unknown `by` is a 400 naming the four values.
-Two clones of one remote are two groups under `repo` and one under `remote`.
+`GET /api/groups?by=` (`GroupList`), `by` one of `dir`, `checkout`, `repo`, `remote`, `beadDatabase`,
+`prefix`, `family`, `bead`: `groups[]` with `key`, `name` (the display name: `repos.Name` for a repo,
+the base name of a directory, the remote itself), `remote`, `gone` (no live entry has this value),
+`sessions` (not scripted runs), `lastActivityAt` and `cost` (`Money`, scripted runs included), most
+recently active first and the group with `key: ""` last. It takes the filters of `/api/sessions`. A
+missing or unknown `by` is a 400 naming all eight values. Two clones of one remote are two groups
+under `repo` and one under `remote`.
+
+The four bead keys group sessions by the beads they worked on:
+
+| Key | Group key | Name |
+|---|---|---|
+| `beadDatabase` | the folded bead database (`BeadRef.database`: a project id, or `prefix:<name>`) | the database's name |
+| `prefix` | the id prefix (`acme` for `acme-a1.2`) | the prefix |
+| `family` | the id of the root of the bead's family | the root's title, else its `hint` |
+| `bead` | the bead id | its title |
+
+A session counts under the one value that holds the largest share of its bead-attributed cost (the
+split of `by=bead` under [Groupings](#groupings-get-apirepos-and-get-apibeads)); ties go to the first in sort order.
+Sessions that worked on no bead count under key `""`, named `(no bead)`, which comes last. Every
+table adds up to the `by=project` total.
 
 ## GET /api/moments
 

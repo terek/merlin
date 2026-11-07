@@ -48,3 +48,8 @@ export function sessionPath(key: { harness: string; id: string }, hash?: string)
   const base = `/s/${encodeURIComponent(key.harness)}/${encodeURIComponent(key.id)}`
   return hash ? `${base}#${hash}` : base
 }
+
+/** The app path of a bead's page. */
+export function beadPath(id: string): string {
+  return `/bead/${encodeURIComponent(id)}`
+}

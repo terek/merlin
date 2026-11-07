@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/terek/merlin/internal/beads"
 	"github.com/terek/merlin/internal/model"
 	"github.com/terek/merlin/internal/repos"
 )
@@ -293,6 +294,13 @@ const (
 	GroupCheckout GroupBy = "checkout" // its primary checkout
 	GroupRepo     GroupBy = "repo"     // its primary repository (git common dir)
 	GroupRemote   GroupBy = "remote"   // its primary remote
+
+	// The bead keys (docs/beads-and-repos.md §6.8): a session counts under the one value that
+	// holds the largest share of its cost; sessions on no bead count under NoBead.
+	GroupBeadDatabase GroupBy = "beadDatabase" // the folded database of the bead
+	GroupPrefix       GroupBy = "prefix"       // the id prefix of the bead
+	GroupFamily       GroupBy = "family"       // the root of the bead's family
+	GroupBead         GroupBy = "bead"         // the bead itself
 )
 
 // Group is one value of a location key with the sessions that count under it. Sessions does
@@ -311,7 +319,8 @@ type Group struct {
 // Groups lists the values of a location key among the sessions selected by f, most recently
 // active first; the group with the empty key comes last.
 func (c *Catalog) Groups(by GroupBy, f Filter) ([]Group, error) {
-	if !slices.Contains([]GroupBy{GroupDir, GroupCheckout, GroupRepo, GroupRemote}, by) {
+	if !slices.Contains([]GroupBy{GroupDir, GroupCheckout, GroupRepo, GroupRemote, GroupBeadDatabase,
+		GroupPrefix, GroupFamily, GroupBead}, by) {
 		return nil, fmt.Errorf("catalog: cannot group by %q", by)
 	}
 	v, fv, f := c.prepare(f, true)
@@ -331,6 +340,8 @@ func (c *Catalog) Groups(by GroupBy, f Filter) ([]Group, error) {
 			key = sf.repo
 		case GroupRemote:
 			key = sf.remote
+		default:
+			key = fv.topValue(sf, by)
 		}
 		g := groups[key]
 		if g == nil {
@@ -367,7 +378,8 @@ func (fv *facets) group(by GroupBy, key string) *Group {
 	g := &Group{Key: key}
 	if key == "" {
 		g.Name = map[GroupBy]string{GroupDir: "(no directory)", GroupCheckout: "(no checkout)",
-			GroupRepo: "(no repository)", GroupRemote: "(no remote)"}[by]
+			GroupRepo: "(no repository)", GroupRemote: "(no remote)", GroupBeadDatabase: "(no bead)",
+			GroupPrefix: "(no bead)", GroupFamily: "(no bead)", GroupBead: "(no bead)"}[by]
 		return g
 	}
 	switch by {
@@ -390,6 +402,52 @@ func (fv *facets) group(by GroupBy, key string) *Group {
 	case GroupRemote:
 		g.Name, g.Remote = key, key
 		g.Gone = !fv.liveRemote[key]
+	case GroupBeadDatabase, GroupPrefix:
+		g.Name = key // the database key or the prefix: there is no nicer name
+	case GroupFamily:
+		g.Name = key
+		if b, ok := fv.bead[key]; ok && b.Title != "" {
+			g.Name = b.Title
+		} else if h := fv.hint[key]; h != "" {
+			g.Name = h
+		}
+	case GroupBead:
+		g.Name = key
+		if b, ok := fv.bead[key]; ok && b.Title != "" {
+			g.Name = b.Title
+		}
 	}
 	return g
+}
+
+// topValue is the value of a bead key (GroupBeadDatabase, GroupPrefix, GroupFamily or GroupBead)
+// a session counts under: the one with the largest share of its attributed cost, the first in
+// sort order on a tie. The cost no bead accounts for does not compete: a session that worked on
+// any bead counts under one; a session that worked on none, or whose beads cost nothing, under
+// NoBead.
+func (fv *facets) topValue(sf *sessFacets, by GroupBy) string {
+	w := map[string]float64{}
+	for id, x := range sf.beadAll {
+		b, ok := fv.bead[id]
+		if !ok {
+			continue // NoBead
+		}
+		switch by {
+		case GroupBeadDatabase:
+			w[b.Database] += x
+		case GroupPrefix:
+			w[beads.Prefix(id)] += x
+		case GroupFamily:
+			w[b.Root] += x
+		default:
+			w[id] += x
+		}
+	}
+	best, top := NoBead, 0.0
+	for _, k := range slices.Sorted(maps.Keys(w)) {
+		if w[k] > top {
+			best, top = k, w[k]
+		}
+	}
+	return best
 }

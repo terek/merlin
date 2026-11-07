@@ -12,7 +12,7 @@ import { backingLowerBound, backingSentence, sessionsLowerBound, unknownNote } f
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
-import { sessionPath, shortProject } from '../../lib/paths'
+import { beadPath, sessionPath, shortProject } from '../../lib/paths'
 import { placeLabels, remoteLabels } from '../../lib/places'
 import { dayStart, shortDate } from '../../lib/time'
 import {
@@ -506,7 +506,16 @@ function GroupLabel({ row, mono, id, text }: { row: CostRow; mono?: boolean; id?
   if (!row.key) return <span className="text-muted italic">{row.label}</span>
   return (
     <span title={row.label ? `${row.key}\n${row.label}` : row.key}>
-      {id && <span className="mr-1.5 font-mono text-meta text-muted">{row.key}</span>}
+      {id && (
+        <Link
+          to={beadPath(row.key)}
+          onClick={(e) => e.stopPropagation()}
+          title="The bead's page"
+          className="mr-1.5 font-mono text-meta"
+        >
+          {row.key}
+        </Link>
+      )}
       <span className={mono ? 'font-mono text-meta' : undefined}>{text || row.label || row.key}</span>
     </span>
   )

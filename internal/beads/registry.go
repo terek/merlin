@@ -34,9 +34,22 @@ type Database struct {
 	Prefixes []string `json:"prefixes,omitempty"`
 	// Sources are the exports read, one per directory, with the size and mtime they had: an
 	// export is read again only when they change.
-	Sources  []Source `json:"sources,omitempty"`
-	BadLines int64    `json:"badLines,omitempty"`
-	Issues   []Issue  `json:"issues"` // sorted by id
+	Sources []Source `json:"sources,omitempty"`
+	// BadLines is the unparseable lines of the export plus InteractionsBadLines, from the latest reads.
+	BadLines             int64   `json:"badLines,omitempty"`
+	InteractionsBadLines int64   `json:"interactionsBadLines,omitempty"`
+	Issues               []Issue `json:"issues"` // sorted by id
+	// Statuses are the latest status change per issue in interactions.jsonl, sorted by id. Databases
+	// without an export have only these.
+	Statuses []Status `json:"statuses,omitempty"`
+}
+
+// Status is the latest status change of an issue recorded in interactions.jsonl.
+type Status struct {
+	ID     string    `json:"id"`
+	Status string    `json:"status"`
+	At     time.Time `json:"at"`
+	Reason string    `json:"reason,omitempty"`
 }
 
 // Source is an export file as it was when read.
@@ -63,7 +76,19 @@ type Issue struct {
 	CloseReason string    `json:"closeReason,omitempty"`
 	// Gone marks an issue that a later export no longer has (deleted, or compacted away).
 	Gone bool `json:"gone,omitempty"`
+	// Source, FirstSeen and LastSeen are set by Fold only (the registry never writes them): where
+	// the bead is known from, and when the sessions first and last named it.
+	Source    string    `json:"source,omitempty"`
+	FirstSeen time.Time `json:"firstSeen,omitzero"`
+	LastSeen  time.Time `json:"lastSeen,omitzero"`
 }
+
+// Issue.Source values.
+const (
+	SourceExport   = "export"   // an export has the issue (even if gone)
+	SourceSessions = "sessions" // known only from bd calls in sessions
+	SourceImplied  = "implied"  // a parent or dotted ancestor no source describes: the id only
+)
 
 // Dep is a dependency of an issue: it depends on ID (type blocks, related, …).
 type Dep struct {
@@ -129,7 +154,7 @@ func (r *Registry) All() []Database {
 func clone(db *Database) Database {
 	c := *db
 	c.Dirs, c.Prefixes, c.Sources = slices.Clone(db.Dirs), slices.Clone(db.Prefixes), slices.Clone(db.Sources)
-	c.Issues = slices.Clone(db.Issues)
+	c.Issues, c.Statuses = slices.Clone(db.Issues), slices.Clone(db.Statuses)
 	return c
 }
 
@@ -185,7 +210,7 @@ func (r *Registry) Refresh(beadsDir string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		next.Issues, next.BadLines = merge(next.Issues, issues), bad
+		next.Issues, next.BadLines = merge(next.Issues, issues), bad+next.InteractionsBadLines
 		next.Prefixes = prefixes(next.Issues)
 		if k < 0 {
 			next.Sources = append(next.Sources, src)
@@ -193,6 +218,28 @@ func (r *Registry) Refresh(beadsDir string) (bool, error) {
 			next.Sources[k] = src
 		}
 		changed = true
+	}
+	ipath := filepath.Join(beadsDir, "interactions.jsonl")
+	if ist, err := os.Stat(ipath); err == nil {
+		isrc := Source{Path: ipath, Size: ist.Size(), MtimeNs: ist.ModTime().UnixNano()}
+		ik := slices.IndexFunc(next.Sources, func(s Source) bool { return s.Path == ipath })
+		if ik < 0 || next.Sources[ik] != isrc {
+			sts, bad, err := readInteractions(ipath)
+			if err != nil {
+				return false, err
+			}
+			next.Statuses = mergeStatuses(next.Statuses, sts)
+			next.BadLines += bad - next.InteractionsBadLines
+			next.InteractionsBadLines = bad
+			if ik < 0 {
+				next.Sources = append(next.Sources, isrc)
+			} else {
+				next.Sources[ik] = isrc
+			}
+			changed = true
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return false, err
 	}
 	if !changed {
 		return false, nil
@@ -344,4 +391,71 @@ func prefixes(issues []Issue) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// readInteractions reads interactions.jsonl and returns the latest status change per issue,
+// sorted by id. Lines that do not parse are counted; other kinds and fields are skipped.
+func readInteractions(path string) ([]Status, int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer f.Close()
+	latest := map[string]Status{}
+	var bad int64
+	rd := bufio.NewReaderSize(f, 256<<10)
+	for {
+		line, err := rd.ReadBytes('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, 0, err
+		}
+		if len(strings.TrimSpace(string(line))) > 0 {
+			var e struct {
+				Kind      string    `json:"kind"`
+				CreatedAt time.Time `json:"created_at"`
+				IssueID   string    `json:"issue_id"`
+				Extra     struct {
+					Field    string `json:"field"`
+					NewValue string `json:"new_value"`
+					Reason   string `json:"reason"`
+				} `json:"extra"`
+			}
+			if json.Unmarshal(line, &e) != nil {
+				bad++
+			} else if e.Kind == "field_change" && e.Extra.Field == "status" && e.IssueID != "" && e.Extra.NewValue != "" {
+				s := Status{ID: e.IssueID, Status: e.Extra.NewValue, At: e.CreatedAt.UTC(), Reason: e.Extra.Reason}
+				if old, ok := latest[s.ID]; !ok || !s.At.Before(old.At) {
+					latest[s.ID] = s
+				}
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+	}
+	return statusList(latest), bad, nil
+}
+
+func statusList(m map[string]Status) []Status {
+	out := make([]Status, 0, len(m))
+	for _, s := range m {
+		out = append(out, s)
+	}
+	slices.SortFunc(out, func(a, b Status) int { return strings.Compare(a.ID, b.ID) })
+	return out
+}
+
+// mergeStatuses returns the latest status per issue of the old and the new read: an issue the
+// new read lacks is kept, and an older change never replaces a later one.
+func mergeStatuses(old, cur []Status) []Status {
+	m := make(map[string]Status, len(old)+len(cur))
+	for _, s := range old {
+		m[s.ID] = s
+	}
+	for _, s := range cur {
+		if o, ok := m[s.ID]; !ok || !s.At.Before(o.At) {
+			m[s.ID] = s
+		}
+	}
+	return statusList(m)
 }

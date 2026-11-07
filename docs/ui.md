@@ -85,6 +85,7 @@ CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scratch dir> \
 | `/` | Sessions | `project`, `state`, `kind`, `q` (search), `since` |
 | `/s/:harness/:id` | Session | `#t<index>` pins a turn, `#a<agentId>` opens an agent's work, `#c<index>` pins a compaction's turn |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
+| `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
 | anything else | Not found | |
 
@@ -489,6 +490,30 @@ the cost spent on each and "no bead" for the rest.
   values, so it links `group=…&repo|checkout|remote=<key>` with no `touched` (none is `-`); two rows
   with one name show enough of their path to tell them apart.
 - Selecting a project row sets the `project` filter; selecting a day bar narrows the range to it.
+
+## 10a. Bead page (`/bead/:id`)
+
+One bead and what was done to it, from `GET /api/beads/{id}` ([api.md](api.md)). The id is a
+bead's id as bd prints it (`acme-k1.2`); an unknown id shows "No such bead" (the API's 404).
+
+- **Header.** Above it the parent chain as links, family root first, parent last. The title is
+  the page title with the id under it in mono; a bead with no title shows its id and, when its
+  family has a `hint` (from `GET /api/beads`), the hint in muted italics ("in the family ..."). Then
+  a status badge (closed green, in progress accent, blocked red), the type, the priority (`P0` is
+  most urgent), and, discreetly in the faint colour, `sessions` or `implied` for a bead no export
+  has (an export is the usual case and says nothing); the close date and reason when known.
+  The children follow as links, each with its status dot.
+- **Timeline.** One card per session, in the time order of its first step: the harness badge, the
+  session title (a link to the session page), the day and step count. Its rows are time, who
+  (`main`, or `worker` with the first characters of the agent's id), the operation as a verb
+  (created, claimed, updated, closed, reopened, commented, dependency, viewed), the status it set, and
+  the title or the close reason. A `show` row is dimmed; a failed call is struck through and badged
+  `failed`, since it is history all the same.
+- **Sessions.** Most expensive share first: harness, title (a link), the operations it ran, and its
+  share of the session's cost as `<Money>`; a total under two or more.
+- **Links in.** A bead id links here from the Cost page's bead and family rows (a family row's key
+  is its root) and from the bead chips in the session header (the id; the title still opens the
+  Sessions page filtered to the bead).
 
 ## 11. As built
 

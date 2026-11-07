@@ -29,8 +29,8 @@ var reserved = []string{"/api", "/hook", "/healthz"}
 //
 //   - GET and HEAD only, and only for a Host of 127.0.0.1 or localhost (the API's guard);
 //   - a path that names a file serves it; any other path without a file extension serves
-//     index.html (the SPA fallback, for /s/claude/x on a reload); a missing file with an
-//     extension is 404;
+//     index.html (the SPA fallback, for /s/claude/x on a reload), and so does any path under
+//     /bead/ (bead ids have dots); a missing file with an extension is 404;
 //   - /assets/* is immutable (the build hashes the names), everything else must be revalidated;
 //   - it never answers under /api, /hook or /healthz.
 func New(fsys fs.FS) http.Handler {
@@ -60,7 +60,8 @@ func New(fsys fs.FS) http.Handler {
 			serveFile(w, r, fsys, name)
 			return
 		}
-		if path.Ext(name) != "" && name != "index.html" {
+		// A bead id has dots (/bead/x-abc.1.2) that are not an extension.
+		if path.Ext(name) != "" && name != "index.html" && !strings.HasPrefix(name, "bead/") {
 			plain(w, http.StatusNotFound, "not found\n")
 			return
 		}

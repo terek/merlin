@@ -87,10 +87,39 @@ type BeadEvent struct {
 	DepType string   `json:"depType,omitempty"` // dep: blocks, parent-child, …
 	Title   string   `json:"title,omitempty"`
 	Reason  string   `json:"reason,omitempty"` // close reason, whole, when the call or output gives it
+	// Type is the issue type of a create (-t/--type): task, bug, epic, …
+	Type string `json:"type,omitempty"`
+	// Priority is create -p/--priority, 0–4 (P0–P4 accepted); nil when absent or not that.
+	Priority *int `json:"priority,omitempty"`
+	// Deps are create --deps as written, "type:id,…". A bare id, depends-on:id and blocked-by:id
+	// are type blocks (the new bead depends on id); blocks:id reverses the direction and is
+	// recorded as type blocked-by; any other type is kept as written.
+	Deps []BeadDepRef `json:"deps,omitempty"`
+	// OutputOnly marks an event no bd call in the script names: only a ✓ line of the output does.
+	OutputOnly bool `json:"outputOnly,omitempty"`
+	// Seen are the beads as the call's JSON output printed them (show, list, ready, create,
+	// update with --json, unpiped).
+	Seen []BeadSeen `json:"seen,omitempty"`
 	// Cwd is the directory the call ran in: a cd earlier in the command, else the harness's
 	// working directory for the call.
 	Cwd     string      `json:"cwd,omitempty"`
 	Outcome BeadOutcome `json:"outcome"`
+}
+
+// BeadDepRef is one dependency named by create --deps: the bead ID and how the new bead relates.
+type BeadDepRef struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+// BeadSeen is a bead as bd's JSON output printed it.
+type BeadSeen struct {
+	ID       string `json:"id"`
+	Title    string `json:"title,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Status   string `json:"status,omitempty"`
+	Priority *int   `json:"priority,omitempty"`
+	Parent   string `json:"parent,omitempty"`
 }
 
 // Key returns the session's (harness, id) key.

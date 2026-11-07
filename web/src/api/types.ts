@@ -154,8 +154,10 @@ export interface BeadBrief {
 export interface BeadRef extends BeadBrief {
   type?: string
   parent?: string
-  /** The bead database (registry key). */
+  /** The bead database (registry key): a project id, or `prefix:<name>`. */
   database: string
+  /** How the bead is known: a registry export, a session's bd call, or only as a parent. */
+  source?: 'export' | 'sessions' | 'implied'
 }
 
 /** A bead one session worked on: the share of its best cost and the bd operations it ran. */
@@ -217,6 +219,9 @@ export interface RepoList {
 /** The location keys GET /api/groups groups by. */
 export type GroupDim = 'dir' | 'checkout' | 'repo' | 'remote'
 
+/** The bead keys GET /api/groups also groups by. */
+export type BeadGroupDim = 'beadDatabase' | 'prefix' | 'family' | 'bead'
+
 /** One value of a location key; the group with `key: ""` (none) is last. */
 export interface Group {
   key: string
@@ -242,6 +247,8 @@ export interface BeadGroup extends BeadRef {
 
 export interface FamilyGroup {
   root: BeadRef
+  /** Names a family whose root has no title: the title of its earliest member that has one. */
+  hint?: string
   sessions: number
   usd: number
   lastActivityAt?: string
@@ -272,6 +279,50 @@ export interface PrefixGroup {
   closed: number
   /** The families some session worked on. */
   families: number
+}
+
+/** A session that worked on a bead, with its share of the session's best cost. */
+export interface BeadSession {
+  harness: string
+  id: string
+  title?: string
+  project?: string
+  usd: number
+  /** The bd operations it ran on the bead, in order of first use. */
+  ops: string[]
+}
+
+/** One bd call on a bead. */
+export interface BeadStep {
+  at: string
+  harness: string
+  sessionId: string
+  agentId?: string
+  turn?: number
+  agentTurn?: number
+  op: string
+  status?: string
+  outcome: string
+  title?: string
+  reason?: string
+}
+
+/** GET /api/beads/{id} */
+export interface BeadDetail extends BeadRef {
+  priority?: number
+  createdAt?: string
+  closedAt?: string
+  closeReason?: string
+  /** The first and last bd call that named it. */
+  firstSeen?: string
+  lastSeen?: string
+  /** The parent first, the family root last. */
+  ancestors?: BeadRef[]
+  children?: BeadRef[]
+  /** Most expensive share first. */
+  sessions?: BeadSession[]
+  /** Time order across sessions and agents. */
+  timeline?: BeadStep[]
 }
 
 /** GET /api/beads */

@@ -82,7 +82,8 @@ func TestFilesAndFallback(t *testing.T) {
 	}
 
 	// A path without an extension is the app (a reload on /s/claude/x).
-	for _, p := range []string{"/", "/cost", "/s/claude/16161616", "/s/claude/x/", "/dev/ui", "/assets", "/s/claude/../cost"} {
+	for _, p := range []string{"/", "/cost", "/s/claude/16161616", "/s/claude/x/", "/dev/ui", "/assets", "/s/claude/../cost",
+		"/bead/acme-k1", "/bead/acme-k1.1", "/bead/acme-k1.1.12"} { // bead ids have dots, not extensions
 		rec := do(t, h, "GET", p, host)
 		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "<title>Explorer</title>") {
 			t.Errorf("%s: %d %q, want index.html", p, rec.Code, rec.Body.String())

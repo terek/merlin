@@ -8,7 +8,11 @@ catalog, API and UI use it (`merlin-t8s.49`).
 validated 2026-11-07): several keys (`dir`, `checkout`, `repo`, `remote`) replace the one `repo`
 value. location.md is now the reference for the repository half: §3.2 and the repository rules of §5
 below describe the code as it was, apart from the `repos.json` fields and the beads lookup, which
-location.md §3 and §5 keep. The beads parts here still apply as written.
+location.md §3 and §5 keep.
+
+**Beads without an export** (§6, designed 2026-11-07, epic `merlin-n1u`): what sessions did is
+the primary source and the export one more. §6 supersedes the registry-only rules of §3.3 (the
+last bullet) and §5 (which ids count, families); the rest of §3–5 stands.
 
 ## 1. Why
 
@@ -206,3 +210,173 @@ On the real history (3,405 sessions): 11 repositories (37 sessions in none), 4 b
 320 families; every grouping adds up to the same $6,538; 56% of spend falls on some bead.
 
 Not done: commit messages citing bead ids; `interactions.jsonl` status history; a CLI view.
+
+## 6. Beads without an export (designed 2026-11-07)
+
+### 6.1 Why, and the stance
+
+On a second machine every bead event was dropped although parsing worked: the database the
+worktrees resolve to has no `issues.jsonl` (no `export.auto`; its only readable file is
+`interactions.jsonl`), so its registry file holds no issues, and §5 keeps an id only when the
+registry knows it. No cost per bead, no families, no prefixes.
+
+**Stance: best effort, recall over precision.** Nothing breaks when a bead is not seen, and every
+bead caught from a command is worth showing. The `bd` calls the agents made are the primary source;
+an export, when there is one, is one more source that fills and corrects. Every field may be
+missing, and every consumer shows what it has (a bead with no title shows its id). Merlin still
+never runs `bd` (§3.3).
+
+### 6.2 What this machine's history shows (2026-11-07)
+
+Measured read-only on 3,428 sessions rescanned with the parser of the day (Claude 18, Codex 8) into
+a scratch home; scripts and numbers only, nothing copied.
+
+- **Creates:** 523 of 738 (71%) yield the new id from their output (Codex 28/28, Claude 495/710).
+  The rest are cut: 191 piped into `tail`/`head`/`grep`, 37 sent to `/dev/null`, 6 captured.
+- **Ids still surface:** later claims and closes name 99% of the beads in the exports (merlin
+  105/106, chatfw 93/95, yimple 550/555, geocards 27/27). **Titles are the weak field:** events give
+  a title for 77/106 merlin beads (chatfw 93/95, yimple 478/555, 441 of them exact).
+- **Binding id-less creates (2026-11-07):** of 796 creates (forked or resumed sessions counted
+  twice), 271 have no id; the §6.4 rule binds 179 (66%), and 78 of the 178 checkable against an
+  export have exactly the create's title (44%; 1 not in any export). With `--parent` 27/47 (57%),
+  without 51/131 (39%). By thread events between the create and the naming one: next event 34/37
+  (92%), within 5 events 32/64, within 20 71 bound with 9 right, beyond 20 3/7.
+- **Hierarchy:** dotted children are 95/95 parents in merlin, 66/71 in chatfw, 253/260 in yimple.
+  Of the 12 non-dotted parents, 5 come from `create --deps parent-child:<id>`; 6 were set where no
+  call shows it (likely `bd update $id --parent=$P`, a variable), 1 bead's create was never seen.
+  `bd update --parent` with a literal value occurs twice, both `--parent ""` (detach: the 2 dotted
+  beads with no parent); `dep add --type parent-child` occurs 0 times; `create --deps` 64 times.
+  Events alone get 412 of 424 parents right (parser 18, before `--deps` was read).
+- **Status:** the last status-setting event matches the export for 668 of 670 beads it covers.
+- **JSON snapshots are rare:** 64 of 3,231 `bd` calls use `--json`, mostly piped into python, grep
+  or jq; 13 outputs hold parseable issues (11 from `create --json`).
+- **Close lines:** with no reason given, bd prints its default: `✓ Closed <id> — <title>: Closed`
+  (105 of 105), so the title can be split off.
+- **Output-only ✓ lines** (a script that runs no `bd` prints them): 8 calls.
+- **The §5 filter** drops 2 confirmed ids here (prefix `zz`, no database): every local database has
+  an export. The fallback matters on machines with old databases.
+- **Cwd → database:** 2,074 of 2,393 events with ids resolve to a database, all with the ids'
+  prefix; 311 do not, mostly `~/work/merlin` since it became a bare container (its `.beads` is in
+  `main/`), which a kept `repos.json` answer covers and a fresh one does not.
+
+### 6.3 Digest additions (shared contract, additive)
+
+```
+BeadEvent
+  type?        create -t/--type
+  priority?    create -p/--priority: 0–4 (P0–P4 accepted)
+  deps[]?      create --deps: [{id, type}] as written, "type:id,…" (a bare id, depends-on:id and
+               blocked-by:id are type blocks: the new bead depends on id; blocks:id reverses the
+               direction and is recorded as type blocked-by). The fold reads parent-child only.
+  parent?      now also update --parent (op update)
+  outputOnly?  true: no bd call in the script names this bead; only a ✓ line of the output does
+  seen[]?      beads as the call's JSON output printed them: [{id, title?, type?, status?,
+               priority?, parent?}] (show, list, ready, create, update with --json, unpiped)
+```
+
+- `title` also from `✓ Closed <id> — <title>: Closed` when the call gave no reason (strip the
+  default reason); with a reason the existing rule stands; with an unknown reason (a file, a
+  variable) no title is taken from the close line.
+- Parser versions: Claude 18 → 19, Codex 9 → 10 (main had taken 9 for `patch_apply_end`), Pi 1 → 2
+  (all three call `beads.Parse`).
+
+### 6.4 The fold: what Merlin knows of each bead
+
+Pure and harness-neutral, in `internal/beads` (`Fold`), called by the catalog when it builds its
+groupings. Not stored: the digests are the record, the fold is recomputed from them and the
+snapshots. Not part of any digest.
+
+**Inputs.** The registry snapshots (export issues, and from now on the status history read from
+`interactions.jsonl`, §6.5), and every bead event of every session with the database resolved at
+its cwd (repos.json → `.beads` → registry key; `""` when none). Copied history is dropped first (the
+catalog's message ownership); failed calls carry no fields. Events are taken in time order, then
+session key, then tool use id.
+
+**Which database a bead belongs to** (one function, used everywhere):
+
+1. The database whose export has the id (the first by key, as today).
+2. Else the database its prefix is known in: an export's prefixes, else prefixes learned from
+   events whose cwd resolved to a database (the one with the most such events; ties by key). This
+   fills `prefixes` of a database with no export.
+3. Else a database of its own, key `prefix:<prefix>`, holding every such bead of that prefix.
+
+**Fields** of each bead, best source first:
+
+| Field | Sources, in order |
+|---|---|
+| title | export; else the latest of: create title (positional or `--title`) once the id is known, `--title` on update, ✓ Created/Updated/Closed line, `seen` |
+| type, priority | export; else latest `seen`; else the create's `-t`, `-p` |
+| parent | export; else latest `update --parent`; else create `--parent`; else a `parent-child` dep (`dep add` or `--deps`); else the dotted id (`x-abc.1.2` → `x-abc.1`). A detach (`--parent ""`) is not recorded: the dotted id still places it (2 beads here) |
+| status | export (not gone); else the latest by time of: status-setting events (ok or unknown, not failed: claim → in_progress, `--status`, close → closed, reopen → open), `interactions.jsonl`, `seen`; a bead created and never changed is open |
+| createdAt, closedAt, closeReason | export; else the create event, the last close and its reason |
+| firstSeen, lastSeen | events (any op, show included) |
+| source | `export` when the export has it, else `sessions`; `implied` for a stub (below) |
+
+- **Stubs.** A parent or dotted ancestor that no source describes becomes a bead with its id only
+  (`source: implied`), so a family always has its root.
+- **Gone** export issues keep their last exported fields, but events after the export's mtime set
+  status.
+- **Binding id-less creates: dropped.** The idea was to bind a create whose id the output did not
+  give to the first id its thread names afterwards that no event named before the create, and that
+  is a child of its `--parent`. Measured on this machine (§6.2) it is right for 44% of the
+  bindings, far under the 95% bar, and even the next-event case (92% of 37) falls short. An
+  id-less create therefore adds nothing: the bead is still found by the later claims and closes
+  that name it, with the title those give or none.
+
+### 6.5 Registry: `interactions.jsonl`
+
+`Refresh` also reads `.beads/interactions.jsonl` when its size or mtime changed (a second
+`Source`): `field_change` records with `extra.field == "status"` give per issue the latest status,
+its time, and for `closed` the reason. Stored apart from the export's issues, so the fold can tell
+them from export truth: `statuses: [{id, status, at, reason?}]`, the latest change per issue,
+sorted by id; merged on each read (an id missing from a newer read is kept; a later `at` wins).
+Other record kinds and unparseable lines are counted (`badLines`), never fatal. `Issue` itself is
+unchanged here; `source`, `firstSeen` and `lastSeen` come with the fold (§6.4).
+
+### 6.6 Which calls count for a session (replaces the id rule of §5)
+
+A bd call (not failed, not copied, not `show`) counts for every id it names, whether the
+registry knows it or not (for `dep`, the issue only: its target is named, not worked on), with one
+guard:
+
+- **Output-only ids** (`outputOnly`) count only when their database (§6.4) is the database at the
+  call's cwd. That keeps out a script printing ✓ lines from other histories (§5's 18 quoted ids)
+  while a wrapper that runs bd in its own repository still counts. At a cwd with no database
+  they count (recall first: there is nothing to tell them from).
+
+`show` still counts for nothing but appears in a bead's timeline. Spans, shares and every grouping
+of §5 then run on the folded beads unchanged.
+
+### 6.7 Families
+
+The root is the top of the parent chain (§6.4 parents, stubs included). A family's name is its
+root's title; with none, the root id, and `hint`, the title of the family's earliest member (by
+firstSeen) that has one.
+
+### 6.8 Uses
+
+- **Grouping keys** in `GET /api/groups?by=`, beside `dir|checkout|repo|remote`: `beadDatabase`,
+  `prefix`, `family`, `bead`. A session counts under one value per key, the one with the largest
+  share of its cost (ties: the first in sort order); sessions on no bead under `""`. Shares across
+  beads stay in `/api/cost?by=bead|family`.
+- **A bead's page:** `GET /api/beads/{id}` returns the folded bead (its `BeadRef` with `source`,
+  type, priority, createdAt, closedAt, closeReason, firstSeen, lastSeen), its parent chain, its
+  children, the sessions that worked on it (harness, id, title, project, `usd` share, `ops`) and its
+  **timeline**: every event on it in time order across sessions and agents (at, harness, session,
+  agentId, turn, agentTurn, op, status, outcome, title, reason), `show` included. 404 for an id no
+  source names.
+- **Cost per bead, families, prefixes:** as §5, over the folded beads; `issues` and `closed` count
+  what the fold knows. `BeadRef` gains `source`; `FamilyGroup` gains `hint`; a `database` may be
+  `prefix:<name>`.
+- **A session's detail** (`places.beads`) is unchanged in shape and now fills without an export.
+- **Web:** a bead page (`/bead/<id>`): header (id, title or hint, status, type, parent chain), the
+  timeline grouped by session (created here by the main agent, claimed by that worker, closed
+  there), the sessions with their cost; linked from bead and family rows and the session page's bead
+  chips.
+
+### 6.9 Tests
+
+Hand-written commands and outputs for every parser addition (`internal/beads`); a synthetic
+database with `metadata.json` and `interactions.jsonl` but no `issues.jsonl`, reproducing the
+empty-registry case end to end (registry → fold → catalog groupings and cost per bead); fold tables
+for precedence, stubs, prefix databases and the output-only guard.

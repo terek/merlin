@@ -405,12 +405,37 @@ no call names (a wrapper script that runs bd) gives one of its own.
 | `op` | `create`, `claim` (update --claim), `update`, `close` (also update --status closed), `reopen`, `comment` (comment or note), `dep` (dep add), `show` (read only: a weak link) |
 | `ids` | the beads it names; for `dep`, [issue, the bead it depends on]; for `create`, the new bead when the output names it |
 | `status` | the status it sets: `in_progress` for a claim, `closed`, `open` for a reopen, or the `--status` given |
-| `parent` | `create --parent` |
+| `parent` | `create --parent`, or `update --parent` (a bead moved under another) |
 | `depType` | for `dep`: `blocks`, `parent-child`, … (from `--type`, else the output, else `blocks`) |
-| `title` | the bead's title, from the call or its output |
+| `title` | the bead's title, from the call or its output (a close line without a reason ends in bd's default `: Closed`, which is cut off) |
+| `type` | `create -t`/`--type`: `task`, `bug`, `epic`, … |
+| `priority` | `create -p`/`--priority`: 0–4 (`P0`–`P4` accepted); omitted when absent or anything else |
+| `deps` | `create --deps`, as `BeadDepRef`s in the order written |
+| `outputOnly` | true when no bd call in the command names this bead and only a ✓ line of the output does (a wrapper script, or a script printing old output); omitted when false |
+| `seen` | the beads as the call's JSON output printed them (`--json` output that reached the transcript), as `BeadSeen`. A `bd list` or `bd ready` whose output holds JSON gives a `show` event naming the printed beads |
 | `reason` | the close reason, whole, when the call gives it inline |
 | `cwd` | the directory the call ran in: a `cd` earlier in the command, else the harness's working directory for the call |
 | `outcome` | `ok` (the output confirms it), `failed` (the output reports an error for it, or the call failed with nothing confirmed), `unknown` (no result yet, output suppressed or not recognised) |
+
+## BeadDepRef
+
+| key | meaning |
+|---|---|
+| `id` | the other bead |
+| `type` | how the new bead relates to it: `blocks` (it depends on `id`: a bare id, `depends-on:` or `blocked-by:`), `blocked-by` (written `blocks:id`: `id` depends on it), or the type as written (`parent-child`, `related`, `discovered-from`, …) |
+
+## BeadSeen
+
+A bead as bd printed it in JSON; every field but `id` may be missing.
+
+| key | meaning |
+|---|---|
+| `id` | the bead |
+| `title` | its title |
+| `type` | its issue type (`issue_type` in bd's JSON) |
+| `status` | its status |
+| `priority` | its priority |
+| `parent` | its parent: `parent`, else a `parent-child` dependency |
 
 ## Diagnostics
 

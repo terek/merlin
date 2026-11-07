@@ -414,3 +414,102 @@ rollups and a session's bead shares are not: they differ in the last digit (abou
 to run, because `share` in `internal/catalog/places.go` summed its weights in map order. That code is
 older than the location keys and had no visible effect. It now sums in key order
 (`TestShareIsDeterministic`); this run was not repeated after that fix.
+
+## Beads without an export (2026-11-07)
+
+Bead `merlin-n1u.8`. Design: [beads-and-repos.md](beads-and-repos.md) §6 (fold, calls that count,
+families, uses). The history is this machine's, rescanned with the current parser (Claude 19, Codex
+9, Pi 2) into a scratch `MERLIN_HOME`: 3,428 digests, no unreadable one, `repos.json` and the four
+registry snapshots (merlin, chatfw, yimple, geocards, with the statuses read from
+`interactions.jsonl`; only chatfw and yimple have that file). Nothing was served and nothing was
+rescanned: the numbers come from a temporary Go program in the module (loading the digests with
+`store`, `repos.Open` and `beads.OpenRegistry` into `catalog.Places` as the daemon does, then
+`Families`, `Prefixes`, `Rollup`, `Groups` and each session's `Places`), deleted afterwards, and from
+the same program built from `git archive HEAD` for the "before" column. The real home was not read
+at all. `shasum` of the real `repos.json` and the 4 `beads/*.json` files is identical before and
+after (5 of 5 lines; `repos.json` starts `2027baee`).
+
+### (a) As is, with the exports
+
+127 sessions have bead events; 123 of the 3,428 are on a bead, 3,305 on none. The total is $6,753.13;
+$3,787.98 of it is spent on beads (sum of `BeadShare` usd) and $2,965.15 on none (the two add up).
+Cost per bead by `Rollup` sums to $3,788.88 over beads: the $0.90 over the share sum is the same
+before the change (it is the message-attributed part of the rollup against the sessions' best cost
+the shares use), not a fold effect.
+
+Beads worked on, by database and source: yimple 544 export, merlin 105 export and 1 sessions, chatfw
+93 export, geocards 27 export, 2 in other prefixes (sessions, database `prefix:<p>`); no `implied`
+bead is worked on (stubs are roots of unworked families). 589 of the 772 have a nonzero share. The
+fold knows 797 beads under the prefixes some session worked on. 349 families, 271 with spend; every
+root has a title (no hint needed).
+
+Totals against `by=project`: `groups` by `beadDatabase` (6 rows), `prefix` (6), `family` (91) and
+`bead` (113) each add up to $6,753.13 and count 295 sessions (scripted runs add cost, not sessions);
+the largest absolute difference from the project total is 1.8e-11. `cost` by bead and by family
+(including the no-bead row) add up to $6,753.13 as well.
+
+**Before and after** (same digests and registry; before is HEAD):
+
+| | before | after |
+|---|---|---|
+| beads worked on | 769 | 772 |
+| bead-attributed USD | 3,785.28 | 3,787.98 |
+| no-bead USD | 2,967.86 | 2,965.15 |
+| families | 349 (270 with spend) | 349 (271) |
+| prefixes | 4 | 5 (4 databases and `prefix:zz`) |
+| beads in the fold, under those prefixes | 793 | 797 |
+| merlin: issues, USD, families | 116, 300.80, 12 | 117, 299.79, 12 |
+| yimple: issues, USD, families | 555, 2,918.55, 288 | 555, 2,918.55, 287 |
+| chatfw: issues, USD, families | 95, 547.84, 22 | 96, 547.84, 21 |
+| geocards: issues, USD, families | 27, 18.09, 27 | 27, 18.09, 27 |
+| other prefix: issues, USD, families | not shown | 2, 3.71, 2 |
+
+Only 2 of 3,428 sessions change which beads they count, and the total did not move. The moves:
+
+- **Ids the registry did not know are kept** (+3 beads, +$2.70 net). One session names 2 ids of a
+  prefix no database has (`zz`); the old rule dropped them, now they count (+$3.71, 2 families, a
+  `prefix:zz` group) and take their share from the session's other beads (-$1.26 on 2 merlin beads
+  of the same session). One other session names a merlin bead the export lacks: now a bead of source
+  `sessions` (+$0.25, a share the old rule did not attribute).
+- **Dotted ids give a parent** (-1 family each in yimple and chatfw). One yimple and one chatfw
+  family of a single zero-spend bead each had no parent in the export; the dotted id now places them
+  under their parent's family. No spend moves.
+- **Stub** (+1 chatfw issue): the fold has 1 more chatfw bead than the export; consistent with an
+  implied parent (source `implied`) of an unworked family, not traced further. merlin +1 issue is
+  the sessions-only bead above, other prefix +2 the `zz` ids.
+- **Output-only guard**: no id that counted before is dropped (0 beads removed, 0 sessions lose a
+  bead), so the guard changed nothing on this history; **dep target rule**: no bead gains or loses
+  spend through it that the table shows.
+
+### (b) No export
+
+A copy of the registry with every database's `issues` and `prefixes` emptied and the `issues.jsonl`
+source entries dropped (keys, directories and the `statuses` of chatfw and yimple kept), the same
+digests and `repos.json`. Totals are unchanged: 123 sessions on a bead, $3,787.98 on beads.
+
+| kept from (a) | |
+|---|---|
+| beads worked on | 772 of 772, all of them with `source: sessions` |
+| cost per bead, sum of min(usd) / sum of usd (a) | 100.00% |
+| family USD on the same root, sum of min / sum (a) | 99.83% |
+| (a)'s families with spend whose root is a root in (b) | 271 of 271 |
+| bead-attributed USD in the same database | 100.00% (all 4 databases and `prefix:zz`; prefixes are learned from events) |
+| beads with spend that have a title | 513 of 589 (87.1%); 669 of 772 beads in all |
+| families | 353 (349 in (a)); 44 with an untitled root (41 sessions, 3 implied), 10 of them get a hint (38 have spend, 10 of those hinted) |
+
+**Acceptance (>= 95% of cost per bead and of families): met** (100.00% and 99.83%). Cost per bead is
+complete because every id the sessions name is kept whatever the export says.
+
+Where the 0.17% of family USD ($6.62 on 8 beads, all yimple) goes: the export holds parents that no
+call shows. 4 non-dotted beads (about $1.66) become roots of their own families, and 4 dotted
+beads (about $4.95) keep only their dotted parent, which in the export has a parent of its own that
+no session set. That is the 4 extra families (353 against 349), and it is the case §6.2 predicted
+(parents set through a variable). The fold's counts under each prefix fall with the export: 111,
+551, 94 and 27 beads (merlin, yimple, chatfw, geocards) against 117, 555, 96 and 27, and yimple
+closed 480 against 486 (beads no session touched are absent; `interactions.jsonl` covers
+chatfw and yimple only for those it records).
+
+### Not checked here
+
+The other machine's database with only `interactions.jsonl` (no export, no events for most of its
+beads): to be run by Zsolt.
