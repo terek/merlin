@@ -3,23 +3,39 @@ import type { Agent, AgentTurn, Message, SessionDetail, Turn } from '../../api/t
 import type { Col } from './model'
 import {
   barSpan,
+  boundsOf,
   bracketed,
   buildTimeline,
+  centerWindow,
+  clampWindow,
+  contextEnvelope,
   dayAt,
+  defaultWindow,
   detailAt,
+  dragWindow,
+  episodes,
   GAP_MS,
   type Lane,
-  latestDay,
+  MIN_WINDOW_MS,
   mergeBusy,
   packLanes,
+  parseTime,
   pxPerTurn,
+  resizeWindow,
+  revealWindow,
+  sliceDay,
   sliceTimeline,
   slotLength,
+  snapDay,
+  snapTarget,
+  spendDensity,
   splitDays,
   splitHeld,
+  stepWindow,
   type Timeline,
   timeAxis,
   turnPlace,
+  windowDay,
 } from './timeline'
 import { buildTree } from './tree'
 
@@ -382,7 +398,7 @@ describe('sliceTimeline', () => {
 
   test('each day has only its own turns, calls, lanes and scale', () => {
     expect(days).toHaveLength(2)
-    const [one, two] = days.map((d) => sliceTimeline(tl, d))
+    const [one, two] = days.map((d) => sliceDay(tl, d))
     expect(one.lanes.map((l) => l.key)).toEqual(['0/main'])
     expect(one.lanes[0].turns.map((s) => s.col.index)).toEqual([0])
     expect(one.peak).toBe(90_000)
@@ -395,10 +411,195 @@ describe('sliceTimeline', () => {
   })
 })
 
-test('the first day shown is the last that spent more than next to nothing', () => {
-  expect(latestDay([{ total: 5 }, { total: 3 }, { total: 0.01 }])).toBe(1)
-  expect(latestDay([{ total: 5 }, { total: 3 }])).toBe(1)
-  expect(latestDay([{}, {}])).toBe(1)
+describe('windows', () => {
+  const h = (day: number, hour: number) => new Date(2026, 0, day, 0).getTime() + hour * 60 * 60_000
+  const call = (t: number, usd = 1) => ({ t, usd }) as unknown as Lane['calls'][number]
+  /** A timeline with one main lane that made a call of `usd` at each of the given times. */
+  const tlOf = (...calls: [number, number?][]): Timeline => {
+    const lane = {
+      key: '0/main',
+      branch: 0,
+      main: true,
+      units: [],
+      turns: [],
+      series: [],
+      misses: [],
+      compactions: [],
+      calls: calls.map(([t, usd]) => call(t, usd)),
+      usd: 0,
+      peak: 0,
+      t0: 0,
+      t1: 0,
+    } as unknown as Lane
+    const times = calls.map(([t]) => t)
+    return {
+      lanes: [lane],
+      spans: times.map((t) => [t, t] as [number, number]),
+      peak: 0,
+      t0: Math.min(...times),
+      t1: Math.max(...times),
+    }
+  }
+  const bounds = { t0: h(5, 0), t1: h(8, 0) }
+
+  test('slicing by a range keeps what starts inside it', () => {
+    const tl = tlOf([h(5, 9)], [h(5, 10)], [h(5, 11)])
+    const s = sliceTimeline(tl, h(5, 9.5), h(5, 10.5))
+    expect(s.lanes[0].calls.map((c) => c.t)).toEqual([h(5, 10)])
+    expect(s.lanes[0].usd).toBe(1)
+    expect(s.spans).toEqual([[h(5, 10), h(5, 10)]])
+  })
+
+  test('a piece of agent work that overlaps the window is kept, the others not', () => {
+    const unit = (a: number, b: number) => ({ startMs: a, endMs: b, id: `${a}` }) as unknown as Lane['units'][number]
+    const tl = tlOf([h(5, 9)])
+    tl.lanes.push({
+      ...tl.lanes[0],
+      key: '0/a',
+      main: false,
+      calls: [],
+      units: [unit(h(5, 8), h(5, 10)), unit(h(5, 1), h(5, 2))],
+    })
+    tl.spans.push([h(5, 8), h(5, 10)], [h(5, 1), h(5, 2)])
+    const s = sliceTimeline(tl, h(5, 9), h(5, 12))
+    expect(s.lanes[1].units).toHaveLength(1)
+    // the span is cut at the left edge
+    expect(s.spans).toContainEqual([h(5, 9), h(5, 10)])
+    // work that runs on past the window is cut at its end
+    expect(sliceTimeline(tl, h(5, 8.5), h(5, 9.5)).spans).toContainEqual([h(5, 8.5), h(5, 9.5)])
+    expect(s.spans).toHaveLength(2)
+  })
+
+  test('an open range is the whole', () => {
+    const tl = tlOf([h(5, 9)], [h(6, 9)])
+    const s = sliceTimeline(tl, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY)
+    expect(s.lanes[0].calls).toHaveLength(2)
+  })
+
+  test('episodes break at an idle stretch over two hours and at a night cut', () => {
+    // 9:00-10:00, then 11:30 (an hour and a half later: the same), then 15:00 (over two hours: new)
+    const tl = tlOf([h(5, 9)], [h(5, 10)], [h(5, 11.5)], [h(5, 15)], [h(5, 15.5)])
+    const eps = episodes(tl, splitDays(tl))
+    expect(eps.map((e) => [e.t0, e.t1])).toEqual([
+      [h(5, 9), h(5, 11.5)],
+      [h(5, 15), h(5, 15.5)],
+    ])
+    expect(eps.map((e) => e.usd)).toEqual([3, 2])
+    // a night cut ends an episode even if the pause is short
+    const night = tlOf([h(5, 22), 1], [h(5, 23.8), 1], [h(6, 1), 1], [h(6, 2), 1])
+    const days = [
+      { date: h(5, 0), t0: h(5, 22), t1: h(5, 23.8), lo: Number.NEGATIVE_INFINITY, hi: h(5, 24.5) },
+      { date: h(6, 0), t0: h(6, 1), t1: h(6, 2), lo: h(5, 24.5), hi: Number.POSITIVE_INFINITY },
+    ]
+    expect(episodes(night, days)).toHaveLength(2)
+    expect(episodes(night, [days[0]])).toHaveLength(1)
+  })
+
+  test('the first window is the day of the last episode, or of the one before when that spent next to nothing', () => {
+    // three sittings on one day: the day, not its last sitting
+    const one = tlOf([h(5, 9), 5], [h(5, 10), 5], [h(5, 20), 1])
+    const d1 = splitDays(one)
+    expect(defaultWindow(one, d1)).toEqual(snapDay(d1[0]))
+    // the last day spent next to nothing: the day before
+    const two = tlOf([h(5, 9), 5], [h(5, 17), 5], [h(6, 9), 0.01])
+    const d2 = splitDays(two)
+    expect(d2.length).toBe(2)
+    expect(defaultWindow(two, d2)).toEqual(snapDay(d2[0]))
+    // asked for a moment: the day of the episode it is in
+    const busy = tlOf([h(5, 9), 5], [h(6, 9), 5])
+    const d3 = splitDays(busy)
+    expect(defaultWindow(busy, d3)).toEqual(snapDay(d3[1]))
+    expect(defaultWindow(busy, d3, h(5, 9))).toEqual(snapDay(d3[0]))
+    expect(defaultWindow({ lanes: [], spans: [], peak: 0, t0: 0, t1: 0 }, [])).toEqual({ lo: 0, hi: 1 })
+  })
+
+  test('a day snaps to its activity with a pad that stays inside the day', () => {
+    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
+    const days = splitDays(tl)
+    const w = snapDay(days[0])
+    expect(w.lo).toBeLessThan(h(5, 9))
+    expect(w.hi).toBeGreaterThan(h(5, 17))
+    expect(w.hi).toBeLessThanOrEqual(days[0].hi)
+    expect(windowDay(w, days)).toBe(0)
+    expect(windowDay({ lo: w.lo + 3_600_000, hi: w.hi }, days)).toBe(-1)
+  })
+
+  test('a date label snaps to the day made of it, else to the activity of that calendar day', () => {
+    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
+    const days = splitDays(tl)
+    expect(snapTarget(tl, days, h(5, 0))).toEqual(snapDay(days[0]))
+    expect(snapTarget(tl, [], h(6, 0))?.lo).toBeLessThan(h(6, 8))
+    expect(snapTarget(tl, [], h(6, 0))?.lo).toBeGreaterThanOrEqual(h(6, 8) - 30 * 60_000)
+    expect(snapTarget(tl, [], h(7, 0))).toBeUndefined()
+  })
+
+  test('windows stay inside the bounds and are never narrower than the minimum', () => {
+    expect(clampWindow({ lo: h(4, 0), hi: h(4, 5) }, bounds)).toEqual({ lo: bounds.t0, hi: bounds.t0 + 5 * 3_600_000 })
+    expect(clampWindow({ lo: h(7, 23), hi: h(9, 0) }, bounds)).toEqual({
+      lo: bounds.t1 - 25 * 3_600_000,
+      hi: bounds.t1,
+    })
+    const tiny = clampWindow({ lo: h(6, 0), hi: h(6, 0) + 1000 }, bounds)
+    expect(tiny.hi - tiny.lo).toBe(MIN_WINDOW_MS)
+    expect(clampWindow({ lo: 0, hi: 1e15 }, bounds)).toEqual({ lo: bounds.t0, hi: bounds.t1 })
+    const d = dragWindow(h(6, 10), h(6, 8), bounds)
+    expect(d).toEqual({ lo: h(6, 8), hi: h(6, 10) })
+    expect(resizeWindow(d, 'hi', h(6, 7), bounds)).toEqual({ lo: h(6, 8), hi: h(6, 8) + MIN_WINDOW_MS })
+    expect(resizeWindow(d, 'lo', h(6, 9), bounds)).toEqual({ lo: h(6, 9), hi: h(6, 10) })
+    expect(resizeWindow(d, 'lo', h(1, 0), bounds).lo).toBe(bounds.t0)
+    expect(centerWindow(d, h(7, 0), bounds)).toEqual({ lo: h(6, 23), hi: h(7, 1) })
+  })
+
+  test('a turn out of view moves the window: to its day when it is a day, else by centring', () => {
+    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
+    const days = splitDays(tl)
+    const b = boundsOf(tl)
+    const w = snapDay(days[0])
+    expect(revealWindow(w, h(5, 12), days, b)).toBe(w)
+    expect(revealWindow(w, h(6, 9), days, b)).toEqual(snapDay(days[1]))
+    const free = { lo: h(5, 9), hi: h(5, 11) }
+    const r = revealWindow(free, h(6, 9), days, b)
+    expect(r.hi - r.lo).toBe(2 * 3_600_000)
+    expect(r.lo).toBeLessThan(h(6, 9))
+    expect(r.hi).toBeGreaterThan(h(6, 9))
+    expect(revealWindow(free, Number.NaN, days, b)).toBe(free)
+  })
+
+  test('the keys step a day at a time, or a window width', () => {
+    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
+    const days = splitDays(tl)
+    const b = boundsOf(tl)
+    expect(stepWindow(snapDay(days[0]), 1, days, b)).toEqual(snapDay(days[1]))
+    expect(stepWindow(snapDay(days[0]), -1, days, b)).toEqual(snapDay(days[0]))
+    expect(stepWindow({ lo: h(5, 10), hi: h(5, 12) }, 1, days, b)).toEqual({ lo: h(5, 12), hi: h(5, 14) })
+  })
+
+  test('the strip: context is the largest of the main lanes, spend lands in its column', () => {
+    const tl = tlOf([h(5, 9), 2], [h(5, 9.01), 3])
+    tl.lanes[0].series = [
+      {
+        agentId: '',
+        own: true,
+        points: [
+          { t: h(5, 9), tokens: 100 },
+          { t: h(5, 9.01), tokens: 300 },
+        ],
+      },
+    ]
+    const axis = timeAxis(tl.spans, 0, 100)
+    const env = contextEnvelope(tl, axis, 2)
+    expect(env).toHaveLength(50)
+    expect(Math.max(...env)).toBe(300)
+    const bars = spendDensity(tl, axis, 2, 'kind')
+    expect(bars.reduce((s, b) => s + (b.total ?? 0), 0)).toBe(5)
+  })
+
+  test('from and to read ISO times and milliseconds', () => {
+    expect(parseTime('1767268800000')).toBe(1767268800000)
+    expect(parseTime('2026-01-01T12:00:00Z')).toBe(Date.UTC(2026, 0, 1, 12))
+    expect(parseTime('nonsense')).toBeUndefined()
+    expect(parseTime(null)).toBeUndefined()
+  })
 })
 
 describe('barSpan', () => {

@@ -457,8 +457,8 @@ export function addCall(bar: Record<string, number>, c: Call, split: Split) {
 // ---- days -----------------------------------------------------------------------------
 
 /**
- * What ran between two nights: the time view shows one day at a time. Everything at or after `lo`
- * and before `hi` belongs to it.
+ * What ran between two nights: the overview snaps to it. Everything at or after `lo` and before `hi`
+ * belongs to it.
  */
 export interface Day {
   /** Local midnight of the calendar day it is shown as. */
@@ -546,27 +546,6 @@ export function splitDays(tl: Timeline): Day[] {
   return days
 }
 
-/** What each day spent, in a bar's parts (`addCall`). */
-export function daySpend(tl: Timeline, days: readonly Day[], split: Split): Record<string, number>[] {
-  const out = days.map(() => ({}) as Record<string, number>)
-  for (const l of tl.lanes)
-    for (const c of l.calls) {
-      const k = dayAt(days, c.t)
-      if (k >= 0) addCall(out[k], c, split)
-    }
-  return out
-}
-
-/**
- * The day to show first: the last one, unless it spent next to nothing (a resume that only
- * compacted, say); then the last that spent more.
- */
-export function latestDay(spend: readonly Record<string, number>[]): number {
-  const total = spend.reduce((s, d) => s + (d.total ?? 0), 0)
-  for (let k = spend.length - 1; k >= 0; k--) if ((spend[k].total ?? 0) >= total * 0.01) return k
-  return spend.length - 1
-}
-
 /** The day `t` is on: an index into `days`, or -1. */
 export function dayAt(days: readonly Day[], t: number): number {
   let lo = 0
@@ -580,18 +559,39 @@ export function dayAt(days: readonly Day[], t: number): number {
   return -1
 }
 
+// ---- windows ----------------------------------------------------------------------------
+
+/** The stretch of time the plot shows: everything that starts at or after `lo` and before `hi`. */
+export interface Win {
+  lo: number
+  hi: number
+}
+
+/** The shortest window the brush makes. */
+export const MIN_WINDOW_MS = 5 * MIN
+/** An idle stretch longer than this ends a work episode. */
+export const EPISODE_GAP_MS = 2 * HOUR
+/** A window that is not the day's own is padded at most this much on each side. */
+const MAX_PAD_MS = 30 * MIN
+
 /**
- * What of a timeline happened on one day: its lanes with only that day's calls, turns, pieces of
- * work, contexts and marks. A session's main lane stays while anything of its session is left.
+ * What of a timeline is in the window `[lo, hi)`: its lanes with only the calls, turns, contexts and
+ * marks that start inside it. A turn that runs past the edge is kept whole when it starts inside; a
+ * piece of agent work is kept when it overlaps the window (cut at the left edge when it started
+ * before it), so that the lines to and from it can be drawn to the edge. A session's main lane stays
+ * while anything of its session is left.
  */
-export function sliceTimeline(tl: Timeline, day: Day): Timeline {
-  const on = (t: number) => t >= day.lo && t < day.hi
+export function sliceTimeline(tl: Timeline, lo: number, hi: number): Timeline {
+  const on = (t: number) => t >= lo && t < hi
+  const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
   const lanes = tl.lanes.map((l) =>
     measure({
       ...l,
       calls: l.calls.filter((c) => on(c.t)),
       turns: l.turns.filter((s) => on(s.t0)),
-      units: l.units.filter((u) => on(u.startMs)),
+      units: l.units.filter(
+        (u) => Number.isFinite(u.startMs) && u.startMs < hi && (Number.isFinite(u.endMs) ? u.endMs : u.startMs) >= lo,
+      ),
       series: l.series.map((s) => ({ ...s, points: s.points.filter((p) => on(p.t)) })).filter((s) => s.points.length),
       misses: l.misses.filter((m) => on(m.t)),
       compactions: l.compactions.filter((c) => on(c.t)),
@@ -603,8 +603,201 @@ export function sliceTimeline(tl: Timeline, day: Day): Timeline {
   )
   return withBounds(
     lanes.filter((l) => (l.main ? busy.has(l.branch) : l.calls.length > 0 || l.units.length > 0)),
-    tl.spans.filter(([a]) => on(a)),
+    tl.spans.flatMap(([a, b]) => {
+      if (a >= hi || b < lo) return []
+      // work that goes on past the window does not stretch its axis; a turn that starts inside is whole
+      return [[Math.max(a, lo), workSpans.has(`${a}/${b}`) ? Math.min(b, hi) : b] as [number, number]]
+    }),
   )
+}
+
+/** The part of a timeline on one day. */
+export const sliceDay = (tl: Timeline, day: Day) => sliceTimeline(tl, day.lo, day.hi)
+
+/** The first and last moment a window can have: a little beyond the tree's activity. */
+export const boundsOf = (tl: Timeline): { t0: number; t1: number } => ({ t0: tl.t0 - 1, t1: tl.t1 + 1 })
+
+/** How much of a tree is activity: the time in which something ran, idle stretches left out. */
+export function activeMs(tl: Timeline): number {
+  return mergeSpans(tl.spans, GAP_MS).reduce((s, [a, b]) => s + (b - a), 0)
+}
+
+/** A window around `[t0, t1]`, a little wider (2%, between a minute and half an hour). */
+export function windowAround(t0: number, t1: number): Win {
+  const pad = Math.min(MAX_PAD_MS, Math.max(MIN, (t1 - t0) * 0.02))
+  return { lo: t0 - pad, hi: t1 + pad }
+}
+
+/** The window that snaps to a day: its activity with a little pad, never into the next day's. */
+export function snapDay(day: Day): Win {
+  const w = windowAround(day.t0, day.t1)
+  return { lo: Math.max(day.lo, w.lo), hi: Math.min(day.hi, w.hi) }
+}
+
+/** The day a window is (index into `days`), or -1. */
+export function windowDay(w: Win, days: readonly Day[]): number {
+  return days.findIndex((d) => {
+    const s = snapDay(d)
+    return Math.abs(s.lo - w.lo) < 1000 && Math.abs(s.hi - w.hi) < 1000
+  })
+}
+
+/** A window inside `b`, at least `min` wide, keeping its width where it can. */
+export function clampWindow(w: Win, b: { t0: number; t1: number }, min = MIN_WINDOW_MS): Win {
+  const width = Math.max(min, w.hi - w.lo)
+  if (width >= b.t1 - b.t0) return { lo: b.t0, hi: b.t1 }
+  const lo = Math.min(Math.max(w.lo, b.t0), b.t1 - width)
+  return { lo, hi: lo + width }
+}
+
+/** The window from dragging out a new range between two moments. */
+export function dragWindow(a: number, b: number, bounds: { t0: number; t1: number }): Win {
+  return clampWindow({ lo: Math.min(a, b), hi: Math.max(a, b) }, bounds)
+}
+
+/** The window with one edge moved to `t`, the other kept, and not narrower than the minimum. */
+export function resizeWindow(w: Win, edge: 'lo' | 'hi', t: number, bounds: { t0: number; t1: number }): Win {
+  if (edge === 'lo') return { lo: Math.max(bounds.t0, Math.min(t, w.hi - MIN_WINDOW_MS)), hi: w.hi }
+  return { lo: w.lo, hi: Math.min(bounds.t1, Math.max(t, w.lo + MIN_WINDOW_MS)) }
+}
+
+/** The window moved to be centred on `t`, same width. */
+export function centerWindow(w: Win, t: number, bounds: { t0: number; t1: number }): Win {
+  const half = (w.hi - w.lo) / 2
+  return clampWindow({ lo: t - half, hi: t + half }, bounds)
+}
+
+/**
+ * The window that has `t` in view: the same one when it does; when it is a day, the day `t` is on;
+ * otherwise one of the same width centred on `t`.
+ */
+export function revealWindow(w: Win, t: number, days: readonly Day[], bounds: { t0: number; t1: number }): Win {
+  if (!Number.isFinite(t) || (t >= w.lo && t < w.hi)) return w
+  if (windowDay(w, days) >= 0) {
+    const k = dayAt(days, t)
+    if (k >= 0) return snapDay(days[k])
+  }
+  return centerWindow(w, t, bounds)
+}
+
+/** The window one step to `dir` (-1 or 1): the previous or next day when it is a day, else its own width. */
+export function stepWindow(w: Win, dir: -1 | 1, days: readonly Day[], bounds: { t0: number; t1: number }): Win {
+  const k = windowDay(w, days)
+  if (k >= 0) return snapDay(days[Math.max(0, Math.min(days.length - 1, k + dir))])
+  const width = w.hi - w.lo
+  return clampWindow({ lo: w.lo + dir * width, hi: w.hi + dir * width }, bounds)
+}
+
+/** A run of work with no idle stretch over EPISODE_GAP_MS in it and no night cut. */
+export interface Episode {
+  t0: number
+  t1: number
+  usd: number
+}
+
+/** The work episodes of a timeline, in order. */
+export function episodes(tl: Timeline, days: readonly Day[], gap = EPISODE_GAP_MS): Episode[] {
+  const turns = tl.lanes.flatMap((l) => l.turns.map((s) => [s.t0, s.t1] as [number, number]))
+  const pieces = mergeSpans([...tl.spans, ...turns], 0)
+  const cuts = days.slice(1).map((d) => d.lo)
+  const out: Episode[] = []
+  for (const [a, b] of pieces) {
+    const last = out[out.length - 1]
+    if (last && a - last.t1 <= gap && !cuts.some((c) => c > last.t1 && c <= a)) last.t1 = Math.max(last.t1, b)
+    else out.push({ t0: a, t1: b, usd: 0 })
+  }
+  for (const l of tl.lanes)
+    for (const c of l.calls) {
+      const e = out.find((x) => c.t >= x.t0 && c.t <= x.t1)
+      if (e) e.usd += c.usd
+    }
+  return out
+}
+
+/**
+ * The window to show first: the day of the last work episode, unless that episode spent under 1% of
+ * the tree (a resume that only compacted, say), then of the last that spent more. With `at` (a turn
+ * asked for), the day of the episode that holds that moment. An episode alone is too narrow a default
+ * (a day of three sittings would open on its last half hour); a tree with no night in it, whose one
+ * "day" runs for days, opens on the episode instead.
+ */
+export function defaultWindow(tl: Timeline, days: readonly Day[], at?: number): Win {
+  const eps = episodes(tl, days)
+  if (eps.length === 0) return { lo: tl.t0, hi: tl.t1 + 1 }
+  const total = eps.reduce((s, e) => s + e.usd, 0)
+  const asked = at !== undefined && Number.isFinite(at) ? eps.find((e) => at >= e.t0 && at <= e.t1) : undefined
+  const pick = asked ?? eps.findLast((e) => e.usd >= total * 0.01) ?? eps[eps.length - 1]
+  const k = dayAt(days, pick.t0)
+  const day = k >= 0 ? days[k] : undefined
+  return day && day.t1 - day.t0 <= 30 * HOUR ? snapDay(day) : windowAround(pick.t0, pick.t1)
+}
+
+/** `?from=` and `?to=`: milliseconds, or anything Date.parse reads. */
+export function parseTime(s: string | null): number | undefined {
+  if (!s) return undefined
+  const t = /^\d+$/.test(s) ? Number(s) : Date.parse(s)
+  return Number.isFinite(t) ? t : undefined
+}
+
+// ---- the overview strip -------------------------------------------------------------------
+
+/** Pixel columns of `step` between the axis' ends. */
+const columns = (axis: TimeAxis, step: number) => Math.max(1, Math.ceil((axis.x1 - axis.x0) / step))
+const columnOf = (axis: TimeAxis, step: number, n: number, t: number) =>
+  Math.max(0, Math.min(n - 1, Math.floor((axis.x(t) - axis.x0) / step)))
+
+/**
+ * The context of the tree's main agents in columns of `step` pixels: the largest of the main lanes'
+ * context in each, a call's context held until the next call unless the pause is longer than HOLD_MS.
+ */
+export function contextEnvelope(tl: Timeline, axis: TimeAxis, step: number): number[] {
+  const n = columns(axis, step)
+  const out = new Array<number>(n).fill(0)
+  for (const l of tl.lanes) {
+    if (!l.main) continue
+    const pts = l.series.find((s) => s.own)?.points ?? []
+    pts.forEach((p, i) => {
+      const next = pts[i + 1]
+      const a = columnOf(axis, step, n, p.t)
+      const b = next && next.t - p.t <= HOLD_MS ? columnOf(axis, step, n, next.t) : a
+      for (let c = a; c <= b; c++) out[c] = Math.max(out[c], p.tokens)
+    })
+  }
+  return out
+}
+
+/** What the tree spent in each column of `step` pixels, in a bar's parts (`addCall`). */
+export function spendDensity(tl: Timeline, axis: TimeAxis, step: number, split: Split): Record<string, number>[] {
+  const n = columns(axis, step)
+  const out = Array.from({ length: n }, () => ({}) as Record<string, number>)
+  for (const l of tl.lanes) for (const c of l.calls) addCall(out[columnOf(axis, step, n, c.t)], c, split)
+  return out
+}
+
+/**
+ * The window a click on the calendar day starting at local midnight `m` snaps to: the day `splitDays`
+ * made of it when there is one that is about a day long, else that calendar day's own activity (cut
+ * at its midnights); undefined when nothing ran on it.
+ */
+export function snapTarget(tl: Timeline, days: readonly Day[], m: number): Win | undefined {
+  const day = days.find((d) => d.date === m && d.t1 - d.t0 <= 30 * HOUR)
+  if (day) return snapDay(day)
+  const next = midnight(m, 1)
+  const hit = tl.spans.filter(([a, b]) => a < next && b >= m)
+  if (hit.length === 0) return undefined
+  const first = Math.min(...hit.map(([a]) => Math.max(a, m)))
+  const last = Math.max(...hit.map(([, b]) => Math.min(b, next)))
+  return windowAround(first, last)
+}
+
+/** Local midnight of the day `t` is on. */
+export const dayStart = (t: number) => midnight(t)
+
+/** The local midnights from just after `t0` up to `t1`. */
+export function midnightsBetween(t0: number, t1: number): number[] {
+  const out: number[] = []
+  for (let m = midnight(t0, 1); m <= t1; m = midnight(m, 1)) out.push(m)
+  return out
 }
 
 // ---- packing --------------------------------------------------------------------------

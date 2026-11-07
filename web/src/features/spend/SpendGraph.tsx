@@ -10,7 +10,6 @@ import { unwrapMachineText } from '../../lib/wrapper'
 import { Card, ModelName, SegmentedControl } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
-import { DayStrip } from './DayStrip'
 import { kindColor } from './marks'
 import {
   compactionTally,
@@ -23,8 +22,18 @@ import {
   type Unit,
   unitParts,
 } from './model'
+import { Overview } from './Overview'
 import { TimePlot } from './TimeView'
-import { buildTimeline, dayAt, daySpend, latestDay, splitDays } from './timeline'
+import {
+  activeMs,
+  boundsOf,
+  buildTimeline,
+  clampWindow,
+  defaultWindow,
+  revealWindow,
+  splitDays,
+  type Win,
+} from './timeline'
 import type { Branch, Tree } from './tree'
 
 /** A turn of a branch. */
@@ -51,11 +60,16 @@ export interface SpendGraphProps {
   initialSplit?: Split
   /** Dev and screenshots: start with the cursor on this turn of the home branch. */
   initialCursor?: number
+  /** Dev and screenshots: the window of time to show first (`?from=&to=`). */
+  initialWindow?: Partial<Win>
   /** Sessions of the tree whose cost is unknown (work, no billed message). */
   unknownSessions?: number
   /** Sessions of the tree whose dollars the harness recorded per call (flag recorded). */
   recordedSessions?: number
 }
+
+/** A tree with more activity than this gets the overview even when it ran on one day. */
+const OVERVIEW_MIN_MS = 3 * 60 * 60_000
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
 
@@ -244,6 +258,7 @@ export function SpendGraph({
   onSelectUnit,
   initialSplit = 'kind',
   initialCursor,
+  initialWindow,
   unknownSessions = 0,
   recordedSessions = 0,
 }: SpendGraphProps) {
@@ -268,27 +283,37 @@ export function SpendGraph({
     [branches],
   )
 
-  // a tree that ran on more than one day is shown a day at a time
+  // a tree that ran long, or on more than one day, is shown a window at a time, picked in the overview
   const timeline = useMemo(() => buildTimeline(tree), [tree])
   const days = useMemo(() => splitDays(timeline), [timeline])
-  const dayOf = (p: Pin | null | undefined) => {
-    const s = p && timeline.lanes.find((l) => l.main && l.branch === p.branch)?.turns.find((x) => x.col.index === p.col)
-    return s ? dayAt(days, s.t0) : -1
-  }
-  const [picked, setPicked] = useState(() => {
-    const d = dayOf(pinned ?? cursor)
-    return d >= 0 ? d : latestDay(daySpend(timeline, days, 'kind'))
+  const bounds = useMemo(() => boundsOf(timeline), [timeline])
+  const overview = days.length > 1 || activeMs(timeline) > OVERVIEW_MIN_MS
+  const turnStart = (p: Pin | null | undefined) =>
+    (p && timeline.lanes.find((l) => l.main && l.branch === p.branch)?.turns.find((x) => x.col.index === p.col)?.t0) ||
+    Number.NaN
+  const latest = useMemo(() => defaultWindow(timeline, days), [timeline, days])
+  const [win, setWin] = useState<Win>(() => {
+    if (initialWindow && (initialWindow.lo !== undefined || initialWindow.hi !== undefined))
+      return clampWindow({ lo: initialWindow.lo ?? bounds.t0, hi: initialWindow.hi ?? bounds.t1 }, bounds)
+    const at = turnStart(pinned ?? cursor)
+    return Number.isFinite(at) ? defaultWindow(timeline, days, at) : latest
   })
   // a turn pinned (in the graph, in a panel, in the list of decisions) or reached with the keys brings
-  // its day into view
+  // itself into view
   const [seen, setSeen] = useState({ pin: pinKey(pinned), cursor: pinKey(cursor) })
   if (seen.pin !== pinKey(pinned) || seen.cursor !== pinKey(cursor)) {
     setSeen({ pin: pinKey(pinned), cursor: pinKey(cursor) })
-    const d =
-      seen.cursor !== pinKey(cursor) && cursor ? dayOf(cursor) : seen.pin !== pinKey(pinned) ? dayOf(pinned) : -1
-    if (d >= 0) setPicked(d)
+    const t =
+      seen.cursor !== pinKey(cursor) && cursor
+        ? turnStart(cursor)
+        : seen.pin !== pinKey(pinned)
+          ? turnStart(pinned)
+          : Number.NaN
+    if (overview && Number.isFinite(t)) {
+      const next = revealWindow(win, t, days, bounds)
+      if (next !== win) setWin(next)
+    }
   }
-  const dayIndex = Math.max(0, Math.min(picked, days.length - 1))
 
   if (branches.length === 0) return null
 
@@ -382,21 +407,22 @@ export function SpendGraph({
           </span>
         </p>
       )}
-      {days.length > 1 && (
-        <DayStrip
-          days={days}
+      {overview && (
+        <Overview
           timeline={timeline}
+          days={days}
           split={split}
-          selected={dayIndex}
-          pinned={dayOf(pinned)}
-          onSelect={setPicked}
+          win={win}
+          onWin={setWin}
+          pinnedT={turnStart(pinned)}
+          latest={latest}
         />
       )}
       <Readout tree={tree} at={shown} unit={shownUnit} split={split} />
       <TimePlot
         tree={tree}
         timeline={timeline}
-        day={days.length > 1 ? days[dayIndex] : undefined}
+        range={overview ? win : undefined}
         split={split}
         pinned={valid(pinned) ? pinned : null}
         cursor={cur}
@@ -409,17 +435,17 @@ export function SpendGraph({
         onKey={onKey}
       />
       <p className="mt-2 text-meta text-muted">
-        Time runs across, local; a narrow grey band is time in which nothing ran, left out. A session that ran on more
-        than one day is shown a day at a time, picked in the strip above the plot: a day ends at the longest pause of
-        its night, so work past midnight stays with its evening. A row is the main agent of a session or an agent it
-        launched: above its line, the context each call was sent with (one scale for every row, so the tall ones are the
-        expensive ones to carry), dotted where the agent held it over a pause (faint while a main agent waited for a
-        message), with the context it carried lightly tinted; below it, what the row spent in each slot of time, on one
-        dollar scale. A light frame spans an agent's work; each piece of it has a line from the row that sent it (none
-        when its own background work woke it) and a dashed one to each turn its report came in; an addressable agent
-        keeps a row of its own, one-shot agents share rows. A dot is a message you sent (hollow if typed while a turn
-        ran), and the bracket rising from it totals everything up to your next one. A diamond is a cache miss, a red
-        mark a compaction on a cold cache, an amber dashed one on a warm cache.
+        Time runs across, local; a narrow grey band is time in which nothing ran, left out. A session that ran long or
+        on more than one day shows a window of it, picked on the strip above the plot (the whole session on one scale,
+        the window highlighted): it opens on the last day of work, and its scales are its own. A row is the main agent
+        of a session or an agent it launched: above its line, the context each call was sent with (one scale for every
+        row, so the tall ones are the expensive ones to carry), dotted where the agent held it over a pause (faint while
+        a main agent waited for a message), with the context it carried lightly tinted; below it, what the row spent in
+        each slot of time, on one dollar scale. A light frame spans an agent's work; each piece of it has a line from
+        the row that sent it (none when its own background work woke it) and a dashed one to each turn its report came
+        in; an addressable agent keeps a row of its own, one-shot agents share rows. A dot is a message you sent (hollow
+        if typed while a turn ran), and the bracket rising from it totals everything up to your next one. A diamond is a
+        cache miss, a red mark a compaction on a cold cache, an amber dashed one on a warm cache.
         {overhead &&
           ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
         {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}

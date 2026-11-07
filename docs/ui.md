@@ -296,20 +296,44 @@ From top to bottom:
     are squeezed into a narrow grey **break** labelled with its length; with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
-  - **one day at a time** (bead `merlin-t8s.50`): a tree that ran on more than one day (one ran
-    for two months) is cut each night at the idle stretch that covers most of the night's core
-    (00:00–08:00), then of its window (18:00–12:00); the time after the last activity counts as such
-    a stretch, so work past midnight with nothing after it stays with its evening, and a turn still
-    running is never cut. A part is shown as the calendar day its first-to-last activity overlaps
-    most; when two land on one day the first goes back to the day it started on (an evening run deep
-    into the night), or, if it started that same day, they are one. Every scale, row and break is the
-    day's own. Above the readout a **day locator** (`DayStrip.tsx`) has a cell per day, at most 44 px
-    wide so that two days take two cells, not the card: the day's spend as a stacked bar in the
-    legend's split, the day of the month (and the month where it changes), a break mark where
-    calendar days with nothing were skipped, the pinned turn's marker over its day. A click or ← →
-    picks the day; pinning a turn (in the graph, a panel or the list of decisions) or moving the
-    keyboard cursor brings its day into view. The first day shown is the last one, unless it spent
-    under 1% of the tree (a resume that only compacted), then the last that spent more;
+  - **a window at a time** (beads `merlin-t8s.50`, `merlin-zls.6`): the plot shows one **window** of
+    time, with scales (token, dollar, slot length) and breaks of its own; the rest of a long tree is
+    reached through an **overview** strip above the readout (`Overview.tsx`). It is shown when the tree
+    ran on more than one day or has more than 3 hours of activity; otherwise there is no strip and the
+    window is everything. A turn, call, context and mark belongs to a window if it starts inside it
+    (`[lo, hi)`; a turn running past the edge is kept whole); a piece of agent work if it overlaps it,
+    and a launch or report line whose other end is outside the window is drawn along the plot's edge,
+    dashed, with a small chevron pointing out (`sliceTimeline`);
+  - the **overview** is 54 px tall and full width: the whole tree on one linear wall-clock scale, idle
+    time squeezed out as in the plot (`timeAxis` over every span, at most 16 breaks, so long nights do
+    not eat the strip). It draws the context of the main rows as a light area (the largest of the main
+    lanes, `contextEnvelope`), the spend as thin stacked columns along the bottom in the legend's split
+    (`spendDensity`), a faint tick at each midnight, the date of each day (from `splitDays`: the
+    day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
+    marker. The **brush** is the window: a highlighted rectangle with a handle at each edge, the rest
+    dimmed. Dragging across the strip selects a new range; dragging the window moves it (in pixels of the
+    strip, so over a break its time width changes); dragging a handle resizes it; a click outside the
+    window centres it there; a click on a date, or a double-click inside a day, snaps to that day (its
+    activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
+    window by its own width, or to the previous or next day when it is a day; Home and End go to the
+    start and end. A window is never narrower than 5 minutes. A line above the strip says what is shown
+    and what it spent, with **Latest** (the window the page opened on) and **All**. The days are cut each
+    night at the idle stretch that covers most of the night's core (00:00–08:00), then of its window
+    (18:00–12:00); the time after the last activity counts as such a stretch, so work past midnight
+    with nothing after it stays with its evening, and a turn still running is never cut. A part is the
+    calendar day its first-to-last activity overlaps most; when two land on one day the first goes back
+    to the day it started on (an evening run deep into the night), or, if it started that same day,
+    they are one;
+  - the **first window** is the day of the last work episode: an episode runs back from the end of
+    activity to the first idle stretch longer than 2 hours or the first night cut, whichever comes
+    first (`defaultWindow`, `episodes`); an episode that spent under 1% of the tree (a resume that only
+    compacted) is passed over for the one before. The window is that episode's day (a day of three
+    sittings would otherwise open on its last half hour), or the episode itself, with a little pad,
+    when the tree had no night and its one day runs for more than 30 hours. Pinning a
+    turn (in the graph, a panel, the list of decisions, `#t<n>`) or moving the keyboard cursor brings
+    it into view: when it is outside the window, the window moves to hold it, keeping its width, or
+    snaps to the turn's day if it was a day (`revealWindow`); a turn asked for on opening picks the
+    episode that holds it. `?from=<ISO or ms>&to=<ISO or ms>` sets the window (screenshots);
   - a **row** per session's main agent and per agent it launched, in the tree's order. Above its
     baseline, the context every call of the agent was sent with (prompt tokens), as a step area, on one
     token scale for every row: a row is as tall as its largest context needs, so the rows that were

@@ -21,6 +21,7 @@ import { Banners, Diagnostics, FamilyStrip, ResumeBox, SessionHeader } from './H
 import { type Pin, SpendGraph, type UnitRef } from './SpendGraph'
 import { parseHash, resolveTarget } from './session'
 import { DecisionPanel, TopDecisions, TurnInspector } from './TurnInspector'
+import { parseTime } from './timeline'
 import { buildTree } from './tree'
 
 const num = (s: string | null) => (s !== null && s !== '' && Number.isFinite(Number(s)) ? Number(s) : null)
@@ -124,6 +125,7 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
           onSelectUnit={selectUnit}
           initialSplit={params.get('split') === 'class' ? 'class' : 'kind'}
           initialCursor={num(params.get('cursor')) ?? undefined}
+          initialWindow={{ lo: parseTime(params.get('from')), hi: parseTime(params.get('to')) }}
           unknownSessions={details.filter((d) => d.cost.flag === 'unknown').length}
           recordedSessions={details.filter((d) => d.cost.flag === 'recorded').length}
         />

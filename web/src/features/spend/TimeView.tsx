@@ -32,7 +32,6 @@ import {
   barSpan,
   bracketed,
   clockTicks,
-  type Day,
   detailAt,
   HOLD_MS,
   type Lane,
@@ -49,6 +48,7 @@ import {
   type TurnSpan,
   timeAxis,
   turnPlace,
+  type Win,
 } from './timeline'
 import type { Overhead, Tree } from './tree'
 import { useWidth } from './useWidth'
@@ -91,6 +91,12 @@ const markColor = (call: { cache: string } | undefined) =>
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const dateOf = (t: number) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' })
+
+/** A small triangle at an edge of the plot, pointing out of it: the line goes on beyond the window. */
+const edgeChevron = (x: number, y: number, side: 'l' | 'r') =>
+  side === 'l'
+    ? `M${f1(x + 4)} ${f1(y - 4)}L${f1(x)} ${f1(y)}L${f1(x + 4)} ${f1(y + 4)}Z`
+    : `M${f1(x - 4)} ${f1(y - 4)}L${f1(x)} ${f1(y)}L${f1(x - 4)} ${f1(y + 4)}Z`
 
 /** The last point at or before `t`. */
 function pointAt(points: readonly Point[], t: number): Point | undefined {
@@ -140,8 +146,8 @@ export interface TimePlotProps {
   tree: Tree
   /** The tree's timeline, every day of it. */
   timeline: Timeline
-  /** The day to show, of a tree that ran on more than one. */
-  day: Day | undefined
+  /** The window of time to show, of a tree too long for one view. */
+  range: Win | undefined
   split: Split
   pinned: Pin | null
   cursor: Pin | undefined
@@ -157,7 +163,7 @@ export interface TimePlotProps {
 export function TimePlot({
   tree,
   timeline,
-  day,
+  range,
   split,
   pinned,
   cursor,
@@ -174,7 +180,7 @@ export function TimePlot({
   const [px, setPx] = useState<{ x: number; row: number } | null>(null)
   const [band, setBand] = useState<{ branch: number; k: number } | null>(null)
   const hatch = `hatch${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
-  const tl = useMemo(() => (day ? sliceTimeline(timeline, day) : timeline), [timeline, day])
+  const tl = useMemo(() => (range ? sliceTimeline(timeline, range.lo, range.hi) : timeline), [timeline, range])
   // the overhead windows of the day
   const overheads = useMemo(
     () => tree.branches.map((b) => b.overhead.filter((o) => o.t1 >= tl.t0 && o.t0 <= tl.t1)),
@@ -288,7 +294,7 @@ export function TimePlot({
     const b = tree.branches.find((x) => x.model.units.includes(u))
     return u.reports
       .map((r) => ms(b?.model.cols[r]?.turn.startedAt))
-      .filter((t) => Number.isFinite(t) && t >= tl.t0 && t <= tl.t1)
+      .filter((t) => Number.isFinite(t) && (range || (t >= tl.t0 && t <= tl.t1)))
   }
   const overX = (o: Overhead): [number, number] => {
     const a = axis.x(Math.max(o.t0, tl.t0))
@@ -778,6 +784,8 @@ export function TimePlot({
               const from = u.woken ? undefined : (u.from && rowByName.get(u.from)) || mainRow(l.branch)
               const to = mainRow(l.branch)
               const [a] = uX(u)
+              // started before the window: its line runs along the left edge, with a chevron
+              const early = range !== undefined && u.startMs < range.lo
               const fy = from ? from.base : g.top
               return (
                 <g key={`c${l.key}/${u.id}`} pointerEvents="none" opacity={on ? 1 : 0.7}>
@@ -790,8 +798,9 @@ export function TimePlot({
                         y2={from.top < g.top ? g.top - 3 : g.bottom + 3}
                         stroke={color}
                         strokeWidth={on ? 1.5 : 1}
+                        strokeDasharray={early ? '4 2' : undefined}
                       />
-                      {from.top < g.top && (
+                      {from.top < g.top && !early && (
                         <path
                           d={`M${f1(a - 3)} ${g.top - 5}L${f1(a)} ${g.top}L${f1(a + 3)} ${g.top - 5}Z`}
                           fill={color}
@@ -799,9 +808,12 @@ export function TimePlot({
                       )}
                     </>
                   )}
+                  {early && <path d={edgeChevron(a, g.top + 4, 'l')} fill={color} />}
                   {to &&
                     arrivals(u).map((t) => {
-                      const xb = axis.x(t)
+                      // a report in a turn outside the window: the line runs to the edge, with a chevron
+                      const edge = range && t < range.lo ? 'l' : range && t >= range.hi ? 'r' : undefined
+                      const xb = edge === 'l' ? X0 + 1 : edge === 'r' ? X1 - 1 : axis.x(t)
                       return (
                         <g key={t}>
                           <line
@@ -814,7 +826,11 @@ export function TimePlot({
                             strokeDasharray="2 2"
                           />
                           <path
-                            d={`M${f1(xb - 3)} ${to.base + 6}L${f1(xb)} ${to.base + 1.5}L${f1(xb + 3)} ${to.base + 6}Z`}
+                            d={
+                              edge
+                                ? edgeChevron(xb, to.base + 3, edge)
+                                : `M${f1(xb - 3)} ${to.base + 6}L${f1(xb)} ${to.base + 1.5}L${f1(xb + 3)} ${to.base + 6}Z`
+                            }
                             fill={color}
                           />
                         </g>
