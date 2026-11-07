@@ -12,6 +12,7 @@ import { unwrapMachineText } from '../../lib/wrapper'
 import { Card, ModelName, SegmentedControl } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
+import { Key, keyFacts } from './Key'
 import { kindColor } from './marks'
 import {
   compactionTally,
@@ -109,8 +110,8 @@ function Chips({ parts }: { parts: Part[] }) {
   )
 }
 
-/** The fixed-height lines above the plot that say what is under the cursor. */
-function Readout({
+/** The lines of the readout that say which turn or piece of work is under the cursor (the plot's own readout holds them). */
+function TurnReadout({
   tree,
   at,
   unit,
@@ -121,14 +122,6 @@ function Readout({
   unit: { branch: Branch; unit: Unit } | undefined
   split: Split
 }) {
-  if (!at && !unit) {
-    return (
-      <div className="min-h-[4.5rem] text-sec text-faint">
-        Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click pins it
-        and opens it below.
-      </div>
-    )
-  }
   const b = unit ? unit.branch : tree.branches[at?.branch ?? 0]
   const c = b.model.cols[unit ? unit.unit.launch : (at?.col ?? 0)]
   const dec = b.model.decisions[c.decision]
@@ -163,7 +156,7 @@ function Readout({
   ]
   return (
     // one line each, so that what is under the pointer never moves the graph
-    <div className="min-h-[4.5rem] space-y-0.5 text-sec" aria-live="polite">
+    <div className="mt-0.5 space-y-0.5 text-sec text-text">
       <div className="flex items-baseline gap-x-3 overflow-hidden whitespace-nowrap">
         {tree.branches.length > 1 && <span className="max-w-64 truncate font-medium">{b.title}</span>}
         <span className="font-mono">turn {c.index}</span>
@@ -290,6 +283,7 @@ export function SpendGraph({
   // a tree that ran long, or on more than one day, is shown a window at a time, picked in the overview
   const prices = usePrices().data?.models // until it arrives (or if it fails) tiers go by the model's family
   const timeline = useMemo(() => buildTimeline(tree, prices), [tree, prices])
+  const facts = useMemo(() => keyFacts(tree, timeline), [tree, timeline])
   const byTier = useMemo(() => tierSpend(timeline), [timeline])
   const days = useMemo(() => splitDays(timeline), [timeline])
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
@@ -440,7 +434,6 @@ export function SpendGraph({
           latest={latest}
         />
       )}
-      <Readout tree={tree} at={shown} unit={shownUnit} split={split} />
       <TimePlot
         tree={tree}
         timeline={timeline}
@@ -455,33 +448,31 @@ export function SpendGraph({
         onPin={onPin}
         onSelectUnit={onSelectUnit}
         onKey={onKey}
+        turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} split={split} /> : null}
       />
-      <p className="mt-2 text-meta text-muted">
-        Time runs across, local; a narrow grey band is time in which nothing ran, left out. A session that ran long or
-        on more than one day shows a window of it, picked on the strip above the plot (the whole session on one scale,
-        the window highlighted): it opens on the last day of work, and its scales are its own. A row is the main agent
-        of a session or an agent it launched: above its line, the context each call was sent with (one scale for every
-        row, so the tall ones are the expensive ones to carry), dotted where the agent held it over a pause (faint while
-        a main agent waited for a message), with the context it carried lightly tinted; below it, what the row spent in
-        each slot of time, on one dollar scale. A light frame spans an agent's work. A faint spine leads from the row
-        that launched an agent, down with a rounded elbow, then along the agent's baseline for its life (full strength
-        for the work in focus; a dashed line goes to each turn its report came in); its weight is the model's price,
-        heavy 3.5 px, mid 2 px, light 1 px, and a main row's turns are weighted the same, with the model's name where it
-        changes. A fork leaves from the top of its parent's context, and a hatched band in its row is the context it
-        copied; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot
-        agents share rows, and four or more launched together are one swarm row (click it, marked +, to open it; − folds
-        it). A dot is a message you sent (hollow if typed while a turn ran), and the bracket rising from it totals
-        everything up to your next one. A diamond is a cache miss, a red mark a compaction on a cold cache, an amber
-        dashed one on a warm cache.
-        {overhead &&
-          ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
-        {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}
-        {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}.
-        {tree.rereads.length > 0 &&
-          ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}
-        {tree.wakeups.count > 0 &&
-          ` ${plural(tree.wakeups.count, 'piece')} of agent work nobody asked for: an agent woken by its own background work (an expired watch, say) after it had reported, ${formatMoney(tree.wakeups.usd)}.`}
-      </p>
+      <Key facts={facts} className="mt-2" />
+      <details className="mt-2 text-meta text-muted">
+        <summary className="cursor-pointer select-none text-sec">How to read this graph</summary>
+        <p className="mt-1">
+          Time runs across, local; a narrow grey band is time in which nothing ran, left out. Every row shares one token
+          scale above its baseline (so the tall ones are the expensive ones to carry) and one dollar scale below it. A
+          session that ran long or on more than one day shows a window of it, picked on the strip above the plot (the
+          whole session on one scale, the window highlighted): it opens on the last day of work, and the scales are the
+          window's own. A fork leaves from the top of its parent's context; a sub-agent starts clean, from the baseline.
+          An addressable agent keeps a row of its own, one-shot agents share rows, and four or more launched together
+          are one swarm row (marked +; click it to open it, − folds it). A person's turns are weighted by the price of
+          their model, and the model's name is written where it changes.
+          {overhead &&
+            ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
+          {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}
+          {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}
+          .
+          {tree.rereads.length > 0 &&
+            ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}
+          {tree.wakeups.count > 0 &&
+            ` ${plural(tree.wakeups.count, 'piece')} of agent work nobody asked for: an agent woken by its own background work (an expired watch, say) after it had reported, ${formatMoney(tree.wakeups.usd)}.`}
+        </p>
+      </details>
     </Card>
   )
 }

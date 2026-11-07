@@ -290,8 +290,28 @@ From top to bottom:
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
-  by when it happened. A legend split by who, by token class or by model tier, a line adding up the compactions, and
-  a readout above the plot of the turn or piece of work under the cursor.
+  by when it happened. A legend split by who, by token class or by model tier, a line adding up the compactions, a
+  **readout** above the plot, and under it a drawn **key**.
+  - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
+    Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
+    message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
+    collapsed swarm, what it stands for. The lines under it (`TurnReadout` in `SpendGraph.tsx`) are the turn
+    under the cursor or pinned (its prompt, step, launched work, decision total, context, idle time, the
+    by-who chips and notes on cache misses, compactions, typed-while-running prompts and reports) or the
+    selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
+    how to read and pin, and the scales;
+  - the **key** (`Key.tsx`) is a row of small inline SVG samples (28x16 px) with a few words each: the context
+    area, held context (strong and faint, tinted), cache miss, compactions (cold, warm, unknown), prompt dots
+    (solid, hollow), the decision bracket (and the pinned one), turn weights by tier, the idle hairline, the
+    spend per slot, the agent spine with its elbow, a fork with the context it copied, the agent frame
+    (sub-agent, fork notch, workflow dashed), the swarm "+", the report line, a forked or continued session's
+    spine, the break band and the overhead hatching. Marks the tree cannot have are left out (`keyFacts`:
+    cache misses, each kind of compaction, queued prompts, agents, forks, workflows, swarms, reports, sessions,
+    overhead). The samples use the constants and patterns TimeView.tsx exports and draws with (widths,
+    dashes, opacities, tints, the hatching, `elbowPath`), so a change to the plot's look changes its key.
+    Under it a **How to read this graph** disclosure holds the rules a picture does not carry: one scale for
+    every row, breaks, the window and overview, forks and sub-agents, swarms, how the dollars are recomputed,
+    and the sentences about cache misses and wake-ups;
   - stretches longer than 10 minutes in which nothing ran (no call, no turn, no piece of agent work)
     are squeezed into a narrow grey **break** labelled with its length; with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the

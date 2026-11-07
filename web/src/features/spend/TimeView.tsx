@@ -24,7 +24,16 @@
 //   overhead   under a session's rows, a hatched band over each reported window for what the harness
 //              reported and no message explains: labelled with its dollars, on no scale, as it belongs
 //              to the whole window and not to any slot, turn or agent in it
-import { type KeyboardEvent, type PointerEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
@@ -93,7 +102,7 @@ const BAR_MIN_PX = 2
 const OVER_H = 14
 const OVER_GAP = 6
 
-const COLOR: Record<KindKey | 'main', string> = {
+export const COLOR: Record<KindKey | 'main', string> = {
   ...(Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<KindKey, string>),
 }
 const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
@@ -102,26 +111,75 @@ const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
 const holds = (run: readonly Point[], p: Point | undefined) => !!p && p.t >= run[0].t && p.t <= run[run.length - 1].t
 
 /** The radius of the elbow where a spine turns from the sender's row onto its own baseline. */
-const ELBOW_R = 6
+export const ELBOW_R = 6
 /** A spine at rest; at full strength for the work in focus. */
-const SPINE_OPACITY = 0.35
+export const SPINE_OPACITY = 0.35
 /** The vertical part of a spine, whatever the weight of its horizontal part. */
-const SPINE_W = 1.25
+export const SPINE_W = 1.25
 
 /** How strongly the context an agent carries over a pause is tinted, under its dotted line. */
-const HELD_TINT = 0.08
+export const HELD_TINT = 0.08
+/** The context area's fill and outline. */
+export const CTX_FILL = 0.22
+export const CTX_LINE = 1.25
+/** The dotted line of held context: strong while a turn or piece of work ran, faint between. */
+export const HELD_LINE = {
+  strong: { opacity: 1, width: 1.5, dash: '1.5 2.5' },
+  faint: { opacity: 0.4, width: 1.25, dash: '1.5 4' },
+}
+/** A compaction's mark: solid on a cold cache, dashed otherwise. */
+export const COMPACT_MARK = {
+  cold: { width: 2, dash: undefined as string | undefined },
+  warm: { width: 1.5, dash: '3 2' },
+}
+/** A cache miss's diamond: its side and colour. */
+export const MISS_SIZE = 8
+export const MISS_COLOR = 'var(--series-5)'
+/** A person's message: the dot's radius. */
+export const DOT_R = 2.8
+/** The dash of a report's line. */
+export const REPORT_DASH = '2 2'
+/** How strongly an agent's frame is drawn. */
+export const FRAME_OPACITY = 0.55
+/** The dash of a workflow's frame. */
+export const WORKFLOW_DASH = '4 2'
 
 /** The chip on the frame of a swarm: "+" on a collapsed one, "−" on the first agent of an expanded one. */
-const CHIP = 12
+export const CHIP = 12
 
 const f1 = (n: number) => n.toFixed(1)
 const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
-const markColor = (call: { cache: string } | undefined) =>
+export const markColor = (call: { cache: string } | undefined) =>
   call?.cache === 'cold' ? 'var(--bad)' : call ? 'var(--warn)' : 'var(--faint)'
 
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const dateOf = (t: number) => new Date(t).toLocaleDateString([], { day: 'numeric', month: 'short' })
+
+/** A vertical from `y0` down (or up) to the baseline `y1`, turning right with a rounded elbow. */
+export function elbowPath(x: number, y0: number, y1: number) {
+  const r = Math.min(ELBOW_R, Math.abs(y1 - y0))
+  const d = y1 >= y0 ? 1 : -1
+  return `M${f1(x)} ${f1(y0)}V${f1(y1 - d * r)}Q${f1(x)} ${f1(y1)} ${f1(x + r)} ${f1(y1)}`
+}
+
+/** The hatching of the overhead bands, as a pattern. */
+export function OverheadPattern({ id }: { id: string }) {
+  return (
+    <pattern id={id} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1={0} y1={0} x2={0} y2={5} stroke="var(--muted)" strokeWidth={1.25} strokeOpacity={0.55} />
+    </pattern>
+  )
+}
+
+/** The hatching of the context a fork copied, in its parent's colour. */
+export function InheritPattern({ id, color }: { id: string; color: string }) {
+  return (
+    <pattern id={id} width={4} height={4} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1={0} y1={0} x2={0} y2={4} stroke={color} strokeWidth={1.1} strokeOpacity={0.6} />
+    </pattern>
+  )
+}
 
 /** A small triangle at an edge of the plot, pointing out of it: the line goes on beyond the window. */
 const edgeChevron = (x: number, y: number, side: 'l' | 'r') =>
@@ -174,6 +232,8 @@ export interface TimePlotProps {
   onPin: (p: Pin | null) => void
   onSelectUnit: (u: UnitRef) => void
   onKey: (e: KeyboardEvent<HTMLDivElement>) => void
+  /** The turn or piece of work under the cursor, pinned or selected (lines under the pointer's own); null if none. */
+  turnLines: ReactNode
 }
 
 export function TimePlot({
@@ -190,6 +250,7 @@ export function TimePlot({
   onPin,
   onSelectUnit,
   onKey,
+  turnLines,
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
@@ -512,7 +573,7 @@ export function TimePlot({
             const xs = l.units.map(uX)
             const a = Math.min(...xs.map(([x]) => x))
             const b = Math.max(...xs.map(([, x]) => x))
-            const dash = l.agent?.kind === 'workflow' ? '4 2' : undefined
+            const dash = l.agent?.kind === 'workflow' ? WORKFLOW_DASH : undefined
             const label = l.title
             const cost = formatMoney(l.usd)
             const room = b - a - (l.kind === 'fork' ? 9 : 4) - 4
@@ -528,7 +589,7 @@ export function TimePlot({
                   d={`M${f1(a)} ${g.base}V${top}H${f1(b)}V${top + 4}`}
                   fill="none"
                   stroke={color}
-                  strokeOpacity={0.55}
+                  strokeOpacity={FRAME_OPACITY}
                   strokeWidth={1}
                   strokeDasharray={dash}
                 />
@@ -602,8 +663,8 @@ export function TimePlot({
                 <title>{`${formatTokens(inherited.tokens)} of context copied from the parent`}</title>
               </rect>
             )}
-            <path d={area(g, run)} fill={color} fillOpacity={0.22} />
-            <path d={line(g, run)} fill="none" stroke={color} strokeWidth={1.25} strokeLinejoin="round" />
+            <path d={area(g, run)} fill={color} fillOpacity={CTX_FILL} />
+            <path d={line(g, run)} fill="none" stroke={color} strokeWidth={CTX_LINE} strokeLinejoin="round" />
             {runs[i + 1] && (
               <g>
                 <title>{`${formatTokens(run[run.length - 1].tokens)} of context held for ${formatDuration(runs[i + 1][0].t - run[run.length - 1].t)}`}</title>
@@ -624,9 +685,9 @@ export function TimePlot({
                     y1={yCtx(g, run[run.length - 1].tokens)}
                     y2={yCtx(g, run[run.length - 1].tokens)}
                     stroke={color}
-                    strokeOpacity={p.busy ? 1 : 0.4}
-                    strokeWidth={p.busy ? 1.5 : 1.25}
-                    strokeDasharray={p.busy ? '1.5 2.5' : '1.5 4'}
+                    strokeOpacity={(p.busy ? HELD_LINE.strong : HELD_LINE.faint).opacity}
+                    strokeWidth={(p.busy ? HELD_LINE.strong : HELD_LINE.faint).width}
+                    strokeDasharray={(p.busy ? HELD_LINE.strong : HELD_LINE.faint).dash}
                     strokeLinecap="round"
                   />
                 ))}
@@ -665,8 +726,8 @@ export function TimePlot({
               y1={pre ? Math.max(top - 2, yCtx(g, pre) - 4) : top}
               y2={g.base}
               stroke={markColor(c.compaction.call)}
-              strokeWidth={cold ? 2 : 1.5}
-              strokeDasharray={cold ? undefined : '3 2'}
+              strokeWidth={(cold ? COMPACT_MARK.cold : COMPACT_MARK.warm).width}
+              strokeDasharray={(cold ? COMPACT_MARK.cold : COMPACT_MARK.warm).dash}
             >
               <title>
                 {`compaction${c.agent ? ` of ${c.agent.name ?? c.agent.kind}` : ''}${pre ? ` at ${formatTokens(pre)}` : ''}${c.compaction.postTokens ? ` → ${formatTokens(c.compaction.postTokens)}` : ''}${c.compaction.call ? `: ${callLine(c.compaction.call, !!c.compaction.messageId)}` : ''}`}
@@ -680,12 +741,12 @@ export function TimePlot({
           return (
             <rect
               key={`${m.t}/${m.reread.agentId ?? ''}`}
-              x={x - 4}
-              y={yy - 4}
-              width={8}
-              height={8}
+              x={x - MISS_SIZE / 2}
+              y={yy - MISS_SIZE / 2}
+              width={MISS_SIZE}
+              height={MISS_SIZE}
               transform={`rotate(45 ${f1(x)} ${f1(yy)})`}
-              fill="var(--series-5)"
+              fill={MISS_COLOR}
               stroke="var(--surface)"
               strokeWidth={1.5}
             >
@@ -914,7 +975,7 @@ export function TimePlot({
                   <circle
                     cx={x}
                     cy={g.base}
-                    r={2.8}
+                    r={DOT_R}
                     fill={m.queued ? 'var(--surface)' : 'var(--text)'}
                     stroke={m.queued ? 'var(--text)' : 'var(--surface)'}
                     strokeWidth={m.queued ? 1.25 : 1}
@@ -933,11 +994,7 @@ export function TimePlot({
   const inFocus = (l: Lane, u: Unit) =>
     isOn(l, u) || focusTurns.some((p) => p.branch === l.branch && (u.launch === p.col || u.reports.includes(p.col)))
   /** A vertical from `y0` on the sender's row down (or up) to the baseline `y1`, turning right with an elbow. */
-  const elbow = (x: number, y0: number, y1: number) => {
-    const r = Math.min(ELBOW_R, Math.abs(y1 - y0))
-    const d = y1 >= y0 ? 1 : -1
-    return `M${f1(x)} ${f1(y0)}V${f1(y1 - d * r)}Q${f1(x)} ${f1(y1)} ${f1(x + r)} ${f1(y1)}`
-  }
+  const elbow = elbowPath
   /**
    * An agent's spine: from the sender's row at the moment of launch (a fork: from the top of the
    * parent's context then, a sub-agent: from its baseline) down, with an elbow, onto the agent's own
@@ -1069,7 +1126,7 @@ export function TimePlot({
                               y2={to.base + 5}
                               stroke={color}
                               strokeWidth={on ? 1.5 : 1}
-                              strokeDasharray="2 2"
+                              strokeDasharray={REPORT_DASH}
                             />
                             <path
                               d={
@@ -1181,35 +1238,45 @@ export function TimePlot({
 
   return (
     <div>
-      <div className="flex min-h-5 items-baseline gap-x-3 overflow-hidden whitespace-nowrap text-sec text-muted">
-        {band ? (
-          <OverheadText o={overheads[band.branch][band.k]} />
-        ) : under ? (
-          <>
-            <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
-            {under.between && <span>{betweenText(under.between)}</span>}
-            {under.swarm?.swarm && <SwarmText l={under.swarm} />}
-            {under.ctx && (
-              <span>
-                {under.ctx.l.main ? 'main agent' : under.ctx.l.title}:{' '}
-                <span className="font-mono text-text">{formatTokens(under.ctx.p.tokens)}</span> context
-                {under.ctx.wait !== undefined
-                  ? `, held, waiting for a message ${idleText(under.ctx.wait)}`
-                  : crossT !== undefined &&
-                    crossT - under.ctx.p.t > HOLD_MS &&
-                    `, held ${idleText(crossT - under.ctx.p.t)}`}
-              </span>
-            )}
-            <span>
-              this {slotText(slot)} on the row:{' '}
-              <span className="font-mono text-text">{formatMoney(under.s?.total ?? 0)}</span>
-            </span>
-          </>
+      {/* one readout of a fixed height, so that nothing under the pointer moves the graph: the pointer's
+          facts on the first line, the turn or piece of work under the next three */}
+      <div className="h-[4.75rem] overflow-hidden text-sec text-muted" aria-live="polite">
+        {!band && !under && !turnLines ? (
+          <div className="text-faint">
+            Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click pins
+            it and opens it below. Context per call above each baseline, spend per {slotText(slot)} below it, each on
+            one scale (the tallest bar is {formatMoney(maxSlot)}).
+          </div>
         ) : (
-          <span className="text-faint">
-            Context per call above each baseline, on one scale; spend per {slotText(slot)} below it, on one scale (the
-            tallest bar is {formatMoney(maxSlot)}).
-          </span>
+          <>
+            <div className="flex items-baseline gap-x-3 overflow-hidden whitespace-nowrap">
+              {band ? (
+                <OverheadText o={overheads[band.branch][band.k]} />
+              ) : under ? (
+                <>
+                  <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
+                  {under.between && <span>{betweenText(under.between)}</span>}
+                  {under.swarm?.swarm && <SwarmText l={under.swarm} />}
+                  {under.ctx && (
+                    <span>
+                      {under.ctx.l.main ? 'main agent' : under.ctx.l.title}:{' '}
+                      <span className="font-mono text-text">{formatTokens(under.ctx.p.tokens)}</span> context
+                      {under.ctx.wait !== undefined
+                        ? `, held, waiting for a message ${idleText(under.ctx.wait)}`
+                        : crossT !== undefined &&
+                          crossT - under.ctx.p.t > HOLD_MS &&
+                          `, held ${idleText(crossT - under.ctx.p.t)}`}
+                    </span>
+                  )}
+                  <span>
+                    this {slotText(slot)} on the row:{' '}
+                    <span className="font-mono text-text">{formatMoney(under.s?.total ?? 0)}</span>
+                  </span>
+                </>
+              ) : null}
+            </div>
+            {!band && turnLines}
+          </>
         )}
       </div>
       <div
@@ -1304,20 +1371,9 @@ export function TimePlot({
             </text>
           ))}
           <defs>
-            <pattern id={hatch} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1={0} y1={0} x2={0} y2={5} stroke="var(--muted)" strokeWidth={1.25} strokeOpacity={0.55} />
-            </pattern>
+            <OverheadPattern id={hatch} />
             {colors.map((c, k) => (
-              <pattern
-                key={c}
-                id={`${hatch}-${k}`}
-                width={4}
-                height={4}
-                patternUnits="userSpaceOnUse"
-                patternTransform="rotate(45)"
-              >
-                <line x1={0} y1={0} x2={0} y2={4} stroke={c} strokeWidth={1.1} strokeOpacity={0.6} />
-              </pattern>
+              <InheritPattern key={c} id={`${hatch}-${k}`} color={c} />
             ))}
           </defs>
           {pinMarks}
