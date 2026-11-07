@@ -20,8 +20,8 @@ func Support() harness.Support {
 		"turns.abandoned": harness.U("rewinds inside a rollout are not examined; turn_aborted is read as interrupted"),
 
 		"tools.calls":        harness.P("function_call and custom_tool_call"),
-		"files.touched":      harness.P("FileChange items"),
-		"files.linesChanged": harness.P("FileChange diffs"),
+		"files.touched":      harness.P("FileChange items; patch_apply_end before 0.164"),
+		"files.linesChanged": harness.P("FileChange diffs; patch_apply_end before 0.164"),
 
 		"cost.perMessage": harness.P("token_usage_record; without one (0.116, 0.137) each token_count with info is a call, repeats skipped; the redacted public dataset has token_count without info, so it has no cost"),
 		"cost.reported":   harness.A("docs/codex-format.md, Not recorded: no dollar figure; cost is recomputed from tokens"),

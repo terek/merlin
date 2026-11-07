@@ -29,6 +29,7 @@ thread; a fork continues its parent's numbering.
 | `event_msg/turn_aborted` | `turn_id`, `reason` (`interrupted`) | a turn was interrupted (Esc, or `interrupt_agent`) |
 | `event_msg/thread_settings_applied` | `thread_settings.{model, reasoning_effort, service_tier}` | fast mode: `service_tier: priority` appears only here |
 | `event_msg/item_completed` | `item.type`: `UserMessage` (typed prompt, `local_image` parts), `AgentMessage` (`phase` commentary / final_answer), `FileChange` (`changes`: path → `add` with `content`, `update` with `unified_diff`, `delete`), `EnteredReviewMode`, `CommandExecution`, `McpToolCall`, `SubAgentActivity`, `CollabAgentToolCall`, `ContextCompaction`, … | prompts, final answers, files and lines changed, review turns |
+| `event_msg/patch_apply_end` | `call_id`, `turn_id`, `status`, `success`, `changes` (the same entries as `FileChange`: path → `add` with `content`, `update` with `unified_diff`, `delete`, `move_path`) | the older form of `FileChange` (0.137–0.142): files and lines changed. It counts when `status` is `completed` (or empty) and `success` is not `false`; a missing `success` is not a failure. Every path is an edit in the turn's work directories whatever the outcome. Credited to the turn named by `turn_id`, else the current one |
 | `event_msg/token_count` | `info.{last_token_usage, total_token_usage, model_context_window}` (null before the first call) and plan rate limits | not used when the thread has `token_usage_record`s (they carry the same numbers); otherwise each one whose running total changed is one call (see Tokens) |
 | `event_msg/user_message`, `agent_message` | `message`, `images`, `local_images`, `text_elements`; `message`, `phase` | the older form of `item_completed` `UserMessage` / `AgentMessage` (0.116, 0.137): prompts and `final_answer` texts |
 | `token_usage_record` | `response_id`, `turn_id`, `thread_id`, `usage`, `turn_token_usage`, `thread_token_usage` | **one billed API call** |
@@ -169,6 +170,16 @@ their turns, prompts, final answers and, from `token_count`, their cost (from pa
 that, no prompts and no cost). Their other record types show up in `diagnostics.unknownTypes`.
 The two corpus versions (0.116.0 and 0.137.0-alpha.4) are of this kind.
 
+Codex 0.137–0.142 records an applied patch as `event_msg/patch_apply_end`; 0.164 as
+`item_completed` `FileChange`. Both are read by one function (parser version 9; before that the
+older form was an unknown type and `files.touched` and `files.linesChanged` were 0 for it). A
+`FileChange` item's `id` is a UUID and a `patch_apply_end`'s `call_id` is the tool call's id
+(`call_...`): on one machine, 0 of 121 `FileChange` ids equal a tool call's `call_id` and no id
+appears in both forms (74 `patch_apply_end`, all with a `call_id` that is a tool call's). The two
+forms cannot be linked, so a record repeated within its own form (same `id`, or same `call_id`) is
+counted once, and a rollout that has both forms for one patch would count it twice. No rollout
+seen has both, and none repeats an id.
+
 ## Corpus
 
 Raw Codex rollouts from public Hugging Face datasets, in `~/work/merlin-corpus/codex/<dataset>/`,
@@ -236,8 +247,9 @@ skipped; both agree) against the last `total_token_usage.total_tokens`. Fields c
 `session_id` and the tree fields, subagents, review mode, fast mode, Fernet messages, forks, `compacted`,
 `session_index.jsonl`. In the hackathon data `task_complete.last_agent_message`, `token_count.info`,
 `patch_apply_end` details, `item_completed.item` and `mcp_tool_call_end` details were removed by the
-redactor, so whether the parser handles them is unknown. `patch_apply_end` (760) is probably the
-0.137 form of `FileChange` and is not read, so `files.touched` is 0 of 4 for that era.
+redactor, so whether the parser handles them is unknown. `patch_apply_end` (760) is the 0.137 form of
+`FileChange`; it is read from parser version 9, but its `changes` were redacted here, so files and lines
+for that era are unmeasured on the corpus (on the real machine: below).
 
 ## One machine, parser 7 against 8
 
@@ -256,3 +268,22 @@ The same `~/.codex` indexed read-only by parser 7 and parser 8 (scratch homes, n
   of the other 11 the per-call sum equals the final `total_token_usage`. The exception has two
   `thread_rolled_back` events and its calls sum to 8,211 tokens more than the final total: the
   rolled-back calls were billed but are not in Codex's running total, and the parser counts them.
+
+## One machine, parser 8 against 9
+
+The same `~/.codex` indexed read-only (scratch homes, numbers only; 25 sessions). Files are unique
+paths per session, summed.
+
+| cli_version | sessions | files before / after | lines added before / after | lines removed before / after |
+|---|---|---|---|---|
+| 0.164.0 | 12 | 40 / 40 | 3,826 / 3,826 | 473 / 473 |
+| 0.139.0 | 4 | 0 / 36 | 0 / 2,699 | 0 / 552 |
+| 0.142.3 | 1 | 0 / 0 | 0 / 0 | 0 / 0 |
+| 0.104.0 | 8 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+Unknown types: `event_msg/patch_apply_end` 74 before, 0 after; the others are unchanged
+(`item_completed/ImageView` 126, `item_completed/Extension` 80, `event_msg/agent_reasoning` 8,
+`event_msg/thread_rolled_back` 2). The 0.142.3 session has no `patch_apply_end`. A separate count over the raw
+`patch_apply_end` records (a script, not the parser) gives the same 74 records, all successful, 36
+files, 2,699 lines added and 552 removed; the other 22 digests are byte-identical apart from the
+parser version.

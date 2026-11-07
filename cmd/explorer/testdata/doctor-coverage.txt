@@ -61,8 +61,8 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     turns.queued         parsed   0 of 0              messages that arrive while a turn runs
     turns.abandoned      unknown  0 of 0              rewinds inside a rollout are not examined; turn_aborted is read as interrupted
     tools.calls          parsed   0 of 0              function_call and custom_tool_call
-    files.touched        parsed   0 of 0              FileChange items
-    files.linesChanged   parsed   0 of 0              FileChange diffs
+    files.touched        parsed   0 of 0              FileChange items; patch_apply_end before 0.164
+    files.linesChanged   parsed   0 of 0              FileChange diffs; patch_apply_end before 0.164
     cost.perMessage      parsed   0 of 0              token_usage_record; without one (0.116, 0.137) each token_count with info is a call, repeats skipped; the redacted public dataset has token_count without info, so it has no cost
     cost.reported        absent   0 of 0              docs/codex-format.md, Not recorded: no dollar figure; cost is recomputed from tokens
     cost.truncated       unknown  0 of 0              whether a usage record can be written before its call finished is not known

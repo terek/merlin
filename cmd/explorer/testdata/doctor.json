@@ -316,13 +316,13 @@
         {
           "capability": "files.touched",
           "state": "parsed",
-          "note": "FileChange items",
+          "note": "FileChange items; patch_apply_end before 0.164",
           "seen": 0
         },
         {
           "capability": "files.linesChanged",
           "state": "parsed",
-          "note": "FileChange diffs",
+          "note": "FileChange diffs; patch_apply_end before 0.164",
           "seen": 0
         },
         {

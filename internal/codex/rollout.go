@@ -353,6 +353,8 @@ type parser struct {
 	// review is set by EnteredReviewMode, which Codex writes between the turn that asked for
 	// a review and the turn that runs it.
 	review bool
+	// changed holds the records whose file changes were counted, by form and id.
+	changed map[string]bool
 }
 
 // countRec is a token_count event with usage: the last call's tokens and the running total.
@@ -595,6 +597,29 @@ func (p *parser) event(raw json.RawMessage, at time.Time) {
 		}
 	case "item_completed":
 		p.item(raw, at)
+	case "patch_apply_end":
+		// The older form of item_completed FileChange (Codex 0.137 to 0.142).
+		var e struct {
+			CallID  string                `json:"call_id"`
+			TurnID  string                `json:"turn_id"`
+			Status  string                `json:"status"`
+			Success *bool                 `json:"success"`
+			Changes map[string]fileChange `json:"changes"`
+		}
+		if json.Unmarshal(raw, &e) != nil {
+			t.BadLines++
+			return
+		}
+		// The turn the record names, else the current one, as item_completed does.
+		i, found := p.byID[e.TurnID]
+		if !found {
+			i = p.cur
+		}
+		if i < 0 || p.seenChange("patch_apply_end", e.CallID) {
+			return
+		}
+		ok := (e.Status == "" || e.Status == "completed") && (e.Success == nil || *e.Success)
+		p.fileChanges(&t.Turns[i], "patch_apply_end/", e.Changes, ok)
 	case "user_message":
 		// The older form of item_completed UserMessage (Codex 0.116, 0.137). A rollout that
 		// has both gives the prompt once.
@@ -667,12 +692,7 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 				Type string `json:"type"`
 				Text string `json:"text"`
 			} `json:"content"`
-			Changes map[string]struct {
-				Type     string  `json:"type"`
-				Content  string  `json:"content"`
-				Diff     string  `json:"unified_diff"`
-				MovePath *string `json:"move_path"`
-			} `json:"changes"`
+			Changes map[string]fileChange `json:"changes"`
 			// CommandExecution
 			ID       string          `json:"id"`
 			Command  json.RawMessage `json:"command"`
@@ -721,42 +741,10 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 			tr.FinalText = strings.Join(parts, "\n")
 		}
 	case "FileChange":
-		// Every path counts as an edit, whatever the outcome: the design counts calls.
-		for path := range it.Changes {
-			c := it.Changes[path]
-			tr.Work = append(tr.Work, workCall{dir: pathpkg.Dir(fileURLPath(path)), edit: true})
-			if c.MovePath != nil && *c.MovePath != "" {
-				tr.Work = append(tr.Work, workCall{dir: pathpkg.Dir(fileURLPath(*c.MovePath)), edit: true})
-			}
-		}
-		if it.Status != "" && it.Status != "completed" {
+		if p.seenChange("item_completed/FileChange", it.ID) {
 			return
 		}
-		paths := make([]string, 0, len(it.Changes))
-		for path := range it.Changes {
-			paths = append(paths, path)
-		}
-		sortStrings(paths)
-		for _, path := range paths {
-			c := it.Changes[path]
-			tr.Files = appendUniq(tr.Files, path)
-			if c.MovePath != nil && *c.MovePath != "" {
-				tr.Files = appendUniq(tr.Files, *c.MovePath)
-			}
-			switch c.Type {
-			case "add":
-				tr.LinesAdded += countLines(c.Content)
-			case "delete":
-				tr.LinesRemoved += countLines(c.Content)
-			default:
-				if c.Type != "update" {
-					t.Unknown["item_completed/FileChange/"+c.Type]++ // read as a diff all the same
-				}
-				a, r := diffLines(c.Diff)
-				tr.LinesAdded += a
-				tr.LinesRemoved += r
-			}
-		}
+		p.fileChanges(tr, "item_completed/FileChange/", it.Changes, it.Status == "" || it.Status == "completed")
 	case "EnteredReviewMode":
 		tr.Review = true
 	case "CommandExecution":
@@ -771,6 +759,74 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 			kind = "(none)" // the payload has no item, or an item without a type
 		}
 		t.Unknown["item_completed/"+kind]++
+	}
+}
+
+// fileChange is one entry of the changes map of a FileChange item or a patch_apply_end event.
+type fileChange struct {
+	Type     string  `json:"type"`
+	Content  string  `json:"content"`
+	Diff     string  `json:"unified_diff"`
+	MovePath *string `json:"move_path"`
+}
+
+// seenChange reports whether the file changes of this record were already read, and
+// remembers them. The two forms are kept apart: a FileChange item id is a UUID and a
+// patch_apply_end call_id is the tool call's id, and no rollout shows them linked. An empty
+// id is never a repeat.
+func (p *parser) seenChange(form, id string) bool {
+	if id == "" {
+		return false
+	}
+	k := form + "\x00" + id
+	if p.changed[k] {
+		return true
+	}
+	if p.changed == nil {
+		p.changed = map[string]bool{}
+	}
+	p.changed[k] = true
+	return false
+}
+
+// fileChanges reads the changes of one applied patch into a turn, for both forms. Every path
+// counts as an edit in Work, whatever the outcome: the design counts calls. Files and lines
+// count only when the patch succeeded.
+func (p *parser) fileChanges(tr *turnRec, unknownPrefix string, changes map[string]fileChange, ok bool) {
+	paths := make([]string, 0, len(changes))
+	for path := range changes {
+		paths = append(paths, path)
+	}
+	sortStrings(paths)
+	for _, path := range paths {
+		c := changes[path]
+		tr.Work = append(tr.Work, workCall{dir: pathpkg.Dir(fileURLPath(path)), edit: true})
+		if c.MovePath != nil && *c.MovePath != "" {
+			tr.Work = append(tr.Work, workCall{dir: pathpkg.Dir(fileURLPath(*c.MovePath)), edit: true})
+		}
+	}
+	if !ok {
+		return
+	}
+	for _, path := range paths {
+		c := changes[path]
+		tr.Files = appendUniq(tr.Files, path)
+		if c.MovePath != nil && *c.MovePath != "" {
+			tr.Files = appendUniq(tr.Files, *c.MovePath)
+		}
+		switch c.Type {
+		case "add":
+			tr.LinesAdded += countLines(c.Content)
+		case "delete":
+			tr.LinesRemoved += countLines(c.Content)
+		default:
+			if c.Type != "update" {
+				p.t.Unknown[unknownPrefix+c.Type]++ // read as a diff all the same
+			}
+			a, r := diffLines(c.Diff)
+			tr.LinesAdded += a
+			tr.LinesRemoved += r
+		}
 	}
 }
 
