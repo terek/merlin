@@ -29,6 +29,7 @@ import type {
   TurnOrigin,
   WorkflowRun,
 } from '../src/api/types'
+import { buildShowcase } from './showcase'
 
 // ---- random ---------------------------------------------------------------------------
 
@@ -137,11 +138,12 @@ const SPAWN_REASONS = [
 ]
 
 export const MODELS = ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-4-5-20251001'] as const
-const PRICE: Record<string, { in: number; out: number; cr: number; cw: number }> = {
+export const PRICE: Record<string, { in: number; out: number; cr: number; cw: number }> = {
   'claude-fable-5-1': { in: 10, out: 50, cr: 1, cw: 12.5 },
   'claude-opus-5-5': { in: 5, out: 25, cr: 0.5, cw: 6.25 },
   'claude-sonnet-5-5': { in: 3, out: 15, cr: 0.3, cw: 3.75 },
   'claude-haiku-4-5-20251001': { in: 1, out: 5, cr: 0.1, cw: 1.25 },
+  'claude-haiku-5-5': { in: 1, out: 5, cr: 0.1, cw: 1.25 },
 }
 const ALIAS: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
@@ -864,8 +866,66 @@ export function finishSession(r: Rng, spec: Spec, p: Parts, inherited?: { turns:
   }
 }
 
-/** One billed message per assistant message of every turn (the `?messages=1` payload). */
+/** Hand-built message lists (the showcase session), by session id: served as they are. */
+export const recordedMessages = new Map<string, Message[]>()
+
+/** `total` split into `n` whole parts in proportion to `weights`; the parts add up to `total`. */
+function apportion(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0)
+  let left = total
+  return weights.map((w, k) => {
+    const v = k === weights.length - 1 ? left : Math.round((total * w) / sum)
+    left -= v
+    return v
+  })
+}
+
+/**
+ * The billed messages of an agent: its cost split over `assistantMessages` calls spread across its run,
+ * the prompt growing from call to call (a call reads what the one before it sent), so that the sum
+ * of the messages is exactly the agent's cost.
+ */
+function agentMessages(a: Agent): Message[] {
+  const start = Date.parse(a.startedAt ?? '')
+  if (!Number.isFinite(start)) return []
+  const end = Math.max(start, Date.parse(a.endedAt ?? '') || start)
+  const n = Math.max(1, a.assistantMessages)
+  const grow = Array.from({ length: n }, (_, k) => k + 1)
+  const even = Array.from({ length: n }, () => 1)
+  const out: Message[] = []
+  for (const [model, mc] of Object.entries(a.cost.byModel ?? {})) {
+    const inp = apportion(mc.input ?? 0, even)
+    const outp = apportion(mc.output ?? 0, even)
+    const cr = apportion(mc.cacheRead ?? 0, grow)
+    const cw5 = apportion(mc.cacheWrite5m ?? 0, even)
+    const cw1 = apportion(mc.cacheWrite1h ?? 0, even)
+    const usd = apportion(Math.round(mc.usd * 1e9), even)
+    for (let k = 0; k < n; k++) {
+      out.push({
+        id: `msg_${a.id}_${k}`,
+        at: iso(start + ((k + 0.5) * (end - start)) / n),
+        model,
+        agentId: a.id,
+        turn: a.spawnTurn,
+        usd: usd[k] / 1e9,
+        input: inp[k],
+        output: outp[k],
+        cacheRead: cr[k],
+        cacheWrite5m: cw5[k] || undefined,
+        cacheWrite1h: cw1[k] || undefined,
+      })
+    }
+  }
+  return out
+}
+
+/**
+ * The billed messages of a mock session (the `?messages=1` payload): one per assistant message of every
+ * turn, and the calls of every agent (and of every compaction), in time order.
+ */
 export function messagesOf(d: SessionDigest): Message[] {
+  const rec = recordedMessages.get(d.id)
+  if (rec) return rec
   const out: Message[] = []
   for (const t of d.turns ?? []) {
     const n = Math.max(1, t.assistantMessages)
@@ -883,7 +943,8 @@ export function messagesOf(d: SessionDigest): Message[] {
       })
     }
   }
-  return out
+  for (const a of d.agents ?? []) out.push(...agentMessages(a))
+  return out.sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : 0))
 }
 
 // ---- the data set ---------------------------------------------------------------------
@@ -1104,6 +1165,11 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
     if (kind === 'continuation') parent.summary.lineage.leaf = false
     parent.detail.lineage.leaf = parent.summary.lineage.leaf
   }
+
+  // 3b. the showcase tree: a session and a fork of it (own random stream: nothing else changes)
+  const showcase = buildShowcase(now)
+  clampPast(showcase.main, now)
+  sessions.push(showcase.main, showcase.fork)
 
   linkFamilies(sessions)
 
