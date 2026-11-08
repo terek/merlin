@@ -18,6 +18,7 @@ import {
   defaultWindow,
   detailAt,
   dragWindow,
+  effectiveWindow,
   episodes,
   findSwarms,
   GAP_MS,
@@ -37,6 +38,7 @@ import {
   revealWindow,
   sliceDay,
   sliceTimeline,
+  sliceWindow,
   slotLength,
   snapDay,
   snapTarget,
@@ -505,6 +507,61 @@ describe('sliceTimeline', () => {
     expect(two.peak).toBe(30_000)
     expect(two.t0).toBeGreaterThanOrEqual(Date.parse(at(1440)))
     expect(dayAt(days, Date.parse(at(1441)))).toBe(1)
+  })
+})
+
+describe('effectiveWindow', () => {
+  // turn 0 runs from minute 5 to 40, turn 1 from 100 to 130, turn 2 starts at 125 inside turn 1
+  const detail = session('e', {
+    turns: [turn(0, 0, 45), turn(1, 98, 135)],
+    messages: [
+      msg('a0', 5, 10_000, { turn: 0 }),
+      msg('a1', 20, 20_000, { turn: 0 }),
+      msg('a2', 40, 30_000, { turn: 0 }),
+      msg('b0', 100, 10_000, { turn: 1 }),
+      msg('b1', 130, 10_000, { turn: 1 }),
+    ],
+  })
+  const tl = buildTimeline(buildTree([detail]))
+  const m = (min: number) => Date.parse(at(min))
+
+  test('a window that cuts a turn grows to the end of it', () => {
+    const w = { lo: m(0), hi: m(25) }
+    expect(effectiveWindow(tl, w)).toEqual({ lo: w.lo, hi: m(40) + 1 })
+    const s = sliceWindow(tl, effectiveWindow(tl, w))
+    expect(s.lanes[0].calls.map((c) => c.t)).toEqual([m(5), m(20), m(40)])
+    // the brushed window alone leaves the last call out
+    expect(sliceTimeline(tl, w.lo, w.hi).lanes[0].calls).toHaveLength(2)
+  })
+
+  test('the axis of the effective slice ends exactly at the effective edge', () => {
+    const eff = effectiveWindow(tl, { lo: m(0), hi: m(25) })
+    expect(sliceWindow(tl, eff).t1).toBeLessThanOrEqual(eff.hi)
+  })
+
+  test('a window that cuts nothing is unchanged', () => {
+    const w = { lo: m(0), hi: m(60) }
+    expect(effectiveWindow(tl, w)).toBe(w)
+  })
+
+  test('a turn that began before the window grows it neither way', () => {
+    const w = { lo: m(10), hi: m(25) }
+    expect(effectiveWindow(tl, w)).toBe(w)
+  })
+
+  test('a window grows by no more than its own width: a long turn can be zoomed into', () => {
+    // turn 0 starts at 5 and runs to 40: [0, 10) would have to grow by 30, three times its width
+    const w = { lo: m(0), hi: m(10) }
+    expect(effectiveWindow(tl, w)).toBe(w)
+    const s = sliceWindow(tl, w)
+    expect(s.t1).toBeLessThanOrEqual(w.hi)
+    expect(s.lanes[0].calls.map((c) => c.t)).toEqual([m(5)])
+  })
+
+  test('a turn that starts in the grown part is not added', () => {
+    // [80, 110) cuts turn 1 (100 to 130) and grows to 130; nothing starting in (110, 130] is looked at
+    const eff = effectiveWindow(tl, { lo: m(80), hi: m(110) })
+    expect(eff.hi).toBe(m(130) + 1)
   })
 })
 

@@ -35,6 +35,7 @@ import {
   buildTimeline,
   clampWindow,
   defaultWindow,
+  effectiveWindow,
   revealWindow,
   splitDays,
   tierSpend,
@@ -304,6 +305,7 @@ export function SpendGraph({
   })
   // a turn pinned (in the graph, in a panel, in the list of decisions) or reached with the keys brings
   // itself into view
+  const eff = useMemo(() => effectiveWindow(timeline, win), [timeline, win])
   const [seen, setSeen] = useState({ pin: pinKey(pinned), cursor: pinKey(cursor) })
   if (seen.pin !== pinKey(pinned) || seen.cursor !== pinKey(cursor)) {
     setSeen({ pin: pinKey(pinned), cursor: pinKey(cursor) })
@@ -433,6 +435,7 @@ export function SpendGraph({
           days={days}
           split={split}
           win={win}
+          eff={eff}
           onWin={setWin}
           pinnedT={turnStart(pinned)}
           latest={latest}
@@ -441,7 +444,7 @@ export function SpendGraph({
       <TimePlot
         tree={tree}
         timeline={timeline}
-        range={overview ? win : undefined}
+        range={overview ? eff : undefined}
         split={split}
         pinned={valid(pinned) ? pinned : null}
         cursor={cur}

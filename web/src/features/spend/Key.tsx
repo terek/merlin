@@ -4,6 +4,7 @@
 import { type ReactNode, useId } from 'react'
 import { TIER_SERIES } from './model'
 import {
+  BREAK_OPACITY,
   BranchNode,
   CHIP,
   COLOR,
@@ -17,7 +18,6 @@ import {
   HELD_LINE,
   HELD_TINT,
   InheritPattern,
-  BREAK_OPACITY,
   MISS_COLOR,
   MISS_SIZE,
   markColor,

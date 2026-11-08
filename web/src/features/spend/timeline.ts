@@ -666,7 +666,7 @@ const MAX_PAD_MS = 30 * MIN
  * before it), so that the lines to and from it can be drawn to the edge. A session's main lane stays
  * while anything of its session is left.
  */
-export function sliceTimeline(tl: Timeline, lo: number, hi: number): Timeline {
+export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true): Timeline {
   const on = (t: number) => t >= lo && t < hi
   const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
   const lanes = tl.lanes.map((l) => {
@@ -694,10 +694,32 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number): Timeline {
     tl.spans.flatMap(([a, b]) => {
       if (a >= hi || b < lo) return []
       // work that goes on past the window does not stretch its axis; a turn that starts inside is whole
-      return [[Math.max(a, lo), workSpans.has(`${a}/${b}`) ? Math.min(b, hi) : b] as [number, number]]
+      return [[Math.max(a, lo), whole && !workSpans.has(`${a}/${b}`) ? b : Math.min(b, hi)] as [number, number]]
     }),
   )
 }
+
+/**
+ * The window the plot really shows for the brushed `w`: the same, grown on the right to the end of the
+ * last turn that starts in it and runs past it, by no more than the window's own width, so that a long
+ * turn can still be zoomed into (beyond that, the turn is cut at the edge). The left edge stays: work
+ * that began before it is cut there, and a turn that began before it grows nothing. Not repeated: what
+ * starts in the grown part is not added.
+ */
+export function effectiveWindow(tl: Timeline, w: Win): Win {
+  const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
+  const most = w.hi + (w.hi - w.lo)
+  let hi = w.hi
+  for (const [a, b] of tl.spans) {
+    if (a < w.lo || a >= w.hi || workSpans.has(`${a}/${b}`)) continue
+    if (Number.isFinite(b) && b > hi && b < most) hi = b
+  }
+  // a window is open at the right and a turn ends on its last call: one millisecond more keeps that call
+  return hi === w.hi ? w : { lo: w.lo, hi: hi + 1 }
+}
+
+/** The part of a timeline the plot shows for the brushed `w`: all of its effective window, nothing past it. */
+export const sliceWindow = (tl: Timeline, eff: Win) => sliceTimeline(tl, eff.lo, eff.hi, false)
 
 /** The part of a timeline on one day. */
 export const sliceDay = (tl: Timeline, day: Day) => sliceTimeline(tl, day.lo, day.hi)

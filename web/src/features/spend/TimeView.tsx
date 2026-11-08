@@ -66,7 +66,7 @@ import {
   pointAt,
   pxPerTurn,
   type Row,
-  sliceTimeline,
+  sliceWindow,
   slotLength,
   slotText,
   splitHeld,
@@ -297,7 +297,7 @@ export function TimePlot({
   const [px, setPx] = useState<{ x: number; row: number } | null>(null)
   const [band, setBand] = useState<{ branch: number; k: number } | null>(null)
   const hatch = `hatch${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
-  const tl = useMemo(() => (range ? sliceTimeline(timeline, range.lo, range.hi) : timeline), [timeline, range])
+  const tl = useMemo(() => (range ? sliceWindow(timeline, range) : timeline), [timeline, range])
   // the overhead windows of the day
   const overheads = useMemo(
     () => tree.branches.map((b) => b.overhead.filter((o) => o.t1 >= tl.t0 && o.t0 <= tl.t1)),
@@ -1555,4 +1555,3 @@ function gapText(ms: number): string {
   if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`
 }
-

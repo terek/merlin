@@ -323,7 +323,12 @@ From top to bottom:
     window is everything. A turn, call, context and mark belongs to a window if it starts inside it
     (`[lo, hi)`; a turn running past the edge is kept whole); a piece of agent work if it overlaps it,
     and a launch or report line whose other end is outside the window is drawn along the plot's edge,
-    dashed, with a small chevron pointing out (`sliceTimeline`);
+    dashed, with a small chevron pointing out (`sliceTimeline`). The axis reaches to the end of a turn
+    the window cuts, so the plot shows the **effective window**: the brushed one grown on the right to
+    that end (`effectiveWindow`: only for a turn that starts inside, by at most the window's own width so
+    that a long turn can be zoomed into; the left edge stays, work from before it is cut there; not repeated for
+    turns that start in the grown part) and every lane is sliced by it (`sliceWindow`), so data fills
+    the whole axis (`merlin-zls.9`);
   - the **overview** is 54 px tall and full width: the whole tree on one linear wall-clock scale, idle
     time squeezed out as in the plot (`timeAxis` over every span, at most 16 breaks, so long nights do
     not eat the strip). It draws the context of the main rows as a light area (the largest of the main
@@ -336,8 +341,10 @@ From top to bottom:
     window centres it there; a click on a date, or a double-click inside a day, snaps to that day (its
     activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
     window by its own width, or to the previous or next day when it is a day; Home and End go to the
-    start and end. A window is never narrower than 5 minutes. A line above the strip says what is shown
-    and what it spent, with **Latest** (the window the page opened on) and **All**. The days are cut each
+    start and end. A window is never narrower than 5 minutes. The part of the effective window past the
+    brush is drawn as a fainter continuation of the highlight (no handles; the brush itself is still the
+    user's window). A line above the strip says what is shown (the effective window: its span, duration
+    and spend, as the plot shows them) and what it spent, with **Latest** (the window the page opened on) and **All**. The days are cut each
     night at the idle stretch that covers most of the night's core (00:00–08:00), then of its window
     (18:00–12:00); the time after the last activity counts as such a stretch, so work past midnight
     with nothing after it stays with its evening, and a turn still running is never cut. A part is the

@@ -54,6 +54,8 @@ export interface OverviewProps {
   days: readonly Day[]
   split: Split
   win: Win
+  /** What the plot really shows: `win`, grown to the end of the turn it cuts (`effectiveWindow`). */
+  eff: Win
   onWin: (w: Win) => void
   /** The start of the pinned turn, if there is one. */
   pinnedT?: number
@@ -66,7 +68,7 @@ type Drag =
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
-export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }: OverviewProps) {
+export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, latest }: OverviewProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
@@ -92,9 +94,9 @@ export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }:
 
   const spent = useMemo(() => {
     let usd = 0
-    for (const l of timeline.lanes) for (const c of l.calls) if (c.t >= win.lo && c.t < win.hi) usd += c.usd
+    for (const l of timeline.lanes) for (const c of l.calls) if (c.t >= eff.lo && c.t < eff.hi) usd += c.usd
     return usd
-  }, [timeline, win])
+  }, [timeline, eff])
 
   // a label for the strip's first day and for every midnight in it, where they do not collide; each snaps
   // to its day
@@ -128,6 +130,7 @@ export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }:
 
   const xlo = axis.x(win.lo)
   const xhi = Math.max(xlo + 2, axis.x(win.hi))
+  const xeff = Math.max(xhi, axis.x(eff.hi))
   const dayOfWin = windowDay(win, days)
   const snap = (k: number) => onWin(snapDay(days[k]))
   const snapped = dayOfWin >= 0 ? { m: days[dayOfWin].date } : undefined
@@ -194,9 +197,9 @@ export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }:
     onWin(next)
   }
 
-  const whole = win.lo <= bounds.t0 && win.hi >= bounds.t1
+  const whole = eff.lo <= bounds.t0 && eff.hi >= bounds.t1
   const from = Math.max(win.lo, timeline.t0)
-  const to = Math.min(win.hi, timeline.t1)
+  const to = Math.min(eff.hi, timeline.t1)
   const sameDay = new Date(from).toDateString() === new Date(to).toDateString()
 
   return (
@@ -212,7 +215,7 @@ export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }:
                 ? `${longDate(from)} ${clock(from)}–${clock(to)}`
                 : `${longDate(from)} ${clock(from)} – ${longDate(to)} ${clock(to)}`}
         </span>
-        <span className="text-muted">{formatDuration(win.hi - win.lo)}</span>
+        <span className="text-muted">{formatDuration(eff.hi - eff.lo)}</span>
         <span className="font-mono">{formatMoney(spent)}</span>
         <button
           type="button"
@@ -331,9 +334,9 @@ export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }:
               opacity={0.55}
             />
             <rect
-              x={xhi}
+              x={xeff}
               y={LABEL_H}
-              width={Math.max(0, width - xhi)}
+              width={Math.max(0, width - xeff)}
               height={H - LABEL_H}
               fill="var(--surface)"
               opacity={0.55}
@@ -349,6 +352,26 @@ export function Overview({ timeline, days, split, win, onWin, pinnedT, latest }:
               strokeWidth={1.5}
               rx={2}
             />
+            {/* the turn the window cuts runs on, and the plot shows it whole: a fainter continuation */}
+            {xeff - xhi > 0.5 && (
+              <g data-testid="overview-effective">
+                <rect
+                  x={xhi}
+                  y={LABEL_H + 0.75}
+                  width={xeff - xhi}
+                  height={H - LABEL_H - 1.5}
+                  fill="var(--accent)"
+                  fillOpacity={0.04}
+                />
+                <path
+                  d={`M${xhi} ${LABEL_H + 0.75}H${xeff}V${H - 0.75}H${xhi}`}
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth={1}
+                  strokeOpacity={0.4}
+                />
+              </g>
+            )}
             {[xlo, xhi].map((x, i) => (
               <rect
                 key={i === 0 ? 'lo' : 'hi'}
