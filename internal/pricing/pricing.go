@@ -187,10 +187,23 @@ func strip1m(name string) string { return strings.TrimSuffix(strings.TrimSpace(n
 
 // Lookup resolves a model name to its table name and price: it strips a "[1m]" suffix,
 // then tries the exact name, then the name without a trailing -YYYYMMDD, then a declared
-// alias, then a table name stored with a date. ok is false for an unknown model, and for
+// alias, then a table name stored with a date. Only when all of those find nothing does it
+// normalise the name (see normalise) and try them again on the result, so an exact name or
+// an alias always wins over a rewrite. ok is false for an unknown model, and for
 // Synthetic, which is free rather than priced.
 func (t *Table) Lookup(name string) (resolved string, p Price, ok bool) {
 	n := strip1m(name)
+	if r, p, ok := t.find(n); ok {
+		return r, p, true
+	}
+	if m := normalise(n); m != n {
+		return t.find(m)
+	}
+	return "", Price{}, false
+}
+
+// find runs the lookup steps on an already trimmed name.
+func (t *Table) find(n string) (string, Price, bool) {
 	if p, ok := t.models[n]; ok {
 		return n, p, true
 	}
@@ -206,6 +219,40 @@ func (t *Table) Lookup(name string) (resolved string, p Price, ok bool) {
 		return full, t.models[full], true
 	}
 	return "", Price{}, false
+}
+
+var (
+	openAIName = regexp.MustCompile(`^(gpt-|o\d|codex)`)
+	dotBetween = regexp.MustCompile(`(\d)\.(\d)`)
+)
+
+// normalise rewrites the spellings that routers (OpenRouter) and other hosts (GitHub
+// Copilot) give a model we know. It strips one leading vendor prefix when the rest is
+// that vendor's own model ("anthropic/claude-", "openai/gpt-", "openai/o<digit>",
+// "openai/codex", "google/gemini-"); any other prefix, and a second segment, are left
+// alone. For a claude- name it then turns a dot between two digits into a dash
+// ("claude-sonnet-4.6" is "claude-sonnet-4-6"); OpenAI and Gemini names keep their dots.
+// The result is a candidate for the ordinary lookup steps, nothing more: it is never
+// stored, so it cannot make two table names collide.
+func normalise(n string) string {
+	if v, rest, ok := strings.Cut(n, "/"); ok {
+		switch {
+		case v == "anthropic" && strings.HasPrefix(rest, "claude-"),
+			v == "openai" && openAIName.MatchString(rest),
+			v == "google" && strings.HasPrefix(rest, "gemini-"):
+			n = rest
+		}
+	}
+	if strings.HasPrefix(n, "claude-") {
+		for { // repeated: "4.5.1" would need two passes, as the matches overlap
+			m := dotBetween.ReplaceAllString(n, "$1-$2")
+			if m == n {
+				break
+			}
+			n = m
+		}
+	}
+	return n
 }
 
 // Models returns a copy of the table's entries by exact name (overrides applied), for

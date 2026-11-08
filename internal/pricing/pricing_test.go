@@ -319,3 +319,122 @@ func TestEmbeddedAliasesLoad(t *testing.T) {
 		near(t, mc.USD, c.want)
 	}
 }
+
+func TestVendorNormalisation(t *testing.T) {
+	tab := Default()
+	for _, c := range []struct{ in, want string }{
+		{"anthropic/claude-sonnet-4.6", "claude-sonnet-4-6"},
+		{"claude-sonnet-4.6", "claude-sonnet-4-6"},
+		{"anthropic/claude-sonnet-4-6", "claude-sonnet-4-6"},
+		{"anthropic/claude-opus-4.5", "claude-opus-4-5"},
+		{"anthropic/claude-opus-4.5[1m]", "claude-opus-4-5"},
+		{"anthropic/claude-haiku-4-5-20251001", "claude-haiku-4-5-20251001"},
+		{"anthropic/claude-haiku-4.5-20251001", "claude-haiku-4-5-20251001"},
+		{"openai/gpt-5.5", "gpt-5.5"},
+		{"openai/gpt-5.3-codex", "gpt-5.3-codex"},
+		{"google/gemini-3-flash-preview", "gemini-3-flash-preview"},
+	} {
+		got, _, ok := tab.Lookup(c.in)
+		if !ok || got != c.want {
+			t.Errorf("Lookup(%q) = %q %v, want %q", c.in, got, ok, c.want)
+		}
+	}
+	a, _ := tab.Cost("anthropic/claude-sonnet-4.6", model.Tokens{Input: 1_000_000}, false)
+	b, _ := tab.Cost("claude-sonnet-4-6", model.Tokens{Input: 1_000_000}, false)
+	if a.USD == 0 || a.USD != b.USD {
+		t.Errorf("prefixed cost %v, exact %v", a.USD, b.USD)
+	}
+}
+
+func TestVendorNormalisationStaysUnpriced(t *testing.T) {
+	tab := Default()
+	for _, n := range []string{
+		"z-ai/glm-5.3",
+		"moonshotai/kimi-k2",
+		"openrouter/anthropic/claude-sonnet-4.6", // one prefix only, and not a vendor's own
+		"anthropic/anthropic/claude-sonnet-4-6",
+		"anthropic/gpt-5.5", // not that vendor's model
+		"openai/claude-sonnet-4-6",
+		"google/claude-sonnet-4-6",
+		"openrouter/claude-sonnet-4-6",
+		"gpt-5-5", // OpenAI names keep their dots
+		"openai/gpt-5-5",
+		"gemini-3-flash-preview-x",
+		"anthropic/claude-sonnet-4.9",
+	} {
+		if got, _, ok := tab.Lookup(n); ok {
+			t.Errorf("Lookup(%q) = %q, want unpriced", n, got)
+		}
+	}
+	if got, _, ok := tab.Lookup("gpt-5.5"); !ok || got != "gpt-5.5" {
+		t.Errorf("gpt-5.5 resolved to %q %v", got, ok)
+	}
+}
+
+func TestNormalisationNeverBeatsExactOrAlias(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	cfg := `{"prices": {
+	  "anthropic/claude-sonnet-4.6": {"input": 99, "output": 99, "cacheRead": 99},
+	  "claude-opus-4.9": {"input": 7, "output": 7, "cacheRead": 7, "aliases": ["vendor/opus-49"]}
+	}}`
+	if err := os.WriteFile(path, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tab, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// An exact entry that happens to look like a prefixed name is used as written.
+	if got, p, ok := tab.Lookup("anthropic/claude-sonnet-4.6"); !ok || got != "anthropic/claude-sonnet-4.6" || p.Input != 99 {
+		t.Errorf("exact entry: %q %v %v", got, p.Input, ok)
+	}
+	// The unprefixed spelling still reaches the table entry.
+	if got, _, ok := tab.Lookup("claude-sonnet-4.6"); !ok || got != "claude-sonnet-4-6" {
+		t.Errorf("claude-sonnet-4.6 = %q %v", got, ok)
+	}
+	// A name stored with a dot is found as written, not rewritten to a dash name.
+	if got, p, ok := tab.Lookup("claude-opus-4.9"); !ok || got != "claude-opus-4.9" || p.Input != 7 {
+		t.Errorf("dotted entry: %q %v %v", got, p.Input, ok)
+	}
+}
+
+// docConfig is the example in docs/pricing.md, copied here so the doc cannot drift.
+const docConfig = `{
+  "prices": {
+    "z-ai/glm-5.3": {
+      "input": 0.60,
+      "output": 2.20,
+      "cacheRead": 0.11
+    }
+  }
+}`
+
+func TestDocExampleConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(docConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := Default().Lookup("z-ai/glm-5.3"); ok {
+		t.Fatal("the example model is in the embedded table; pick another for the doc")
+	}
+	tab, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, p, ok := tab.Lookup("z-ai/glm-5.3")
+	if !ok || got != "z-ai/glm-5.3" || p.Input != 0.60 || p.Output != 2.20 || p.CacheRead != 0.11 {
+		t.Fatalf("Lookup = %q %+v %v", got, p, ok)
+	}
+	mc, ok := tab.Cost("z-ai/glm-5.3", model.Tokens{Input: 1e6, Output: 1e6, CacheRead: 1e6, CacheWrite5m: 1e6}, false)
+	if !ok {
+		t.Fatal("unpriced")
+	}
+	w5, _, _ := tab.Multipliers() // cache writes are Input times the table's multiplier
+	want := 0.60 + 2.20 + 0.11 + 0.60*w5
+	near(t, mc.USD, want)
+	// The embedded table is untouched by the override.
+	if _, _, ok := Default().Lookup("z-ai/glm-5.3"); ok {
+		t.Error("override leaked into the default table")
+	}
+}

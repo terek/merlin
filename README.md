@@ -84,7 +84,7 @@ Versions 0.2.0 and 0.3.0 cannot update themselves: run the installer again to ge
 
 - `~/.merlin` (`MERLIN_HOME`): `claude/` (one JSON digest per session under
   `claude/projects/`, and the hook script), `merlin.lock`, `merlin.log` and an optional
-  `config.json`. All of it can be rebuilt from `~/.claude`. The earlier Merlin kept its files
+  `config.json` (model prices; see [docs/pricing.md](docs/pricing.md)). All of it can be rebuilt from `~/.claude`. The earlier Merlin kept its files
   in the same directory; this program never reads, changes or removes them.
 - `~/.claude/settings.json`: the five hook entries, and their backups
   (`settings.json.merlin-backup-*`).
