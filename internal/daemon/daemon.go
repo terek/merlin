@@ -44,6 +44,7 @@ type Options struct {
 	InstallHooks func() (string, error)
 
 	Workers         int           // concurrent builders; 0 = GOMAXPROCS
+	PricesVersion   string        // pricing.Table.Version of the harnesses' table; computed once
 	RescanInterval  time.Duration // full reconcile; default 10 s
 	PollInterval    time.Duration // stat-poll of the live set; default 1 s
 	Debounce        time.Duration // at most one build per live session per this; default 3 s
@@ -233,12 +234,13 @@ func (d *Daemon) Run(ctx context.Context) error {
 		}
 	}
 	eng, err := engine.New(engine.Options{
-		Store:      st,
-		Harnesses:  d.opts.Harnesses,
-		Workers:    d.opts.Workers,
-		Logf:       func(format string, a ...any) { d.logf(format, a...) },
-		OnWrite:    d.onWrite,
-		OnDiscover: d.onDiscover,
+		Store:         st,
+		Harnesses:     d.opts.Harnesses,
+		Workers:       d.opts.Workers,
+		PricesVersion: d.opts.PricesVersion,
+		Logf:          func(format string, a ...any) { d.logf(format, a...) },
+		OnWrite:       d.onWrite,
+		OnDiscover:    d.onDiscover,
 	})
 	if err != nil {
 		return err

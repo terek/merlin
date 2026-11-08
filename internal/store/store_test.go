@@ -104,6 +104,7 @@ func TestReadHeader(t *testing.T) {
 	d := digest("h1", "k", "s1")
 	d.SourceMissing = true
 	d.Error = "boom"
+	d.PricesVersion = "abc123"
 	if err := s.Write(d); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestReadHeader(t *testing.T) {
 	if err != nil || !found {
 		t.Fatal(found, err)
 	}
-	want := Header{SchemaVersion: 1, ParserVersion: 7, Source: d.Source, SourceMissing: true, Error: "boom"}
+	want := Header{SchemaVersion: 1, ParserVersion: 7, PricesVersion: "abc123", Source: d.Source, SourceMissing: true, Error: "boom"}
 	if !reflect.DeepEqual(*h, want) {
 		t.Fatalf("got %+v want %+v", *h, want)
 	}

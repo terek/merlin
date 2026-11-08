@@ -69,6 +69,7 @@ func runServe(args []string) int {
 		Harnesses:      harnesses,
 		Port:           *port,
 		Workers:        *workers,
+		PricesVersion:  pricer.Version(),
 		RescanInterval: *rescan,
 		Debounce:       *debounce,
 		Version:        version,

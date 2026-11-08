@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -100,9 +101,13 @@ func (e *readEnv) run(extraEnv []string, args ...string) (stdout, stderr string,
 	return norm.Replace(o.String()), norm.Replace(er.String()), code
 }
 
-// snapshot compares got with testdata/<name>; JSON by value, text exactly.
+var pricesVersionRe = regexp.MustCompile(`"pricesVersion": "[0-9a-f]{16}"`)
+
+// snapshot compares got with testdata/<name>; JSON by value, text exactly. The price-table
+// fingerprint is replaced by a placeholder: it changes with every edit of prices.json.
 func snapshot(t *testing.T, name, got string) {
 	t.Helper()
+	got = pricesVersionRe.ReplaceAllString(got, `"pricesVersion": "<prices>"`)
 	path := filepath.Join("testdata", name)
 	if *update {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {

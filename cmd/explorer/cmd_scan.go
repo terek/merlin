@@ -65,11 +65,12 @@ func runScan(args []string) int {
 
 	p := &progressPrinter{w: os.Stderr, enabled: !*quiet}
 	eng, err := engine.New(engine.Options{
-		Store:      st,
-		Harnesses:  harnesses,
-		Workers:    *workers,
-		Logf:       func(format string, a ...any) { fmt.Fprintf(os.Stderr, "merlin scan: "+format+"\n", a...) },
-		OnProgress: p.update,
+		Store:         st,
+		Harnesses:     harnesses,
+		Workers:       *workers,
+		PricesVersion: pricer.Version(),
+		Logf:          func(format string, a ...any) { fmt.Fprintf(os.Stderr, "merlin scan: "+format+"\n", a...) },
+		OnProgress:    p.update,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)

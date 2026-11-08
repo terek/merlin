@@ -68,14 +68,17 @@ input exceeds `above` tokens), `fast` (`true` or `false`, whether fast mode appl
 the file fail to load, with an error naming it.
 
 The file is read when `merlin scan` or the server starts, so restart the server after editing it.
-For now a new price reaches only sessions indexed or changed after that: sessions already
-indexed keep the figures they were built with (merlin-1es.14). A file that does not parse, or
-whose aliases collide, is an error, not silently ignored.
+Each stored session records a fingerprint of the prices it was computed with (`pricesVersion`:
+the table after your overrides, the multipliers and the lookup rules). When the fingerprint
+changes, the next `merlin scan` or server start rebuilds every stored session once, so a new
+price reaches sessions indexed before it. Sessions stored by an older Merlin have no fingerprint
+and are rebuilt too. Sessions whose last build failed are retried only when their files change.
+
+A file that does not parse, or whose aliases collide, is an error, not silently ignored.
 
 ## Checking that it worked
 
 `merlin doctor` has a Pricing section. It lists the models seen in transcripts that have no
 price, with the number of sessions each appears in, or prints `unpriced models: none`. Add the
-name exactly as listed, then run `merlin doctor` again: the model should be gone from the list.
-(Its heading says such messages "cost $0 until a price is added"; the cost views treat them as
-unknown and show a lower bound.)
+name exactly as listed, run `merlin scan` (or restart the server), then `merlin doctor` again:
+the model should be gone from the list.

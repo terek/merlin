@@ -23,6 +23,9 @@ type SourceFile struct {
 type SessionDigest struct {
 	SchemaVersion int `json:"schemaVersion"`
 	ParserVersion int `json:"parserVersion"`
+	// PricesVersion is the fingerprint of the price table the dollars were computed with
+	// (pricing.Table.Version). Absent on digests written before it existed and on error stubs.
+	PricesVersion string `json:"pricesVersion,omitempty"`
 
 	Source        []SourceFile `json:"source"`
 	SourceMissing bool         `json:"sourceMissing,omitempty"`

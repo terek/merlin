@@ -33,6 +33,7 @@ func RefOf(d *model.SessionDigest) Ref {
 type Header struct {
 	SchemaVersion int                `json:"schemaVersion"`
 	ParserVersion int                `json:"parserVersion"`
+	PricesVersion string             `json:"pricesVersion,omitempty"`
 	Source        []model.SourceFile `json:"source"`
 	SourceMissing bool               `json:"sourceMissing,omitempty"`
 	Error         string             `json:"error,omitempty"`
@@ -207,6 +208,8 @@ func decodeHeader(dec *json.Decoder) (*Header, error) {
 			target, seenSchema = &h.SchemaVersion, true
 		case "parserVersion":
 			target = &h.ParserVersion
+		case "pricesVersion":
+			target = &h.PricesVersion
 		case "source":
 			target = &h.Source
 		case "sourceMissing":

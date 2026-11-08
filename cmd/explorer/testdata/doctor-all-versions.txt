@@ -26,7 +26,7 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
   merlin doctor --coverage lists every capability
 
 Pricing
-  unpriced models (their messages cost $0 until a price is added to config.json):
+  unpriced models (their cost is unknown, so totals are lower bounds; add a price, see docs/pricing.md):
     claude-nova-9-9  in 1 session
 
 Agents

@@ -88,6 +88,10 @@ type Options struct {
 	Harnesses []harness.Harness
 	// Workers is the number of concurrent builders; 0 means GOMAXPROCS.
 	Workers int
+	// PricesVersion is the fingerprint of the price table the harnesses were built with
+	// (pricing.Table.Version), computed once by the caller. A stored digest built under another
+	// version is stale and is rebuilt. Empty switches the check off.
+	PricesVersion string
 	// Logf receives warnings and failures; nil discards them.
 	Logf func(format string, args ...any)
 	// OnWrite is called after each digest write and each sourceMissing marking. Calls are
@@ -178,13 +182,18 @@ func (e *Engine) Enqueue(h harness.Harness, s harness.Session, live bool) {
 func (e *Engine) Pending() int { return e.q.depth() }
 
 // Stale reports whether the stored digest header (nil: none) no longer matches the session.
-func Stale(h harness.Harness, s harness.Session, hdr *store.Header) bool {
+// pricesVersion is the current price table's fingerprint ("": not checked). A digest with
+// another one, or none (written by an older Merlin), is stale; an error stub is not, since
+// it holds no prices and is retried when its files change.
+func Stale(h harness.Harness, s harness.Session, hdr *store.Header, pricesVersion string) bool {
 	switch {
 	case hdr == nil:
 		return true
 	case hdr.SchemaVersion != model.SchemaVersion, hdr.ParserVersion != h.ParserVersion():
 		return true
 	case hdr.SourceMissing: // the files are back
+		return true
+	case pricesVersion != "" && hdr.Error == "" && hdr.PricesVersion != pricesVersion:
 		return true
 	}
 	return !sameFiles(hdr.Source, s.Fingerprint)
@@ -256,7 +265,7 @@ func (e *Engine) reconcileOne(ctx context.Context, h harness.Harness) error {
 		if !found {
 			hdr = nil
 		}
-		if Stale(h, s, hdr) {
+		if Stale(h, s, hdr, e.opts.PricesVersion) {
 			e.Enqueue(h, s, false)
 			queued++
 		} else {
@@ -364,6 +373,7 @@ func (e *Engine) process(j job) {
 	if err == nil {
 		// The digest is stored under the identity discovery gave; make sure it says so.
 		d.Harness, d.ProjectKey, d.ID = ref.Harness, ref.ProjectKey, ref.SessionID
+		d.PricesVersion = e.opts.PricesVersion
 		if err = e.opts.Store.Write(d); err == nil {
 			e.finish(j, Event{Kind: Written, Ref: ref, Digest: d})
 			return

@@ -432,7 +432,7 @@ func doDoctor(asJSON, allVersions, coverage bool) error {
 			ms = append(ms, m)
 		}
 		sort.Strings(ms)
-		fmt.Fprintln(out, "  unpriced models (their messages cost $0 until a price is added to config.json):")
+		fmt.Fprintln(out, "  unpriced models (their cost is unknown, so totals are lower bounds; add a price, see docs/pricing.md):")
 		for _, m := range ms {
 			fmt.Fprintf(out, "    %s  in %s\n", m, plural(r.UnpricedModels[m], "session", "sessions"))
 		}

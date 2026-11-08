@@ -115,7 +115,7 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     live.hooks           unknown  not measured        ParseHook always declines: Pi has no hook list to install into; an extension could send one, none is designed
 
 Pricing
-  unpriced models (their messages cost $0 until a price is added to config.json):
+  unpriced models (their cost is unknown, so totals are lower bounds; add a price, see docs/pricing.md):
     claude-nova-9-9  in 1 session
 
 Agents

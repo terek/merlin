@@ -24,6 +24,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 |---|---|
 | `schemaVersion` | version of this layout (`model.SchemaVersion`) |
 | `parserVersion` | version of the parser that built it; a bump forces a rebuild |
+| `pricesVersion` | fingerprint of the price table the dollars were computed with; a different current one forces a rebuild. Absent on error stubs and on digests from before it existed |
 | `source` | every file read, as `SourceFile`; this is the fingerprint |
 | `error` | set on a stub written when building the digest failed; the stub keeps `source` so the session is retried only when its files change |
 | `sourceMissing` | the source files have disappeared; the digest is kept as the ledger |

@@ -86,6 +86,7 @@
   "digest": {
     "schemaVersion": 2,
     "parserVersion": 19,
+    "pricesVersion": "<prices>",
     "source": [
       {
         "path": "$CLAUDE_CONFIG_DIR/projects/-home-dev-acme-s13a-continuation/13131313-0000-4000-8000-000000000002.jsonl",

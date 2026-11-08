@@ -187,7 +187,7 @@ func (d *Daemon) refresh(e *liveEntry, immediate bool) {
 		if err != nil || !ok {
 			hdr = nil
 		}
-		if engine.Stale(e.h, s, hdr) {
+		if engine.Stale(e.h, s, hdr, d.opts.PricesVersion) {
 			d.enqueue(e, s)
 		} else {
 			e.fp = s.Fingerprint

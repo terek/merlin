@@ -1,7 +1,9 @@
 package pricing
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -297,4 +299,52 @@ func (t *Table) Cost(name string, tok model.Tokens, fast bool) (model.ModelCost,
 	}
 	mc.USD = usd / 1e6
 	return mc, true
+}
+
+// lookupRules numbers the rules of Lookup and Cost (name normalisation, date and [1m]
+// stripping, alias order, long-context and fast-mode arithmetic). A developer bumps it
+// whenever one of those rules changes in a way that can give a different price for the
+// same table: Version then changes, and every stored digest is rebuilt once.
+const lookupRules = 1
+
+// Version is a short fingerprint of everything that decides a price: the effective table
+// (embedded prices with the config overrides applied), the cache and fast multipliers, the
+// fast-mode models and lookupRules. Digests record it; one built under a different version
+// is rebuilt. Informational fields (status, note) are left out, so editing a note does not
+// reprice anything. The same inputs give the same string on every run and machine.
+func (t *Table) Version() string {
+	type entry struct {
+		Name                     string
+		Input, Output, CacheRead float64
+		Long                     *LongPrice
+		Aliases                  []string
+		Fast                     bool
+	}
+	names := make([]string, 0, len(t.models))
+	for n := range t.models {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	entries := make([]entry, 0, len(names))
+	for _, n := range names {
+		p := t.models[n]
+		al := append([]string(nil), p.Aliases...)
+		sort.Strings(al)
+		entries = append(entries, entry{n, p.Input, p.Output, p.CacheRead, p.Long, al, t.fast[n]})
+	}
+	var fast []string // the models fast mode applies to, including any without a table entry
+	for n, f := range t.fast {
+		if f {
+			fast = append(fast, n)
+		}
+	}
+	sort.Strings(fast)
+	b, _ := json.Marshal(struct {
+		Rules             int
+		W5m, W1h, FastMul float64
+		Fast              []string
+		Models            []entry
+	}{lookupRules, t.w5m, t.w1h, t.fastMult, fast, entries})
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:16]
 }

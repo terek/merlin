@@ -86,6 +86,7 @@ type rig struct {
 	home   string
 	cfg    string
 	st     *store.Store
+	pv     string // the PricesVersion the engine is given
 	h      *wrapped
 	events []engine.Event
 	mu     sync.Mutex
@@ -101,6 +102,7 @@ func newRig(t *testing.T) *rig {
 		t.Fatal(err)
 	}
 	r.st = st
+	r.pv = "prices-1"
 	pr, err := pricing.Load("")
 	if err != nil {
 		t.Fatal(err)
@@ -112,7 +114,7 @@ func newRig(t *testing.T) *rig {
 func (r *rig) scan() engine.Summary {
 	r.t.Helper()
 	e, err := engine.New(engine.Options{
-		Store: r.st, Harnesses: []harness.Harness{r.h}, Workers: 4,
+		Store: r.st, Harnesses: []harness.Harness{r.h}, Workers: 4, PricesVersion: r.pv,
 		Logf: func(f string, a ...any) { r.t.Logf(f, a...) },
 		OnWrite: func(ev engine.Event) {
 			r.mu.Lock()
@@ -236,6 +238,66 @@ func TestParserVersionBumpReprocessesAll(t *testing.T) {
 	}
 	if sum = r.scan(); sum.Processed != 0 {
 		t.Fatalf("after bump: %+v", sum)
+	}
+}
+
+func TestPricesVersionChangeReprocessesAll(t *testing.T) {
+	r := newRig(t)
+	r.scan()
+	for _, ref := range mustList(t, r.st) {
+		d, _, err := r.st.Read(ref)
+		if err != nil || d.PricesVersion != "prices-1" {
+			t.Fatalf("%v: pricesVersion %q, err %v", ref, d.PricesVersion, err)
+		}
+	}
+	if sum := r.scan(); sum.Processed != 0 {
+		t.Fatalf("same version: %+v", sum)
+	}
+	r.pv = "prices-2"
+	if sum := r.scan(); sum.Processed != fixtureN {
+		t.Fatalf("new version: %+v", sum)
+	}
+	if sum := r.scan(); sum.Processed != 0 {
+		t.Fatalf("after the rebuild: %+v", sum)
+	}
+}
+
+func mustList(t *testing.T, st *store.Store) []store.Ref {
+	t.Helper()
+	refs, err := st.List("")
+	if err != nil || len(refs) == 0 {
+		t.Fatalf("list: %v %v", refs, err)
+	}
+	return refs
+}
+
+func TestStaleByPricesVersion(t *testing.T) {
+	r := newRig(t)
+	disc, err := r.h.Discover()
+	if err != nil || len(disc.Sessions) == 0 {
+		t.Fatal(err)
+	}
+	s := disc.Sessions[0]
+	hdr := func(pv, errMsg string) *store.Header {
+		return &store.Header{SchemaVersion: model.SchemaVersion, ParserVersion: r.h.ParserVersion(),
+			PricesVersion: pv, Source: s.Fingerprint, Error: errMsg}
+	}
+	for _, c := range []struct {
+		name string
+		h    *store.Header
+		want bool
+	}{
+		{"current", hdr("v2", ""), false},
+		{"old", hdr("v1", ""), true},
+		{"none (older Merlin)", hdr("", ""), true},
+		{"error stub, old", hdr("", "boom"), false},
+	} {
+		if got := engine.Stale(r.h, s, c.h, "v2"); got != c.want {
+			t.Errorf("%s: Stale = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if engine.Stale(r.h, s, hdr("", ""), "") {
+		t.Error("an empty current version must switch the check off")
 	}
 }
 
