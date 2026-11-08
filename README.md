@@ -21,10 +21,10 @@ not touch `~/.claude`. macOS and Linux, arm64 and x64; Windows is not supported.
 ## First run
 
 ```sh
-merlin serve
+merlin
 ```
 
-Open http://127.0.0.1:7433/. The first start:
+Bare `merlin` is `merlin serve`; flags alone go to it too (`merlin --port 8080`). Open http://127.0.0.1:7433/. The first start:
 
 - indexes your sessions from `~/.claude` into `~/.merlin` (read-only on `~/.claude`);
 - leaves `~/.claude/settings.json` alone; the page follows sessions as their files change.
@@ -55,7 +55,8 @@ The server listens on 127.0.0.1 only.
 ```
 merlin cost [--by B] [--since D]          cost rollups
 merlin doctor                             format drift, unpriced models, attributed vs reported
-merlin help                               show this help
+merlin                                    same as merlin serve (flags alone go to serve too)
+merlin help                               show this help (also -h)
 merlin hook [codex]                       called by Claude Code or Codex
 merlin hooks <action> [harness]           install|uninstall|status hooks: claude (default), codex or all
 merlin scan                               index once and exit

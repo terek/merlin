@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 )
 
 // A command runs a subcommand with its arguments (without the subcommand name)
@@ -30,9 +31,9 @@ func main() {
 }
 
 func dispatch(args []string) int {
+	// Bare `merlin`, and `merlin -port 8080`, run `merlin serve`.
 	if len(args) == 0 {
-		printUsage(os.Stderr)
-		return 2
+		return commands["serve"].run(nil)
 	}
 	name := args[0]
 	switch name {
@@ -40,6 +41,10 @@ func dispatch(args []string) int {
 		name = "help"
 	case "-v", "--version":
 		name = "version"
+	default:
+		if strings.HasPrefix(name, "-") {
+			return commands["serve"].run(args)
+		}
 	}
 	c, ok := commands[name]
 	if !ok {
@@ -51,7 +56,10 @@ func dispatch(args []string) int {
 }
 
 func printUsage(w *os.File) {
-	fmt.Fprintln(w, "Usage: merlin <command> [arguments]")
+	fmt.Fprintln(w, "Usage: merlin [serve-flags]")
+	fmt.Fprintln(w, "       merlin <command> [arguments]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Bare `merlin` runs `merlin serve`; flags alone (merlin --port 8080) go to serve.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	names := make([]string, 0, len(commands))
