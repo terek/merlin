@@ -782,7 +782,6 @@ export function TimePlot({
     // the session's whole life, not the window's slice of it: its line runs through the window even where no turn does
     const whole = main && fullLane.get(main.key)
     const b = tree.branches[g.row.branch]
-    const ticks = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (main ? BRACKET_H : 0) - 2)
     // the decisions that get a bracket, and the turns drawn one by one
     const focusDec = (p: Pin | null | undefined) =>
       p && p.branch === g.row.branch ? b.model.cols[p.col]?.decision : undefined
@@ -800,15 +799,6 @@ export function TimePlot({
     let lastTurnX = Number.NEGATIVE_INFINITY
     return (
       <g key={g.full.lanes[0].key}>
-        {/* every row labels its own token scale */}
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={X0} x2={X1} y1={yCtx(g, t)} y2={yCtx(g, t)} stroke="var(--line)" strokeWidth={1} />
-            <text x={X0 - 4} y={yCtx(g, t)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--faint)">
-              {formatTokens(t)}
-            </text>
-          </g>
-        ))}
         {/* the decisions over a main row */}
         {main &&
           b.model.decisions.map((dec) => {
@@ -912,8 +902,6 @@ export function TimePlot({
             </g>
           )
         })}
-        {/* the row's zero: an axis, darker than the gridlines and reaching into the scale's gutter */}
-        <line x1={ZERO_X} x2={X1} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--faint)" strokeWidth={1} />
         {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included) */}
         {whole &&
           Number.isFinite(whole.t0) &&
@@ -1010,11 +998,13 @@ export function TimePlot({
     const y0 = from && from.g !== g ? from.g.base : undefined
     const turn = y0 !== undefined ? Math.min(ELBOW_R, Math.abs(g.base - y0)) : 0
     return (
-      <g key={`s${l.key}`} opacity={on ? 1 : SPINE_OPACITY} pointerEvents="none">
+      <g key={`s${l.key}`} pointerEvents="none">
+        {/* the spawn is light unless in focus; the agent's own line, as heavy as its model, is always drawn in full */}
         {y0 !== undefined && (
           <path
             d={elbow(xa, y0, g.base)}
             fill="none"
+            opacity={on ? 1 : SPINE_OPACITY}
             stroke={color}
             strokeWidth={l.kind === 'fork' ? branchWeight(l.runs[0]?.tier) : SPINE_W}
             strokeLinecap="round"
@@ -1092,6 +1082,23 @@ export function TimePlot({
     )
   }
   // an agent's spine runs under the rows; a session's branch is skeleton and passes over them
+  // the coordinate system of every row, under everything drawn on it: its token gridlines, labelled, and its zero
+  const grid = layout.map((g) => (
+    <g key={`grid${g.full.lanes[0].key}`}>
+      {cTicks
+        .filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2)
+        .map((t) => (
+          <g key={t}>
+            <line x1={X0} x2={X1} y1={yCtx(g, t)} y2={yCtx(g, t)} stroke="var(--line)" strokeWidth={1} />
+            <text x={X0 - 4} y={yCtx(g, t)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--faint)">
+              {formatTokens(t)}
+            </text>
+          </g>
+        ))}
+      {/* the row's zero: an axis, darker than the gridlines and reaching into the scale's gutter */}
+      <line x1={ZERO_X} x2={X1} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--faint)" strokeWidth={1} />
+    </g>
+  ))
   const spines = layout.map((g) => (g.row.main ? null : g.row.lanes.map((l) => laneSpine(g, l))))
   const branches = layout.map((g) => (g.row.main ? branchSpine(g) : null))
   // the reports of the work in focus, and the launch of its later pieces (the first one is the spine)
@@ -1407,6 +1414,7 @@ export function TimePlot({
               <InheritPattern key={c} id={`${hatch}-${k}`} color={c} />
             ))}
           </defs>
+          {grid}
           {pinMarks}
           {spines}
           {layout.map(drawRow)}

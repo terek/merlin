@@ -490,7 +490,8 @@ From top to bottom:
     frames; at full strength for the work in focus: hovered, selected, or launched or reported in the
     turn under the cursor or pinned. Context-carrying branches are skeleton, not detail: a forked or
     continued session's spine and an agent fork's are always at full strength, a clean-context
-    sub-agent's stays thin and faint. Agents packed into one row
+    sub-agent's elbow stays thin and faint, while its own line along its baseline is always drawn in
+    full. Every row's gridlines and zero line are drawn first, under all of this. Agents packed into one row
     each have their own segment. The horizontal part is as heavy as the model tier of the run the
     agent was on, segment by segment along `lane.runs` (3.5 px heavy, 2 px mid, 1 px light, 1 px grey
     unpriced; the gap between two runs keeps the weight of the one before; `tierSegments`), so a
