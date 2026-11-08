@@ -53,7 +53,7 @@ import {
   windowRow,
 } from './layout'
 import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
-import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, TIER_SERIES, type Unit } from './model'
+import { KIND_SERIES, type KindKey, missText, type Split, type Unit } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
@@ -104,7 +104,6 @@ const BAR_MIN_PX = 2
 export const COLOR: Record<KindKey | 'main', string> = {
   ...(Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<KindKey, string>),
 }
-const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
 
 /** Whether a run of points holds the point `p` (the run may start earlier, at the start of its turn or piece of work). */
 const holds = (run: readonly Point[], p: Point | undefined) => !!p && p.t >= run[0].t && p.t <= run[run.length - 1].t
@@ -134,6 +133,8 @@ export const COMPACT_MARK = {
 /** A cache miss's diamond: its side and colour. */
 export const MISS_SIZE = 8
 export const MISS_COLOR = 'var(--series-5)'
+/** The spend per slot under a baseline: one quiet grey, whatever the split; only a cache miss is coloured. */
+export const SPEND_COLOR = 'var(--muted)'
 /** A person's message: the dot's radius. */
 export const DOT_R = 2.8
 /** The dash of a report's line. */
@@ -344,6 +345,7 @@ export function TimePlot({
             const k = Math.floor(c.t / slot)
             const s = m.get(k) ?? {}
             addCall(s, c, split)
+            s.miss = (s.miss ?? 0) + c.reread
             m.set(k, s)
           }
         return m
@@ -776,8 +778,7 @@ export function TimePlot({
     )
   }
 
-  const drawRow = (g: Layout, i: number) => {
-    const order = ORDER[split]
+  const drawRow = (g: Layout) => {
     const main = g.row.main ? g.row.lanes[0] : undefined
     // the session's whole life, not the window's slice of it: its line runs through the window even where no turn does
     const whole = main && fullLane.get(main.key)
@@ -874,34 +875,6 @@ export function TimePlot({
               )
             })
           })()}
-        {/* the spend per slot, down from the baseline */}
-        {[...slots[i].entries()].map(([k, s]) => {
-          let off = 0
-          const [ta, tb] = bars[i].get(k) ?? [k * slot, (k + 1) * slot]
-          const bx0 = axis.x(ta)
-          const bx1 = Math.max(bx0 + BAR_MIN_PX, axis.x(tb))
-          return (
-            <g key={k}>
-              {order.map((p) => {
-                const v = s[p.key] ?? 0
-                if (v <= 0) return null
-                const h = v * kUsd
-                const r = (
-                  <rect
-                    key={p.key}
-                    x={bx0}
-                    y={g.base + 1 + off}
-                    width={bx1 - bx0}
-                    height={Math.max(h, 0.6)}
-                    fill={p.color}
-                  />
-                )
-                off += h
-                return r
-              })}
-            </g>
-          )
-        })}
         {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included) */}
         {whole &&
           Number.isFinite(whole.t0) &&
@@ -1097,6 +1070,34 @@ export function TimePlot({
         ))}
       {/* the row's zero: an axis, darker than the gridlines and reaching into the scale's gutter */}
       <line x1={ZERO_X} x2={X1} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--faint)" strokeWidth={1} />
+    </g>
+  ))
+  // the spend per slot, down from each baseline: a thin grey stroke per slot, under the lines drawn on the
+  // baseline, its cache miss (context billed again in full) in the miss colour at the bottom
+  const spend = layout.map((g, i) => (
+    <g key={`usd${g.full.lanes[0].key}`} pointerEvents="none">
+      {[...slots[i].entries()].map(([k, s]) => {
+        const [ta, tb] = bars[i].get(k) ?? [k * slot, (k + 1) * slot]
+        const x = f1((axis.x(ta) + axis.x(tb)) / 2)
+        const miss = (s.miss ?? 0) * kUsd
+        const rest = Math.max(0, s.total * kUsd - miss)
+        const y = g.base + 1
+        return (
+          <g key={k}>
+            <line x1={x} x2={x} y1={y} y2={y + Math.max(rest, 0.6)} stroke={SPEND_COLOR} strokeWidth={1} />
+            {miss > 0 && (
+              <line
+                x1={x}
+                x2={x}
+                y1={y + rest}
+                y2={y + rest + Math.max(miss, 0.6)}
+                stroke={MISS_COLOR}
+                strokeWidth={1.5}
+              />
+            )}
+          </g>
+        )
+      })}
     </g>
   ))
   const spines = layout.map((g) => (g.row.main ? null : g.row.lanes.map((l) => laneSpine(g, l))))
@@ -1415,6 +1416,7 @@ export function TimePlot({
             ))}
           </defs>
           {grid}
+          {spend}
           {pinMarks}
           {spines}
           {layout.map(drawRow)}

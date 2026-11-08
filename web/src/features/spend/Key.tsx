@@ -2,7 +2,6 @@
 // The samples are drawn with the plot's own constants and colours (exported by TimeView.tsx), so
 // that a change to the plot's look changes its key; marks the tree cannot have are left out.
 import { type ReactNode, useId } from 'react'
-import { TIER_SERIES } from './model'
 import {
   BREAK_OPACITY,
   BranchNode,
@@ -23,6 +22,7 @@ import {
   markColor,
   OverheadPattern,
   REPORT_DASH,
+  SPEND_COLOR,
   SPINE_OPACITY,
   SPINE_W,
   WORKFLOW_DASH,
@@ -230,9 +230,10 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
       </Entry>
       <Entry label="spend per slot (under the baseline)">
         {base()}
-        {TIER_SERIES.slice(0, 3).map((s, i) => (
-          <rect key={s.key} x={4 + i * 8} y={B + 1} width={6} height={3 - i * 0.5} fill={s.color} />
+        {[4, 8, 12, 16, 20].map((x, i) => (
+          <line key={x} x1={x + 0.5} x2={x + 0.5} y1={B + 1} y2={B + 1 + [3, 4, 2, 4, 3][i]} stroke={SPEND_COLOR} />
         ))}
+        <line x1={12.5} x2={12.5} y1={B + 3} y2={B + 6} stroke={MISS_COLOR} strokeWidth={1.5} />
       </Entry>
       {f.agents && (
         <Entry label="agent spine" title="Leads from the row that launched an agent, along the agent's baseline">

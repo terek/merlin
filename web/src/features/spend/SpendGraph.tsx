@@ -296,8 +296,8 @@ export function SpendGraph({
   const [win, setWin] = useState<Win>(() => {
     if (initialWindow && (initialWindow.lo !== undefined || initialWindow.hi !== undefined))
       return clampWindow({ lo: initialWindow.lo ?? bounds.t0, hi: initialWindow.hi ?? bounds.t1 }, bounds)
-    const at = turnStart(pinned ?? cursor)
-    return Number.isFinite(at) ? defaultWindow(timeline, days, at) : latest
+    // a session opens on all of it; "Latest" is a click away
+    return { lo: bounds.t0, hi: bounds.t1 }
   })
   // what the plot shows is measured on the strip the brush is dragged on, so the strip's width is known here
   const stripRef = useRef<HTMLDivElement>(null)
@@ -464,7 +464,7 @@ export function SpendGraph({
           Time runs across, local; a narrow grey band is time in which nothing ran, left out. Every row shares one token
           scale above its baseline (so the tall ones are the expensive ones to carry) and one dollar scale below it. The
           plot shows a window of the session, picked on the strip above it (the whole session on one scale, the window
-          highlighted): it opens on the last day of work, or on all of a short session. The rows and the token scale are
+          highlighted): it opens on all of it, and Latest goes to the last day of work. The rows and the token scale are
           those of the whole session, so the plot keeps its shape as the window moves (it looks sparse where the session
           is quiet); the time axis and the dollar scale are the window's own. A fork leaves from the top of its parent's
           context; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot

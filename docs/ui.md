@@ -350,7 +350,7 @@ From top to bottom:
     calendar day its first-to-last activity overlaps most; when two land on one day the first goes back
     to the day it started on (an evening run deep into the night), or, if it started that same day,
     they are one;
-  - the **first window** is the day of the last work episode: an episode runs back from the end of
+  - a session **opens on all of it**; **Latest** goes to the day of the last work episode: an episode runs back from the end of
     activity to the first idle stretch longer than 2 hours or the first night cut, whichever comes
     first (`defaultWindow`, `episodes`); an episode that spent under 1% of the tree (a resume that only
     compacted) is passed over for the one before. The window is that episode's day (a day of three
@@ -389,7 +389,10 @@ From top to bottom:
     min". A turn whose first call came more than 5 minutes after its prompt (a failed prompt sent
     again) starts its area at that call. A one-shot sub-agent has a single piece of work, so this never shows on its row. An agent's own sub-agents are thin lines on its row;
   - below the baseline, what the row spent in each slot of time (a round length, at least 4 px wide),
-    on one dollar scale for every row, split like the legend. The scale is the window's own (slots are
+    on one dollar scale for every row, as a 1 px line per slot (at the middle of where the row ran in
+    it), one quiet grey (`--muted`) whatever the split, with the slot's cache miss in the miss colour at
+    its bottom; the lines are drawn under everything on the baseline, so the agent's and session's
+    weighted lines stay readable. The scale is the window's own (slots are
     shorter when zoomed in, so a fixed scale would make bars vanish): the largest at which the tallest bar of
     every row in the window still fits the band the row has in the frame (`dollarScale`), less the room a main
     row keeps for its turn numbers; "the tallest bar is $X" above the plot is true of it. A row pays for its agent's calls, its
