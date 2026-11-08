@@ -526,7 +526,7 @@ describe('effectiveWindow', () => {
   const m = (min: number) => Date.parse(at(min))
 
   test('a window that cuts a turn grows to the end of it', () => {
-    const w = { lo: m(0), hi: m(25) }
+    const w = { lo: m(0), hi: m(38) }
     expect(effectiveWindow(tl, w)).toEqual({ lo: w.lo, hi: m(40) + 1 })
     const s = sliceWindow(tl, effectiveWindow(tl, w))
     expect(s.lanes[0].calls.map((c) => c.t)).toEqual([m(5), m(20), m(40)])
@@ -535,7 +535,7 @@ describe('effectiveWindow', () => {
   })
 
   test('the axis of the effective slice ends exactly at the effective edge', () => {
-    const eff = effectiveWindow(tl, { lo: m(0), hi: m(25) })
+    const eff = effectiveWindow(tl, { lo: m(0), hi: m(38) })
     expect(sliceWindow(tl, eff).t1).toBeLessThanOrEqual(eff.hi)
   })
 
@@ -545,19 +545,33 @@ describe('effectiveWindow', () => {
   })
 
   test('a turn that began before the window is made whole on the left too', () => {
-    // turn 0 runs from 5 to 40; [10, 30) cuts it on both sides, each by less than its width
-    expect(effectiveWindow(tl, { lo: m(10), hi: m(30) })).toEqual({ lo: m(5), hi: m(40) + 1 })
-    expect(sliceWindow(tl, { lo: m(5), hi: m(40) + 1 }).lanes[0].calls.map((c) => c.t)).toEqual([m(5), m(20), m(40)])
+    // turn 0 runs from 5 to 40 (35 minutes); [10, 50) is wider and cuts it on the left
+    expect(effectiveWindow(tl, { lo: m(10), hi: m(50) })).toEqual({ lo: m(5), hi: m(50) })
+    expect(sliceWindow(tl, { lo: m(5), hi: m(50) }).lanes[0].calls.map((c) => c.t)).toEqual([m(5), m(20), m(40)])
   })
 
-  test('both edges follow one rule: a turn too long on the left is cut there, as on the right', () => {
-    // [30, 35) would have to grow by 25 on the left, five times its width
+  test('a turn longer than the window is cut at either edge', () => {
     const w = { lo: m(30), hi: m(35) }
     expect(effectiveWindow(tl, w)).toBe(w)
   })
 
-  test('a window grows by no more than its own width: a long turn can be zoomed into', () => {
-    // turn 0 starts at 5 and runs to 40: [0, 10) would have to grow by 30, three times its width
+  test('a window of one width dragged across a turn keeps one behaviour', () => {
+    // turn 0 is 35 minutes: a 30-minute window always cuts it, a 40-minute one always makes it whole
+    for (const width of [30, 40]) {
+      const whole = new Set<boolean>()
+      for (let lo = -30; lo <= 35; lo += 1) {
+        const w = { lo: m(lo), hi: m(lo + width) }
+        const cuts = lo <= 40 && lo + width > 5 && !(lo <= 5 && lo + width > 40)
+        if (!cuts) continue
+        const e = effectiveWindow(tl, w)
+        whole.add(e.lo <= m(5) && e.hi > m(40))
+      }
+      expect([...whole]).toEqual([width >= 35])
+    }
+  })
+
+  test('a window narrower than a turn zooms into it', () => {
+    // turn 0 runs from 5 to 40, longer than [0, 10)
     const w = { lo: m(0), hi: m(10) }
     expect(effectiveWindow(tl, w)).toBe(w)
     const s = sliceWindow(tl, w)

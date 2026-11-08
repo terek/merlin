@@ -325,9 +325,9 @@ From top to bottom:
     and a launch or report line whose other end is outside the window is drawn along the plot's edge,
     dashed, with a small chevron pointing out (`sliceTimeline`). A turn the window cuts is shown whole, at either
     edge alike, so the plot shows the **effective window**: the brushed one grown to the start and end of
-    the turns it cuts (`effectiveWindow`; a turn is made whole only when neither side grows by more than
-    the window's own width, so that a long turn can be zoomed into, and is cut at the edges otherwise; not
-    repeated for what the grown parts reach into) and every lane is sliced by it (`sliceWindow`), so data fills
+    the turns it cuts (`effectiveWindow`; a turn no longer than the window is made whole, a longer one is being zoomed
+    into and is cut at the edges: a rule of lengths only, so a window dragged along keeps its behaviour;
+    not repeated for what the grown parts reach into) and every lane is sliced by it (`sliceWindow`), so data fills
     the whole axis (`merlin-zls.9`);
   - the **overview** is 54 px tall and full width: the whole tree on one linear wall-clock scale, idle
     time squeezed out as in the plot (`timeAxis` over every span, at most 16 breaks, so long nights do

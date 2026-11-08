@@ -701,10 +701,10 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
 
 /**
  * The window the plot really shows for the brushed `w`: the same, grown at either edge so that a turn
- * it cuts is whole, which is how far the axis would reach. Both edges follow the one rule: a turn is
- * made whole only when that grows neither side by more than the window's own width, so that a long turn
- * can still be zoomed into (it is then cut at the edges). Not repeated: what the grown parts reach into
- * is not added.
+ * it cuts is whole, which is how far the axis would reach. Both edges follow one rule, which depends on
+ * the turn's length and the window's width only, so that a window dragged along keeps its behaviour: a
+ * turn no longer than the window is made whole, a longer one is being zoomed into and is cut at the
+ * edges. Not repeated: what the grown parts reach into is not added.
  */
 export function effectiveWindow(tl: Timeline, w: Win): Win {
   const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
@@ -713,7 +713,7 @@ export function effectiveWindow(tl: Timeline, w: Win): Win {
   let hi = w.hi
   for (const [a, b] of tl.spans) {
     if (!Number.isFinite(a) || !Number.isFinite(b) || b < w.lo || a >= w.hi || workSpans.has(`${a}/${b}`)) continue
-    if (w.lo - a > width || b - w.hi > width) continue
+    if (b - a > width) continue
     lo = Math.min(lo, a)
     // a window is open at the right and a turn ends on its last call: one millisecond more keeps that call
     hi = Math.max(hi, b + 1)
