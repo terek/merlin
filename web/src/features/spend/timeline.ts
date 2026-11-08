@@ -700,22 +700,25 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
 }
 
 /**
- * The window the plot really shows for the brushed `w`: the same, grown on the right to the end of the
- * last turn that starts in it and runs past it, by no more than the window's own width, so that a long
- * turn can still be zoomed into (beyond that, the turn is cut at the edge). The left edge stays: work
- * that began before it is cut there, and a turn that began before it grows nothing. Not repeated: what
- * starts in the grown part is not added.
+ * The window the plot really shows for the brushed `w`: the same, grown at either edge so that a turn
+ * it cuts is whole, which is how far the axis would reach. Both edges follow the one rule: a turn is
+ * made whole only when that grows neither side by more than the window's own width, so that a long turn
+ * can still be zoomed into (it is then cut at the edges). Not repeated: what the grown parts reach into
+ * is not added.
  */
 export function effectiveWindow(tl: Timeline, w: Win): Win {
   const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
-  const most = w.hi + (w.hi - w.lo)
+  const width = w.hi - w.lo
+  let lo = w.lo
   let hi = w.hi
   for (const [a, b] of tl.spans) {
-    if (a < w.lo || a >= w.hi || workSpans.has(`${a}/${b}`)) continue
-    if (Number.isFinite(b) && b > hi && b < most) hi = b
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b < w.lo || a >= w.hi || workSpans.has(`${a}/${b}`)) continue
+    if (w.lo - a > width || b - w.hi > width) continue
+    lo = Math.min(lo, a)
+    // a window is open at the right and a turn ends on its last call: one millisecond more keeps that call
+    hi = Math.max(hi, b + 1)
   }
-  // a window is open at the right and a turn ends on its last call: one millisecond more keeps that call
-  return hi === w.hi ? w : { lo: w.lo, hi: hi + 1 }
+  return lo === w.lo && hi === w.hi ? w : { lo, hi }
 }
 
 /** The part of a timeline the plot shows for the brushed `w`: all of its effective window, nothing past it. */

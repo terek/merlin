@@ -130,6 +130,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
 
   const xlo = axis.x(win.lo)
   const xhi = Math.max(xlo + 2, axis.x(win.hi))
+  const xeff0 = Math.min(xlo, axis.x(eff.lo))
   const xeff = Math.max(xhi, axis.x(eff.hi))
   const dayOfWin = windowDay(win, days)
   const snap = (k: number) => onWin(snapDay(days[k]))
@@ -198,7 +199,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
   }
 
   const whole = eff.lo <= bounds.t0 && eff.hi >= bounds.t1
-  const from = Math.max(win.lo, timeline.t0)
+  const from = Math.max(eff.lo, timeline.t0)
   const to = Math.min(eff.hi, timeline.t1)
   const sameDay = new Date(from).toDateString() === new Date(to).toDateString()
 
@@ -328,7 +329,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
             <rect
               x={0}
               y={LABEL_H}
-              width={Math.max(0, xlo)}
+              width={Math.max(0, xeff0)}
               height={H - LABEL_H}
               fill="var(--surface)"
               opacity={0.55}
@@ -352,25 +353,36 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
               strokeWidth={1.5}
               rx={2}
             />
-            {/* the turn the window cuts runs on, and the plot shows it whole: a fainter continuation */}
-            {xeff - xhi > 0.5 && (
-              <g data-testid="overview-effective">
-                <rect
-                  x={xhi}
-                  y={LABEL_H + 0.75}
-                  width={xeff - xhi}
-                  height={H - LABEL_H - 1.5}
-                  fill="var(--accent)"
-                  fillOpacity={0.04}
-                />
-                <path
-                  d={`M${xhi} ${LABEL_H + 0.75}H${xeff}V${H - 0.75}H${xhi}`}
-                  fill="none"
-                  stroke="var(--accent)"
-                  strokeWidth={1}
-                  strokeOpacity={0.4}
-                />
-              </g>
+            {/* a turn the window cuts runs on, and the plot shows it whole: a fainter continuation */}
+            {(
+              [
+                [xeff0, xlo, 'l'],
+                [xhi, xeff, 'r'],
+              ] as const
+            ).map(([x0, x1, side]) =>
+              x1 - x0 > 0.5 ? (
+                <g key={side} data-testid={`overview-effective-${side}`}>
+                  <rect
+                    x={x0}
+                    y={LABEL_H + 0.75}
+                    width={x1 - x0}
+                    height={H - LABEL_H - 1.5}
+                    fill="var(--accent)"
+                    fillOpacity={0.04}
+                  />
+                  <path
+                    d={
+                      side === 'r'
+                        ? `M${x0} ${LABEL_H + 0.75}H${x1}V${H - 0.75}H${x0}`
+                        : `M${x1} ${LABEL_H + 0.75}H${x0}V${H - 0.75}H${x1}`
+                    }
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth={1}
+                    strokeOpacity={0.4}
+                  />
+                </g>
+              ) : null,
             )}
             {[xlo, xhi].map((x, i) => (
               <rect

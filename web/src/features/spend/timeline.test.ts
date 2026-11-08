@@ -544,8 +544,15 @@ describe('effectiveWindow', () => {
     expect(effectiveWindow(tl, w)).toBe(w)
   })
 
-  test('a turn that began before the window grows it neither way', () => {
-    const w = { lo: m(10), hi: m(25) }
+  test('a turn that began before the window is made whole on the left too', () => {
+    // turn 0 runs from 5 to 40; [10, 30) cuts it on both sides, each by less than its width
+    expect(effectiveWindow(tl, { lo: m(10), hi: m(30) })).toEqual({ lo: m(5), hi: m(40) + 1 })
+    expect(sliceWindow(tl, { lo: m(5), hi: m(40) + 1 }).lanes[0].calls.map((c) => c.t)).toEqual([m(5), m(20), m(40)])
+  })
+
+  test('both edges follow one rule: a turn too long on the left is cut there, as on the right', () => {
+    // [30, 35) would have to grow by 25 on the left, five times its width
+    const w = { lo: m(30), hi: m(35) }
     expect(effectiveWindow(tl, w)).toBe(w)
   })
 
