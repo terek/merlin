@@ -701,19 +701,20 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
 
 /**
  * The window the plot really shows for the brushed `w`: the same, grown at either edge so that a turn
- * it cuts is whole, which is how far the axis would reach. Both edges follow one rule, which depends on
- * the turn's length and the window's width only, so that a window dragged along keeps its behaviour: a
- * turn no longer than the window is made whole, a longer one is being zoomed into and is cut at the
- * edges. Not repeated: what the grown parts reach into is not added.
+ * it cuts is whole. Both edges follow one rule, which compares lengths only: a turn no longer than the
+ * window is made whole, a longer one is being zoomed into and is cut at the edges. Lengths are measured
+ * by `len` — on the strip the user drags the brush on, so that a brush dragged along (its width on the
+ * strip kept) keeps its behaviour wherever it is; in time when no strip is given. Not repeated: what the
+ * grown parts reach into is not added.
  */
-export function effectiveWindow(tl: Timeline, w: Win): Win {
+export function effectiveWindow(tl: Timeline, w: Win, len: (a: number, b: number) => number = (a, b) => b - a): Win {
   const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
-  const width = w.hi - w.lo
+  const room = len(w.lo, w.hi)
   let lo = w.lo
   let hi = w.hi
   for (const [a, b] of tl.spans) {
     if (!Number.isFinite(a) || !Number.isFinite(b) || b < w.lo || a >= w.hi || workSpans.has(`${a}/${b}`)) continue
-    if (b - a > width) continue
+    if (len(a, b) > room) continue
     lo = Math.min(lo, a)
     // a window is open at the right and a turn ends on its last call: one millisecond more keeps that call
     hi = Math.max(hi, b + 1)

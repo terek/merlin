@@ -9,7 +9,6 @@ import { CLASS_SERIES, KIND_SERIES, type Split, TIER_SERIES } from './model'
 import {
   boundsOf,
   centerWindow,
-  clampWindow,
   contextEnvelope,
   type Day,
   dayAt,
@@ -21,6 +20,7 @@ import {
   snapTarget,
   spendDensity,
   stepWindow,
+  type TimeAxis,
   type Timeline,
   timeAxis,
   type Win,
@@ -64,8 +64,12 @@ export interface OverviewProps {
   latest: Win
 }
 
+/** The strip's time axis at a width: the whole tree, idle time squeezed out. */
+export const stripAxis = (timeline: Timeline, width: number): TimeAxis =>
+  timeAxis(timeline.spans, PAD, Math.max(PAD + 80, width - PAD), undefined, STRIP_BREAKS)
+
 type Drag =
-  | { mode: 'move'; x: number; xlo: number; width: number }
+  | { mode: 'move'; x: number; xlo: number; xhi: number }
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
@@ -77,7 +81,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
   const x0 = PAD
   const x1 = Math.max(x0 + 80, width - PAD)
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
-  const axis = useMemo(() => timeAxis(timeline.spans, x0, x1, undefined, STRIP_BREAKS), [timeline, x1])
+  const axis = useMemo(() => stripAxis(timeline, width), [timeline, width])
 
   const env = useMemo(() => contextEnvelope(timeline, axis, COL), [timeline, axis])
   const peak = Math.max(1, ...env)
@@ -153,7 +157,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
     const z = zoneAt(x)
     drag.current =
       z === 'move'
-        ? { mode: 'move', x, xlo, width: win.hi - win.lo }
+        ? { mode: 'move', x, xlo, xhi }
         : z === 'new'
           ? { mode: 'new', x, t: axis.t(x), moved: false }
           : { mode: z }
@@ -172,9 +176,10 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
       return
     }
     if (d.mode === 'move') {
-      // a dragged window keeps its length in time, not on the strip, where idle time is squeezed
-      const lo = axis.t(Math.max(x0, Math.min(x1, d.xlo + x - d.x)))
-      onWin(clampWindow({ lo, hi: lo + d.width }, bounds))
+      // the brush moves as the pointer does, its width on the strip kept: what the user holds is the brush
+      const w = d.xhi - d.xlo
+      const a = Math.max(x0, Math.min(x1 - w, d.xlo + x - d.x))
+      onWin(dragWindow(axis.t(a), axis.t(a + w), bounds))
     } else if (d.mode === 'new') {
       if (Math.abs(x - d.x) > 3) d.moved = true
       if (d.moved) onWin(dragWindow(d.t, axis.t(x), bounds))

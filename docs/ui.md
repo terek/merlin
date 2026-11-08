@@ -326,7 +326,7 @@ From top to bottom:
     dashed, with a small chevron pointing out (`sliceTimeline`). A turn the window cuts is shown whole, at either
     edge alike, so the plot shows the **effective window**: the brushed one grown to the start and end of
     the turns it cuts (`effectiveWindow`; a turn no longer than the window is made whole, a longer one is being zoomed
-    into and is cut at the edges: a rule of lengths only, so a window dragged along keeps its behaviour;
+    into and is cut at the edges, both measured on the strip, so a brush dragged along keeps its behaviour;
     not repeated for what the grown parts reach into) and every lane is sliced by it (`sliceWindow`), so data fills
     the whole axis (`merlin-zls.9`);
   - the **overview** is 54 px tall and full width: the whole tree on one linear wall-clock scale, idle
@@ -336,8 +336,8 @@ From top to bottom:
     (`spendDensity`), a faint tick at each midnight, the date of each day (from `splitDays`: the
     day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
     marker. The **brush** is the window: a highlighted rectangle with a handle at each edge, the rest
-    dimmed. Dragging across the strip selects a new range; dragging the window moves it, keeping its length in
-    time (on the strip it narrows over a break, where idle time is squeezed); dragging a handle resizes it; a click outside the
+    dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
+    strip kept (so over a break its time width changes); dragging a handle resizes it; a click outside the
     window centres it there; a click on a date, or a double-click inside a day, snaps to that day (its
     activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
     window by its own width, or to the previous or next day when it is a day; Home and End go to the

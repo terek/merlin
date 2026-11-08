@@ -1,7 +1,7 @@
 // The spend graph: the card around the time view (TimeView.tsx), with the legend, the compactions,
 // the readout of what is under the cursor and the key handling. The pinned turn and the selected
 // piece of agent work are the page's; the panels under the card open them.
-import { type KeyboardEvent, useMemo, useState } from 'react'
+import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
 import { usePrices } from '../../api/queries'
 import type { SessionKey } from '../../api/types'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
@@ -27,7 +27,7 @@ import {
   type Unit,
   unitParts,
 } from './model'
-import { Overview } from './Overview'
+import { Overview, stripAxis } from './Overview'
 import { TimePlot } from './TimeView'
 import {
   activeMs,
@@ -42,6 +42,7 @@ import {
   type Win,
 } from './timeline'
 import type { Branch, Tree } from './tree'
+import { useWidth } from './useWidth'
 
 /** A turn of a branch. */
 export interface Pin {
@@ -303,7 +304,14 @@ export function SpendGraph({
     const at = turnStart(pinned ?? cursor)
     return Number.isFinite(at) ? defaultWindow(timeline, days, at) : latest
   })
-  const eff = useMemo(() => effectiveWindow(timeline, win), [timeline, win])
+  // what the plot shows is measured on the strip the brush is dragged on, so the strip's width is known here
+  const stripRef = useRef<HTMLDivElement>(null)
+  const stripWidth = useWidth(stripRef)
+  const strip = useMemo(() => stripAxis(timeline, stripWidth), [timeline, stripWidth])
+  const eff = useMemo(
+    () => (overview ? effectiveWindow(timeline, win, (a, b) => strip.x(b) - strip.x(a)) : win),
+    [timeline, win, strip, overview],
+  )
   // the window is the user's: only what they do to it moves it. A turn they pin (in a panel, in the list
   // of decisions) or reach with the keys brings itself into view when the plot does not show it; the
   // pointer passing over the plot never moves it.
@@ -428,18 +436,20 @@ export function SpendGraph({
           </span>
         </p>
       )}
-      {overview && (
-        <Overview
-          timeline={timeline}
-          days={days}
-          split={split}
-          win={win}
-          eff={eff}
-          onWin={setWin}
-          pinnedT={turnStart(pinned)}
-          latest={latest}
-        />
-      )}
+      <div ref={stripRef}>
+        {overview && (
+          <Overview
+            timeline={timeline}
+            days={days}
+            split={split}
+            win={win}
+            eff={eff}
+            onWin={setWin}
+            pinnedT={turnStart(pinned)}
+            latest={latest}
+          />
+        )}
+      </div>
       <TimePlot
         tree={tree}
         timeline={timeline}

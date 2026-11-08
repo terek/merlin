@@ -570,6 +570,16 @@ describe('effectiveWindow', () => {
     }
   })
 
+  test('lengths are measured as given: on the strip, a turn and a brush compare as drawn', () => {
+    // a strip that draws minutes 20 to 30 as one: turn 0 (5 to 40, 35 minutes) is 26 long there, and
+    // [30, 60) is 30. In time the turn is longer than the window and is cut; on the strip it is whole.
+    const squeeze = (t: number) => (t <= m(20) ? t : t <= m(30) ? m(20) + (t - m(20)) / 10 : t - m(9))
+    const len = (a: number, b: number) => squeeze(b) - squeeze(a)
+    const w = { lo: m(30), hi: m(60) }
+    expect(effectiveWindow(tl, w)).toBe(w)
+    expect(effectiveWindow(tl, w, len)).toEqual({ lo: m(5), hi: m(60) })
+  })
+
   test('a window narrower than a turn zooms into it', () => {
     // turn 0 runs from 5 to 40, longer than [0, 10)
     const w = { lo: m(0), hi: m(10) }
