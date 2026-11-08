@@ -39,8 +39,8 @@ var (
 	reCrossSessionMsg = regexp.MustCompile(`(?ms)^<cross-session-message\b([^>]*)>$(.*?)^</cross-session-message>$`)
 	// "<" and ">" are entity-escaped in the children, so the first closing tag ends the element.
 	reTaskNote = regexp.MustCompile(`(?s)<task-notification>(.*?)</task-notification>`)
-	reAttr            = regexp.MustCompile(`([a-z_]+)="([^"]*)"`)
-	entities          = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&apos;", "'", "&amp;", "&")
+	reAttr     = regexp.MustCompile(`([a-z_]+)="([^"]*)"`)
+	entities   = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&apos;", "'", "&amp;", "&")
 )
 
 // delivered parses a prompt a machine delivered. It returns the messages and what is left
