@@ -77,7 +77,21 @@ HTTP API and the design.
 `merlin upgrade` downloads the latest release, verifies its SHA-256 and replaces the binary in
 place; `merlin upgrade --check` only reports whether there is one. If merlin is installed in a
 directory you cannot write to (such as `/usr/local/bin`), run it with `sudo`. A running
-`merlin serve` keeps the old version until you restart it.
+`merlin serve` switches to the new binary within a minute.
+
+### Auto-upgrade
+
+`merlin serve` keeps itself on the latest release: it checks at startup, before it indexes
+anything, and then every 4 hours; when there is a newer release it downloads and verifies it,
+replaces the binary and re-executes itself (same PID, same port; in-flight indexing finishes
+first). Progress is in `merlin.log` (`auto-upgrade: ...`). The previous binary is kept as
+`.merlin.prev` beside it; if the new version cannot start, the previous one is put back and the
+bad version is recorded in `~/.merlin/upgrade.json` and not tried again. Development builds
+(`make build`) never upgrade themselves, nor does an install in a directory the user cannot
+write to (run `sudo merlin upgrade`). Turn it off with `"autoUpgrade": false` in `config.json`,
+`MERLIN_AUTO_UPGRADE=0`, or `merlin serve --no-auto-upgrade` (flag beats environment beats file).
+For testing, `MERLIN_RELEASES_URL` points the release lookups at another server (a directory
+laid out like the releases page) and `--upgrade-interval` shortens the 4 hours.
 
 Versions 0.2.0 and 0.3.0 cannot update themselves: run the installer again to get past them.
 

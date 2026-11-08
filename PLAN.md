@@ -507,4 +507,17 @@ Gatekeeper checks the notarization online on first launch.
 **Locally.** `OUT_DIR=/some/dir scripts/release-build.sh 0.2.0 darwin-arm64 linux-x64`, then
 `scripts/release-smoke.sh /some/dir/merlin-darwin-arm64 0.2.0`. `install.sh` honours
 `MERLIN_BASE_URL` (a directory laid out like a release, served over HTTP) for testing without
-GitHub.
+the network. `merlin upgrade` and `merlin serve` read releases the same way (the
+`/releases/latest` redirect, `SHA256SUMS`); `MERLIN_RELEASES_URL` overrides their base for tests.
+
+**Auto-upgrade.** `merlin serve` (cmd/explorer/autoupgrade.go) checks at startup, before the
+store or engine exist, and every 4 h (`daemon.Options.Upgrade`; the daemon never executes
+anything). A newer release is staged next to the binary, verified (checksum, runs, prints the
+version), the current binary is hard-linked to `.merlin.prev`, and the stage is renamed over it.
+`Run` then returns `daemon.ErrRestart` (at startup at once; later after in-flight builds drain,
+at most 10 min) and `serve` re-execs itself with `MERLIN_UPGRADED_FROM` set. If that process
+fails before listening, it restores `.merlin.prev`, records its version in
+`$MERLIN_HOME/upgrade.json` and re-execs without the variable. A once-a-minute stat of the
+binary (`Options.BinaryChanged`) makes `merlin upgrade`/install.sh take effect in a running
+serve. Off for dev builds, `--no-auto-upgrade`, `MERLIN_AUTO_UPGRADE=0`, `autoUpgrade: false`.
+A new binary that crashes (rather than fails to start) is not rolled back.
