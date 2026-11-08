@@ -19,6 +19,7 @@ import { agentLabel } from '../agents/model'
 import { BracketMark, DECISION_TINT, kindColor, Notch, PinMark, TURN_TINT, unitBox } from './marks'
 import {
   agentSeries,
+  agentWorkText,
   type Bucket,
   CLASS_SERIES,
   type Col,
@@ -33,6 +34,7 @@ import {
   stepParts,
   type Unit,
   unitParts,
+  unitUnrecorded,
 } from './model'
 import type { Pin } from './SpendGraph'
 import { type Tree, topTreeDecisions } from './tree'
@@ -71,7 +73,7 @@ export function TopDecisions({ tree, pinned, onPin }: { tree: Tree; pinned: Pin 
                 <span className={`font-mono text-sec ${on ? 'text-accent' : 'text-muted'}`}>
                   {x.end > x.start ? `turns ${x.start}–${x.end}` : `turn ${x.start}`}
                 </span>
-                <Money usd={x.usd} className="text-right" />
+                <Money usd={x.usd} lowerBound={lowerBoundNote(0, 0, x.unrecorded)} className="text-right" />
                 <Bar
                   height={6}
                   total={max}
@@ -86,11 +88,7 @@ export function TopDecisions({ tree, pinned, onPin }: { tree: Tree; pinned: Pin 
                   {x.prompt || <span className="text-faint">(no prompt text)</span>}
                 </span>
                 <span className="flex max-w-80 items-center gap-2 whitespace-nowrap text-sec text-muted">
-                  {x.units > 0 && (
-                    <span>
-                      {plural(x.units, 'piece')} of agent work {formatMoney(x.unitsUSD)}
-                    </span>
-                  )}
+                  {x.units > 0 && <span>{agentWorkText(x.units, x.unrecorded, x.unitsUSD)}</span>}
                   {multi && <span className="min-w-0 truncate text-faint">{branch.title}</span>}
                 </span>
               </button>
@@ -146,7 +144,7 @@ export function DecisionPanel({
           <BracketMark />
           {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
           <span>{own.length > 1 ? `Turns ${first.index} to ${dec.end}` : `Turn ${first.index}`}</span>
-          <Money usd={dec.usd} />
+          <Money usd={dec.usd} lowerBound={lowerBoundNote(0, 0, dec.unrecorded)} />
           <span className="text-sec font-normal text-muted">
             {typed
               ? more
@@ -180,7 +178,8 @@ export function DecisionPanel({
           )}
           <span className="text-muted">
             {plural(own.length, 'turn')}
-            {dec.units > 0 && `, ${plural(dec.units, 'piece')} of agent work`}
+            {dec.units > 0 &&
+              `, ${plural(dec.units, 'piece')} of agent work${dec.unrecorded > 0 ? ` (${dec.unrecorded} not recorded)` : ''}`}
             {span >= 60_000 && `, ${formatDuration(span)}`}
           </span>
         </div>
@@ -263,7 +262,7 @@ export function DecisionPanel({
                   label="share of the largest item"
                   segments={unitParts(u, 'kind').map((p) => ({ value: p.usd, tone: p.tone, title: p.label }))}
                 />
-                <Money usd={x.usd} className="text-right" />
+                <UnitMoney unit={u} className="text-right" />
               </button>
             </li>
           )
@@ -440,17 +439,32 @@ function UnitList({
                     ]}
                   />
                 </span>
-                <Money
-                  usd={u.bucket.usd}
-                  lowerBound={lowerBoundNote(0, u.bucket.unpriced)}
-                  estimate={estimateNote(u.bucket.estimated, u.bucket.truncated)}
-                  className="w-14 shrink-0 text-right"
-                />
+                <UnitMoney unit={u} className="min-w-14 shrink-0 text-right" />
               </button>
             </li>
           )
         })}
     </ul>
+  )
+}
+
+/** A piece of work's dollars; for an agent that left no record there are none to print ($0 would be a claim). */
+function UnitMoney({ unit: u, className }: { unit: Unit; className?: string }) {
+  const unrecorded = unitUnrecorded(u)
+  if (u.agent.unrecorded && u.bucket.usd === 0) {
+    return (
+      <span className={`whitespace-nowrap text-muted ${className ?? ''}`} title={lowerBoundNote(0, 0, unrecorded)}>
+        not recorded
+      </span>
+    )
+  }
+  return (
+    <Money
+      usd={u.bucket.usd}
+      lowerBound={lowerBoundNote(0, u.bucket.unpriced, unrecorded)}
+      estimate={estimateNote(u.bucket.estimated, u.bucket.truncated)}
+      className={className}
+    />
   )
 }
 
@@ -485,12 +499,7 @@ function UnitDetail({
             piece {u.ordinal} of {u.of}
           </span>
         )}
-        <Money
-          usd={u.bucket.usd}
-          lowerBound={lowerBoundNote(0, u.bucket.unpriced)}
-          estimate={estimateNote(u.bucket.estimated, u.bucket.truncated)}
-          className="font-semibold"
-        />
+        <UnitMoney unit={u} className="font-semibold" />
         {a.model && <ModelName name={a.model} className="text-sec text-muted" />}
       </div>
       <div className="grid gap-6 p-3 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
@@ -695,7 +704,14 @@ export function TurnInspector({
           {col.launched.length > 0 && (
             <div>
               <Label>
-                Launched in this turn: {plural(col.launched.length, 'piece')} of agent work, {formatMoney(launchedUSD)}
+                Launched in this turn:{' '}
+                {col.launched.some((u) => u.agent.unrecorded)
+                  ? agentWorkText(
+                      col.launched.length,
+                      col.launched.filter((u) => u.agent.unrecorded).length,
+                      launchedUSD,
+                    )
+                  : `${plural(col.launched.length, 'piece')} of agent work, ${formatMoney(launchedUSD)}`}
               </Label>
               <UnitList
                 units={col.launched}

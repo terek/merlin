@@ -541,6 +541,7 @@ func (v *view) costs() {
 		perWin := make([][]dayAmount, len(s.windows))
 		coveredBy := make([]float64, len(s.windows))
 		estBy := make([]float64, len(s.windows))
+		c.UnrecordedAgents = int(s.d.Cost.UnrecordedAgents)
 		var priced, recorded int // owned messages with a price, and of those the harness's own figure
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)

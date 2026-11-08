@@ -148,6 +148,9 @@ type SessionCost struct {
 	// UnpricedMessages is how many of the owned messages were billed on a model with no
 	// price (Message.Unpriced): they count $0 in OwnUSD.
 	UnpricedMessages int `json:"unpricedMessages,omitempty"`
+	// UnrecordedAgents is how many agent runs the harness kept no record of (the digest's
+	// Cost.UnrecordedAgents): their spend is unknown, not $0, so every dollar figure is "at least".
+	UnrecordedAgents int `json:"unrecordedAgents,omitempty"`
 	// LowerBound: BestUSD is a lower bound, because an unpriced message lies outside every
 	// reported window (inside one, the reported total already covers it).
 	LowerBound bool `json:"lowerBound,omitempty"`

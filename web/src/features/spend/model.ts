@@ -24,7 +24,7 @@ import type {
 } from '../../api/types'
 import { agentRole } from '../../lib/agent'
 import { idleText } from '../../lib/compaction'
-import { formatDuration } from '../../lib/format'
+import { formatDuration, formatMoney, plural } from '../../lib/format'
 import { ENCRYPTED, inboxBody, turnPrompt } from '../../lib/inbox'
 import { modelLabel } from '../../lib/models'
 import type { Tier } from '../../lib/tiers'
@@ -442,6 +442,8 @@ export interface Decision {
   rereadUSD: number
   usd: number
   units: number
+  /** How many of `units` are agent runs the harness kept no record of: their spend is unknown, not $0. */
+  unrecorded: number
   /** Dollars per kind, for a bar. */
   parts: Part[]
   /** The compactions after its turns; their cost is an estimate and in no figure above. */
@@ -720,6 +722,11 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       ...inbox.map((x, k) => mk(k + 1, ms(x.at), x.text || x.summary || (x.encrypted ? ENCRYPTED : ''), x.from)),
     ])
   }
+  // an agent that left no record has no message to give its piece of work an end: the span is its own
+  for (const a of rootAgents) {
+    const end = ms(a.endedAt)
+    if (a.unrecorded && Number.isFinite(end)) for (const u of unitsOf.get(a.id) ?? []) u.endMs = Math.max(u.endMs, end)
+  }
   const unitAt = (root: Agent, at: number): Unit | undefined => {
     const list = unitsOf.get(root.id)
     if (!list) return undefined
@@ -882,6 +889,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         rereadUSD: 0,
         usd: 0,
         units: 0,
+        unrecorded: 0,
         parts: [],
         compactions: [],
         agentCompactions: [],
@@ -902,6 +910,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     dec.stepsUSD += c.usd
     dec.unitsUSD += launchedUSD
     dec.units += c.launched.length
+    dec.unrecorded += c.launched.filter((u) => u.agent.unrecorded).length
     const mine: Record<string, number> = {}
     for (const p of stepParts(c, 'kind')) mine[p.key] = (mine[p.key] ?? 0) + p.usd
     for (const u of c.launched) for (const p of unitParts(u, 'kind')) mine[p.key] = (mine[p.key] ?? 0) + p.usd
@@ -943,6 +952,20 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     agentsById,
   }
 }
+
+/**
+ * "2 pieces of agent work $0.004", or, with runs nothing recorded, "1 piece of agent work, not recorded"
+ * and "3 pieces of agent work $0.004 + 1 not recorded": an unrecorded run's spend is unknown, never $0.
+ */
+export function agentWorkText(units: number, unrecorded: number, usd: number): string {
+  const known = units - unrecorded
+  if (unrecorded <= 0) return `${plural(units, 'piece')} of agent work ${formatMoney(usd)}`
+  if (known <= 0) return `${plural(units, 'piece')} of agent work, not recorded`
+  return `${plural(known, 'piece')} of agent work ${formatMoney(usd)} + ${unrecorded} not recorded`
+}
+
+/** How many agents of a piece of work (its own, and its sub-agents) left no record of their calls. */
+export const unitUnrecorded = (u: Unit): number => [u.agent, ...u.nested].filter((a) => a.unrecorded).length
 
 /** One thing a decision paid for: a step of the main agent, or a piece of agent work. */
 export type DecisionItem = { kind: 'step'; col: Col; usd: number } | { kind: 'unit'; unit: Unit; usd: number }

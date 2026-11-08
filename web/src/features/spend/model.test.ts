@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Agent, Message, SessionDetail, Turn } from '../../api/types'
 import {
   addMessage,
+  agentWorkText,
   buildSpend,
   CLASS_SERIES,
   compactionTally,
@@ -632,4 +633,10 @@ test('a bucket counts its truncated and unpriced messages and carries the estima
   expect([b.messages, b.truncated, b.unpriced, b.estimated, b.usd]).toEqual([3, 1, 1, 0.5, 3.5])
   // the estimate is missing output
   expect(b.byClass.output).toBeGreaterThanOrEqual(0.5)
+})
+
+test('agentWorkText never prints $0 for runs nothing recorded', () => {
+  expect(agentWorkText(2, 0, 0.5)).toBe('2 pieces of agent work $0.50')
+  expect(agentWorkText(1, 1, 0)).toBe('1 piece of agent work, not recorded')
+  expect(agentWorkText(4, 1, 0.5)).toBe('3 pieces of agent work $0.50 + 1 not recorded')
 })

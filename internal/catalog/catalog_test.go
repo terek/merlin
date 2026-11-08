@@ -446,3 +446,19 @@ func TestLowerBound(t *testing.T) {
 		t.Errorf("04: truncated %d estimate %v", in.Cost.TruncatedMessages, in.Cost.EstimatedUncoveredUSD)
 	}
 }
+
+// A session digest's unrecorded agent runs reach its cost, and a lower-bound reader can tell
+// "spend unknown" from "$0".
+func TestUnrecordedAgentsCarried(t *testing.T) {
+	c := New()
+	d := syn("pi", "p1", "acme", 0, 10, []model.Turn{turn(0, "u0", "go", 0)}, msgSpec{"m1", 1, 0.01, 0})
+	d.Cost.UnrecordedAgents = 2
+	c.Upsert(d)
+	c.Upsert(syn("pi", "p2", "acme", 0, 10, []model.Turn{turn(0, "u0", "go", 0)}, msgSpec{"m1", 1, 0.01, 0}))
+	if in, ok := c.Session(model.SessionKey{Harness: "pi", ID: "p1"}); !ok || in.Cost.UnrecordedAgents != 2 {
+		t.Errorf("p1 unrecorded = %+v", in.Cost)
+	}
+	if in, _ := c.Session(model.SessionKey{Harness: "pi", ID: "p2"}); in.Cost.UnrecordedAgents != 0 {
+		t.Errorf("p2 unrecorded = %d, want 0", in.Cost.UnrecordedAgents)
+	}
+}

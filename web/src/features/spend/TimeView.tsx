@@ -595,7 +595,8 @@ export function TimePlot({
             const b = Math.max(...xs.map(([, x]) => x))
             const dash = l.agent?.kind === 'workflow' ? WORKFLOW_DASH : undefined
             const label = l.title
-            const cost = formatMoney(l.usd)
+            // an agent that left no record has no spend to print: $0 would be a claim
+            const cost = l.agent?.unrecorded ? 'not recorded' : formatMoney(l.usd)
             const room = b - a - (l.kind === 'fork' ? 9 : 4) - 4
             // name · model · cost; the model goes first when room is short, then the cost
             const fits = (s: string) => room >= s.length * 5.6

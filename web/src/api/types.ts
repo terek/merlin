@@ -58,6 +58,7 @@ export interface CostBrief {
   lowerBound?: boolean
   truncatedMessages?: number
   unpricedMessages?: number
+  unrecordedAgents?: number
 }
 
 export interface LineageBrief {
@@ -480,6 +481,8 @@ export interface SessionCost {
   truncatedMessages?: number
   /** Owned messages billed on a model without a price; they count $0. */
   unpricedMessages?: number
+  /** Agent runs the harness kept no record of: their spend is unknown, so bestUSD is "at least". */
+  unrecordedAgents?: number
   /** bestUSD is a lower bound: an unpriced message lies outside every reported window. */
   lowerBound?: boolean
   /** The session's compaction calls, estimated; see CompactionTally. */

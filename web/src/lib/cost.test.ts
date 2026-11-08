@@ -80,6 +80,13 @@ test('lower bound notes', () => {
   expect(lowerBoundNote()).toBe('')
   expect(lowerBoundNote(3)).toBe('A lower bound: 3 messages cut short in the transcript (partial output tokens).')
   expect(lowerBoundNote(0, 1)).toBe('A lower bound: 1 message on a model without a price (counted as $0).')
+  expect(lowerBoundNote(0, 0, 1)).toBe('A lower bound: 1 agent run left no record of its spend.')
+  expect(lowerBoundNote(0, 2, 3)).toBe(
+    'A lower bound: 2 messages on a model without a price (counted as $0), 3 agent runs left no record of their spend.',
+  )
+  expect(sessionsLowerBound([{ unrecordedAgents: 1 }, {}])).toBe(
+    'A lower bound: 1 agent run left no record of its spend.',
+  )
   // only sessions flagged lowerBound count: inside a reported window an unpriced message does not matter
   expect(
     sessionsLowerBound([

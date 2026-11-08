@@ -25,7 +25,7 @@ func summarize(cat *catalog.Catalog, in catalog.SessionInfo, state catalog.State
 		Cost: CostBrief{BestUSD: in.Cost.BestUSD, Flag: in.Cost.Flag, ReportedUSD: in.Cost.ReportedUSD,
 			UncoveredUSD: in.Cost.UncoveredUSD, OverheadUSD: in.Cost.OverheadUSD, InheritedUSD: in.Cost.InheritedUSD,
 			LowerBound: in.Cost.LowerBound, TruncatedMessages: in.Cost.TruncatedMessages,
-			UnpricedMessages: in.Cost.UnpricedMessages},
+			UnpricedMessages: in.Cost.UnpricedMessages, UnrecordedAgents: in.Cost.UnrecordedAgents},
 		Lineage: LineageBrief{Children: len(in.Children), Root: in.Root, Leaf: in.Leaf,
 			InheritedTurns: len(in.InheritedTurns), FirstOwnTurn: in.FirstOwnTurn},
 	}

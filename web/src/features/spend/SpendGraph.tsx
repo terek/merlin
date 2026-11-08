@@ -26,6 +26,7 @@ import {
   turnList,
   type Unit,
   unitParts,
+  unitUnrecorded,
 } from './model'
 import { Overview, stripAxis } from './Overview'
 import { TimePlot } from './TimeView'
@@ -166,12 +167,24 @@ function TurnReadout({
         </span>
         {c.launched.length > 0 && (
           <span title="work handed to agents in this turn, at its full cost">
-            launched {c.launched.length} · <span className="font-mono font-semibold">{formatMoney(launchedUSD)}</span>
+            launched {c.launched.length} ·{' '}
+            {c.launched.every((x) => x.agent.unrecorded) ? (
+              <span className="text-muted">not recorded</span>
+            ) : (
+              <span className="font-mono font-semibold">
+                {c.launched.some((x) => x.agent.unrecorded) ? '≥' : ''}
+                {formatMoney(launchedUSD)}
+              </span>
+            )}
           </span>
         )}
         {dec.end > dec.start && (
           <span className="text-muted" title="everything between the prompt you typed and your next one">
-            turns {dec.start}–{dec.end} together: <span className="font-mono">{formatMoney(dec.usd)}</span>
+            turns {dec.start}–{dec.end} together:{' '}
+            <span className="font-mono">
+              {dec.unrecorded > 0 ? '≥' : ''}
+              {formatMoney(dec.usd)}
+            </span>
           </span>
         )}
         {typeof c.turn.contextTokens === 'number' && (
@@ -195,10 +208,14 @@ function TurnReadout({
                 {u.ordinal} of {u.of}
               </span>
             )}
-            <span className="font-mono font-semibold">
-              {u.bucket.unpriced > 0 ? '≥' : u.bucket.estimated > 0 ? '~' : ''}
-              {formatMoney(u.bucket.usd)}
-            </span>
+            {u.agent.unrecorded && u.bucket.usd === 0 ? (
+              <span className="text-muted">not recorded</span>
+            ) : (
+              <span className="font-mono font-semibold">
+                {u.bucket.unpriced > 0 || unitUnrecorded(u) > 0 ? '≥' : u.bucket.estimated > 0 ? '~' : ''}
+                {formatMoney(u.bucket.usd)}
+              </span>
+            )}
             {u.agent.model && <ModelName name={u.agent.model} className="text-meta text-faint" />}
             <span className="text-muted">
               launched in turn {u.launch}
@@ -206,7 +223,7 @@ function TurnReadout({
                 ? `, ${u.reports.length > 1 ? 'reports' : 'report'} in ${turnList(u.reports)}`
                 : ', no report'}
               {u.nested.length > 0 &&
-                `, ${plural(u.nested.length, 'sub-agent')} of its own (${formatMoney(u.nestedUSD)})`}
+                `, ${plural(u.nested.length, 'sub-agent')} of its own (${u.nested.some((x) => x.unrecorded) ? '≥' : ''}${formatMoney(u.nestedUSD)})`}
             </span>
             {u.compactions.length > 0 && (
               <span
@@ -273,6 +290,8 @@ export function SpendGraph({
   const focus = pinned?.branch ?? home
   // the parts add up to the harness's figure: the messages, and what it reported beyond them
   const overhead = tree.overheadUSD >= 0.005
+  // agent runs that left no record of their spend (a Pi `--no-session` child): unknown, so in no figure
+  const unrecordedRuns = branches.reduce((n, b) => n + (b.detail.digest.cost.unrecordedAgents ?? 0), 0)
   const grand = tree.total + (overhead ? tree.overheadUSD : 0)
   const compactions = useMemo(
     () => ({
@@ -396,6 +415,15 @@ export function SpendGraph({
             <span className="text-faint">{formatPercent(p.usd, grand)}</span>
           </span>
         ))}
+        {unrecordedRuns > 0 && (
+          <span
+            className="inline-flex items-center gap-1.5 text-muted"
+            title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
+          >
+            <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
+            <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
+          </span>
+        )}
         {overhead && (
           <span
             className="inline-flex items-center gap-1.5"

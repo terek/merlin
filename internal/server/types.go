@@ -55,6 +55,7 @@ type CostBrief struct {
 	LowerBound        bool `json:"lowerBound,omitempty"`
 	TruncatedMessages int  `json:"truncatedMessages,omitempty"`
 	UnpricedMessages  int  `json:"unpricedMessages,omitempty"`
+	UnrecordedAgents  int  `json:"unrecordedAgents,omitempty"`
 }
 
 // LineageBrief is the lineage of a session as the list shows it.

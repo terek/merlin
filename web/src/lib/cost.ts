@@ -31,12 +31,15 @@ export function flagExplanation(flag: CostFlag | undefined): string {
 /**
  * Why a figure is only a lower bound (the `lowerBound` of <Money>): messages written down before
  * they finished (partial output tokens; mostly sub-agent messages) and messages on a model without
- * a price (counted as $0). '' when there are none.
+ * a price (counted as $0), and agent runs whose harness kept no record of their spend (unknown, not
+ * $0). '' when there are none.
  */
-export function lowerBoundNote(truncated = 0, unpriced = 0): string {
+export function lowerBoundNote(truncated = 0, unpriced = 0, unrecorded = 0): string {
   const parts: string[] = []
   if (truncated > 0) parts.push(`${plural(truncated, 'message')} cut short in the transcript (partial output tokens)`)
   if (unpriced > 0) parts.push(`${plural(unpriced, 'message')} on a model without a price (counted as $0)`)
+  if (unrecorded > 0)
+    parts.push(`${plural(unrecorded, 'agent run')} left no record of ${unrecorded === 1 ? 'its' : 'their'} spend`)
   return parts.length ? `A lower bound: ${parts.join(', ')}.` : ''
 }
 
@@ -44,10 +47,16 @@ export function lowerBoundNote(truncated = 0, unpriced = 0): string {
  * lowerBoundNote for the best cost of one or several sessions: only those flagged `lowerBound` count,
  * and only for their unpriced messages (a truncated message's missing output is estimated in it).
  */
-export function sessionsLowerBound(costs: readonly Pick<SessionCost, 'lowerBound' | 'unpricedMessages'>[]): string {
+export function sessionsLowerBound(
+  costs: readonly Pick<SessionCost, 'lowerBound' | 'unpricedMessages' | 'unrecordedAgents'>[],
+): string {
   let unpriced = 0
-  for (const c of costs) if (c.lowerBound) unpriced += c.unpricedMessages ?? 0
-  return lowerBoundNote(0, unpriced)
+  let unrecorded = 0
+  for (const c of costs) {
+    if (c.lowerBound) unpriced += c.unpricedMessages ?? 0
+    unrecorded += c.unrecordedAgents ?? 0
+  }
+  return lowerBoundNote(0, unpriced, unrecorded)
 }
 
 /** An estimated amount: `~$1.20`, but `<$0.01` alone (the `<` says enough). */

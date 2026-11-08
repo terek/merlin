@@ -56,7 +56,8 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
   `recordedUSD` (omitted when 0) is the part of `uncoveredUSD` that is the harness's own per-call figure
   (`Message.recorded`, Pi), not a recomputation. In the digest, an agent with `unrecorded: true` ran with no
   record of its calls, and `cost.unrecordedAgents` (omitted when 0) counts such agents on a session, turn or
-  agent: their spend is unknown, not $0, so the dollars are a lower bound.
+  agent: their spend is unknown, not $0, so the dollars are a lower bound. The session list's `cost` and
+  `/api/sessions/{id}`'s `cost` carry the session's count as `unrecordedAgents` too (omitted when 0).
 - **Dates and times** given as parameters are an RFC 3339 time or a date (`2026-09-16`, local
   midnight). A date-only `until` includes that whole day.
 - **Errors.** Every non-2xx body has this shape:
