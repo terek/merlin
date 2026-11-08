@@ -1089,14 +1089,20 @@ export function TimePlot({
     const b = tree.branches[g.row.branch]
     const parent = b.parent !== undefined ? mainRow(b.parent) : undefined
     const l = g.row.lanes[0]
-    if (!parent || !Number.isFinite(l.t0)) return null
-    const x = axis.x(l.t0)
+    // when the session began, not its first moment in the window: a window cut after the branch has no branch in it
+    const t0 = fullLane.get(l.key)?.t0 ?? l.t0
+    if (!Number.isFinite(t0)) return null
+    if (range && (t0 < range.lo || t0 >= range.hi)) {
+      return t0 < range.lo ? <path key={`s${l.key}`} d={edgeChevron(X0, g.base, 'l')} fill={COLOR.main} /> : null
+    }
+    if (!parent) return null
+    const x = axis.x(t0)
     const y = parent.base
     const d = elbow(x, y, g.base)
     // a fork is the parent's line forking: as heavy as the parent's line there
     const w =
       b.kind === 'fork'
-        ? carrierWeight(fullLane.get(parent.row.lanes[0].key)?.runs ?? parent.row.lanes[0].runs, l.t0)
+        ? carrierWeight(fullLane.get(parent.row.lanes[0].key)?.runs ?? parent.row.lanes[0].runs, t0)
         : branchWeight(l.runs[0]?.tier)
     const link = b.detail.lineage.parent
     const name = `“${shortTitle(b.title)}”`
