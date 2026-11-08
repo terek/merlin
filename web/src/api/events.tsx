@@ -3,6 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { keyString } from '../lib/session'
+import { initialVersion, seeVersion, type VersionState } from '../lib/version'
 import { applyEvent } from './cache'
 import type { EventMap, ScanProgress, SessionKey } from './types'
 
@@ -10,6 +11,8 @@ export type Connection = 'connecting' | 'live' | 'offline'
 
 /** How long a row that changed through an event stays highlighted (the fade is in CSS). */
 export const FLASH_MS = 900
+/** A dropped stream shows as offline only after this long: a daemon restarting in place is back sooner. */
+export const OFFLINE_GRACE_MS = 3000
 /** Invalidations of projects, cost and session details are batched this long. */
 const INVALIDATE_MS = 1500
 
@@ -19,6 +22,8 @@ type Listener = () => void
 export class EventStore {
   connection: Connection = 'connecting'
   progress: ScanProgress | null = null
+  version: VersionState = initialVersion
+  private offlineTimer: ReturnType<typeof setTimeout> | undefined
   private flashing = new Map<string, ReturnType<typeof setTimeout>>()
   private listeners = new Set<Listener>()
 
@@ -32,6 +37,25 @@ export class EventStore {
   setConnection(c: Connection) {
     if (c === this.connection) return
     this.connection = c
+    this.emit()
+  }
+  /** The stream broke: show `offline` only if it stays down for the grace period. */
+  streamDropped() {
+    if (this.connection === 'offline' || this.offlineTimer) return
+    this.offlineTimer = setTimeout(() => {
+      this.offlineTimer = undefined
+      this.setConnection('offline')
+    }, OFFLINE_GRACE_MS)
+  }
+  streamOpened() {
+    clearTimeout(this.offlineTimer)
+    this.offlineTimer = undefined
+    this.setConnection('live')
+  }
+  setVersion(seen: string) {
+    const next = seeVersion(this.version, seen)
+    if (next === this.version) return
+    this.version = next
     this.emit()
   }
   setProgress(p: ScanProgress) {
@@ -54,6 +78,8 @@ export class EventStore {
     return this.flashing.has(keyString(key))
   }
   dispose() {
+    clearTimeout(this.offlineTimer)
+    this.offlineTimer = undefined
     for (const t of this.flashing.values()) clearTimeout(t)
     this.flashing.clear()
   }
@@ -62,7 +88,7 @@ export class EventStore {
 const idleStore = new EventStore()
 const Ctx = createContext<EventStore>(idleStore)
 
-const NAMES = ['session-updated', 'session-state', 'session-missing', 'scan-progress'] as const
+const NAMES = ['session-updated', 'session-state', 'session-missing', 'scan-progress', 'hello'] as const
 
 export function EventsProvider({ children, url = '/api/events' }: { children: ReactNode; url?: string }) {
   const qc = useQueryClient()
@@ -89,14 +115,14 @@ export function EventsProvider({ children, url = '/api/events' }: { children: Re
     let failed = false
     const es = new EventSource(url)
     es.onopen = () => {
-      store.setConnection('live')
+      store.streamOpened()
       // Events are not replayed: after a reconnect, re-read everything that is on screen.
       if (failed) void qc.invalidateQueries()
       failed = false
     }
     es.onerror = () => {
       failed = true
-      store.setConnection('offline')
+      store.streamDropped()
     }
     for (const name of NAMES) {
       es.addEventListener(name, (e) => {
@@ -104,6 +130,10 @@ export function EventsProvider({ children, url = '/api/events' }: { children: Re
         try {
           data = JSON.parse((e as MessageEvent<string>).data)
         } catch {
+          return
+        }
+        if (name === 'hello') {
+          store.setVersion((data as EventMap['hello']).version)
           return
         }
         if (name === 'scan-progress') {
@@ -125,10 +155,16 @@ export function EventsProvider({ children, url = '/api/events' }: { children: Re
 
 const useStore = () => useContext(Ctx)
 
-/** `connecting` until the stream first opens, `live` while it is open, `offline` after an error (it retries by itself). */
+/** `connecting` until the stream first opens, `live` while it is open, `offline` after an error that lasts over 3 s (it retries by itself). */
 export function useConnection(): Connection {
   const s = useStore()
   return useSyncExternalStore(s.subscribe, () => s.connection)
+}
+
+/** The version this page loaded with and, once the daemon reports another, the one it was replaced by. */
+export function useVersion(): VersionState {
+  const s = useStore()
+  return useSyncExternalStore(s.subscribe, () => s.version)
 }
 
 /** The latest scan-progress event, or null before the first. Indexing is under way while `pending > 0`. */

@@ -138,6 +138,7 @@ func refreshHooks(t hookTarget) (string, error) {
 func apiOptions(d *daemon.Daemon, pricer *pricing.Table) server.Options {
 	return server.Options{
 		Prices:    pricer,
+		Version:   version,
 		Catalog:   d.Catalog,
 		Subscribe: d.Events().Subscribe,
 		Harnesses: harnessInfos(),

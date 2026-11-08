@@ -1125,10 +1125,12 @@ moment's symptom did not fire. Clients ignore moment ids they do not know.
 
 A Server-Sent Events stream (`Content-Type: text/event-stream`), for live updates without polling.
 Use `new EventSource("/api/events")`. The stream starts with `retry: 3000` and a `: connected`
-comment, then a `scan-progress` event with the current state.
+comment, then a `hello` event with the daemon's version, then a `scan-progress` event with the
+current state.
 
 | Event | When | Data |
 |---|---|---|
+| `hello` | first event of every stream, so again after each reconnect | `{"version": "0.4.2"}`: the daemon's version, as on `/healthz` |
 | `session-updated` | a session's digest was written (new, or changed) | `{"key": {...}, "session": <session summary>}`: the same shape as a row of `/api/sessions` |
 | `session-missing` | a session's files are gone (the digest is kept, `sourceMissing` is set) | `{"key": {...}}` |
 | `session-state` | a listed session changed between `busy`, `idle`, `recent` and `ended` | `{"key": {...}, "state": "idle", "previous": "busy"}` |
@@ -1137,6 +1139,9 @@ comment, then a `scan-progress` event with the current state.
 ```
 retry: 3000
 : connected
+
+event: hello
+data: {"version":"0.4.2"}
 
 event: scan-progress
 data: {"pending":0,"seen":35,"processed":0,"unchanged":35,"failed":0,"missing":0}
@@ -1152,7 +1157,11 @@ data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"s
 
 - Events of one session within 250 ms are sent once, with the state after the last of them.
 - Scripted runs and sessions that failed to build never produce `session-updated`.
-- A line starting with `:` (`: heartbeat`, every 15 s) is a comment; ignore it.
+- `hello` is how a page learns it is talking to a different daemon than it was loaded from: the
+  web UI is embedded in the binary, and `merlin serve` can replace itself and restart on the same
+  port. Compare the version with the one seen first; a mismatch means the page is stale. The event
+  is absent when the daemon has no version to report.
+- A line starting with `:` (`: heartbeat, every 15 s) is a comment; ignore it.
 - The stream never holds up the indexer: if a client cannot keep up, events are dropped for that
   client, and a write that stalls for 10 s ends its stream. After a reconnect (EventSource does
   it by itself) re-read `/api/sessions` to catch up, since events are not replayed.

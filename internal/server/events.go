@@ -72,6 +72,10 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if a.o.Version != "" && s.event(EventHello, Hello{Version: a.o.Version}) != nil {
+		return
+	}
+
 	// Subscribe before reading the first progress, so that nothing slips in between.
 	ch, unsub := a.o.Subscribe(subscriberBuffer)
 	defer unsub()

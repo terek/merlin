@@ -1,10 +1,11 @@
 import { Monitor, Moon, Sun } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
-import { useConnection, useScanProgress } from '../api/events'
+import { useConnection, useScanProgress, useVersion } from '../api/events'
 import { useSpend7d } from '../api/queries'
 import { cn } from '../lib/cn'
 import { backingLowerBound, unknownNote } from '../lib/cost'
 import { formatCount } from '../lib/format'
+import { releaseUrl } from '../lib/version'
 import { IconButton, Money } from '../ui'
 import { nextTheme, useTheme } from './theme'
 
@@ -36,6 +37,22 @@ function ConnectionIndicator() {
     <div className="flex items-center gap-1.5 text-sec text-muted" title={`Event stream: ${text}`}>
       <span className={cn('size-2 rounded-full', look)} aria-hidden />
       {c === 'live' ? <span className="sr-only">live</span> : <span className="whitespace-nowrap">{text}</span>}
+    </div>
+  )
+}
+
+function UpdateNotice() {
+  const { updatedTo } = useVersion()
+  if (!updatedTo) return null
+  return (
+    <div className="flex items-center gap-1.5 whitespace-nowrap text-sec text-muted">
+      <a href={releaseUrl(updatedTo)} target="_blank" rel="noreferrer" title="Release notes">
+        Merlin updated to {updatedTo}
+      </a>
+      <span aria-hidden>·</span>
+      <button type="button" className="text-accent hover:underline" onClick={() => location.reload()}>
+        Reload
+      </button>
     </div>
   )
 }
@@ -96,6 +113,7 @@ export function TopBar() {
         </NavLink>
       </nav>
       <div className="ml-auto flex items-center gap-4">
+        <UpdateNotice />
         <ScanIndicator />
         <ConnectionIndicator />
         <SpendLink />

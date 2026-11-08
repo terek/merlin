@@ -41,6 +41,9 @@ type Options struct {
 	Harnesses []harness.Info
 	// Prices is the price table for GET /api/prices; nil serves the embedded default.
 	Prices *pricing.Table
+	// Version is the daemon's version, announced by a hello event at the start of every
+	// /api/events stream; empty sends no hello.
+	Version string
 	// Now is the clock for liveness; nil means time.Now. Handlers read no other clock.
 	Now func() time.Time
 	// Location buckets days and parses date-only parameters; nil means time.Local.

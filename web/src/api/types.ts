@@ -1010,11 +1010,17 @@ export interface ScanProgress {
   missing: number
 }
 
+/** The first event of every stream: the daemon's version (absent when it has none). */
+export interface HelloEvent {
+  version: string
+}
+
 export interface EventMap {
   'session-updated': SessionUpdatedEvent
   'session-missing': SessionMissingEvent
   'session-state': SessionStateEvent
   'scan-progress': ScanProgress
+  hello: HelloEvent
 }
 
 // ---- moments (experimental, docs/moments.md) -------------------------------------------

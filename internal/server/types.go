@@ -352,6 +352,7 @@ const (
 	EventSessionMissing = "session-missing"
 	EventScanProgress   = "scan-progress"
 	EventSessionState   = "session-state"
+	EventHello          = "hello"
 )
 
 // SessionStateEvent is the data of a session-state event: a listed session changed
@@ -371,6 +372,12 @@ type SessionUpdatedEvent struct {
 // SessionMissingEvent is the data of a session-missing event: the session's files are gone.
 type SessionMissingEvent struct {
 	Key model.SessionKey `json:"key"`
+}
+
+// Hello is the data of a hello event: the first event of every stream, sent when the
+// daemon was given a version.
+type Hello struct {
+	Version string `json:"version"`
 }
 
 // ScanProgress is the data of a scan-progress event: how far indexing is. Pending is the

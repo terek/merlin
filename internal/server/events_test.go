@@ -426,3 +426,20 @@ func localReq(path string) *http.Request {
 	req.Host = "127.0.0.1:7433"
 	return req
 }
+
+func TestEventsHello(t *testing.T) {
+	r := newRig(t, func(o *Options) { o.Version = "1.2.3-dev" })
+	c := r.events()
+	f := c.nextEvent(t, EventHello)
+	var h Hello
+	if err := json.Unmarshal([]byte(f.data), &h); err != nil || h.Version != "1.2.3-dev" {
+		t.Fatalf("hello = %s (%v)", f.data, err)
+	}
+	c.nextEvent(t, EventScanProgress) // hello comes first, then the initial state
+}
+
+func TestEventsNoHelloWithoutVersion(t *testing.T) {
+	r := newRig(t)
+	c := r.events()
+	c.nextEvent(t, EventScanProgress)
+}
