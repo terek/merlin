@@ -1007,6 +1007,7 @@ describe('branchRole', () => {
     expect(branchRole(undefined, undefined, false)).toBe('original')
     expect(branchRole('fork', 2, false)).toBe('fork of turn 2')
     expect(branchRole('continuation', 5, false)).toBe('continued')
+    expect(branchRole('spawned', 4, false)).toBe('spawned in turn 4')
   })
   test('marks the session the page is about', () => {
     expect(branchRole('fork', 2, true)).toBe('fork of turn 2 · this session')

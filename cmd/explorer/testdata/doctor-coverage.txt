@@ -104,11 +104,11 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     compactions.summary  parsed   0 of 0              compaction.summary, whole
     compactions.trigger  absent   0 of 0              docs/pi-format.md, Compaction (from source): a compaction entry has no trigger field; manual (/compact) and automatic are not told apart
     compactions.call     parsed   0 of 0              compaction.usage, when Pi recorded it, as a message and as the compaction's call
-    agents.tree          parsed   0 of 0              docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). A bash-spawned pi without --no-session is a session of its own, not linked to its parent (merlin-1es.15)
+    agents.tree          parsed   0 of 0              docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). A bash-spawned pi without --no-session writes a session of its own: the parent keeps a spawn hint and the catalog links the child (kind spawned) by cwd, a time window around the call and its exact first prompt; heuristic, never explicit (merlin-1es.15)
     agents.nesting       parsed   0 of 0              a child's own results[] or bash pi --no-session, by shape; not seen in a session
     agents.prompts       parsed   0 of 0              results[].task whole; the bash command for a bash-spawned pi; details.description for Task and oracle
     agents.inbox         unknown  0 of 0              no message to a child after its launch is known in any convention here; none is read
-    lineage.fork         parsed   0 of 0              header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog
+    lineage.fork         parsed   0 of 0              header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog. A bash pi without --no-session also leaves a spawn hint (spawnedSessions); the catalog links that child (kind spawned) by cwd, a time window around the call and its exact first prompt: heuristic, never explicit
     links.prs            unknown  0 of 0              no record of this kind is known; not looked for
     links.beads          parsed   0 of 0              bd calls in the bash tool and in bashExecution (!) messages
     live.registry        unknown  not measured        LiveSessions returns none; whether Pi keeps a registry is not known

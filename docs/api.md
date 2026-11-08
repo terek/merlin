@@ -364,6 +364,12 @@ indexes of turns copied from the parent; `firstOwnTurn`: index of the first turn
 `family` (every linked session in tree order, and the `leaves` to resume, newest first) and
 `digest` (the stored digest, see `digest-schema.md`).
 
+A link's `kind` is `fork`, `continuation` or `spawned`. A spawned child was started by a tool call of
+its parent (a bash call running a child Pi that keeps its own session file). It shares nothing with
+the parent (`sharedMessages` and `sharedTurns` 0, `explicit` false); `atTurn` is the parent's turn of
+the call. The link is a heuristic: same directory, start within 2 s of the call, exact first prompt;
+more than one match gives no link.
+
 Each of `cost.windows` carries, beside the harness's figures, `coveredUSD` (what the session's own
 messages inside the window add up to) and `overheadUSD` (`totalUSD` − `coveredUSD`, not clamped: what
 the harness reported in the window that no message explains, negative when the messages add up to

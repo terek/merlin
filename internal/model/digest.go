@@ -63,8 +63,33 @@ type SessionDigest struct {
 	// Beads are the bd (beads issue tracker) calls of the session and its agents that name a
 	// bead, ordered by time, then tool call, then position in the command.
 	Beads []BeadEvent `json:"beads,omitempty"`
+	// SpawnedSessions are the commands of the session's tools that start another session of a
+	// harness by themselves (a bash call running a child Pi that keeps its own session file),
+	// ordered by time, then tool call. The catalog matches them to the sessions they started.
+	SpawnedSessions []SessionSpawn `json:"spawnedSessions,omitempty"`
 
 	Diagnostics Diagnostics `json:"diagnostics"`
+}
+
+// SessionSpawn is a tool call that started a session of another harness (or the same one) that
+// records itself. Nothing in either file names the other session: the catalog finds the child by
+// where and when it started and by its first prompt.
+type SessionSpawn struct {
+	ToolUseID string `json:"toolUseId,omitempty"`
+	// Turn is the main agent's turn the call was made in; AgentID the agent, when the call was
+	// made inside a subagent's messages.
+	Turn    *int   `json:"turn,omitempty"`
+	AgentID string `json:"agentId,omitempty"`
+	// At is when the call was made; EndedAt when its result came back (zero when it never did).
+	At      time.Time `json:"at,omitzero"`
+	EndedAt time.Time `json:"endedAt,omitzero"`
+	// Dir is the working directory the command ran in.
+	Dir string `json:"dir,omitempty"`
+	// Prompts are the prompt arguments of the command, unquoted: the child's first user message
+	// is one of them.
+	Prompts []string `json:"prompts,omitempty"`
+	// Harness is the harness the child is expected in.
+	Harness string `json:"harness"`
 }
 
 // BeadEvent is one bd call that names a bead. Turn, AgentID and AgentTurn are as on Message.

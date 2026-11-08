@@ -4,6 +4,83 @@ import (
 	"strings"
 )
 
+// piSpawnHint is a `pi` command that starts a child Pi which writes a session file of its own.
+type piSpawnHint struct {
+	dir     string   // the directory it ran in
+	prompts []string // its positional arguments, unquoted
+}
+
+// flagsWithValue are the options of pi that take a value in the next word (`--flag=value` is
+// one word and needs no rule).
+var flagsWithValue = map[string]bool{
+	"--model": true, "--provider": true, "--mode": true, "--session-dir": true, "--name": true, "-n": true,
+	"--models": true, "--skill": true, "--prompt-template": true, "--theme": true, "--tui-mode": true,
+	"--thinking": true, "--extension": true, "-e": true, "--tools": true, "--append-system-prompt": true,
+	"--system-prompt": true, "--api-key": true,
+}
+
+// reuseFlags make pi continue, open or copy an existing session instead of writing a new one.
+var reuseFlags = map[string]bool{
+	"--session": true, "--continue": true, "-c": true, "--resume": true, "-r": true,
+	"--fork": true, "--session-id": true,
+}
+
+// piHints finds the commands of a shell command line that start a child Pi with a session file
+// of its own: no --no-session and none of the options that reuse or copy a session. A command
+// is found as in piSpawns. dir is where the line runs; a `cd <dir>` earlier in the line changes
+// it for the commands after it. The prompts are the words that are no option and no option's
+// value (an @file argument is an attachment, not a prompt).
+func piHints(script, dir string) []piSpawnHint {
+	var out []piSpawnHint
+	for _, words := range simpleCommands(script) {
+		if words[0] == "cd" && len(words) == 2 && words[1] != "-" {
+			dir = resolve(dir, words[1])
+			continue
+		}
+		args, ok := piArgs(words)
+		if !ok {
+			continue
+		}
+		h, skip := piSpawnHint{dir: dir}, false
+		for k := 0; k < len(args) && !skip; k++ {
+			a := args[k]
+			name, _, _ := strings.Cut(a, "=")
+			switch {
+			case a == "--no-session" || reuseFlags[name]:
+				skip = true
+			case a == "--":
+				for _, w := range args[k+1:] {
+					h.prompts = append(h.prompts, w)
+				}
+				k = len(args)
+			case strings.HasPrefix(a, "-") && len(a) > 1:
+				if flagsWithValue[a] {
+					k++
+				}
+			case strings.HasPrefix(a, "@"):
+			default:
+				h.prompts = append(h.prompts, a)
+			}
+		}
+		if !skip {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// piArgs returns the arguments of a simple command whose command word is pi.
+func piArgs(words []string) ([]string, bool) {
+	i := 0
+	for i < len(words) && isAssign(words[i]) {
+		i++
+	}
+	if i >= len(words) || !(words[i] == "pi" || strings.HasSuffix(words[i], "/pi")) {
+		return nil, false
+	}
+	return words[i+1:], true
+}
+
 // piSpawn is a `pi` command in a bash call that ran with --no-session: a child Pi whose run
 // left no session file anywhere, so nothing records what it spent.
 type piSpawn struct {
@@ -21,14 +98,10 @@ func piSpawns(script string) []piSpawn {
 	}
 	var out []piSpawn
 	for _, words := range simpleCommands(script) {
-		i := 0
-		for i < len(words) && isAssign(words[i]) {
-			i++
-		}
-		if i >= len(words) || !(words[i] == "pi" || strings.HasSuffix(words[i], "/pi")) {
+		args, ok := piArgs(words)
+		if !ok {
 			continue
 		}
-		args := words[i+1:]
 		sp, noSession := piSpawn{}, false
 		for k := 0; k < len(args); k++ {
 			switch a := args[k]; {

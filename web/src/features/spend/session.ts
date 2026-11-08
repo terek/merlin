@@ -1,7 +1,7 @@
 // The Session page around the spend tree, as pure functions: what a URL hash points at, the resume
 // command, the family list and the parser's diagnostics.
 
-import type { Diagnostics, FamilyMember, SessionDetail, SessionKey } from '../../api/types'
+import type { Diagnostics, FamilyMember, LinkKind, SessionDetail, SessionKey } from '../../api/types'
 import { resumeCommand } from '../../lib/paths'
 import { sameKey } from '../../lib/session'
 import type { Pin, UnitRef } from './SpendGraph'
@@ -82,13 +82,13 @@ export interface FamilyRow {
   depth: number
   current: boolean
   /** How this member relates to its parent, when the detail says so (only links of the current session are given). */
-  relation?: 'fork' | 'continuation'
+  relation?: LinkKind
 }
 
 export function familyRows(d: SessionDetail): FamilyRow[] {
   const depthOf = new Map<string, number>()
   const id = (k: SessionKey) => `${k.harness}/${k.id}`
-  const relations = new Map<string, 'fork' | 'continuation'>()
+  const relations = new Map<string, LinkKind>()
   if (d.lineage.parent) relations.set(id(d.lineage.parent.child), d.lineage.parent.kind)
   for (const c of d.lineage.children) relations.set(id(c.child), c.kind)
   return d.family.members.map((member) => {

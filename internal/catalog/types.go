@@ -175,7 +175,8 @@ type WindowCost struct {
 	EstimateScale *float64 `json:"estimateScale,omitempty"`
 }
 
-// LinkKind says whether a child session took over from its parent or branched off it.
+// LinkKind says whether a child session took over from its parent, branched off it or was
+// started by it.
 type LinkKind string
 
 const (
@@ -184,6 +185,10 @@ const (
 	LinkFork LinkKind = "fork"
 	// LinkContinuation: the parent stops where the child's copy ends.
 	LinkContinuation LinkKind = "continuation"
+	// LinkSpawned: the parent started the child through a tool (a bash call running a child
+	// Pi). The two share no messages; the link is a heuristic (directory, start time within
+	// the call, exact first prompt), never explicit. AtTurn is the parent's turn of the call.
+	LinkSpawned LinkKind = "spawned"
 )
 
 // Link joins a parent session to a child that starts with a copy of its history.

@@ -50,6 +50,8 @@ type view struct {
 
 	ev map[pairKey]int8 // cache of evidence()
 
+	spawnTurn map[int]int // child session index -> the parent's turn of the call that spawned it (-1: none)
+
 	diag Diagnostics
 }
 

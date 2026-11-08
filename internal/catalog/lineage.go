@@ -3,6 +3,7 @@ package catalog
 import (
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/terek/merlin/internal/model"
@@ -57,6 +58,7 @@ func (v *view) lineage(pairs map[pairKey]*pairCount) {
 			best[c.idx] = chosen.pc
 		}
 	}
+	v.spawnLinks(best)
 	v.breakCycles(best)
 
 	for _, c := range v.sessions {
@@ -73,6 +75,53 @@ func (v *view) lineage(pairs map[pairKey]*pairCount) {
 		sort.Slice(p.kids, func(i, j int) bool { return older(v.sessions[p.kids[i]], v.sessions[p.kids[j]]) })
 		for _, k := range p.kids {
 			p.info.Children = append(p.info.Children, *v.sessions[k].info.Parent)
+		}
+	}
+}
+
+// spawnWindow is how far a child's first record may lie outside the span of the call that
+// started it: the child's header is stamped a moment after the call is written.
+const spawnWindow = 2 * time.Second
+
+// spawnLinks links a session to the session whose tool call started it (a SessionSpawn). A hint
+// links a session C of its harness when C started in the hint's directory within the call's
+// span (plus spawnWindow either side) and its first turn's prompt is exactly one of the hint's
+// prompts. Only sessions with no parent from shared history or a marker are linked, and a
+// hint that matches more than one session links none of them. Nothing is shared with a
+// spawned child, so each side keeps its own spend.
+func (v *view) spawnLinks(best []*pairCount) {
+	for _, p := range v.sessions {
+		for _, h := range p.d.SpawnedSessions {
+			end := h.EndedAt
+			if end.IsZero() {
+				end = p.d.LastActivityAt
+			}
+			for _, want := range h.Prompts {
+				want = strings.TrimSpace(want)
+				var match []*sess
+				for _, c := range v.sessions {
+					if c == p || c.key.Harness != h.Harness || c.d.StartedAt.IsZero() || len(c.d.Turns) == 0 ||
+						c.d.StartedAt.Before(h.At.Add(-spawnWindow)) || c.d.StartedAt.After(end.Add(spawnWindow)) ||
+						(c.d.Cwd != h.Dir && c.project != h.Dir) ||
+						strings.TrimSpace(c.d.Turns[0].UserText) != want {
+						continue
+					}
+					match = append(match, c)
+				}
+				if len(match) != 1 || match[0].parent >= 0 {
+					continue
+				}
+				c := match[0]
+				c.parent, best[c.idx] = p.idx, &pairCount{}
+				t := -1
+				if h.Turn != nil {
+					t = *h.Turn
+				}
+				if v.spawnTurn == nil {
+					v.spawnTurn = map[int]int{}
+				}
+				v.spawnTurn[c.idx] = t
+			}
 		}
 	}
 }
@@ -129,6 +178,9 @@ func (v *view) breakCycles(best []*pairCount) {
 
 // link describes how child c continues or forks from parent p.
 func (v *view) link(p, c *sess, pc *pairCount) Link {
+	if t, ok := v.spawnTurn[c.idx]; ok && pc.msgs == 0 && pc.turns == 0 && !c.names(p) {
+		return Link{Parent: p.key, Child: c.key, AtTurn: t, Kind: LinkSpawned}
+	}
 	l := Link{
 		Parent:         p.key,
 		Child:          c.key,

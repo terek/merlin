@@ -17,7 +17,8 @@ import type { Row } from './model'
 function ParentHint({ s, parentTitle }: { s: SessionSummary; parentTitle: string | undefined }) {
   const p = s.lineage.parent
   if (!p) return null
-  const what = s.lineage.parentKind === 'fork' ? 'fork of' : 'continues'
+  const kind = s.lineage.parentKind
+  const what = kind === 'fork' ? 'fork of' : kind === 'spawned' ? 'spawned by' : 'continues'
   const name = parentTitle || shortId(p.id)
   return (
     <span

@@ -54,6 +54,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `workflows` | the workflow runs launched in the session, as `WorkflowRun`, ordered by start time |
 | `messages` | one entry per billed API message, as `Message` |
 | `beads` | the bd (beads issue tracker) calls of the session and its agents that name a bead, as `BeadEvent`, ordered by time, then tool call, then position in the command |
+| `spawnedSessions` | tool calls that started a session which records itself (a bash call running a child Pi without `--no-session`), as `SessionSpawn`, ordered by time, then tool call: `toolUseId`, `turn`, `agentId` (when made inside a subagent), `at`, `endedAt` (zero: no result), `dir` (working directory of the command), `prompts` (the command's prompt arguments, unquoted), `harness` (where the child is expected). Neither session names the other; the catalog links them (kind `spawned`) by directory, start time and exact first prompt |
 | `diagnostics` | what the parser could not interpret, as `Diagnostics` |
 
 ## SourceFile
@@ -389,6 +390,27 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `unpriced` | the model has no price (it is in `diagnostics.unpricedModels`): `usd` is 0 although the tokens were billed; omitted when false |
 | `fast` | the call was made in fast mode (Claude Code's fast speed, Codex's `priority` service tier); the prompt cache is not shared between fast and standard calls; omitted when false |
 | `recorded` | `usd` is the harness's own per-call figure (Pi writes a cost on every call), not a recomputation from tokens with Merlin's price table; it is the harness's catalog estimate, not an invoice. Omitted when false (recomputed, or `unpriced`) |
+
+## SessionSpawn
+
+A tool call that started a session which records itself: today a bash call running a child Pi
+without `--no-session`. Neither session names the other, so the catalog links them (kind
+`spawned`, a heuristic) when one session of `harness` started in `dir` between 2 s before `at` and
+2 s after `endedAt` (the parent's last activity when `endedAt` is zero), and its first turn's
+prompt, trimmed, equals one of `prompts`. More than one such session means no link. A pi command
+that reuses or copies a session (`--session`, `--continue`, `--resume`, `--fork`, `--session-id`)
+or runs with `--no-session` gives no hint.
+
+| key | meaning |
+|---|---|
+| `toolUseId` | the tool call |
+| `turn` | the main agent's turn the call was made in; omitted outside every turn |
+| `agentId` | the agent whose messages made the call; omitted for the main agent |
+| `at` | when the call was made |
+| `endedAt` | when its result came back; omitted when it never did |
+| `dir` | the directory the command ran in: the session's directory, or a `cd <dir> &&` before the command in the same line, resolved against it |
+| `prompts` | the command's positional arguments, unquoted, without the values of options that take one and without `@file` attachments; one hint per pi command of the line |
+| `harness` | the harness the child is expected in (`pi`) |
 
 ## BeadEvent
 

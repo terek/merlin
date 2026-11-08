@@ -320,7 +320,13 @@ subagents): the shape allows it; whether it occurs in a real session is unknown.
 The child wrote no file anywhere, and the parent's file records nothing of its tokens or cost: its
 spend is unknown. Without `--no-session`, the demo's child wrote a session file of its own, which
 Merlin indexes as any other session. Its header has no `parentSession`, and nothing else in either
-file names the other (demo), so the two are not linked (merlin-1es.15).
+file names the other (demo). Merlin links them by a heuristic, never explicit: the parent's digest
+keeps a spawn hint per such `pi` command (the call's time and result time, the working directory,
+the prompt arguments), and the catalog links the one session of the same harness that started in
+that directory within 2 s of the call (to 2 s after the result) and whose first user message is
+exactly one of the prompts. Calls with `--session`, `--continue`/`-c`, `--resume`/`-r`, `--fork`
+or `--session-id` reuse or copy an existing session and give no hint; more than one matching
+session means no link.
 
 **C. `Task` and `oracle` (public corpus).** The tool result's `details` is `{kind, mode, model,
 description?, thinking?, run}` with `run` = `{kind, mode, model ("provider/id"), ok, exitCode,
@@ -421,7 +427,8 @@ spend is unknown, so the session's dollars are a lower bound.
    1.5.0, 2026-11-08): a bash-spawned child with `--no-session` leaves no file and no figure; one
    without it writes its own session file; the example extension in single, chain and parallel
    mode returns `results[]` with the child's messages. The demo's bash-spawned child without
-   `--no-session` wrote a file whose header has no `parentSession` (linking: merlin-1es.15). Still
+   `--no-session` wrote a file whose header has no `parentSession`; Merlin links it by cwd, time window and exact
+   first prompt (merlin-1es.15, heuristic). Still
    unknown: where other extensions keep child runs.
 7. Does `/clone` differ from `/fork` in the file, and which one uses which copy function?
 8. Is a Pi extension the right hook point for a live signal, or is tailing the file enough?

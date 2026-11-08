@@ -16,7 +16,8 @@ export type EndState = 'clean' | 'interrupted' | 'mid-turn' | 'unknown'
 export type State = 'busy' | 'idle' | 'recent' | 'ended'
 /** `unknown`: work but no billed message and no reported figure; the cost is unknown, not $0. */
 export type CostFlag = 'exact' | 'partial' | 'recorded' | 'estimated' | 'unknown'
-export type LinkKind = 'fork' | 'continuation'
+/** `spawned`: the parent started the child through a tool (a heuristic match, nothing shared). */
+export type LinkKind = 'fork' | 'continuation' | 'spawned'
 export type TurnOrigin =
   | 'human'
   | 'command'

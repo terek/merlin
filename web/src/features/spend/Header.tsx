@@ -285,7 +285,7 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sec text-muted">
           {parentLink && (
             <span>
-              {parentLink.kind === 'fork' ? 'fork of' : 'continues'}{' '}
+              {parentLink.kind === 'fork' ? 'fork of' : parentLink.kind === 'spawned' ? 'spawned by' : 'continues'}{' '}
               <Link to={sessionPath(parentLink.parent)}>{parent?.title || parentLink.parent.id.slice(0, 8)}</Link>
               {lineage.inheritedTurns.length > 0 && (
                 <span className="text-faint"> ({plural(lineage.inheritedTurns.length, 'turn')} copied)</span>
@@ -296,7 +296,7 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
             const m = family.members.find((x) => sameKey(x.key, c.child))
             return (
               <span key={c.child.id}>
-                {c.kind === 'fork' ? 'forked in' : 'continued in'}{' '}
+                {c.kind === 'fork' ? 'forked in' : c.kind === 'spawned' ? 'spawned' : 'continued in'}{' '}
                 <Link to={sessionPath(c.child)}>{m?.title || c.child.id.slice(0, 8)}</Link>
                 {' ›'}
               </span>

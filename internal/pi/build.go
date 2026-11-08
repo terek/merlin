@@ -14,7 +14,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 3
+const ParserVersion = 4
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -99,6 +99,7 @@ type builder struct {
 	unpriced map[string]bool
 	assist   int64 // billed assistant messages, agents' included
 
+	hintsOf    map[string][]int // spawn hints (indexes into d.SpawnedSessions) of a bash call, by id prefix of the call
 	bashAgents map[string][]int // agents a bash call started with pi --no-session, by id prefix of the call
 }
 
@@ -550,6 +551,14 @@ func (b *builder) finish() {
 	d, p := b.d, b.p
 	h := p.head
 	cwd := string(h.Cwd)
+
+	sort.SliceStable(d.SpawnedSessions, func(i, j int) bool {
+		a, c := &d.SpawnedSessions[i], &d.SpawnedSessions[j]
+		if !a.At.Equal(c.At) {
+			return a.At.Before(c.At)
+		}
+		return a.ToolUseID < c.ToolUseID
+	})
 
 	// A call that never got a result (an aborted run) names its beads with no outcome.
 	for _, c := range b.callList {

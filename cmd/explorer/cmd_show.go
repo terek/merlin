@@ -217,12 +217,18 @@ func (p *printer) header(d *model.SessionDigest, in catalog.SessionInfo) {
 			verb = "fork of"
 		}
 		s := fmt.Sprintf("↳ %s %s%s, after its turn %d (%s shared)", verb, p.w.shortID(l.Parent.ID), p.titleOf(l.Parent), l.AtTurn, plural(l.SharedMessages, "message", "messages"))
+		if l.Kind == catalog.LinkSpawned {
+			s = fmt.Sprintf("↳ spawned by %s%s in turn %d (matched by directory, time and first prompt)", p.w.shortID(l.Parent.ID), p.titleOf(l.Parent), l.AtTurn)
+		}
 		p.kv("lineage", s)
 	}
 	for _, l := range in.Children {
 		verb := "continued in"
 		if l.Kind == catalog.LinkFork {
 			verb = "forked to"
+		}
+		if l.Kind == catalog.LinkSpawned {
+			verb = "spawned"
 		}
 		p.kv("lineage", fmt.Sprintf("→ %s %s%s, from this session's turn %d", verb, p.w.shortID(l.Child.ID), p.titleOf(l.Child), l.AtTurn))
 	}
@@ -520,8 +526,16 @@ func (p *printer) family(self model.SessionKey, fam catalog.Family) {
 	if len(fam.Leaves) > 0 {
 		newest = fam.Leaves[0].ID
 	}
-	p.printf("\nFamily  (%d sessions that share history; leaves are the ones to resume, newest first: %s)\n",
-		len(fam.Members), strings.Join(p.shortIDs(fam.Leaves), ", "))
+	// A spawned session shares no history with its parent: say so when the family has one.
+	related := "that share history"
+	for _, m := range fam.Members {
+		if in, ok := p.w.cat.Session(m); ok && in.Parent != nil && in.Parent.Kind == catalog.LinkSpawned {
+			related = "that share history or were spawned by one another"
+			break
+		}
+	}
+	p.printf("\nFamily  (%d sessions %s; leaves are the ones to resume, newest first: %s)\n",
+		len(fam.Members), related, strings.Join(p.shortIDs(fam.Leaves), ", "))
 	for _, m := range fam.Members {
 		in, ok := p.w.cat.Session(m)
 		if !ok {

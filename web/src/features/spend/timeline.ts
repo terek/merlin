@@ -9,7 +9,7 @@
 //
 // Pure; TimeView.tsx draws what this returns.
 
-import type { Agent, Compaction } from '../../api/types'
+import type { Agent, Compaction, LinkKind } from '../../api/types'
 import { modelLabel } from '../../lib/models'
 import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import {
@@ -1317,12 +1317,15 @@ export const carrierWeight = (runs: readonly ModelRun[], t: number): number =>
  * What a session of a tree is to the others, said in a few words: the trunk is the original, a fork names
  * the turn it left at, a continuation is just continued. The session the page is about is marked.
  */
-export function branchRole(
-  kind: 'fork' | 'continuation' | undefined,
-  atTurn: number | undefined,
-  current: boolean,
-): string {
-  const role = kind === undefined ? 'original' : kind === 'continuation' ? 'continued' : `fork of turn ${atTurn ?? '?'}`
+export function branchRole(kind: LinkKind | undefined, atTurn: number | undefined, current: boolean): string {
+  const role =
+    kind === undefined
+      ? 'original'
+      : kind === 'continuation'
+        ? 'continued'
+        : kind === 'spawned'
+          ? `spawned in turn ${atTurn ?? '?'}`
+          : `fork of turn ${atTurn ?? '?'}`
   return current ? `${role} · this session` : role
 }
 

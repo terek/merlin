@@ -560,7 +560,7 @@
         {
           "capability": "agents.tree",
           "state": "parsed",
-          "note": "docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). A bash-spawned pi without --no-session is a session of its own, not linked to its parent (merlin-1es.15)",
+          "note": "docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). A bash-spawned pi without --no-session writes a session of its own: the parent keeps a spawn hint and the catalog links the child (kind spawned) by cwd, a time window around the call and its exact first prompt; heuristic, never explicit (merlin-1es.15)",
           "seen": 0
         },
         {
@@ -584,7 +584,7 @@
         {
           "capability": "lineage.fork",
           "state": "parsed",
-          "note": "header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog",
+          "note": "header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog. A bash pi without --no-session also leaves a spawn hint (spawnedSessions); the catalog links that child (kind spawned) by cwd, a time window around the call and its exact first prompt: heuristic, never explicit",
           "seen": 0
         },
         {

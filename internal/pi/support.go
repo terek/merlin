@@ -42,13 +42,16 @@ func Support() harness.Support {
 
 		"agents.tree": harness.P("docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); " +
 			"a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). " +
-			"A bash-spawned pi without --no-session is a session of its own, not linked to its parent (merlin-1es.15)"),
+			"A bash-spawned pi without --no-session writes a session of its own: the parent keeps a spawn hint and the catalog " +
+			"links the child (kind spawned) by cwd, a time window around the call and its exact first prompt; heuristic, never explicit (merlin-1es.15)"),
 		"agents.nesting": harness.P("a child's own results[] or bash pi --no-session, by shape; not seen in a session"),
 		"agents.prompts": harness.P("results[].task whole; the bash command for a bash-spawned pi; details.description for Task and oracle"),
 		"agents.inbox":   harness.U("no message to a child after its launch is known in any convention here; none is read"),
 
 		"lineage.fork": harness.P("header parentSession: the id after the last _ of the parent file's name; " +
-			"entries are copied with their ids, so a fork's spend is billed once by the catalog"),
+			"entries are copied with their ids, so a fork's spend is billed once by the catalog. A bash pi without " +
+			"--no-session also leaves a spawn hint (spawnedSessions); the catalog links that child (kind spawned) by cwd, " +
+			"a time window around the call and its exact first prompt: heuristic, never explicit"),
 		"links.prs":   harness.U("no record of this kind is known; not looked for"),
 		"links.beads": harness.P("bd calls in the bash tool and in bashExecution (!) messages"),
 

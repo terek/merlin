@@ -204,12 +204,17 @@ func (w *world) lineageMarker(in catalog.SessionInfo) string {
 		if p.Kind == catalog.LinkFork {
 			verb = "↳ fork of "
 		}
+		if p.Kind == catalog.LinkSpawned {
+			verb = "↳ spawned by "
+		}
 		parts = append(parts, verb+w.shortID(p.Parent.ID))
 	}
-	var conts, forks []string
+	var conts, forks, spawned []string
 	for _, c := range in.Children {
 		if c.Kind == catalog.LinkFork {
 			forks = append(forks, w.shortID(c.Child.ID))
+		} else if c.Kind == catalog.LinkSpawned {
+			spawned = append(spawned, w.shortID(c.Child.ID))
 		} else {
 			conts = append(conts, w.shortID(c.Child.ID))
 		}
@@ -219,6 +224,9 @@ func (w *world) lineageMarker(in catalog.SessionInfo) string {
 	}
 	if len(forks) > 0 {
 		parts = append(parts, "→ forked to "+idList(forks))
+	}
+	if len(spawned) > 0 {
+		parts = append(parts, "→ spawned "+idList(spawned))
 	}
 	return strings.Join(parts, "  ")
 }

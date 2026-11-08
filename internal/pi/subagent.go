@@ -209,6 +209,7 @@ func (b *builder) newAgent(sc scope, id, callID string, at time.Time) int {
 // The first gets the call's id, any further one in the same command line a numbered suffix.
 func (b *builder) spawnBash(sc scope, callID, command string, at time.Time, fallback string) {
 	prefix := b.callPrefix(sc, callID, fallback)
+	b.spawnHints(sc, prefix, callID, command, at)
 	for n, sp := range piSpawns(command) {
 		id := prefix
 		if n > 0 {
@@ -226,8 +227,33 @@ func (b *builder) spawnBash(sc scope, callID, command string, at time.Time, fall
 	}
 }
 
+// spawnHints records the children a bash call started that keep a session file of their own.
+func (b *builder) spawnHints(sc scope, prefix, callID, command string, at time.Time) {
+	if !strings.Contains(command, "pi") {
+		return
+	}
+	for _, h := range piHints(command, string(b.p.head.Cwd)) {
+		sp := model.SessionSpawn{ToolUseID: callID, At: at, Dir: h.dir, Prompts: h.prompts, Harness: HarnessName}
+		if sc.turn >= 0 {
+			v := sc.turn
+			sp.Turn = &v
+		}
+		if sc.parent >= 0 {
+			sp.AgentID = b.d.Agents[sc.parent].ID
+		}
+		b.d.SpawnedSessions = append(b.d.SpawnedSessions, sp)
+		if b.hintsOf == nil {
+			b.hintsOf = map[string][]int{}
+		}
+		b.hintsOf[prefix] = append(b.hintsOf[prefix], len(b.d.SpawnedSessions)-1)
+	}
+}
+
 // bashResult closes the unrecorded runs a bash call started: its result came back.
 func (b *builder) bashResult(sc scope, callID, fallback string, at time.Time) {
+	for _, i := range b.hintsOf[b.callPrefix(sc, callID, fallback)] {
+		b.d.SpawnedSessions[i].EndedAt = at
+	}
 	for _, ai := range b.bashAgents[b.callPrefix(sc, callID, fallback)] {
 		a := &b.d.Agents[ai]
 		a.Status, a.EndedAt = model.StatusCompleted, at

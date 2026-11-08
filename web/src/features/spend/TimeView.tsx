@@ -1035,9 +1035,11 @@ export function TimePlot({
     const tip =
       b.kind === 'continuation'
         ? `Continued in ${name}`
-        : link
-          ? `Forked at turn ${link.atTurn}: ${link.sharedTurns} turns copied into ${name}`
-          : `Forked into ${name}`
+        : b.kind === 'spawned'
+          ? `Spawned in turn ${link?.atTurn ?? '?'}: ${name}`
+          : link
+            ? `Forked at turn ${link.atTurn}: ${link.sharedTurns} turns copied into ${name}`
+            : `Forked into ${name}`
     return (
       <g key={`s${l.key}`}>
         <path
@@ -1049,7 +1051,13 @@ export function TimePlot({
           pointerEvents="none"
         />
         <path d={d} fill="none" stroke={COLOR.main} strokeWidth={w} strokeLinecap="round" pointerEvents="none">
-          <title>{b.kind === 'continuation' ? 'continued in a new session' : 'forked into a new session'}</title>
+          <title>
+            {b.kind === 'continuation'
+              ? 'continued in a new session'
+              : b.kind === 'spawned'
+                ? 'spawned a new session'
+                : 'forked into a new session'}
+          </title>
         </path>
         {x >= X0 && x <= X1 && <BranchNode x={x} y={y} color={COLOR.main} ring={b.kind === 'continuation'} tip={tip} />}
       </g>
