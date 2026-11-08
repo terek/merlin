@@ -303,22 +303,19 @@ export function SpendGraph({
     const at = turnStart(pinned ?? cursor)
     return Number.isFinite(at) ? defaultWindow(timeline, days, at) : latest
   })
-  // a turn pinned (in the graph, in a panel, in the list of decisions) or reached with the keys brings
-  // itself into view
   const eff = useMemo(() => effectiveWindow(timeline, win), [timeline, win])
-  const [seen, setSeen] = useState({ pin: pinKey(pinned), cursor: pinKey(cursor) })
-  if (seen.pin !== pinKey(pinned) || seen.cursor !== pinKey(cursor)) {
-    setSeen({ pin: pinKey(pinned), cursor: pinKey(cursor) })
-    const t =
-      seen.cursor !== pinKey(cursor) && cursor
-        ? turnStart(cursor)
-        : seen.pin !== pinKey(pinned)
-          ? turnStart(pinned)
-          : Number.NaN
-    if (overview && Number.isFinite(t)) {
-      const next = revealWindow(win, t, days, bounds)
-      if (next !== win) setWin(next)
-    }
+  // the window is the user's: only what they do to it moves it. A turn they pin (in a panel, in the list
+  // of decisions) or reach with the keys brings itself into view when the plot does not show it; the
+  // pointer passing over the plot never moves it.
+  const reveal = (t: number) => {
+    if (!overview || !Number.isFinite(t) || (t >= eff.lo && t < eff.hi)) return
+    const next = revealWindow(win, t, days, bounds)
+    if (next !== win) setWin(next)
+  }
+  const [seen, setSeen] = useState(pinKey(pinned))
+  if (seen !== pinKey(pinned)) {
+    setSeen(pinKey(pinned))
+    reveal(turnStart(pinned))
   }
 
   if (branches.length === 0) return null
@@ -354,7 +351,9 @@ export function SpendGraph({
       return
     } else return
     e.preventDefault()
-    setCursor({ branch: b.index, col: b.own[Math.min(b.own.length - 1, Math.max(0, next))] })
+    const to = { branch: b.index, col: b.own[Math.min(b.own.length - 1, Math.max(0, next))] }
+    setCursor(to)
+    reveal(turnStart(to))
   }
 
   return (

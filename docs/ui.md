@@ -336,8 +336,8 @@ From top to bottom:
     (`spendDensity`), a faint tick at each midnight, the date of each day (from `splitDays`: the
     day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
     marker. The **brush** is the window: a highlighted rectangle with a handle at each edge, the rest
-    dimmed. Dragging across the strip selects a new range; dragging the window moves it (in pixels of the
-    strip, so over a break its time width changes); dragging a handle resizes it; a click outside the
+    dimmed. Dragging across the strip selects a new range; dragging the window moves it, keeping its length in
+    time (on the strip it narrows over a break, where idle time is squeezed); dragging a handle resizes it; a click outside the
     window centres it there; a click on a date, or a double-click inside a day, snaps to that day (its
     activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
     window by its own width, or to the previous or next day when it is a day; Home and End go to the
@@ -358,9 +358,11 @@ From top to bottom:
     sittings would otherwise open on its last half hour), or the episode itself, with a little pad,
     when the tree had no night and its one day runs for more than 30 hours. Pinning a
     turn (in the graph, a panel, the list of decisions, `#t<n>`) or moving the keyboard cursor brings
-    it into view: when it is outside the window, the window moves to hold it, keeping its width, or
+    it into view: when it is outside the effective window, the window moves to hold it, keeping its width, or
     snaps to the turn's day if it was a day (`revealWindow`); a turn asked for on opening picks the
-    episode that holds it. `?from=<ISO or ms>&to=<ISO or ms>` sets the window (screenshots);
+    episode that holds it. The window is the user's: nothing else moves it (the pointer passing over
+    the plot does not), and the page keeps room for a scroll bar, so that one appearing mid-drag does
+    not shift the strip under the pointer. `?from=<ISO or ms>&to=<ISO or ms>` sets the window (screenshots);
   - a **row** per session's main agent and per agent it launched, in the tree's order. Above its
     baseline, the context every call of the agent was sent with (prompt tokens), as a step area, on one
     token scale for every row: a row is as tall as its largest context needs, so the rows that were

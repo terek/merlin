@@ -9,6 +9,7 @@ import { CLASS_SERIES, KIND_SERIES, type Split, TIER_SERIES } from './model'
 import {
   boundsOf,
   centerWindow,
+  clampWindow,
   contextEnvelope,
   type Day,
   dayAt,
@@ -64,7 +65,7 @@ export interface OverviewProps {
 }
 
 type Drag =
-  | { mode: 'move'; x: number; xlo: number; xhi: number }
+  | { mode: 'move'; x: number; xlo: number; width: number }
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
@@ -152,7 +153,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
     const z = zoneAt(x)
     drag.current =
       z === 'move'
-        ? { mode: 'move', x, xlo, xhi }
+        ? { mode: 'move', x, xlo, width: win.hi - win.lo }
         : z === 'new'
           ? { mode: 'new', x, t: axis.t(x), moved: false }
           : { mode: z }
@@ -171,9 +172,9 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
       return
     }
     if (d.mode === 'move') {
-      const w = d.xhi - d.xlo
-      const a = Math.max(x0, Math.min(x1 - w, d.xlo + x - d.x))
-      onWin(dragWindow(axis.t(a), axis.t(a + w), bounds))
+      // a dragged window keeps its length in time, not on the strip, where idle time is squeezed
+      const lo = axis.t(Math.max(x0, Math.min(x1, d.xlo + x - d.x)))
+      onWin(clampWindow({ lo, hi: lo + d.width }, bounds))
     } else if (d.mode === 'new') {
       if (Math.abs(x - d.x) > 3) d.moved = true
       if (d.moved) onWin(dragWindow(d.t, axis.t(x), bounds))
