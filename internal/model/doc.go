@@ -5,7 +5,7 @@
 // other coding agents can produce the same shape. Field-by-field documentation lives in
 // docs/digest-schema.md and must be kept in step with these structs.
 //
-// Conventions (see CLAUDE.md): camelCase JSON keys, RFC 3339 UTC timestamps, USD
+// Conventions (see AGENTS.md): camelCase JSON keys, RFC 3339 UTC timestamps, USD
 // as float64, token counts as int64, omitempty on optional fields. Texts are stored whole;
 // nothing in this package truncates. Producers must emit timestamps in UTC and slices in
 // time-then-id order so that a digest is a pure function of the session's files.

@@ -1,30 +1,34 @@
-# Agent Instructions
+# Merlin Explorer — working notes for agents
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
+Go program that indexes Claude Code and Codex sessions. Start with [PLAN.md](PLAN.md); read
+[docs/transcript-format.md](docs/transcript-format.md) before touching anything that
+parses transcripts.
 
-> **Architecture in one line:** Issues live in a local Dolt database
-> (`.beads/dolt/`); cross-machine sync uses `bd dolt push/pull` (a
-> git-compatible protocol), stored under `refs/dolt/data` on your git
-> remote — separate from `refs/heads/*` where your code lives.
-> `.beads/issues.jsonl` is a passive export, not the wire protocol.
->
-> See [sync-concepts](https://github.com/gastownhall/beads/blob/main/docs/core-concepts/sync-concepts.md)
-> for the one-screen overview and anti-patterns (don't treat JSONL as the
-> source of truth; don't `bd import` during normal operation; don't
-> reach for third-party Dolt hosting before trying the default).
+**Mission.** The primary objective is understanding spend: what agentic work cost, and where the
+money went. The larger mission is understanding agentic usage as a whole, and helping users get
+better at working with agents. Spend optimization is the way most people come in, not where
+Merlin stops. When you weigh a feature, ask what it teaches the user about how they work with
+agents, as well as what it tells them about cost.
 
-## Quick Reference
+**Names.** The project is Merlin Explorer; the command it builds is `merlin` (it replaced the
+old Bun/TS Merlin binary in releases). Its state is under `~/.merlin`
+(`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `codex/`, `beads/`, `repos.json`,
+`merlin.lock`, `merlin.log` and `config.json` only. The old program kept its own files in the
+same directory: never read, change or remove anything else there.
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim --actor <seat>  # Claim work atomically; <seat> = the persona you work for
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+## Commands
+
+Run from the root of your worktree (see Worktrees).
+
+```
+make build      # bin/merlin with the web UI embedded (needs bun)
+make build-go   # bin/merlin without the UI (no bun)
+make test       # go test ./...
+make vet        # go vet ./...
+make web-check  # web/: tsc, Biome, bun test
 ```
 
-Without `--actor` every claim is recorded as the user, and a second agent's claim of the same
-bead also succeeds.
+Go 1.27 at `/opt/homebrew/bin/go`. Module `github.com/terek/merlin`.
 
 ## Worktrees
 
@@ -32,13 +36,8 @@ The repository is a bare container: `~/work/merlin/.bare` holds git, and every c
 worktree beside it.
 
 - `~/work/merlin/main/` is the user's checkout of `main`; agents do not edit there. Work reaches
-  `main` by push from a seat; after every push, update it with
+  `main` by push from a seat (see Rules); after every push, update it with
   `git -C ~/work/merlin/main pull --ff-only` (if it refuses, leave it and tell the user).
-- Every finished piece of work ends on `main`, without asking: pushing is safe (nothing deploys on
-  push), and whatever is on `main` goes into the next release. Commit on your seat's branch. To land: `git fetch`,
-  `git rebase origin/main`, run the checks, then `git push origin HEAD:main` (fast-forward only;
-  never force-push `main`), then pull `~/work/merlin/main`. This repository opts in to the beads team-maintainer profile,
-  `bd dolt push` included. Tags make releases: push one only when the user asks.
 - `~/work/merlin/<seat>/` belongs to one persona (seat) and its workers; stay in yours and never
   edit another seat's. A task gets a branch `<seat>/<topic>` cut from `origin/main`
   (`git switch -c <seat>/<topic> origin/main`); between tasks the worktree sits detached on
@@ -51,6 +50,94 @@ worktree beside it.
   `(cd web && bun install --frozen-lockfile)`.
 - Git commands do not work at the container root (it is bare); run them inside a worktree. The
   stash is shared by all worktrees.
+
+## Rules
+
+- **Dependencies:** standard library, plus `tidwall/gjson` and `tidwall/sjson` in
+  `internal/claude/hooks` only. Do not add others; if you think one is needed, say so in the
+  bead and stop short of adding it.
+- **Harness boundary.** Only `internal/claude/**` may know the layout of `~/.claude` or
+  the shape of Claude Code transcripts, only `internal/codex/**` that of `~/.codex` and
+  Codex rollouts ([docs/codex-format.md](docs/codex-format.md)), and only `internal/pi/**` that of
+  Pi sessions ([docs/pi-format.md](docs/pi-format.md)). `internal/model`, `store`,
+  `catalog`, `engine`, `server`, `harness` and `hookfile` are harness-neutral and must not import
+  `internal/claude/*`, `internal/codex` or `internal/pi`; other harnesses go beside them.
+  Storage is per harness: `<MERLIN_HOME>/claude/...`, `<MERLIN_HOME>/codex/...`.
+- **Parallel work.** Other agents edit other packages in this tree at the same time. If
+  `make test` or `make vet` fails in a package you do not own, do not fix it: run the
+  checks for your own packages (`go test ./internal/<yours>/...`) and note the failure.
+- **Stay in your packages.** A bead names the packages it owns. `internal/model` and
+  `internal/claude/transcript` are the shared contract: additive changes only, and mention them
+  in your closing note.
+- **A digest is a pure function of the session's files.** No wall-clock time, no
+  hostname, no map-iteration order in output. Slices are ordered by time, then id.
+- **Tolerant parsing.** Unknown record types, unknown fields and unparseable lines are
+  counted, never fatal. Lines can exceed 1 MB — do not use `bufio.Scanner` with its
+  default buffer.
+- **Texts are stored whole.** Do not truncate prompts, final texts or summaries.
+- **Tests never touch the real machine.** No reads of `~/.claude` or `~/.codex`, no writes to
+  `~/.merlin`. Use `t.TempDir()`, `MERLIN_HOME`, `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. The one
+  exception is the validation bead, which reads `~/.claude` read-only.
+- **Fixtures are synthetic.** Never copy content from a real transcript into `testdata/`
+  or into any committed file. Write fixture text by hand.
+- **JSON conventions:** camelCase keys, RFC 3339 UTC timestamps, USD as float64, token
+  counts as int64, `omitempty` on optional fields.
+- **Commit and push.** Every finished piece of work ends on `main`, without asking: pushing is
+  safe (nothing deploys on push), and whatever is on `main` goes into the next release. Commit on
+  your seat's branch. To land: `git fetch`, `git rebase origin/main`,
+  run the checks, then `git push origin HEAD:main` (fast-forward only; never force-push `main`), then pull
+  `~/work/merlin/main` (see Worktrees).
+  This repository opts in to the beads team-maintainer profile, `bd dolt push` included. Tags make
+  releases: push one only when the user asks.
+
+## Web UI (`web/`)
+
+The design is [docs/ui.md](docs/ui.md); the API it reads is [docs/api.md](docs/api.md). Read both
+before touching `web/`.
+
+- **bun only.** `bun install`, `bun run <script>`, `bunx <tool>`. Never `npm`, `npx` or `node`
+  (`node` is broken on this machine).
+- **Dependencies** are the ones listed in docs/ui.md §1. Do not add others.
+- **Ownership.** A bead owns its directory under `web/src/features/`. `web/src/api`, `lib` and
+  `ui` are shared: additive changes only, named in your closing note. Do not restyle a shared
+  primitive to suit one view; if it falls short, extend it with a prop.
+- **Never serve the real history.** Run the daemon only against the fixtures, with a scratch
+  home, without hooks, on the port your bead gives you:
+  `HOME=<scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<scratch dir> ./bin/merlin serve --no-hooks --port <port>`.
+  The scratch `HOME` keeps every other harness (`~/.codex`, `~/.pi`) out too.
+  Start it as a background command and stop it when you are done.
+- **Look at what you build.** `web/dev/shot.sh <url> <out.png> [width] [height]` screenshots a
+  page with headless Chrome (a wrapper over `web/dev/shot.ts`, DevTools protocol, no dependency);
+  read the PNG. It waits for the network to go idle (the event stream does not count), so
+  scrolled deep links (`#t300`, `#a<id>`) and pages with the event stream on capture fine. Options:
+  `--wait-for <css>`, `--eval <js>` (click or press a key first; awaited, value printed),
+  `--delay <ms>`, `--port <n>` (Chrome debugging port, default 9333). Check both `?theme=light`
+  and `?theme=dark`. Put screenshots in your scratch directory, never in the repository.
+- **Dev server and mock.** `VITE_PORT=<p> EXPLORER_API=http://127.0.0.1:<mock or daemon> bun run dev`
+  has React fast refresh. `MOCK_PORT=<p> bun run mock`; `MOCK_DAYS=200` stretches the mock's
+  history (default 90). `make dev` runs the daemon and Vite together (Ctrl+C stops both;
+  `MERLIN_PORT`, `VITE_PORT`; `ARGS=-no-hooks` goes to `merlin serve`).
+- **Checks.** `make web-check` (TypeScript, Biome, `bun test`) and `make build` must pass, as well
+  as `make test` and `make vet`. The repository's Stop hook formats changed `.ts`/`.tsx`/`.json`
+  files with Biome (root `biome.json`: 2 spaces, single quotes, no semicolons, 120 columns), so
+  write in that style from the start.
+- macOS has no `timeout` command, and a bare foreground `sleep` is refused by the harness: run
+  servers as background commands and poll with a loop.
+
+## Beads
+
+```
+bd show <id>                    # the task, its acceptance criteria and dependencies
+bd update <id> --claim --actor <seat>   # when you start; <seat> = the persona you work for
+bd comment <id> --file note.md  # long notes go through a file, not the command line
+bd close <id> --reason "..."    # when acceptance criteria are met and make test passes
+```
+
+Without `--actor` every claim is recorded as the user, and a second agent's claim of the same
+bead also succeeds.
+
+Close a bead only when its acceptance criteria hold and `make test` and `make vet` pass.
+If you cannot finish, leave it open and comment with what is done and what blocks you.
 
 ## Non-Interactive Shell Commands
 
@@ -76,7 +163,7 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:46cd31e7 -->
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:1105d646 -->
 ## Beads Issue Tracker
 
 This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
@@ -120,7 +207,6 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
    # Team-maintainer opt-in only, unless current instructions forbid it:
    git pull --rebase
-   bd dolt push
    git push
    git status
    ```
@@ -131,27 +217,3 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - Do not commit or push without clear authority from the active profile or the current user request.
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
-
-<!-- BEGIN BEADS CODEX SETUP: generated by bd setup codex -->
-## Beads Issue Tracker
-
-Use Beads (`bd`) for durable task tracking in repositories that include it. Use the `beads` skill at `.agents/skills/beads/SKILL.md` (project install) or `~/.agents/skills/beads/SKILL.md` (global install) for Beads workflow guidance, then use the `bd` CLI for issue operations.
-
-### Quick Reference
-
-```bash
-bd ready                # Find available work
-bd show <id>            # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>           # Complete work
-bd prime                # Refresh Beads context
-```
-
-### Rules
-
-- Use `bd` for all task tracking; do not create markdown TODO lists.
-- Run `bd prime` when Beads context is missing or stale. Codex 0.129.0+ can load Beads context automatically through native hooks; use `/hooks` to inspect or toggle them.
-- Keep persistent project memory in Beads via `bd remember`; do not create ad hoc memory files.
-
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/core-concepts/sync-concepts.md for details and anti-patterns.
-<!-- END BEADS CODEX SETUP -->
