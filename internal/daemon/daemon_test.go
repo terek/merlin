@@ -66,10 +66,14 @@ func copyClaude(t *testing.T) string {
 type counting struct {
 	*claude.Harness
 	builds atomic.Int64
+	gate   chan struct{} // if set, Build blocks until it is closed
 }
 
 func (c *counting) Build(s harness.Session) (*model.SessionDigest, error) {
 	c.builds.Add(1)
+	if c.gate != nil {
+		<-c.gate
+	}
 	return c.Harness.Build(s)
 }
 

@@ -29,7 +29,15 @@ const (
 	DefaultLiveWindow      = 5 * time.Minute
 	DefaultShutdownTimeout = 10 * time.Second
 	tmpMaxAge              = time.Minute
+
+	DefaultBinaryCheckInterval = time.Minute
+	DefaultIdlePoll            = 2 * time.Second
+	DefaultIdleMax             = 10 * time.Minute
 )
+
+// ErrRestart is what Run returns when the daemon shut down cleanly because a newer binary
+// is in place. The caller is expected to re-exec itself.
+var ErrRestart = errors.New("daemon: restart to run the new binary")
 
 // Options configures a Daemon. Every interval can be shortened for tests.
 type Options struct {
@@ -50,6 +58,23 @@ type Options struct {
 	Debounce        time.Duration // at most one build per live session per this; default 3 s
 	LiveWindow      time.Duration // how long a hook or a file change keeps a session live; default 5 min
 	ShutdownTimeout time.Duration // how long in-flight builds may take on shutdown; default 10 s
+
+	// Upgrade, if set, checks for, downloads and installs a newer binary, and reports whether
+	// one is now in place. It runs right after the lock is taken and the log is open, before
+	// anything is indexed (true: Run returns ErrRestart at once), and then every
+	// UpgradeInterval. A true from the periodic check waits until no builds are in flight,
+	// then shuts down cleanly and returns ErrRestart. The daemon never executes anything.
+	Upgrade         func(ctx context.Context, logf func(string, ...any)) bool
+	UpgradeInterval time.Duration // 0 = no periodic Upgrade (the startup one still runs)
+
+	// BinaryChanged, if set, is polled every BinaryCheckInterval (default 1 min) and should
+	// be cheap: it reports that the installed binary now is a different version than the
+	// running one (someone ran merlin upgrade). True restarts the same way as Upgrade.
+	BinaryChanged       func() bool
+	BinaryCheckInterval time.Duration
+
+	IdlePoll time.Duration // how often to look for in-flight builds before a restart; default 2 s
+	IdleMax  time.Duration // how long to wait for them; then restart anyway; default 10 min
 
 	Version string    // reported by /healthz
 	Stderr  io.Writer // log copy; nil = os.Stderr
@@ -117,6 +142,9 @@ func New(opts Options) (*Daemon, error) {
 	def(&opts.Debounce, DefaultDebounce)
 	def(&opts.LiveWindow, DefaultLiveWindow)
 	def(&opts.ShutdownTimeout, DefaultShutdownTimeout)
+	def(&opts.BinaryCheckInterval, DefaultBinaryCheckInterval)
+	def(&opts.IdlePoll, DefaultIdlePoll)
+	def(&opts.IdleMax, DefaultIdleMax)
 	if opts.Stderr == nil {
 		opts.Stderr = os.Stderr
 	}
@@ -199,6 +227,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.start = time.Now()
 	d.logf("merlin serve %s starting (pid %d, home %s)", d.opts.Version, os.Getpid(), home)
 
+	if d.opts.Upgrade != nil && d.opts.Upgrade(ctx, d.logf) {
+		d.logf("auto-upgrade: a new binary is in place; restarting before indexing")
+		return ErrRestart
+	}
+
 	if n, err := SweepTemp(home, tmpMaxAge, time.Now()); err != nil {
 		d.logf("sweeping temp files: %v", err)
 	} else if n > 0 {
@@ -270,10 +303,20 @@ func (d *Daemon) Run(ctx context.Context) error {
 	go func() { defer close(engDone); eng.Run(engCtx) }()
 	var loops sync.WaitGroup
 	loops.Add(2)
+	restart := make(chan struct{}, 1)
+	if (d.opts.Upgrade != nil && d.opts.UpgradeInterval > 0) || d.opts.BinaryChanged != nil {
+		loops.Add(1)
+		go func() { defer loops.Done(); d.upgradeLoop(loopCtx, eng, restart) }()
+	}
 	go func() { defer loops.Done(); d.rescanLoop(loopCtx) }()
 	go func() { defer loops.Done(); d.liveLoop(loopCtx) }()
 
-	<-ctx.Done()
+	restarting := false
+	select {
+	case <-ctx.Done():
+	case <-restart:
+		restarting = true
+	}
 	d.logf("shutting down")
 	shCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	if err := srv.Shutdown(shCtx); err != nil {
@@ -290,7 +333,64 @@ func (d *Daemon) Run(ctx context.Context) error {
 		d.logf("abandoning %d unfinished builds (their writes are atomic; the next start redoes them)", eng.Pending())
 	}
 	d.logf("stopped")
+	if restarting {
+		return ErrRestart
+	}
 	return nil
+}
+
+// upgradeLoop runs Options.Upgrade every UpgradeInterval and Options.BinaryChanged every
+// BinaryCheckInterval. When either says a new binary is in place it waits for the engine
+// to go idle (at most IdleMax: builds write atomically, so abandoning them is safe), asks
+// Run to restart and returns.
+func (d *Daemon) upgradeLoop(ctx context.Context, eng *engine.Engine, restart chan<- struct{}) {
+	var up, bin <-chan time.Time
+	if d.opts.Upgrade != nil && d.opts.UpgradeInterval > 0 {
+		t := time.NewTicker(d.opts.UpgradeInterval)
+		defer t.Stop()
+		up = t.C
+	}
+	if d.opts.BinaryChanged != nil {
+		t := time.NewTicker(d.opts.BinaryCheckInterval)
+		defer t.Stop()
+		bin = t.C
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-up:
+			if !d.opts.Upgrade(ctx, d.logf) {
+				continue
+			}
+		case <-bin:
+			if !d.opts.BinaryChanged() {
+				continue
+			}
+			d.logf("auto-upgrade: the installed binary changed")
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		d.logf("auto-upgrade: restarting when idle (%d builds in flight)", eng.Pending())
+		deadline := time.NewTimer(d.opts.IdleMax)
+		defer deadline.Stop()
+		poll := time.NewTicker(d.opts.IdlePoll)
+		defer poll.Stop()
+		for eng.Pending() > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-deadline.C:
+				d.logf("auto-upgrade: still %d builds in flight after %s; restarting anyway", eng.Pending(), d.opts.IdleMax)
+				restart <- struct{}{}
+				return
+			case <-poll.C:
+			}
+		}
+		restart <- struct{}{}
+		return
+	}
 }
 
 // onWrite is the engine's OnWrite: the catalog first, then the bus.
