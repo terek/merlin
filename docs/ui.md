@@ -398,7 +398,8 @@ From top to bottom:
     pieces of work (agent row) that hold its calls, so it never starts before its agent was
     launched or runs past the end of a turn; calls outside any of them give the span from the first
     to the last call, and a bar narrower than 2 px is widened to 2 px, centred on its calls;
-  - the **token scale** is labelled on every row, as far up as the row reaches; the other rows keep faint gridlines;
+  - the **token scale** is labelled on every row, as far up as the row reaches; zero is not labelled, its line
+    is the row's axis: darker than the gridlines (`--faint`) and drawn on into the scale's gutter; the other rows keep faint gridlines;
   - **level of detail** by the median room a turn has on the main row (`detailAt`): above 40 px
     per turn every turn has its tick, thick stretch and number and every decision its bracket and
     dollars. From 12 to 40 px the numbers still show only where they fit, and only the 8 most

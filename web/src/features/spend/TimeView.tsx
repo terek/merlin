@@ -95,6 +95,8 @@ export const BREAK_OPACITY = 0.35
 
 /** Room left of the plot for the context scale. */
 const LABEL_W = 34
+/** Where a row's zero line starts: in the gutter of the token scale, under its labels. */
+const ZERO_X = 6
 const MR = 12
 /** A spend bar is drawn at least this wide, centred on its calls. */
 const BAR_MIN_PX = 2
@@ -910,14 +912,8 @@ export function TimePlot({
             </g>
           )
         })}
-        <line
-          x1={X0}
-          x2={X1}
-          y1={g.base + 0.5}
-          y2={g.base + 0.5}
-          stroke={main ? 'var(--faint)' : 'var(--line)'}
-          strokeWidth={main ? 0.75 : 1}
-        />
+        {/* the row's zero: an axis, darker than the gridlines and reaching into the scale's gutter */}
+        <line x1={ZERO_X} x2={X1} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--faint)" strokeWidth={1} />
         {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included) */}
         {whole &&
           Number.isFinite(whole.t0) &&
