@@ -9,6 +9,7 @@ import {
   branchRole,
   branchWeight,
   buildTimeline,
+  carrierWeight,
   centerWindow,
   clampWindow,
   collapseSwarms,
@@ -931,5 +932,13 @@ describe('branchWeight', () => {
     expect(branchWeight('light')).toBe(TIER_WEIGHT.light)
     expect(branchWeight('unknown')).toBe(TIER_WEIGHT.mid)
     expect(branchWeight(undefined)).toBe(TIER_WEIGHT.mid)
+    const runs = [
+      { t0: 10, t1: 20, model: 'a', tier: 'heavy' as const },
+      { t0: 40, t1: 50, model: 'b', tier: 'unknown' as const },
+    ]
+    expect(carrierWeight(runs, 0)).toBe(TIER_WEIGHT.heavy)
+    expect(carrierWeight(runs, 30)).toBe(TIER_WEIGHT.heavy)
+    expect(carrierWeight(runs, 45)).toBe(TIER_WEIGHT.mid)
+    expect(carrierWeight([], 5)).toBe(TIER_WEIGHT.mid)
   })
 })

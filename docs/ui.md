@@ -302,10 +302,10 @@ From top to bottom:
     how to read and pin, and the scales;
   - the **key** (`Key.tsx`) is a row of small inline SVG samples (28x16 px) with a few words each: the context
     area, held context (strong and faint, tinted), cache miss, compactions (cold, warm, unknown), prompt dots
-    (solid, hollow), the decision bracket (and the pinned one), turn weights by tier, the idle hairline, the
-    spend per slot, the agent spine with its elbow, a fork with the context it copied, the agent frame
+    (solid, hollow), the decision bracket (and the pinned one), the session line by tier, the
+    spend per slot, the agent spine with its elbow, a fork leaving a baseline with its copied context, the agent frame
     (sub-agent, fork notch, workflow dashed), the swarm "+", the report line, a forked or continued session's
-    spine with its node, the break band and the overhead hatching. Marks the tree cannot have are left out (`keyFacts`:
+    line leaving a baseline with its node, the break band and the overhead hatching. Marks the tree cannot have are left out (`keyFacts`:
     cache misses, each kind of compaction, queued prompts, agents, forks, workflows, swarms, reports, sessions,
     overhead). The samples use the constants and patterns TimeView.tsx exports and draws with (widths,
     dashes, opacities, tints, the hatching, `elbowPath`), so a change to the plot's look changes its key.
@@ -382,8 +382,7 @@ From top to bottom:
     dollars. From 12 to 40 px the numbers still show only where they fit, and only the 8 most
     expensive decisions in view (`bracketed`), plus those of the hovered or cursor turn and of the
     pinned turn, have a bracket; the others show only their prompt dot. Below 12 px the turns are
-    one thick band on the baseline (stretches closer than 3 px merged), with a tick and number
-    only for the turn in focus, and the brackets are the same top 8 plus focus;
+    only the turn in focus has a tick and number, and the brackets are the same top 8 plus focus;
   - a diamond is a **cache miss**, on the call that missed: the part of an agent's previous prompt
     that its next message did not read from the cache, written to it again (Claude Code) or charged
     as plain input (Codex, whose cache has no writes). Each miss has a cause: idle longer than the
@@ -407,12 +406,14 @@ From top to bottom:
     and not to a slot, turn or agent in it. Hover reads the window's reported and covered figures. The
     legend's "Not explained by messages" entry adds the bands up, and the legend's percentages are
     of messages plus overhead, which is the header's figure;
-  - on a main row each **turn** is a stretch of the baseline from its start to its end, as heavy as
-    the tier of the model it ran on (3.5 px heavy, 2 px mid, 1 px light or unpriced; the heaviest
-    tier of the runs that hold its calls, else the run current at its start; `turnTier`), with a
-    tick where it starts. The baseline where no turn runs is a hairline (0.75 px, faint). In the
-    band level of detail the merged band takes the heaviest weight of the turns it joins
-    (`mergeWeighted`). The colour stays the text colour. Where the main agent's model changes
+  - a main row's baseline is the **session line**: one continuous stretch in `--main` from the session's first
+    moment to its last (the whole life, clipped to the window, so it runs through the window even where no
+    turn does), over a faint full-width axis (0.75 px) that keeps the scale readable outside it. It is as
+    heavy as the tier of the model in effect (3.5 px heavy, 2 px mid, 1 px light; unpriced is mid): during a
+    turn the model that ran, between turns and across breaks the model last in effect, before the first
+    run the first run's (`tierSegments`, `carrierWeight`). It is never thinned while idle. Each turn has a
+    tick where it starts, drawn over the line; the band level of detail keeps only the ticks and numbers
+    of the turns in focus, the line is the same. Where the main agent's model changes
     (`lane.runs`), and where its first call in the window is, the model's short name (`Fable 5.1`)
     is written small (9 px, muted, surface-coloured halo) just above the baseline at that point; a
     label that would come within 14 px of the one before is left out, and a change to a name that
@@ -457,7 +458,7 @@ From top to bottom:
     swarm (`#a<agentId>`) opens it. A window that cuts a swarm keeps it one row while two of its agents
     remain; the state is the plot's own and is not kept in the address;
   - **spines** show who launched whom. Every agent lane, and every forked or continued session's main
-    row, has a spine: a path that starts on its sender's row at the moment of launch (the main row of
+    row, has a spine: a path that starts on its sender's baseline at the moment of launch (the main row of
     its branch, or the row of the agent a later message names as its sender, `u.from`; for a forked
     or continued session, the main row of its parent session at the moment the new session begins),
     runs vertically to the agent's row, turns with a rounded elbow (radius 6 px) onto its baseline and
@@ -466,15 +467,18 @@ From top to bottom:
     frames; at full strength for the work in focus: hovered, selected, or launched or reported in the
     turn under the cursor or pinned. Context-carrying branches are skeleton, not detail: a forked or
     continued session's spine and an agent fork's are always at full strength, a clean-context
-    sub-agent's stays faint. Agents packed into one row
+    sub-agent's stays thin and faint. Agents packed into one row
     each have their own segment. The horizontal part is as heavy as the model tier of the run the
     agent was on, segment by segment along `lane.runs` (3.5 px heavy, 2 px mid, 1 px light, 1 px grey
     unpriced; the gap between two runs keeps the weight of the one before; `tierSegments`), so a
     cheap worker under an expensive main agent is a thin line and a fork on the parent's model a
     heavy one. The vertical part of an agent's spine is 1.25 px whatever the weight. A forked or continued
-    session's spine is the main line bending down: `--main` colour, as heavy as the tier of its first
-    model run (mid when unknown), on a `--surface` halo 4 px wider so that it passes in front of the
-    agent rows it crosses; it has no horizontal part: its turns on the main row carry the weight. A swarm of 4 or more is one row with one spine
+    session's spine is the main line bending down: `--main` colour, on a `--surface` halo 4 px wider so that
+    it passes in front of the agent rows it crosses. A fork forks the line, so its spine is as heavy as the
+    parent's line at that moment (`carrierWeight`) and lands on the fork's own line where it begins; a
+    continuation's is as heavy as its first model run (mid when unknown). It has no horizontal part: the
+    session line carries the weight. An agent fork's elbow is as heavy as the agent's first tier, not 1.25 px.
+    A swarm of 4 or more is one row with one spine
     (above); fewer launched at one moment are a trunk of overlapping spines. A piece of work that began before the window starts at the left
     edge with a chevron and no elbow. A later piece of work of the same agent (a teammate woken again)
     keeps a thin line from its sender, drawn only when it is in focus; none for work the agent's own
@@ -482,18 +486,18 @@ From top to bottom:
     a report came in, only for the work in focus. An agent's turns are its pieces of work: a
     message from the agent that launched it, or a notification that wakes it after it finished,
     starts a new one (the harness writes these as `isMeta` records with an `origin`);
-  - **branch nodes and labels**: where a fork or agent fork leaves its parent's row a filled dot
+  - **branch nodes and labels**: where a fork or agent fork leaves its parent's baseline a filled dot
     (r 4.5, 2 px surface outline, in `--main` or the fork colour) marks the start of the spine; a continuation
     has a ring (surface fill, 1.75 px `--main` outline). The session's dot has a tooltip ("Forked at turn 27:
     28 turns copied into “…”", "Continued in “…”"); it is left out when it falls outside the window. In a
     tree of more than one session the first model label of each main row is prefixed with its role in
     the text colour, semibold: `original`, `fork of turn N` or `continued`, plus ` · this session` for
     the session the page was opened on (`TimePlot`'s `current`; `branchRole`);
-  - **a fork copies its parent's context**: its spine does not start at the parent's baseline but at
-    the top of the parent's context at that moment (the parent's own last context at or before the
-    launch; for a forked session, at the end of the last turn it copied, `lineage.parent.atTurn`),
-    and in the fork's row the first run of its context shows the part it inherited, the parent's
-    context then capped at the fork's first context (`inheritedContext`), as a light hatched band in
+  - **a fork takes the whole context** (every other agent starts clean), so it forks the line: its spine
+    leaves the parent's baseline (as a continuation's does) at that moment (for a forked session, at the end
+    of the last turn it copied, `lineage.parent.atTurn`), and in the fork's row the first run of its context
+    shows the part it inherited, the parent's context then capped at the fork's first context
+    (`inheritedContext`), as a light hatched band in
     the parent's colour under the fork's own area, so the copied context and the growth on top of
     it can be told apart. A sub-agent (clean context) and a continuation branch from the parent's
     baseline and have no hatch;

@@ -1286,6 +1286,13 @@ export const branchWeight = (tier: Tier | undefined): number =>
   tier && tier !== 'unknown' ? TIER_WEIGHT[tier] : TIER_WEIGHT.mid
 
 /**
+ * The weight of a session's carrier line at `t`: the tier of the model in effect then (the last run that
+ * started by `t`; before the first run, the first run's), the middle weight when there is none or it is unknown.
+ */
+export const carrierWeight = (runs: readonly ModelRun[], t: number): number =>
+  branchWeight((runs.findLast((r) => r.t0 <= t) ?? runs[0])?.tier)
+
+/**
  * What a session of a tree is to the others, said in a few words: the trunk is the original, a fork names
  * the turn it left at, a continuation is just continued. The session the page is about is marked.
  */

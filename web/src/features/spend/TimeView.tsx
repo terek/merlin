@@ -9,15 +9,18 @@
 //              light tint under it (the context carried); the area always stops at the end of a turn
 //              or a piece of work
 //   marks      a diamond is a cache miss, a vertical mark a compaction (red on a cold cache)
-//   main rows  each turn a stretch of the baseline as heavy as its model's tier (a hairline between turns);
+//   main rows  the session's line: one continuous stretch of the baseline from its first moment to its
+//              last (idle and breaks included), as heavy as the tier of the model in effect, over a
+//              faint axis; a tick and number per turn;
 //              the model's name where it changes; a dot for every prompt a person typed (hollow
 //              if typed while a turn ran); a bracket with the total over each decision, its start reaching
 //              down to the dot
 //   agents     one light frame over an agent's work (its start down to the baseline, its top, a stem
 //              at its end); an addressable agent keeps a row of its own, the others share rows when they
 //              do not overlap
-//   spines     from the row that launched an agent (a fork: from the top of its parent's context, with
-//              what it copied hatched in its row), an elbow onto its baseline, and along it over its
+//   spines     from the baseline of the row that launched an agent (a fork, which takes the whole context,
+//              forks the line: its elbow as heavy as the agent, what it copied hatched in its row; a clean
+//              agent: thin and dimmed), an elbow onto its baseline, and along it over its
 //              life, weighted by model tier, faint, full for the work in focus; the reports of that
 //              work are dashed lines to the turns they came in
 //   breaks     time in which nothing ran is squeezed into a narrow band, with its length on the axis
@@ -44,11 +47,11 @@ import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, TIER_SER
 import type { Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
-  BAND_GAP_PX,
   barSpan,
   bracketed,
   branchRole,
   branchWeight,
+  carrierWeight,
   clockTicks,
   collapseSwarms,
   detailAt,
@@ -57,7 +60,6 @@ import {
   inheritedContext,
   type Lane,
   mergeBusy,
-  mergeWeighted,
   modelMarks,
   type Point,
   packLanes,
@@ -75,7 +77,6 @@ import {
   tierSegments,
   timeAxis,
   turnPlace,
-  turnTier,
   type Win,
 } from './timeline'
 import { type Overhead, shortTitle, type Tree } from './tree'
@@ -797,6 +798,8 @@ export function TimePlot({
   const drawRow = (g: Layout, i: number) => {
     const order = ORDER[split]
     const main = g.row.main ? g.row.lanes[0] : undefined
+    // the session's whole life, not the window's slice of it: its line runs through the window even where no turn does
+    const whole = main && fullLane.get(main.key)
     const b = tree.branches[g.row.branch]
     const ticks = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (main ? BRACKET_H : 0) - 2)
     // the decisions that get a bracket, and the turns drawn one by one
@@ -952,6 +955,27 @@ export function TimePlot({
           stroke={main ? 'var(--faint)' : 'var(--line)'}
           strokeWidth={main ? 0.75 : 1}
         />
+        {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included) */}
+        {whole &&
+          Number.isFinite(whole.t0) &&
+          Number.isFinite(whole.t1) &&
+          tierSegments(whole.runs, whole.t0, whole.t1).map((sg, k, all) => {
+            const x0 = Math.max(X0, axis.x(sg.t0))
+            const x1 = Math.min(X1, k === all.length - 1 ? Math.max(axis.x(sg.t1), axis.x(sg.t0) + 1.5) : axis.x(sg.t1))
+            if (!(x1 > x0)) return null
+            return (
+              <line
+                key={sg.t0}
+                pointerEvents="none"
+                x1={x0}
+                x2={x1}
+                y1={g.base + 0.5}
+                y2={g.base + 0.5}
+                stroke={COLOR.main}
+                strokeWidth={branchWeight(sg.tier)}
+              />
+            )
+          })}
         {/* a main row's turns, and their numbers */}
         {main?.turns.map((s) => {
           const x = axis.x(s.t0)
@@ -959,20 +983,8 @@ export function TimePlot({
           if (detail === 'band' && !isFocusTurn(s.col.index)) return null
           const label = detail === 'band' || x - lastTurnX >= String(s.col.index).length * 5.5 + 6
           if (label) lastTurnX = x
-          const xe = Math.max(x + 1.5, axis.x(s.t1) - 0.75)
-          const weight = TIER_WEIGHT[turnTier(main.runs, s.t0, s.t1)]
           return (
             <g key={s.col.index} pointerEvents="none">
-              {detail !== 'band' && (
-                <line
-                  x1={x + 0.75}
-                  x2={xe}
-                  y1={g.base + 0.5}
-                  y2={g.base + 0.5}
-                  stroke="var(--text)"
-                  strokeWidth={weight}
-                />
-              )}
               <line x1={x} x2={x} y1={g.base - 4} y2={g.base + 5} stroke="var(--text)" strokeWidth={1} />
               {label && (
                 <text x={x} y={turnsY} textAnchor="middle" fontSize={9} fill="var(--faint)">
@@ -982,28 +994,6 @@ export function TimePlot({
             </g>
           )
         })}
-        {/* too many turns for a mark each: they are one thick band, turns closer than a few pixels joined, as heavy as the heaviest model in it */}
-        {main &&
-          detail === 'band' &&
-          mergeWeighted(
-            main.turns.map((s) => ({
-              t0: axis.x(s.t0),
-              t1: Math.max(axis.x(s.t0) + 1.5, axis.x(s.t1)),
-              weight: TIER_WEIGHT[turnTier(main.runs, s.t0, s.t1)],
-            })),
-            BAND_GAP_PX,
-          ).map((r) => (
-            <line
-              key={r.t0}
-              pointerEvents="none"
-              x1={r.t0}
-              x2={r.t1}
-              y1={g.base + 0.5}
-              y2={g.base + 0.5}
-              stroke="var(--text)"
-              strokeWidth={r.weight}
-            />
-          ))}
         {/* a person's messages: a dot on the baseline, hollow for one typed while a turn ran */}
         {main?.turns.flatMap((s) =>
           [
@@ -1057,14 +1047,19 @@ export function TimePlot({
     const color = COLOR[l.kind]
     // a fork carries its parent's context: structure, at full strength; a clean worker is light
     const on = l.kind === 'fork' || l.units.some((u) => inFocus(l, u)) || (!!hot && hot.key === l.key)
-    // a fork branches from the top of its parent's context, any other agent from its baseline
-    const ctx = from && l.kind === 'fork' ? pointAt(ownPoints(from.l.key), t0)?.tokens : undefined
-    const y0 = from && from.g !== g ? (ctx ? yCtx(from.g, ctx) : from.g.base) : undefined
+    // every agent leaves its sender's baseline; a fork takes the whole context and its elbow is as heavy as the agent
+    const y0 = from && from.g !== g ? from.g.base : undefined
     const turn = y0 !== undefined ? Math.min(ELBOW_R, Math.abs(g.base - y0)) : 0
     return (
       <g key={`s${l.key}`} opacity={on ? 1 : SPINE_OPACITY} pointerEvents="none">
         {y0 !== undefined && (
-          <path d={elbow(xa, y0, g.base)} fill="none" stroke={color} strokeWidth={SPINE_W} strokeLinecap="round" />
+          <path
+            d={elbow(xa, y0, g.base)}
+            fill="none"
+            stroke={color}
+            strokeWidth={l.kind === 'fork' ? branchWeight(l.runs[0]?.tier) : SPINE_W}
+            strokeLinecap="round"
+          />
         )}
         {y0 !== undefined && l.kind === 'fork' && <BranchNode x={xa} y={y0} color={color} />}
         {tierSegments(l.runs, t0, l.t1).map((sg, k, all) => {
@@ -1095,11 +1090,14 @@ export function TimePlot({
     const parent = b.parent !== undefined ? mainRow(b.parent) : undefined
     const l = g.row.lanes[0]
     if (!parent || !Number.isFinite(l.t0)) return null
-    const ctx = b.kind === 'fork' ? pointAt(ownPoints(`${b.parent}/main`), forkMoment(g.row.branch))?.tokens : undefined
     const x = axis.x(l.t0)
-    const y = ctx ? yCtx(parent, ctx) : parent.base
+    const y = parent.base
     const d = elbow(x, y, g.base)
-    const w = branchWeight(l.runs[0]?.tier)
+    // a fork is the parent's line forking: as heavy as the parent's line there
+    const w =
+      b.kind === 'fork'
+        ? carrierWeight(fullLane.get(parent.row.lanes[0].key)?.runs ?? parent.row.lanes[0].runs, l.t0)
+        : branchWeight(l.runs[0]?.tier)
     const link = b.detail.lineage.parent
     const name = `“${shortTitle(b.title)}”`
     const tip =

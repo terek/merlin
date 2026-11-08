@@ -208,30 +208,24 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
         {base()}
       </Entry>
       <Entry
-        label="turn: heavy, mid, light model"
-        title="A turn is a stretch of the baseline as heavy as its model's price tier"
+        label="session line: heavy, mid, light model"
+        title="The session's line runs unbroken, idle or not, as heavy as its model's price tier"
       >
+        {base()}
         {(['heavy', 'mid', 'light'] as const).map((t, i) => (
           <line
             key={t}
-            x1={1 + i * 9}
-            x2={7 + i * 9}
+            x1={i * 9.33}
+            x2={(i + 1) * 9.33}
             y1={B + 0.5}
             y2={B + 0.5}
-            stroke="var(--text)"
+            stroke={main}
             strokeWidth={TIER_WEIGHT[t]}
           />
         ))}
-        {[0, 7, 9, 16, 18, 25].map((x) => (
+        {[3, 12, 21].map((x) => (
           <line key={x} x1={x + 0.5} x2={x + 0.5} y1={B - 4} y2={B + 5} stroke="var(--text)" />
         ))}
-      </Entry>
-      <Entry label="idle between turns" title="The main agent waited">
-        <line x1={1} x2={7} y1={B + 0.5} y2={B + 0.5} stroke="var(--text)" strokeWidth={TIER_WEIGHT.mid} />
-        {base()}
-        <line x1={8} x2={8} y1={B - 4} y2={B + 5} stroke="var(--text)" />
-        <line x1={20} x2={20} y1={B - 4} y2={B + 5} stroke="var(--text)" />
-        <line x1={21} x2={W - 1} y1={B + 0.5} y2={B + 0.5} stroke="var(--text)" strokeWidth={TIER_WEIGHT.mid} />
       </Entry>
       <Entry label="spend per slot (under the baseline)">
         {base()}
@@ -261,13 +255,23 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
         </Entry>
       )}
       {f.forks && (
-        <Entry label="fork, with the context it copied" title="A fork leaves from the top of its parent's context">
+        <Entry
+          label="fork, with the context it copied"
+          title="A fork takes the whole context: it leaves from its sender's line, as heavy as the agent"
+        >
           <defs>
             <InheritPattern id={`${id}-inh`} color={main} />
           </defs>
           {ctxArea(0, 7, 3)}
           <rect x={7} y={5} width={W - 7} height={B - 5} fill={`url(#${id}-inh)`} />
-          <path d={elbowPath(7, 3, B)} fill="none" stroke={COLOR.fork} strokeWidth={SPINE_W} strokeLinecap="round" />
+          <line x1={0} x2={7} y1={3} y2={3} stroke={main} strokeWidth={TIER_WEIGHT.mid} />
+          <path
+            d={elbowPath(7, 3, B)}
+            fill="none"
+            stroke={COLOR.fork}
+            strokeWidth={TIER_WEIGHT.mid}
+            strokeLinecap="round"
+          />
           <line x1={7 + ELBOW_R} x2={W - 1} y1={B} y2={B} stroke={COLOR.fork} strokeWidth={TIER_WEIGHT.mid} />
           <BranchNode x={7} y={3} color={COLOR.fork} />
         </Entry>
@@ -305,8 +309,9 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
       {f.sessions && (
         <Entry
           label="forked or continued session"
-          title="A session's spine bends down from its parent's row, as heavy as its model; a dot where a fork left, a ring for a continuation"
+          title="A session's line bends down from its parent's baseline, as heavy as the line it left; a dot where a fork left, a ring for a continuation"
         >
+          <line x1={0} x2={5} y1={3} y2={3} stroke={COLOR.main} strokeWidth={TIER_WEIGHT.mid} />
           <path
             d={elbowPath(5, 3, B)}
             fill="none"
