@@ -4,6 +4,12 @@ Go program that indexes Claude Code and Codex sessions. Start with [PLAN.md](PLA
 [docs/transcript-format.md](docs/transcript-format.md) before touching anything that
 parses transcripts.
 
+**Mission.** The primary objective is understanding spend: what agentic work cost, and where the
+money went. The larger mission is understanding agentic usage as a whole, and helping users get
+better at working with agents. Spend optimization is the way most people come in, not where
+Merlin stops. When you weigh a feature, ask what it teaches the user about how they work with
+agents, as well as what it tells them about cost.
+
 **Names.** The project is Merlin Explorer; the command it builds is `merlin` (it replaced the
 old Bun/TS Merlin binary in releases). Its state is under `~/.merlin`
 (`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `codex/`, `beads/`, `repos.json`,
