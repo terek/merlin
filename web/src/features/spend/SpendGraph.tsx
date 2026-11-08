@@ -30,7 +30,6 @@ import {
 import { Overview, stripAxis } from './Overview'
 import { TimePlot } from './TimeView'
 import {
-  activeMs,
   boundsOf,
   buildTimeline,
   clampWindow,
@@ -77,9 +76,6 @@ export interface SpendGraphProps {
   /** The session the page is about: its main row is marked in the plot. */
   current?: SessionKey
 }
-
-/** A tree with more activity than this gets the overview even when it ran on one day. */
-const OVERVIEW_MIN_MS = 3 * 60 * 60_000
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
 
@@ -286,14 +282,13 @@ export function SpendGraph({
     [branches],
   )
 
-  // a tree that ran long, or on more than one day, is shown a window at a time, picked in the overview
+  // a tree is shown a window at a time, picked in the overview (a short one opens on all of it)
   const prices = usePrices().data?.models // until it arrives (or if it fails) tiers go by the model's family
   const timeline = useMemo(() => buildTimeline(tree, prices), [tree, prices])
   const facts = useMemo(() => keyFacts(tree, timeline), [tree, timeline])
   const byTier = useMemo(() => tierSpend(timeline), [timeline])
   const days = useMemo(() => splitDays(timeline), [timeline])
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
-  const overview = days.length > 1 || activeMs(timeline) > OVERVIEW_MIN_MS
   const turnStart = (p: Pin | null | undefined) =>
     (p && timeline.lanes.find((l) => l.main && l.branch === p.branch)?.turns.find((x) => x.col.index === p.col)?.t0) ||
     Number.NaN
@@ -308,15 +303,12 @@ export function SpendGraph({
   const stripRef = useRef<HTMLDivElement>(null)
   const stripWidth = useWidth(stripRef)
   const strip = useMemo(() => stripAxis(timeline, stripWidth), [timeline, stripWidth])
-  const eff = useMemo(
-    () => (overview ? effectiveWindow(timeline, win, (a, b) => strip.x(b) - strip.x(a)) : win),
-    [timeline, win, strip, overview],
-  )
+  const eff = useMemo(() => effectiveWindow(timeline, win, (a, b) => strip.x(b) - strip.x(a)), [timeline, win, strip])
   // the window is the user's: only what they do to it moves it. A turn they pin (in a panel, in the list
   // of decisions) or reach with the keys brings itself into view when the plot does not show it; the
   // pointer passing over the plot never moves it.
   const reveal = (t: number) => {
-    if (!overview || !Number.isFinite(t) || (t >= eff.lo && t < eff.hi)) return
+    if (!Number.isFinite(t) || (t >= eff.lo && t < eff.hi)) return
     const next = revealWindow(win, t, days, bounds)
     if (next !== win) setWin(next)
   }
@@ -437,23 +429,21 @@ export function SpendGraph({
         </p>
       )}
       <div ref={stripRef}>
-        {overview && (
-          <Overview
-            timeline={timeline}
-            days={days}
-            split={split}
-            win={win}
-            eff={eff}
-            onWin={setWin}
-            pinnedT={turnStart(pinned)}
-            latest={latest}
-          />
-        )}
+        <Overview
+          timeline={timeline}
+          days={days}
+          split={split}
+          win={win}
+          eff={eff}
+          onWin={setWin}
+          pinnedT={turnStart(pinned)}
+          latest={latest}
+        />
       </div>
       <TimePlot
         tree={tree}
         timeline={timeline}
-        range={overview ? eff : undefined}
+        range={eff}
         split={split}
         pinned={valid(pinned) ? pinned : null}
         cursor={cur}
@@ -472,15 +462,15 @@ export function SpendGraph({
         <summary className="cursor-pointer select-none text-sec">How to read this graph</summary>
         <p className="mt-1">
           Time runs across, local; a narrow grey band is time in which nothing ran, left out. Every row shares one token
-          scale above its baseline (so the tall ones are the expensive ones to carry) and one dollar scale below it. A
-          session that ran long or on more than one day shows a window of it, picked on the strip above the plot (the
-          whole session on one scale, the window highlighted): it opens on the last day of work. The rows and the token
-          scale are those of the whole session, so the plot keeps its shape as the window moves (it looks sparse where
-          the session is quiet); the time axis and the dollar scale are the window's own. A fork leaves from the top of
-          its parent's context; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its
-          own, one-shot agents share rows, and four or more launched together are one swarm row (marked +; click it to
-          open it, − folds it). A person's turns are weighted by the price of their model, and the model's name is
-          written where it changes.
+          scale above its baseline (so the tall ones are the expensive ones to carry) and one dollar scale below it. The
+          plot shows a window of the session, picked on the strip above it (the whole session on one scale, the window
+          highlighted): it opens on the last day of work, or on all of a short session. The rows and the token scale are
+          those of the whole session, so the plot keeps its shape as the window moves (it looks sparse where the session
+          is quiet); the time axis and the dollar scale are the window's own. A fork leaves from the top of its parent's
+          context; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot
+          agents share rows, and four or more launched together are one swarm row (marked +; click it to open it, −
+          folds it). A person's turns are weighted by the price of their model, and the model's name is written where it
+          changes.
           {overhead &&
             ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
           {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}

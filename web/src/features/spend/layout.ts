@@ -113,10 +113,12 @@ export function buildFrame(
       y += OVER_GAP + OVER_H
     }
   })
-  // the token scale is labelled once: on the first row, and higher up on a row taller than it
+  // the token scale is labelled on each session's main row, and on an agent's row only higher up than
+  // on its session's rows above it
   const labelFrom: number[] = []
   let done = 0
   for (const g of layout) {
+    if (g.row.main) done = 0
     const n = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2).length
     labelFrom.push(done)
     done = Math.max(done, n)

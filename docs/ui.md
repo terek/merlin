@@ -318,9 +318,8 @@ From top to bottom:
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
   - **a window at a time** (beads `merlin-t8s.50`, `merlin-zls.6`): the plot shows one **window** of
     time, with a time axis, breaks, slot length and dollar scale of its own (its rows and token scale are the whole session's, see the vertical frame below); the rest of a long tree is
-    reached through an **overview** strip above the readout (`Overview.tsx`). It is shown when the tree
-    ran on more than one day or has more than 3 hours of activity; otherwise there is no strip and the
-    window is everything. A turn, call, context and mark belongs to a window if it starts inside it
+    reached through an **overview** strip above the readout (`Overview.tsx`). Every tree has it, a short one
+    too (it opens on all of it), so any tree can be zoomed into. A turn, call, context and mark belongs to a window if it starts inside it
     (`[lo, hi)`; a turn running past the edge is kept whole); a piece of agent work if it overlaps it,
     and a launch or report line whose other end is outside the window is drawn along the plot's edge,
     dashed, with a small chevron pointing out (`sliceTimeline`). A turn the window cuts is shown whole, at either
@@ -399,8 +398,8 @@ From top to bottom:
     pieces of work (agent row) that hold its calls, so it never starts before its agent was
     launched or runs past the end of a turn; calls outside any of them give the span from the first
     to the last call, and a bar narrower than 2 px is widened to 2 px, centred on its calls;
-  - the **token scale** is labelled once: its tick labels stand on the first row, and on a taller
-    row only for the ticks above the ones already labelled; the other rows keep faint gridlines;
+  - the **token scale** is labelled on each session's main row, and on an agent's row only for the
+    ticks above the ones its session's rows above it already label; the other rows keep faint gridlines;
   - **level of detail** by the median room a turn has on the main row (`detailAt`): above 40 px
     per turn every turn has its tick, thick stretch and number and every decision its bracket and
     dollars. From 12 to 40 px the numbers still show only where they fit, and only the 8 most

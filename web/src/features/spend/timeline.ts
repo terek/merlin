@@ -731,11 +731,6 @@ export const sliceDay = (tl: Timeline, day: Day) => sliceTimeline(tl, day.lo, da
 /** The first and last moment a window can have: a little beyond the tree's activity. */
 export const boundsOf = (tl: Timeline): { t0: number; t1: number } => ({ t0: tl.t0 - 1, t1: tl.t1 + 1 })
 
-/** How much of a tree is activity: the time in which something ran, idle stretches left out. */
-export function activeMs(tl: Timeline): number {
-  return mergeSpans(tl.spans, GAP_MS).reduce((s, [a, b]) => s + (b - a), 0)
-}
-
 /** A window around `[t0, t1]`, a little wider (2%, between a minute and half an hour). */
 export function windowAround(t0: number, t1: number): Win {
   const pad = Math.min(MAX_PAD_MS, Math.max(MIN, (t1 - t0) * 0.02))
