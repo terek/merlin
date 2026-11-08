@@ -82,6 +82,9 @@ import {
 import { type Overhead, shortTitle, type Tree } from './tree'
 import { useWidth } from './useWidth'
 
+/** How strongly a break shows: a faint pause, so that the work around it reads first. */
+export const BREAK_OPACITY = 0.35
+
 /** Room left of the plot for the context scale. */
 const LABEL_W = 34
 const MR = 12
@@ -1405,7 +1408,7 @@ export function TimePlot({
                 width={b.x1 - b.x0 - 6}
                 height={height - AXIS_H}
                 fill="var(--surface-2)"
-                opacity={0.8}
+                opacity={BREAK_OPACITY}
               />
               <path
                 d={`M${f1(b.x0 + 3)} ${AXIS_H - 6}l3 -4M${f1(b.x1 - 6)} ${AXIS_H - 6}l3 -4`}
@@ -1552,3 +1555,4 @@ function gapText(ms: number): string {
   if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
   return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`
 }
+

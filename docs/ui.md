@@ -313,7 +313,7 @@ From top to bottom:
     every row, breaks, the window and overview, forks and sub-agents, swarms, how the dollars are recomputed,
     and the sentences about cache misses and wake-ups;
   - stretches longer than 10 minutes in which nothing ran (no call, no turn, no piece of agent work)
-    are squeezed into a narrow grey **break** labelled with its length; with more than 12 such
+    are squeezed into a narrow, faint grey **break** (a pause, so that the work around it reads first) labelled with its length; with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
   - **a window at a time** (beads `merlin-t8s.50`, `merlin-zls.6`): the plot shows one **window** of

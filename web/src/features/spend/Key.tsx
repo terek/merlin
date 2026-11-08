@@ -17,6 +17,7 @@ import {
   HELD_LINE,
   HELD_TINT,
   InheritPattern,
+  BREAK_OPACITY,
   MISS_COLOR,
   MISS_SIZE,
   markColor,
@@ -324,7 +325,7 @@ export function Key({ facts, className }: { facts: KeyFacts; className?: string 
         </Entry>
       )}
       <Entry label="break" title="Time in which nothing ran, left out">
-        <rect x={5} y={1} width={W - 10} height={H - 2} fill="var(--surface-2)" opacity={0.8} />
+        <rect x={5} y={1} width={W - 10} height={H - 2} fill="var(--surface-2)" opacity={BREAK_OPACITY} />
         <path d="M5 4l3 -3M17 4l3 -3" stroke="var(--faint)" />
       </Entry>
       {f.overhead && (
