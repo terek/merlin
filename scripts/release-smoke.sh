@@ -4,7 +4,8 @@
 #
 # `merlin version` must print the version; `merlin serve --no-hooks` against the
 # fixtures (scratch HOME and MERLIN_HOME, nothing under ~) must serve the embedded UI at /
-# and JSON at /api/sessions.
+# and JSON at /api/sessions. It passes --no-auto-upgrade: a 0.0.0-ci or rc build is not a dev
+# version, and would otherwise download the real latest release and re-exec into it.
 set -euo pipefail
 
 [ "$#" -ge 2 ] || { echo "usage: $0 <binary> <version> [port]" >&2; exit 2; }
@@ -25,7 +26,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-HOME="$home" CLAUDE_CONFIG_DIR="$fixtures" MERLIN_HOME="$home" "$bin" serve --no-hooks --port "$port" >"$log" 2>&1 &
+HOME="$home" CLAUDE_CONFIG_DIR="$fixtures" MERLIN_HOME="$home" "$bin" serve --no-hooks --no-auto-upgrade --port "$port" >"$log" 2>&1 &
 pid=$!
 
 up=""

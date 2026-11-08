@@ -21,6 +21,7 @@ type fakeRelease struct {
 	reports   string // what the downloaded binary says it is; default latest
 	badSum    bool   // SHA256SUMS lists the wrong hash
 	downloads int
+	checks    int // hits on /latest
 }
 
 func (f *fakeRelease) start(t *testing.T) {
@@ -42,6 +43,7 @@ func (f *fakeRelease) start(t *testing.T) {
 	dl := "/download/v" + f.latest + "/"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/latest", func(w http.ResponseWriter, r *http.Request) {
+		f.checks++
 		http.Redirect(w, r, "/tag/v"+f.latest, http.StatusFound)
 	})
 	mux.HandleFunc(dl+"SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +122,7 @@ func TestUpgradeReplacesBinary(t *testing.T) {
 	if !strings.Contains(contents(t, real), "merlin 0.9.0") {
 		t.Errorf("binary not replaced: %q", contents(t, real))
 	}
-	for _, want := range []string{"Upgrading merlin 0.3.0 to 0.9.0", "installed " + real, "merlin serve 0.3.0 is still running"} {
+	for _, want := range []string{"Upgrading merlin 0.3.0 to 0.9.0", "installed " + real, "The running merlin serve (0.3.0) switches to 0.9.0 within a minute"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}

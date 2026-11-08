@@ -99,7 +99,7 @@ func TestRestartGivesUpWaitingForBuilds(t *testing.T) {
 	r.h.gate = make(chan struct{})
 	r.start()
 	err := waitRun(t, r, "restart after IdleMax")
-	close(r.h.gate) // let the abandoned builds finish before the temp dir goes
+	close(r.h.gate)                    // let the abandoned builds finish before the temp dir goes
 	time.Sleep(300 * time.Millisecond) // the engine is stopped; in-flight builds write and end
 	if !errors.Is(err, daemon.ErrRestart) {
 		t.Fatalf("Run = %v, want ErrRestart", err)

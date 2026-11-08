@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -22,7 +23,7 @@ import (
 
 func init() {
 	register("serve", command{
-		usage:   "serve [--port 7433] [--no-hooks]",
+		usage:   "serve [--port 7433] [--no-hooks] [--no-auto-upgrade]",
 		summary: "daemon: index, follow, serve",
 		run:     runServe,
 	})
@@ -36,6 +37,8 @@ func runServe(args []string) int {
 	rescan := fs.Duration("rescan", daemon.DefaultRescanInterval, "full rescan interval")
 	debounce := fs.Duration("debounce", daemon.DefaultDebounce, "at most one build per live session per this")
 	workers := fs.Int("workers", 0, "concurrent builders (default: number of CPUs)")
+	noUpgrade := fs.Bool("no-auto-upgrade", false, "do not install new releases by itself (also: MERLIN_AUTO_UPGRADE=0, \"autoUpgrade\": false in config.json)")
+	upgradeEvery := fs.Duration("upgrade-interval", defaultUpgradeInterval, "how often to check for a new release (for testing)")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -53,6 +56,7 @@ func runServe(args []string) int {
 		return fail(err)
 	}
 	cfg, pricer := loadConfig(home, "merlin serve")
+	applyReleasesEnv()
 	harnesses, err := buildHarnesses(pricer)
 	if err != nil {
 		return fail(err)
@@ -73,6 +77,9 @@ func runServe(args []string) int {
 		Debounce:       *debounce,
 		Version:        version,
 	}
+	au := newAutoUpgrader(home, *noUpgrade)
+	opts.Upgrade, opts.UpgradeInterval = au.run, *upgradeEvery
+	opts.BinaryChanged = au.binaryChanged
 	if !*noHooks {
 		// Hooks are opt-in (merlin hooks install). Once any of a harness's are there, serve
 		// keeps its set complete and pointing at this binary.
@@ -107,10 +114,38 @@ func runServe(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := d.Run(ctx); err != nil {
-		return fail(err)
+	err = d.Run(ctx)
+	switch {
+	case err == nil:
+		return 0
+	case errors.Is(err, daemon.ErrRestart):
+		// Run has shut down: the lock and the listener are released. Exec keeps the PID.
+		if err := restartSelf(home, au.wasInstalled()); err != nil {
+			return fail(fmt.Errorf("restarting after an upgrade: %w", err))
+		}
+	case os.Getenv(upgradedFromEnv) != "" && !started(d) && !isLocked(err):
+		// The binary we just upgraded to cannot start: go back to the one that could.
+		if rerr := rollback(home, err); rerr != nil {
+			fmt.Fprintf(os.Stderr, "merlin serve: %v\n", rerr)
+		}
 	}
-	return 0
+	return fail(err)
+}
+
+// started reports whether the daemon got as far as listening.
+func started(d *daemon.Daemon) bool {
+	select {
+	case <-d.Ready():
+		return true
+	default:
+		return false
+	}
+}
+
+// isLocked reports that another merlin serve holds the lock: not a sign of a bad binary.
+func isLocked(err error) bool {
+	var l *daemon.LockedError
+	return errors.As(err, &l)
 }
 
 // refreshHooks reinstalls a harness's hooks if any of them is installed, and otherwise

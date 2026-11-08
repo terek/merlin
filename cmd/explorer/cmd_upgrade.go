@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -60,6 +61,7 @@ func runUpgrade(args []string) int {
 		fmt.Fprintln(os.Stderr, "merlin upgrade: unexpected arguments")
 		return 2
 	}
+	applyReleasesEnv()
 	if err := upgrade(os.Stdout, *check, *force); err != nil {
 		fmt.Fprintf(os.Stderr, "merlin upgrade: %v\n\nTo upgrade by hand, run the installer:\n\n  %s\n", err, installCommand)
 		return 1
@@ -67,8 +69,18 @@ func runUpgrade(args []string) int {
 	return 0
 }
 
+// applyReleasesEnv honours MERLIN_RELEASES_URL, for testing: a directory laid out like the
+// releases page (latest redirecting to tag/vX, download/vX/...) served over HTTP.
+func applyReleasesEnv() {
+	if u := os.Getenv("MERLIN_RELEASES_URL"); u != "" {
+		releasesURL = strings.TrimRight(u, "/")
+	}
+}
+
 func upgrade(w io.Writer, check, force bool) error {
-	latest, err := latestVersion()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	latest, err := latestVersion(ctx)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -89,83 +101,142 @@ func upgrade(w io.Writer, check, force bool) error {
 		return nil
 	}
 
-	target, err := releaseTarget()
+	dest, err := resolveDest()
 	if err != nil {
 		return err
 	}
-	dest, err := executablePath()
-	if err != nil {
-		return fmt.Errorf("cannot find this binary: %w", err)
-	}
-	if dest, err = filepath.EvalSymlinks(dest); err != nil {
-		return fmt.Errorf("cannot find this binary: %w", err)
-	}
-
-	asset := "merlin-" + target
-	base := releasesURL + "/download/v" + latest
-	fmt.Fprintf(w, "Upgrading merlin %s to %s (%s)...\n", cur, latest, asset)
-	sums, err := fetch(base+"/SHA256SUMS", 1<<20)
+	fmt.Fprintf(w, "Upgrading merlin %s to %s...\n", cur, latest)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	staged, err := stageRelease(ctx, dest, latest)
 	if err != nil {
 		return err
 	}
-	want, err := checksumFor(sums, asset)
-	if err != nil {
-		return err
-	}
-
-	// Stage next to the destination so the final rename is atomic and stays on one
-	// filesystem, and prove the binary runs here before it replaces anything.
-	dir := filepath.Dir(dest)
-	staged, err := os.CreateTemp(dir, ".merlin.upgrade.*")
-	if err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("cannot write to %s; run: sudo %s upgrade", dir, dest)
-		}
-		return err
-	}
-	defer os.Remove(staged.Name()) // a no-op once renamed
-	if err := download(staged, base+"/"+asset, want); err != nil {
-		staged.Close()
-		return err
-	}
-	if err := staged.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(staged.Name(), 0o755); err != nil {
-		return err
-	}
-	out, err := exec.Command(staged.Name(), "version").Output()
-	if err != nil {
-		return fmt.Errorf("the downloaded binary does not run on this machine: %w", err)
-	}
-	if got := strings.TrimSpace(string(out)); got != "merlin "+latest {
-		return fmt.Errorf("the downloaded binary reports %q, want %q", got, "merlin "+latest)
-	}
-	// Renaming over a running executable is safe: running processes keep the old file.
-	if err := os.Rename(staged.Name(), dest); err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			return fmt.Errorf("cannot replace %s; run: sudo %s upgrade", dest, dest)
-		}
+	defer os.Remove(staged) // a no-op once renamed
+	if err := swapBinary(staged, dest); err != nil {
 		return err
 	}
 	fmt.Fprintf(w, "✓ installed %s (merlin %s)\n", dest, latest)
 
 	if v := runningServeVersion(); v != "" && v != latest {
-		fmt.Fprintf(w, "merlin serve %s is still running; restart it to run %s.\n", v, latest)
+		fmt.Fprintf(w, "The running merlin serve (%s) switches to %s within a minute.\n", v, latest)
 	}
 	return nil
 }
 
+// resolveDest is the file `merlin upgrade` replaces: this binary, symlinks resolved.
+func resolveDest() (string, error) {
+	dest, err := executablePath()
+	if err != nil {
+		return "", fmt.Errorf("cannot find this binary: %w", err)
+	}
+	if dest, err = filepath.EvalSymlinks(dest); err != nil {
+		return "", fmt.Errorf("cannot find this binary: %w", err)
+	}
+	return dest, nil
+}
+
+// prevName is the previous binary, kept next to the installed one for rollback.
+const prevName = ".merlin.prev"
+
+// stageRelease downloads release latest for this host next to dest, checks its SHA-256
+// and proves it runs here (it must print `merlin <latest>`). It returns the staged file;
+// the caller removes it (renaming it over dest does that). Staging next to dest keeps the
+// final rename atomic and on one filesystem.
+func stageRelease(ctx context.Context, dest, latest string) (string, error) {
+	target, err := releaseTarget()
+	if err != nil {
+		return "", err
+	}
+	asset := "merlin-" + target
+	base := releasesURL + "/download/v" + latest
+	sums, err := fetch(ctx, base+"/SHA256SUMS", 1<<20)
+	if err != nil {
+		return "", err
+	}
+	want, err := checksumFor(sums, asset)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Dir(dest)
+	f, err := os.CreateTemp(dir, ".merlin.upgrade.*")
+	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			return "", fmt.Errorf("cannot write to %s; run: sudo %s upgrade", dir, dest)
+		}
+		return "", err
+	}
+	name := f.Name()
+	fail := func(err error) (string, error) { os.Remove(name); return "", err }
+	if err := download(ctx, f, base+"/"+asset, want); err != nil {
+		f.Close()
+		return fail(err)
+	}
+	if err := f.Close(); err != nil {
+		return fail(err)
+	}
+	if err := os.Chmod(name, 0o755); err != nil {
+		return fail(err)
+	}
+	out, err := exec.CommandContext(ctx, name, "version").Output()
+	if err != nil {
+		return fail(fmt.Errorf("the downloaded binary does not run on this machine: %w", err))
+	}
+	if got := strings.TrimSpace(string(out)); got != "merlin "+latest {
+		return fail(fmt.Errorf("the downloaded binary reports %q, want %q", got, "merlin "+latest))
+	}
+	return name, nil
+}
+
+// swapBinary installs staged as dest. The current binary is first hard-linked (or, where
+// that is impossible, copied) to .merlin.prev beside it, so dest never goes missing and a
+// failed start can roll back. Failing to keep that copy does not stop the upgrade.
+func swapBinary(staged, dest string) error {
+	prev := filepath.Join(filepath.Dir(dest), prevName)
+	os.Remove(prev)
+	if err := os.Link(dest, prev); err != nil {
+		if err := copyFile(dest, prev); err != nil {
+			os.Remove(prev)
+		}
+	}
+	// Renaming over a running executable is safe: running processes keep the old file.
+	if err := os.Rename(staged, dest); err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			return fmt.Errorf("cannot replace %s; run: sudo %s upgrade", dest, dest)
+		}
+		return err
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o755)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
 // latestVersion follows the /releases/latest redirect to learn the newest tag, as
 // install.sh does: no API token, no rate-limited API call. It returns it without the v.
-func latestVersion() (string, error) {
-	c := &http.Client{
-		Timeout:       30 * time.Second,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-	resp, err := c.Head(releasesURL + "/latest")
+func latestVersion(ctx context.Context) (string, error) {
+	c := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, releasesURL+"/latest", nil)
 	if err != nil {
-		return "", fmt.Errorf("cannot reach GitHub to find the latest release: %w", err)
+		return "", err
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("cannot reach the release server to find the latest release: %w", err)
 	}
 	resp.Body.Close()
 	loc := resp.Header.Get("Location")
@@ -188,9 +259,17 @@ func releaseTarget() (string, error) {
 	return runtime.GOOS + "-" + arch, nil
 }
 
+func get(ctx context.Context, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	return http.DefaultClient.Do(req)
+}
+
 // fetch GETs a small file whole.
-func fetch(url string, limit int64) ([]byte, error) {
-	resp, err := (&http.Client{Timeout: time.Minute}).Get(url)
+func fetch(ctx context.Context, url string, limit int64) ([]byte, error) {
+	resp, err := get(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("download failed: %w", err)
 	}
@@ -202,8 +281,8 @@ func fetch(url string, limit int64) ([]byte, error) {
 }
 
 // download streams url into f and checks its SHA-256 against want.
-func download(f *os.File, url, want string) error {
-	resp, err := (&http.Client{Timeout: 10 * time.Minute}).Get(url)
+func download(ctx context.Context, f *os.File, url, want string) error {
+	resp, err := get(ctx, url)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
