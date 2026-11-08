@@ -95,8 +95,8 @@ export const BREAK_OPACITY = 0.35
 
 /** Room left of the plot for the context scale. */
 const LABEL_W = 34
-/** Where a row's zero line starts: in the gutter of the token scale, under its labels. */
-const ZERO_X = 6
+/** Where a row's zero line starts: halfway into the gutter of the token scale, under its labels. */
+const ZERO_X = LABEL_W / 2 + 3
 const MR = 12
 /** A spend bar is drawn at least this wide, centred on its calls. */
 const BAR_MIN_PX = 2
