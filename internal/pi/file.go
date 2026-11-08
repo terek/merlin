@@ -161,6 +161,7 @@ type rec struct {
 	output     string // the result text of a bash call, or a bashExecution's output
 	added      int64  // lines of an edit's diff
 	removed    int64
+	runs       []subRun // agent runs the result carries (see subagent.go)
 
 	// bashExecution
 	command  string
@@ -181,6 +182,7 @@ type parsed struct {
 	recs    []rec
 	bad     int64
 	unknown map[string]int64
+	nest    int // depth of the child messages being read; bounds the recursion
 }
 
 // knownTypes are the entry types the parser understands; used ones feed the digest, the
@@ -362,6 +364,7 @@ func (p *parsed) message(r *rec, raw json.RawMessage) {
 		r.text = strings.Join(texts, "\n")
 	case "toolResult":
 		r.toolCallID, r.toolName, r.isErr, r.usage = string(m.ToolCallID), string(m.ToolName), bool(m.IsError), m.Usage
+		r.runs = p.runs(m.Details)
 		switch r.toolName {
 		case "bash":
 			blocks, s, isStr := content(m.Content)

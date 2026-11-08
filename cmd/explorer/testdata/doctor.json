@@ -431,10 +431,10 @@
       "harness": "pi",
       "sessions": 0,
       "states": {
-        "absent": 8,
+        "absent": 4,
         "dropped": 1,
-        "parsed": 14,
-        "unknown": 6
+        "parsed": 17,
+        "unknown": 7
       },
       "rows": [
         {
@@ -559,26 +559,26 @@
         },
         {
           "capability": "agents.tree",
-          "state": "absent",
-          "note": "docs/pi-format.md, Not recorded (from source): Pi's core has no subagents. Extension tools (subagent, Task, oracle) exist and are plain tool calls here",
+          "state": "parsed",
+          "note": "docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). A bash-spawned pi without --no-session is a session of its own, not linked to its parent (merlin-1es.15)",
           "seen": 0
         },
         {
           "capability": "agents.nesting",
-          "state": "absent",
-          "note": "as agents.tree: no agents in Pi's core",
+          "state": "parsed",
+          "note": "a child's own results[] or bash pi --no-session, by shape; not seen in a session",
           "seen": 0
         },
         {
           "capability": "agents.prompts",
-          "state": "absent",
-          "note": "as agents.tree: no agents in Pi's core",
+          "state": "parsed",
+          "note": "results[].task whole; the bash command for a bash-spawned pi; details.description for Task and oracle",
           "seen": 0
         },
         {
           "capability": "agents.inbox",
-          "state": "absent",
-          "note": "as agents.tree: no agents in Pi's core",
+          "state": "unknown",
+          "note": "no message to a child after its launch is known in any convention here; none is read",
           "seen": 0
         },
         {

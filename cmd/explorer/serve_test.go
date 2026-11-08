@@ -88,10 +88,16 @@ type serveProc struct {
 // startServe runs `merlin serve` with temp directories and waits for /healthz.
 func startServe(t *testing.T, home, cfg string, extra ...string) *serveProc {
 	t.Helper()
+	return startServeEnv(t, nil, home, cfg, extra...)
+}
+
+// startServeEnv is startServe with more environment variables (KEY=value) for the daemon.
+func startServeEnv(t *testing.T, env []string, home, cfg string, extra ...string) *serveProc {
+	t.Helper()
 	port := freePort(t)
 	args := append([]string{"serve", "--port", fmt.Sprint(port)}, extra...)
 	cmd := exec.Command(binary(t), args...)
-	cmd.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+	cmd.Env = isolatedEnv(t, append([]string{"MERLIN_HOME=" + home, "CLAUDE_CONFIG_DIR=" + cfg}, env...)...)
 	p := &serveProc{cmd: cmd, stderr: &bytes.Buffer{}, port: port}
 	cmd.Stderr = p.stderr
 	if err := cmd.Start(); err != nil {
@@ -156,7 +162,7 @@ func TestServeProcess(t *testing.T) {
 
 	// A second instance refuses and names the lock.
 	second := exec.Command(binary(t), "serve", "--port", fmt.Sprint(freePort(t)), "--no-hooks")
-	second.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+	second.Env = isolatedEnv(t, "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
 	out, err := second.CombinedOutput()
 	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() == 0 {
 		t.Errorf("second instance: err=%v", err)
@@ -209,7 +215,7 @@ func TestServeRefreshesInstalledHooks(t *testing.T) {
 	home := t.TempDir()
 	cfg := copyTree(t, fixtures.ClaudeDir())
 	install := exec.Command(binary(t), "hooks", "install")
-	install.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+	install.Env = isolatedEnv(t, "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
 	if out, err := install.CombinedOutput(); err != nil {
 		t.Fatalf("hooks install: %v\n%s", err, out)
 	}
@@ -324,7 +330,7 @@ func TestHooksForCodex(t *testing.T) {
 	hooksCLI := func(args ...string) string {
 		t.Helper()
 		cmd := exec.Command(binary(t), append([]string{"hooks"}, args...)...)
-		cmd.Env = append(os.Environ(), "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg)
+		cmd.Env = isolatedEnv(t, "MERLIN_HOME="+home, "CLAUDE_CONFIG_DIR="+cfg, "CODEX_HOME="+codexHome)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("hooks %v: %v\n%s", args, err, out)
@@ -354,7 +360,7 @@ func TestHooksForCodex(t *testing.T) {
 	if err := os.Remove(script); err != nil {
 		t.Fatal(err)
 	}
-	p := startServe(t, home, cfg)
+	p := startServeEnv(t, []string{"CODEX_HOME=" + codexHome}, home, cfg)
 	if code := p.terminate(t); code != 0 {
 		t.Errorf("exit code = %d", code)
 	}
@@ -375,4 +381,15 @@ func TestHooksForCodex(t *testing.T) {
 	if _, err := os.Stat(script); !os.IsNotExist(err) {
 		t.Errorf("notify.sh left: %v", err)
 	}
+}
+
+// isolatedEnv is the environment for a merlin subprocess in a test: the caller's variables
+// (MERLIN_HOME, CLAUDE_CONFIG_DIR, ...) over a scratch HOME and empty Codex and Pi
+// directories, so the subprocess never indexes the real ~/.codex or ~/.pi of the machine.
+func isolatedEnv(t *testing.T, kv ...string) []string {
+	t.Helper()
+	empty := t.TempDir()
+	env := append(os.Environ(), "HOME="+empty, "CODEX_HOME="+filepath.Join(empty, "codex"),
+		"PI_CODING_AGENT_DIR="+filepath.Join(empty, "pi"), "PI_CODING_AGENT_SESSION_DIR=")
+	return append(env, kv...)
 }

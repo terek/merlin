@@ -14,7 +14,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 2
+const ParserVersion = 3
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -97,7 +97,9 @@ type builder struct {
 	callList []*callInfo // in file order
 
 	unpriced map[string]bool
-	assist   int64 // billed assistant messages
+	assist   int64 // billed assistant messages, agents' included
+
+	bashAgents map[string][]int // agents a bash call started with pi --no-session, by id prefix of the call
 }
 
 func (b *builder) build() {
@@ -291,6 +293,9 @@ func (b *builder) assistant(i int, acc *turnAcc, t int, cwd string) (billed bool
 			b.calls[c.ID] = info
 		}
 		b.callList = append(b.callList, info)
+		if c.Name == "bash" && c.Command != "" {
+			b.spawnBash(scope{turn: t, parent: -1}, c.ID, c.Command, b.start(r), r.id)
+		}
 		if acc == nil {
 			continue
 		}
@@ -347,6 +352,16 @@ func (b *builder) toolResult(i, t int) {
 			ref = c.rec // the model of the assistant message that made the call: a guess
 		}
 		b.spend(i, ref, "tool", r.usage, t)
+	}
+	if r.toolName == "bash" {
+		b.bashResult(scope{turn: t, parent: -1}, r.toolCallID, r.id, b.start(r))
+	}
+	if len(r.runs) > 0 {
+		var callAt time.Time
+		if c != nil {
+			callAt = c.at
+		}
+		b.toolRuns(r.runs, scope{turn: t, parent: -1, msgBase: messageID(r) + ".sub"}, r.toolCallID, r.id, b.start(r), callAt)
 	}
 	switch r.toolName {
 	case "edit":
@@ -558,6 +573,8 @@ func (b *builder) finish() {
 		d.Turns = append(d.Turns, tr)
 	}
 
+	b.rollUpAgents()
+
 	slices.SortStableFunc(d.Messages, func(a, c model.Message) int {
 		if !a.At.Equal(c.At) {
 			if earlier(a.At, c.At) {
@@ -622,6 +639,16 @@ func (b *builder) finish() {
 		}
 		s.ToolCalls += t.ToolCalls
 		for name, n := range t.ToolsByName {
+			if s.ToolsByName == nil {
+				s.ToolsByName = map[string]int64{}
+			}
+			s.ToolsByName[name] += n
+		}
+	}
+	// As Codex does, an agent's tool calls count in the session's as well.
+	for _, a := range d.Agents {
+		s.ToolCalls += a.ToolCalls
+		for name, n := range a.ToolsByName {
 			if s.ToolsByName == nil {
 				s.ToolsByName = map[string]int64{}
 			}
@@ -761,4 +788,44 @@ func earlier(a, b time.Time) bool {
 		return !a.IsZero() && b.IsZero()
 	}
 	return a.Before(b)
+}
+
+// rollUpAgents orders the agents, counts the runs nothing recorded on the session and on the
+// turn that spawned them, and fills the subtree totals and what each turn spawned.
+func (b *builder) rollUpAgents() {
+	d := b.d
+	slices.SortStableFunc(d.Agents, func(a, c model.Agent) int {
+		if !a.StartedAt.Equal(c.StartedAt) {
+			if earlier(a.StartedAt, c.StartedAt) {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.ID, c.ID)
+	})
+	idx := make(map[string]int, len(d.Agents))
+	for i := range d.Agents {
+		idx[d.Agents[i].ID] = i
+		d.Agents[i].SubtreeUSD = d.Agents[i].Cost.USD
+	}
+	for i := range d.Agents {
+		a := &d.Agents[i]
+		for p := a.ParentAgentID; p != nil; p = d.Agents[idx[*p]].ParentAgentID {
+			d.Agents[idx[*p]].SubtreeUSD += a.Cost.USD
+		}
+		if a.Unrecorded {
+			d.Cost.AddUnrecorded()
+			if a.SpawnTurn != nil && *a.SpawnTurn < len(d.Turns) {
+				d.Turns[*a.SpawnTurn].Cost.AddUnrecorded()
+			}
+		}
+	}
+	for _, a := range d.Agents {
+		if a.ParentAgentID != nil || a.SpawnTurn == nil || *a.SpawnTurn >= len(d.Turns) {
+			continue
+		}
+		t := &d.Turns[*a.SpawnTurn]
+		t.Spawned = append(t.Spawned, a.ID)
+		t.CostWithAgents += a.SubtreeUSD
+	}
 }

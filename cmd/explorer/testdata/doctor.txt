@@ -18,8 +18,8 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     ! links.beads: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
   Codex: 0 sessions; 22 parsed, 0 dropped, 2 absent, 5 unknown
     unknown: session.recaps, turns.abandoned, cost.truncated, links.prs, live.registry
-  Pi: 0 sessions; 14 parsed, 1 dropped, 8 absent, 6 unknown
-    unknown: turns.queued, cost.truncated, cost.fast, links.prs, live.registry, live.hooks
+  Pi: 0 sessions; 17 parsed, 1 dropped, 4 absent, 7 unknown
+    unknown: turns.queued, cost.truncated, cost.fast, agents.inbox, links.prs, live.registry, live.hooks
 
   merlin doctor --coverage lists every capability
 

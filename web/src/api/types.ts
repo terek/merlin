@@ -568,6 +568,8 @@ export interface Cost {
   truncatedMessages?: number
   /** Messages on a model without a price: not in usd or byModel, so usd is a lower bound. */
   unpricedMessages?: number
+  /** Agent runs whose harness kept no record of their calls (see Agent.unrecorded): their spend is unknown, so usd is a lower bound. */
+  unrecordedAgents?: number
 }
 
 export interface Reported {
@@ -753,6 +755,8 @@ export interface Agent {
   compactions?: Compaction[]
   /** Its stretches of work: the task it was started with, then each message or task that set it working again. */
   turns?: AgentTurn[]
+  /** It ran but its harness kept no record of its calls (Pi child with no session file): its spend is unknown, not $0. */
+  unrecorded?: boolean
   cost: Cost
   /** Own dollars plus all descendants. */
   subtreeUSD: number

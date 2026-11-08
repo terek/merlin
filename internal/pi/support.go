@@ -40,11 +40,12 @@ func Support() harness.Support {
 			"field; manual (/compact) and automatic are not told apart"),
 		"compactions.call": harness.P("compaction.usage, when Pi recorded it, as a message and as the compaction's call"),
 
-		"agents.tree": harness.A("docs/pi-format.md, Not recorded (from source): Pi's core has no subagents. " +
-			"Extension tools (subagent, Task, oracle) exist and are plain tool calls here"),
-		"agents.nesting": harness.A("as agents.tree: no agents in Pi's core"),
-		"agents.prompts": harness.A("as agents.tree: no agents in Pi's core"),
-		"agents.inbox":   harness.A("as agents.tree: no agents in Pi's core"),
+		"agents.tree": harness.P("docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); " +
+			"a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). " +
+			"A bash-spawned pi without --no-session is a session of its own, not linked to its parent (merlin-1es.15)"),
+		"agents.nesting": harness.P("a child's own results[] or bash pi --no-session, by shape; not seen in a session"),
+		"agents.prompts": harness.P("results[].task whole; the bash command for a bash-spawned pi; details.description for Task and oracle"),
+		"agents.inbox":   harness.U("no message to a child after its launch is known in any convention here; none is read"),
 
 		"lineage.fork": harness.P("header parentSession: the id after the last _ of the parent file's name; " +
 			"entries are copied with their ids, so a fork's spend is billed once by the catalog"),

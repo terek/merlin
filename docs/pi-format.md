@@ -284,6 +284,59 @@ file. The latest compaction on the path decides the context (from source).
   source, `docs/extensions.md`). A Merlin hook for Pi would be an extension file; none is
   designed here, and no live signal beyond the file is assumed.
 
+## Subagents
+
+Pi's core has no subagents; extensions add them by starting a child `pi` process. The evidence for
+this section is three-fold, and every claim names which: **from source** (Pi 1.5.0,
+`examples/extensions/subagent/index.ts`), **demo** (two sessions the user made on Pi 1.5.0 on
+2026-11-08: a bash-spawned child with and without `--no-session`, and the example extension in
+single, chain and parallel mode), and **public corpus** (the tools `Task` and `oracle`, seen in
+the public datasets). Everything below is read from the parent's own session file; what a child
+wrote elsewhere is not read.
+
+**A. The example extension's convention.** From source, the extension spawns
+`pi --mode json -p --no-session` for each agent, so the child leaves no session file; it returns
+what it saw in the tool result's `details`. Recognised by shape, not by tool name: a `toolResult`
+whose `details.results` is a list of objects that carry `messages` (a list) and/or `usage` (an
+object). `details.mode` is `single`, `parallel` or `chain`, `details.agentScope` a string (demo:
+all three modes). Each element of `results`:
+
+| key | value |
+|---|---|
+| `agent`, `agentSource`, `task` | strings: the agent's name, where its definition came from, the task it was given |
+| `exitCode`, `stderr` | integer, string |
+| `messages` | the child's full Pi messages: roles `system`, `user`, `assistant`, `toolResult`; the assistant ones in exactly the shape of the parent's (provider, model, `usage` with `cost.total`, `responseId`, `content` with `toolCall` blocks, `timestamp` in ms) |
+| `usage` | `{input, output, cacheRead, cacheWrite, cost, contextTokens, turns}`; `cost` is a number and equals the sum of the assistant messages' `usage.cost.total` (demo) |
+| `model` | `"provider/id"`, when given |
+| `stopReason`, `errorMessage`, `step` | optional; `step` in chain mode |
+
+A malformed call returns `results: []`: no agent ran. A result may have `usage` and no `messages`
+(seen in another extension, not named here), or neither.
+A child's `messages` may themselves contain tool results with `details.results` (nested
+subagents): the shape allows it; whether it occurs in a real session is unknown.
+
+**B. A bash call that spawns `pi --no-session`.** An assistant `toolCall` block
+`{name: "bash", arguments: {command, timeout}}` whose command runs `pi` with `--no-session` (demo).
+The child wrote no file anywhere, and the parent's file records nothing of its tokens or cost: its
+spend is unknown. Without `--no-session`, the demo's child wrote a session file of its own, which
+Merlin indexes as any other session. Its header has no `parentSession`, and nothing else in either
+file names the other (demo), so the two are not linked (merlin-1es.15).
+
+**C. `Task` and `oracle` (public corpus).** The tool result's `details` is `{kind, mode, model,
+description?, thinking?, run}` with `run` = `{kind, mode, model ("provider/id"), ok, exitCode,
+aborted, timedOut, durationMs, stopReason, text, thinking, stderr, error?, artifacts {dir,
+sessionPath, eventsPath, inputPath, metaPath, stderrPath}}`. There is no usage at all, and the
+child's session file lies outside Pi's sessions directory, so the run is known and its spend is
+not. `artifacts.sessionPath` is not read.
+
+**What Merlin makes of it.** Each A result, each B spawn and each C run is an agent (kind
+`subagent`, linkage `tool-result`, parent the main agent or, for a nested one, the child). An A
+child's assistant messages are billed like the parent's, with the ids of the parent's tool-result
+entry plus `.sub.<result>.<message>`, so a fork that copies the entry bills them once. An A result
+with `usage` and no `messages` is one message carrying the totals. An A result with neither, and
+every B and C run, is an agent flagged `unrecorded` and counted in `cost.unrecordedAgents`: its
+spend is unknown, so the session's dollars are a lower bound.
+
 ## Not recorded
 
 - The Pi version (see question 2). The only version in a file is the format version.
@@ -291,8 +344,8 @@ file. The latest compaction on the path decides the context (from source).
   written by Pi's own summary call.
 - The assistant's request-end time on the message itself (`durationMs` exists in the source; not
   seen).
-- A subagent relationship: Pi's core has no subagents (the only source for them is an example
-  extension, `examples/extensions/subagent`, and a plugin of another app in the same repository).
+- A subagent relationship in Pi's core: it has no subagents (see Subagents for what extensions
+  leave in a session file). A child started with `--no-session` writes no file anywhere.
 - The current leaf, and which branch the user was on when a session was closed (see Tree).
 - A billed amount, except `totalFromProvider` for providers that report one (none seen).
 - Git branch, app mode, plan or permission settings: none in the header.
@@ -336,7 +389,7 @@ file. The latest compaction on the path decides the context (from source).
 | 5 | Spend outside assistant messages? | `usage` entries, `toolResult.usage`, `compaction.usage`, `branch_summary.usage` are all in Pi's totals. Only compaction usage occurs: 18 records, 0.036% of tokens, 0.19% of cost. | kinds from source (commit 085c84e); compaction usage seen in 5 of 820 sessions; the others unknown in data |
 | 6 | When is cost missing or 0? Local models? Unknown price? | Never missing on an assistant message. Zero object when Pi has no catalog price: local models (LlamaBarn, llama-cpp), github-copilot, gemini-cli, some codex models, kimi-coding. 1,405 messages have tokens and zero cost. Billed-amount flag never seen. | field present on 22,845 of 22,845 messages; zero cost with tokens on 7 providers (1,405 messages); formula from source (commit 085c84e) |
 | 7 | Tool names; shell tool; file tools? | `bash` (argument `command`, success from `isError`, exit code only in the error text); `read`, `edit`, `write` take `path`. Extension tools vary. | built-ins from source (commit 085c84e); counts seen in 820 sessions (`bash` in 12,241 calls); error text in 1,076 of 1,119 `bash` errors |
-| 8 | Subagents? `parentSession` path or id? | Core Pi has none. Extensions provide `subagent`, `Task`, `oracle` tools; their `details` keys are listed above, and whether they write child session files is unknown. `parentSession` is the parent file's path and is set only by `/fork` and `/clone`. | none in core, from source (commit 085c84e); extension tools seen in 12 of 820 sessions; `parentSession` in 1 of 820 (path form) |
+| 8 | Subagents? `parentSession` path or id? | Core Pi has none. Extensions provide `subagent`, `Task`, `oracle` tools; the shapes of their `details` are in Subagents. The example extension's children write no session file (`--no-session`); a bash-spawned `pi` writes one unless it has `--no-session`. `parentSession` is the parent file's path and is set only by `/fork` and `/clone`. | none in core, from source (commit 085c84e); example extension from source (Pi 1.5.0) and demo; extension tools seen in 12 of 820 sessions; `parentSession` in 1 of 820 (path form) |
 | 9 | Does Pi rewrite old files on load? | Yes, once, and only when the format version is below 3: the whole file is rewritten with new ids (v1) and the role renamed (v2). A v3 file is only appended to. For fingerprints: size and modification time change on append only; a migrated file changes completely once. | from source (commit 085c84e); the migration itself unseen (0 of 820 sessions are below v3) |
 | 10 | Where do sessions live, with environment overrides? | `~/.pi/agent/sessions/--<cwd>--/`; `$PI_CODING_AGENT_DIR` moves the agent directory; `--session-dir`, `$PI_CODING_AGENT_SESSION_DIR` or `sessionDir` move the sessions directory, with files directly in it. | from source (commit 085c84e) |
 
@@ -362,7 +415,14 @@ file. The latest compaction on the path decides the context (from source).
 5. Why does one session have 3 entries pointing at a missing parent (a branch removed by the
    exporter, or a Pi bug)?
 6. How do subagent extensions store their child runs, and does any write a session file with
-   `parentSession`?
+   `parentSession`? Answered in part, see Subagents. From source (Pi 1.5.0
+   `examples/extensions/subagent`): the example spawns `pi --mode json -p --no-session` and returns
+   `results[]` in the tool result's `details`; no session file. From the two demo sessions (Pi
+   1.5.0, 2026-11-08): a bash-spawned child with `--no-session` leaves no file and no figure; one
+   without it writes its own session file; the example extension in single, chain and parallel
+   mode returns `results[]` with the child's messages. The demo's bash-spawned child without
+   `--no-session` wrote a file whose header has no `parentSession` (linking: merlin-1es.15). Still
+   unknown: where other extensions keep child runs.
 7. Does `/clone` differ from `/fork` in the file, and which one uses which copy function?
 8. Is a Pi extension the right hook point for a live signal, or is tailing the file enough?
 

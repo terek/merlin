@@ -36,6 +36,10 @@ type Cost struct {
 	// know (see Message.Unpriced). They are not in USD or ByModel, so USD is a lower bound
 	// whenever this is non-zero.
 	UnpricedMessages int64 `json:"unpricedMessages,omitempty"`
+	// UnrecordedAgents is how many agent runs happened whose harness kept no record of their
+	// calls (see Agent.Unrecorded): their spend is unknown, not zero, so USD is a lower bound
+	// whenever this is non-zero.
+	UnrecordedAgents int64 `json:"unrecordedAgents,omitempty"`
 }
 
 // Add adds other into c. It is safe on a zero Cost.
@@ -43,6 +47,7 @@ func (c *Cost) Add(other Cost) {
 	c.USD += other.USD
 	c.TruncatedMessages += other.TruncatedMessages
 	c.UnpricedMessages += other.UnpricedMessages
+	c.UnrecordedAgents += other.UnrecordedAgents
 	for m, oc := range other.ByModel {
 		c.addModel(m, oc)
 	}
@@ -60,6 +65,9 @@ func (c *Cost) AddTruncated() { c.TruncatedMessages++ }
 
 // AddUnpriced counts one message whose model has no price; it is not added with AddMessage.
 func (c *Cost) AddUnpriced() { c.UnpricedMessages++ }
+
+// AddUnrecorded counts one agent run that left no record of its spend.
+func (c *Cost) AddUnrecorded() { c.UnrecordedAgents++ }
 
 func (c *Cost) addModel(model string, add ModelCost) {
 	if c.ByModel == nil {

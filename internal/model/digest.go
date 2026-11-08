@@ -377,6 +377,11 @@ type Agent struct {
 	// each message or task that set it working again.
 	Turns []AgentTurn `json:"turns,omitempty"`
 
+	// Unrecorded: the agent ran, but its harness kept no record of its calls (a child process
+	// started with no session file), so its spend is unknown, not zero. Cost stays empty and
+	// carries UnrecordedAgents instead.
+	Unrecorded bool `json:"unrecorded,omitempty"`
+
 	Cost       Cost    `json:"cost"`
 	SubtreeUSD float64 `json:"subtreeUSD"` // own + descendants
 }

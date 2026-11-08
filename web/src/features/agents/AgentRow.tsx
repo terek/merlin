@@ -191,12 +191,21 @@ export function AgentRow({
           {a.status !== 'completed' && <AgentStatusMark status={a.status} />}
           {hiddenKilled > 0 && <HiddenFailures n={hiddenKilled} />}
           <span className="ml-auto pl-1">
-            <Money
-              usd={row.stats.usd}
-              lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced)}
-              className={heavy ? 'font-semibold' : undefined}
-              title={hasKids ? 'with all its descendants' : undefined}
-            />
+            {a.unrecorded && !hasKids ? (
+              <span
+                className="text-muted"
+                title="The harness kept no record of this agent's calls: its spend is unknown"
+              >
+                not recorded
+              </span>
+            ) : (
+              <Money
+                usd={row.stats.usd}
+                lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced)}
+                className={heavy ? 'font-semibold' : undefined}
+                title={hasKids ? 'with all its descendants' : undefined}
+              />
+            )}
           </span>
         </span>
         <span className="flex items-baseline gap-1.5 text-sec text-muted">

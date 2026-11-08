@@ -271,12 +271,16 @@ export function AgentDetail({
         )}
         <p className="mt-1 text-meta text-faint">
           own{' '}
-          <Money
-            usd={a.cost.usd}
-            lowerBound={lowerBoundNote(a.cost.truncatedMessages, a.cost.unpricedMessages)}
-            dim
-            className="text-meta"
-          />
+          {a.unrecorded ? (
+            <span title="The harness kept no record of this agent's calls: its spend is unknown">not recorded</span>
+          ) : (
+            <Money
+              usd={a.cost.usd}
+              lowerBound={lowerBoundNote(a.cost.truncatedMessages, a.cost.unpricedMessages)}
+              dim
+              className="text-meta"
+            />
+          )}
           {subtreeUSD - a.cost.usd >= 0.005 && (
             <>
               , with descendants <Money usd={subtreeUSD} dim className="text-meta" />

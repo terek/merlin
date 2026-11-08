@@ -80,8 +80,8 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     links.beads          parsed   0 of 0              bd calls in command executions
     live.registry        unknown  not measured        LiveSessions returns none; whether Codex keeps a registry is not known
     live.hooks           parsed   not measured        ParseHook, with hooks installed by internal/codex/hooks
-  Pi: 0 sessions; 14 parsed, 1 dropped, 8 absent, 6 unknown
-    unknown: turns.queued, cost.truncated, cost.fast, links.prs, live.registry, live.hooks
+  Pi: 0 sessions; 17 parsed, 1 dropped, 4 absent, 7 unknown
+    unknown: turns.queued, cost.truncated, cost.fast, agents.inbox, links.prs, live.registry, live.hooks
 
     CAPABILITY           STATE    SEEN          FLAG  NOTE
     session.project      parsed   0 of 0              header cwd. Kind is always interactive: nothing in the file says otherwise
@@ -104,10 +104,10 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     compactions.summary  parsed   0 of 0              compaction.summary, whole
     compactions.trigger  absent   0 of 0              docs/pi-format.md, Compaction (from source): a compaction entry has no trigger field; manual (/compact) and automatic are not told apart
     compactions.call     parsed   0 of 0              compaction.usage, when Pi recorded it, as a message and as the compaction's call
-    agents.tree          absent   0 of 0              docs/pi-format.md, Not recorded (from source): Pi's core has no subagents. Extension tools (subagent, Task, oracle) exist and are plain tool calls here
-    agents.nesting       absent   0 of 0              as agents.tree: no agents in Pi's core
-    agents.prompts       absent   0 of 0              as agents.tree: no agents in Pi's core
-    agents.inbox         absent   0 of 0              as agents.tree: no agents in Pi's core
+    agents.tree          parsed   0 of 0              docs/pi-format.md, Subagents: the example extension's results[] (from source, Pi 1.5.0); a bash pi --no-session and pi-dial's Task and oracle are unrecorded runs (spend unknown, not zero). A bash-spawned pi without --no-session is a session of its own, not linked to its parent (merlin-1es.15)
+    agents.nesting       parsed   0 of 0              a child's own results[] or bash pi --no-session, by shape; not seen in a session
+    agents.prompts       parsed   0 of 0              results[].task whole; the bash command for a bash-spawned pi; details.description for Task and oracle
+    agents.inbox         unknown  0 of 0              no message to a child after its launch is known in any convention here; none is read
     lineage.fork         parsed   0 of 0              header parentSession: the id after the last _ of the parent file's name; entries are copied with their ids, so a fork's spend is billed once by the catalog
     links.prs            unknown  0 of 0              no record of this kind is known; not looked for
     links.beads          parsed   0 of 0              bd calls in the bash tool and in bashExecution (!) messages

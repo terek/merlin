@@ -559,6 +559,9 @@ func (v *view) costs() {
 				priced++
 				if m.Recorded {
 					recorded++
+					if wi < 0 {
+						c.RecordedUSD += m.USD
+					}
 				}
 			}
 			if wi < 0 {

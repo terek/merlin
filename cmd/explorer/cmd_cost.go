@@ -324,8 +324,30 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 
 	fmt.Println()
 	if total.TotalUSD > 0 {
-		fmt.Printf("Of %s: %s (%.0f%%) was reported by the harness itself; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
-			usd(total.TotalUSD), usd(total.ReportedUSD), 100*total.ReportedUSD/total.TotalUSD, usd(total.AttributedUSD), 100*total.AttributedUSD/total.TotalUSD)
+		// Some harnesses (Pi) write a cost on every call: that part of the attributed spend is the
+		// harness's own figure, not a recomputation. Its share is taken from the sessions listed;
+		// exact unless the dates cut a session.
+		var recorded, outside float64
+		for _, in := range listing.Sessions {
+			recorded += in.Cost.RecordedUSD
+			outside += in.Cost.UncoveredUSD + in.Cost.EstimatedUncoveredUSD
+		}
+		if recorded > 0 && outside > 0 {
+			rec := total.AttributedUSD * min(recorded/outside, 1)
+			var parts []string
+			pct := func(v float64) float64 { return 100 * v / total.TotalUSD }
+			if total.ReportedUSD > 0 {
+				parts = append(parts, fmt.Sprintf("%s (%.0f%%) was reported by the harness itself", usd(total.ReportedUSD), pct(total.ReportedUSD)))
+			}
+			parts = append(parts, fmt.Sprintf("%s (%.0f%%) is the harness's own per-call figure, its price-catalog estimate", usd(rec), pct(rec)))
+			if rest := total.AttributedUSD - rec; rest > 1e-9 {
+				parts = append(parts, fmt.Sprintf("%s (%.0f%%) is recomputed from tokens where it recorded nothing", usd(rest), pct(rest)))
+			}
+			fmt.Printf("Of %s: %s.\n", usd(total.TotalUSD), strings.Join(parts, "; "))
+		} else {
+			fmt.Printf("Of %s: %s (%.0f%%) was reported by the harness itself; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
+				usd(total.TotalUSD), usd(total.ReportedUSD), 100*total.ReportedUSD/total.TotalUSD, usd(total.AttributedUSD), 100*total.AttributedUSD/total.TotalUSD)
+		}
 	}
 	if line := compactionLine(total.Compactions); line != "" {
 		fmt.Println(line)

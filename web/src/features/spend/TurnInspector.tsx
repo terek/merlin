@@ -546,7 +546,10 @@ function UnitDetail({
           {u.nested.length > 0 && (
             <p className="mt-1.5 text-sec text-muted">
               Includes <Money usd={u.nestedUSD} /> of its own {plural(u.nested.length, 'sub-agent')}:{' '}
-              {u.nested.map((x) => `${agentLabel(x)} ${formatMoney(x.cost.usd)}`).join(', ')}.
+              {u.nested
+                .map((x) => `${agentLabel(x)} ${x.unrecorded ? 'not recorded' : formatMoney(x.cost.usd)}`)
+                .join(', ')}
+              .
             </p>
           )}
           {u.compactions.map((x) => (

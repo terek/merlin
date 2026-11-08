@@ -116,6 +116,7 @@ Recomputed from token usage with the price table.
 | `byModel` | per model, as `ModelCost` |
 | `truncatedMessages` | how many of the summed messages are `truncated` (see `Message`); when non-zero, `usd` is a lower bound |
 | `unpricedMessages` | how many messages are `unpriced` (see `Message`); they are not in `usd` or `byModel`, so when non-zero `usd` is a lower bound |
+| `unrecordedAgents` | how many agent runs ran with no record of their calls (see `Agent.unrecorded`); their spend is unknown, not zero, so when non-zero `usd` is a lower bound; omitted when 0 |
 
 ## ModelCost
 
@@ -273,6 +274,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `toolsByName` | tool calls per tool name |
 | `compactions` | its own compactions |
 | `turns` | its stretches of work, as `AgentTurn`, in order: the task it was started with, then each message or task that set it working again |
+| `unrecorded` | the agent ran, but its harness kept no record of its calls (Pi: a child process started with no session file), so its spend is unknown, not zero; its `cost` is empty apart from `unrecordedAgents: 1`; omitted when false |
 | `cost` | its own attributed cost |
 | `subtreeUSD` | own dollars plus all descendants |
 

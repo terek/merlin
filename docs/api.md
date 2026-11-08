@@ -53,6 +53,10 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
   they count $0. `lowerBound` (omitted when false) says `bestUSD` itself is a lower bound: an
   unpriced message lies outside every reported window (inside one, the reported total covers it). All three are in the session list's `cost` and on `/api/cost?by=session`
   rows too; `/api/cost`'s `backing.lowerBound` counts the sessions with `lowerBound`.
+  `recordedUSD` (omitted when 0) is the part of `uncoveredUSD` that is the harness's own per-call figure
+  (`Message.recorded`, Pi), not a recomputation. In the digest, an agent with `unrecorded: true` ran with no
+  record of its calls, and `cost.unrecordedAgents` (omitted when 0) counts such agents on a session, turn or
+  agent: their spend is unknown, not $0, so the dollars are a lower bound.
 - **Dates and times** given as parameters are an RFC 3339 time or a date (`2026-09-16`, local
   midnight). A date-only `until` includes that whole day.
 - **Errors.** Every non-2xx body has this shape:

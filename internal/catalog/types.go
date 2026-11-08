@@ -119,6 +119,10 @@ type SessionCost struct {
 	// agents or turns.
 	OverheadUSD float64 `json:"overheadUSD"`
 
+	// RecordedUSD is the part of UncoveredUSD that is the harness's own per-call figure
+	// (Message.Recorded), not a recomputation from tokens. 0 for Claude Code and Codex.
+	RecordedUSD float64 `json:"recordedUSD,omitempty"`
+
 	// The estimated output truncated messages are missing (Message.EstimatedUSD).
 	// EstimatedCoveredUSD is the part inside the windows, capped per window at its overhead:
 	// it explains that much of OverheadUSD. EstimatedUncoveredUSD is the part outside every

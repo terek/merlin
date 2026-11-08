@@ -275,7 +275,20 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 	if c.TruncatedMessages > 0 {
 		attributed = fmt.Sprintf("at least; recomputed from tokens, %s cut short in the transcript", plural(c.TruncatedMessages, "message", "messages"))
 	}
-	row("attributed", c.OwnUSD, attributed)
+	if c.RecordedUSD > 0 {
+		// Pi writes a cost on every call: that part is the harness's own figure, and only the rest
+		// was recomputed from tokens.
+		row("recorded", c.RecordedUSD, fmt.Sprintf("%s's own per-call figure, messages this session owns", harnessTitle(in.Key.Harness)))
+		if rest := c.OwnUSD - c.RecordedUSD; rest > 1e-9 {
+			row("recomputed", rest, "from tokens, for the calls that carry no cost of their own")
+		}
+	} else {
+		row("attributed", c.OwnUSD, attributed)
+	}
+	if n := d.Cost.UnrecordedAgents; n > 0 {
+		p.printf("  plus %s with no record of %s spend; the figures above are a lower bound\n",
+			plural(int(n), "agent run", "agent runs"), map[bool]string{true: "its", false: "their"}[n == 1])
+	}
 	if est := c.EstimatedCoveredUSD + c.EstimatedUncoveredUSD; est > 0 {
 		row("estimated", est, "output the agent messages cut short are missing, estimated per message")
 	}
@@ -414,6 +427,9 @@ func (p *printer) agents(d *model.SessionDigest) {
 			sub = usd(a.SubtreeUSD)
 		}
 		own := atLeast(usd(a.Cost.USD), a.Cost.TruncatedMessages > 0)
+		if a.Unrecorded {
+			own = "not recorded"
+		}
 		if sub != "" {
 			sub = atLeast(sub, subtreeTruncated(a, children))
 		}
@@ -442,7 +458,32 @@ func (p *printer) agents(d *model.SessionDigest) {
 		}
 		walk(r, "  ", b)
 	}
-	p.printf("\nAgents  (%s; own cost is attributed from tokens)\n", plural(len(d.Agents), "agent", "agents"))
+	// Whose figure an agent's own cost is: Merlin's recomputation from tokens, or the
+	// harness's per-call figure (Pi), or both.
+	var recorded, recomputed int
+	for _, m := range d.Messages {
+		if m.AgentID == "" || m.Unpriced {
+			continue
+		}
+		if m.Recorded {
+			recorded++
+		} else {
+			recomputed++
+		}
+	}
+	source := "attributed from tokens"
+	switch {
+	case recorded > 0 && recomputed > 0:
+		source = fmt.Sprintf("%s's own per-call figure, or recomputed from tokens", harnessTitle(d.Harness))
+	case recorded > 0:
+		source = fmt.Sprintf("%s's own per-call figure", harnessTitle(d.Harness))
+	}
+	if recorded+recomputed == 0 {
+		// No agent billed a message the files show: no claim about whose figure it is.
+		p.printf("\nAgents  (%s)\n", plural(len(d.Agents), "agent", "agents"))
+	} else {
+		p.printf("\nAgents  (%s; own cost is %s)\n", plural(len(d.Agents), "agent", "agents"), source)
+	}
 	truncated := d.Cost.TruncatedMessages
 	renderTable(p.out, []column{{head: "  AGENT", flex: true, max: 48}, {head: "KIND"}, {head: "MODEL"}, {head: "STATUS"}, {head: "OWN", right: true}, {head: "WITH SUBTREE", right: true}}, rows, termWidth())
 	if truncated > 0 {
