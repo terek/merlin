@@ -97,7 +97,8 @@ before touching `web/`.
   primitive to suit one view; if it falls short, extend it with a prop.
 - **Never serve the real history.** Run the daemon only against the fixtures, with a scratch
   home, without hooks, on the port your bead gives you:
-  `CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<scratch dir> ./bin/merlin serve --no-hooks --port <port>`.
+  `HOME=<scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<scratch dir> ./bin/merlin serve --no-hooks --port <port>`.
+  The scratch `HOME` keeps every other harness (`~/.codex`, `~/.pi`) out too.
   Start it as a background command and stop it when you are done.
 - **Look at what you build.** `web/dev/shot.sh <url> <out.png> [width] [height]` screenshots a
   page with headless Chrome (a wrapper over `web/dev/shot.ts`, DevTools protocol, no dependency);
@@ -108,7 +109,8 @@ before touching `web/`.
   and `?theme=dark`. Put screenshots in your scratch directory, never in the repository.
 - **Dev server and mock.** `VITE_PORT=<p> EXPLORER_API=http://127.0.0.1:<mock or daemon> bun run dev`
   has React fast refresh. `MOCK_PORT=<p> bun run mock`; `MOCK_DAYS=200` stretches the mock's
-  history (default 90).
+  history (default 90). `make dev` runs the daemon and Vite together (Ctrl+C stops both;
+  `MERLIN_PORT`, `VITE_PORT`; `ARGS=-no-hooks` goes to `merlin serve`).
 - **Checks.** `make web-check` (TypeScript, Biome, `bun test`) and `make build` must pass, as well
   as `make test` and `make vet`. The repository's Stop hook formats changed `.ts`/`.tsx`/`.json`
   files with Biome (root `biome.json`: 2 spaces, single quotes, no semicolons, 120 columns), so

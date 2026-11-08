@@ -71,10 +71,10 @@ make web-check   # cd web && bun run check   (tsc --noEmit, biome check, bun tes
 
 Development: `bun run dev` in `web/` starts Vite on port 5173 and proxies `/api` to the daemon
 (`EXPLORER_API`, default `http://127.0.0.1:7433`, with `changeOrigin` so the Host guard passes).
-Run the daemon against the fixtures, never against the real `~/.claude`:
+Run the daemon against the fixtures, never against the real history (`~/.claude`, `~/.codex`, `~/.pi`); the scratch `HOME` keeps out every harness that defaults to it:
 
 ```
-CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scratch dir> \
+HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scratch dir> \
   ./bin/merlin serve --no-hooks --port <your port>
 ```
 
