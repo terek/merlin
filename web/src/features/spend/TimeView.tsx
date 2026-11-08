@@ -320,7 +320,7 @@ export function TimePlot({
       ),
     [timeline, swarms, open, X1, tree],
   )
-  const { strips, height, cTicks, kCtx, labelFrom } = frame
+  const { strips, height, cTicks, kCtx } = frame
   // what the window shows in each row of it
   const layout = useMemo(() => {
     const sliced = new Map(tl.lanes.map((l) => [l.key, l]))
@@ -798,29 +798,13 @@ export function TimePlot({
     let lastTurnX = Number.NEGATIVE_INFINITY
     return (
       <g key={g.full.lanes[0].key}>
-        {ticks.map((t, n) => (
+        {/* every row labels its own token scale */}
+        {ticks.map((t) => (
           <g key={t}>
-            <line
-              x1={X0}
-              x2={X1}
-              y1={yCtx(g, t)}
-              y2={yCtx(g, t)}
-              stroke="var(--line)"
-              strokeWidth={1}
-              strokeOpacity={n >= labelFrom[i] ? 1 : 0.4}
-            />
-            {n >= labelFrom[i] && (
-              <text
-                x={X0 - 4}
-                y={yCtx(g, t)}
-                textAnchor="end"
-                dominantBaseline="middle"
-                fontSize={9}
-                fill="var(--faint)"
-              >
-                {formatTokens(t)}
-              </text>
-            )}
+            <line x1={X0} x2={X1} y1={yCtx(g, t)} y2={yCtx(g, t)} stroke="var(--line)" strokeWidth={1} />
+            <text x={X0 - 4} y={yCtx(g, t)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--faint)">
+              {formatTokens(t)}
+            </text>
           </g>
         ))}
         {/* the decisions over a main row */}

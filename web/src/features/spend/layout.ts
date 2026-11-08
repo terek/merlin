@@ -53,8 +53,6 @@ export interface Frame {
   /** The token scale: ticks, and pixels per token. */
   cTicks: number[]
   kCtx: number
-  /** For each row, how many of the token ticks are labelled on the rows above it. */
-  labelFrom: number[]
 }
 
 /** The dollars of every slot of `slot` ms that the calls of `lanes` fall in. */
@@ -113,17 +111,7 @@ export function buildFrame(
       y += OVER_GAP + OVER_H
     }
   })
-  // the token scale is labelled on each session's main row, and on an agent's row only higher up than
-  // on its session's rows above it
-  const labelFrom: number[] = []
-  let done = 0
-  for (const g of layout) {
-    if (g.row.main) done = 0
-    const n = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2).length
-    labelFrom.push(done)
-    done = Math.max(done, n)
-  }
-  return { layout, strips, height: y + 6, cTicks, kCtx, labelFrom }
+  return { layout, strips, height: y + 6, cTicks, kCtx }
 }
 
 /** A lane with nothing in it: what stands in a main row for a session with nothing in the window. */
