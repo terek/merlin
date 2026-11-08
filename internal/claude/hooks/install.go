@@ -1,10 +1,9 @@
 package hooks
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 
+	"github.com/terek/merlin/internal/config"
 	"github.com/terek/merlin/internal/hookfile"
 )
 
@@ -66,17 +65,11 @@ func Uninstall(c Config) (Result, error) { return hookfile.Uninstall(c.file()) }
 // Status reports, per event, whether an Explorer entry is present and usable.
 func Status(c Config) ([]EventStatus, error) { return hookfile.Status(c.file()) }
 
-// configPort reads "port" from <explorerHome>/config.json.
+// configPort is the "port" of <explorerHome>/config.json, else DefaultPort. Hooks must
+// stay silent, so the config's warnings are dropped here (serve reports them).
 func configPort(explorerHome string) int {
-	data, err := os.ReadFile(filepath.Join(explorerHome, "config.json"))
-	if err != nil {
-		return DefaultPort
+	if c, _ := config.Load(explorerHome); c.Port > 0 {
+		return c.Port
 	}
-	var cfg struct {
-		Port int `json:"port"`
-	}
-	if json.Unmarshal(data, &cfg) != nil || cfg.Port <= 0 || cfg.Port > 65535 {
-		return DefaultPort
-	}
-	return cfg.Port
+	return DefaultPort
 }

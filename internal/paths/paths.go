@@ -13,7 +13,7 @@ import (
 //
 // ~/.merlin is shared with the earlier Merlin program, whose files may still be there.
 // This program only ever touches claude/, codex/ (and other per-harness directories),
-// config.json, merlin.lock and merlin.log in it.
+// config.json (read only, by package config), merlin.lock and merlin.log in it.
 func Home() (string, error) {
 	if v := os.Getenv("MERLIN_HOME"); v != "" {
 		return filepath.Clean(v), nil

@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"github.com/terek/merlin/internal/links"
 	"github.com/terek/merlin/internal/model"
 	"github.com/terek/merlin/internal/paths"
-	"github.com/terek/merlin/internal/pricing"
 	"github.com/terek/merlin/internal/store"
 )
 
@@ -46,11 +44,7 @@ func runScan(args []string) int {
 		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
 		return 1
 	}
-	pricer, err := pricing.Load(filepath.Join(home, "config.json"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
-	}
+	_, pricer := loadConfig(home, "merlin scan")
 	harnesses, err := buildHarnesses(pricer)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -53,16 +52,16 @@ func runServe(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	pricer, err := pricing.Load(filepath.Join(home, "config.json"))
-	if err != nil {
-		return fail(err)
-	}
+	cfg, pricer := loadConfig(home, "merlin serve")
 	harnesses, err := buildHarnesses(pricer)
 	if err != nil {
 		return fail(err)
 	}
-	if *port == 0 {
-		*port = hooks.Port(home)
+	if *port == 0 { // flag, then config.json, then the default
+		*port = hooks.DefaultPort
+		if cfg.Port > 0 {
+			*port = cfg.Port
+		}
 	}
 	opts := daemon.Options{
 		Home:           home,

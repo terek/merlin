@@ -42,7 +42,9 @@ table (or in your `config.json`) is never rewritten.
 ## Adding or overriding a price
 
 Put a `"prices"` object in `<MERLIN_HOME>/config.json` (default `~/.merlin/config.json`). Other
-keys in the file are ignored. Each entry is keyed by the model name exactly as it appears in the
+keys in the file are ignored. An entry that is not a price object, or a price table that does
+not hold together (an alias that is also a model name), is reported as a warning when `merlin
+serve` starts and left out; it does not stop the server. Each entry is keyed by the model name exactly as it appears in the
 transcript, with prices in USD per million tokens. An entry replaces the table's entry of that
 name, or adds a model. `input`, `output` and `cacheRead` are the fields to give; cache writes
 are priced from `input` with the table's multipliers (1.25x for 5 minutes, 2x for 1 hour).

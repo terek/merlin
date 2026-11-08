@@ -106,10 +106,22 @@ func Load(path string) (*Table, error) {
 	if err := json.Unmarshal(b, &o); err != nil {
 		return nil, fmt.Errorf("pricing: parse %s: %w", path, err)
 	}
-	for name, p := range o.Prices {
+	t, err = WithOverrides(o.Prices)
+	if err != nil {
+		return nil, fmt.Errorf("pricing: %s: %w", path, err)
+	}
+	return t, nil
+}
+
+// WithOverrides returns the embedded table with the given entries applied: each replaces
+// the table entry of that name or adds a model. It fails on an empty model name or an
+// alias that collides with another name; the caller decides whether that is fatal.
+func WithOverrides(prices map[string]Price) (*Table, error) {
+	t := Default()
+	for name, p := range prices {
 		name = strip1m(name)
 		if name == "" {
-			return nil, fmt.Errorf("pricing: %s: empty model name in prices", path)
+			return nil, errors.New("empty model name in prices")
 		}
 		if p.Fast != nil {
 			t.fast[name] = *p.Fast
@@ -121,7 +133,7 @@ func Load(path string) (*Table, error) {
 		t.models[name] = p
 	}
 	if err := t.reindex(); err != nil {
-		return nil, fmt.Errorf("pricing: %s: %w", path, err)
+		return nil, err
 	}
 	return t, nil
 }

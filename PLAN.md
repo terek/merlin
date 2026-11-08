@@ -92,7 +92,7 @@ merlin/                         (repository root)
 
 ```
 ~/.merlin/                        (MERLIN_HOME; shared with the earlier Merlin, whose files are left alone)
-  config.json                     port, source dirs, price overrides
+  config.json                     port, autoUpgrade, price overrides
   merlin.lock                     flock — one instance
   merlin.log
   claude/                         one directory per harness; codex/, pi/ … later

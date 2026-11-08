@@ -80,11 +80,28 @@ directory you cannot write to (such as `/usr/local/bin`), run it with `sudo`. A 
 
 Versions 0.2.0 and 0.3.0 cannot update themselves: run the installer again to get past them.
 
+## Configuration
+
+`~/.merlin/config.json` (`MERLIN_HOME/config.json`) is optional; merlin never writes it. All
+keys are optional and unknown keys are ignored:
+
+```json
+{ "port": 7433, "autoUpgrade": true, "prices": { } }
+```
+
+- `port`: the TCP port of `merlin serve` and the hooks. `--port` overrides it. Default 7433.
+- `autoUpgrade`: whether the daemon may upgrade merlin by itself. Default `true`.
+- `prices`: model price overrides; see [docs/pricing.md](docs/pricing.md).
+
+A command-line flag beats the file, and the file beats the built-in default. A malformed file or
+a key of the wrong type does not stop `merlin serve`: it logs a warning naming the key and uses
+the default for it.
+
 ## Where state lives
 
 - `~/.merlin` (`MERLIN_HOME`): `claude/` (one JSON digest per session under
   `claude/projects/`, and the hook script), `merlin.lock`, `merlin.log` and an optional
-  `config.json` (model prices; see [docs/pricing.md](docs/pricing.md)). All of it can be rebuilt from `~/.claude`. The earlier Merlin kept its files
+  `config.json` (see Configuration below). All of it can be rebuilt from `~/.claude`. The earlier Merlin kept its files
   in the same directory; this program never reads, changes or removes them.
 - `~/.claude/settings.json`: the five hook entries, and their backups
   (`settings.json.merlin-backup-*`).
