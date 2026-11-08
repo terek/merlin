@@ -3,7 +3,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { useConnection, useScanProgress } from '../api/events'
 import { useSpend7d } from '../api/queries'
 import { cn } from '../lib/cn'
-import { unknownNote } from '../lib/cost'
+import { backingLowerBound, unknownNote } from '../lib/cost'
 import { formatCount } from '../lib/format'
 import { IconButton, Money } from '../ui'
 import { nextTheme, useTheme } from './theme'
@@ -43,13 +43,14 @@ function ConnectionIndicator() {
 function SpendLink() {
   const { data } = useSpend7d()
   if (!data) return null
+  const lowerBound = backingLowerBound(data.backing)
   return (
     <Link
       to="/cost?range=7d"
-      title={`Spend in the last 7 days. Open Cost.${data.backing.unknown ? `\n${unknownNote(data.backing.unknown)}` : ''}`}
+      title={`Spend in the last 7 days. Open Cost.${data.backing.unknown ? `\n${unknownNote(data.backing.unknown)}` : ''}${lowerBound ? `\n${lowerBound}` : ''}`}
       className="flex items-center gap-1.5 text-sec text-muted hover:text-fg hover:no-underline"
     >
-      <Money usd={data.total.totalUSD} dim />
+      <Money usd={data.total.totalUSD} lowerBound={lowerBound} dim />
       <span>7 d</span>
     </Link>
   )

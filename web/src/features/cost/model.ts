@@ -78,6 +78,8 @@ export interface Bucket {
   total: number
   reported: number
   attributed: number
+  /** Agent runs with no record of their spend in the sessions of the bucket's days: the total is "at least". */
+  unrecorded?: number
   /** Spend by model, largest first. */
   parts: CostSplitEntry[]
   /** The compaction calls of the bucket, estimated. */
@@ -140,6 +142,7 @@ export function makeBuckets(rows: CostRow[], window: Window, weekly: boolean): B
     e.b.total += row.totalUSD
     e.b.reported += row.reportedUSD
     e.b.attributed += row.attributedUSD
+    if (row.unrecordedAgents) e.b.unrecorded = (e.b.unrecorded ?? 0) + row.unrecordedAgents
     if (row.compactions) e.b.compactions = addTally(e.b.compactions, row.compactions)
     addParts(e.parts, row.split)
   }

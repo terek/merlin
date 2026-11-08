@@ -38,9 +38,11 @@ test('segments add up to the best cost', () => {
 
 test('agent split', () => {
   const agents = [{ cost: { usd: 0.25 } }, { cost: { usd: 0.25 } }] as Agent[]
-  expect(agentCostSplit({ cost: { usd: 1 }, agents })).toEqual({ main: 0.5, agents: 0.5 })
-  expect(agentCostSplit({ cost: { usd: 1 } })).toEqual({ main: 1, agents: 0 })
+  expect(agentCostSplit({ cost: { usd: 1 }, agents })).toEqual({ main: 0.5, agents: 0.5, unrecorded: 0 })
+  expect(agentCostSplit({ cost: { usd: 1 } })).toEqual({ main: 1, agents: 0, unrecorded: 0 })
   expect(agentCostSplit({ cost: { usd: 0.1 }, agents }).main).toBe(0)
+  const lost = [{ cost: { usd: 0, unrecordedAgents: 1 } }, { cost: { usd: 0.25 } }] as Agent[]
+  expect(agentCostSplit({ cost: { usd: 1 }, agents: lost }).unrecorded).toBe(1)
 })
 
 test('a rail row is unknown only when every session is, and nothing else is billed', () => {

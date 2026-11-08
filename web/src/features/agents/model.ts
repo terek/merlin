@@ -23,6 +23,8 @@ export interface SubtreeStats {
   /** Messages cut short in the transcript, and messages on a model without a price, in the subtree. */
   truncated: number
   unpriced: number
+  /** Agent runs in the subtree that left no record of their spend (unknown, not $0). */
+  unrecorded: number
 }
 
 /** Sums per node, computed from the tree rather than trusted from `agent.subtreeUSD` (orphans, broken cycles). */
@@ -36,6 +38,7 @@ export function subtreeStats(forest: readonly AgentNode[]): Map<string, SubtreeS
       open: n.agent.status === 'open' ? 1 : 0,
       truncated: n.agent.cost.truncatedMessages ?? 0,
       unpriced: n.agent.cost.unpricedMessages ?? 0,
+      unrecorded: n.agent.cost.unrecordedAgents ?? 0,
     }
     for (const c of n.children) {
       const t = walk(c)
@@ -45,6 +48,7 @@ export function subtreeStats(forest: readonly AgentNode[]): Map<string, SubtreeS
       s.open += t.open
       s.truncated += t.truncated
       s.unpriced += t.unpriced
+      s.unrecorded += t.unrecorded
     }
     out.set(n.agent.id, s)
     return s
@@ -164,7 +168,7 @@ export function visibleRows(
         continue
       }
       const open = overrides.get(e.id) ?? false
-      const sum: SubtreeStats = { usd: 0, count: 0, killed: 0, open: 0, truncated: 0, unpriced: 0 }
+      const sum: SubtreeStats = { usd: 0, count: 0, killed: 0, open: 0, truncated: 0, unpriced: 0, unrecorded: 0 }
       for (const n of e.nodes) {
         const s = stats.get(n.agent.id) as SubtreeStats
         sum.usd += s.usd
@@ -173,6 +177,7 @@ export function visibleRows(
         sum.open += s.open
         sum.truncated += s.truncated
         sum.unpriced += s.unpriced
+        sum.unrecorded += s.unrecorded
       }
       const group = groupText(e.nodes, runs)
       rows.push({ kind: 'group', key: e.id, level, open, nodes: e.nodes, ...group, stats: sum })

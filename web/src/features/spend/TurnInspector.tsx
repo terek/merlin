@@ -4,7 +4,7 @@
 // the decisions that cost the most. Each wears the graph's mark for what it opens (marks.tsx).
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
-import type { Compaction, QueuedPrompt } from '../../api/types'
+import type { Agent, Compaction, QueuedPrompt } from '../../api/types'
 import { callLine, tallyLine, warmLine } from '../../lib/compaction'
 import { estimateNote, lowerBoundNote } from '../../lib/cost'
 import { formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
@@ -73,7 +73,7 @@ export function TopDecisions({ tree, pinned, onPin }: { tree: Tree; pinned: Pin 
                 <span className={`font-mono text-sec ${on ? 'text-accent' : 'text-muted'}`}>
                   {x.end > x.start ? `turns ${x.start}–${x.end}` : `turn ${x.start}`}
                 </span>
-                <Money usd={x.usd} lowerBound={lowerBoundNote(0, 0, x.unrecorded)} className="text-right" />
+                <Money usd={x.usd} lowerBound={lowerBoundNote(0, 0, x.unrecordedRuns)} className="text-right" />
                 <Bar
                   height={6}
                   total={max}
@@ -144,7 +144,7 @@ export function DecisionPanel({
           <BracketMark />
           {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
           <span>{own.length > 1 ? `Turns ${first.index} to ${dec.end}` : `Turn ${first.index}`}</span>
-          <Money usd={dec.usd} lowerBound={lowerBoundNote(0, 0, dec.unrecorded)} />
+          <Money usd={dec.usd} lowerBound={lowerBoundNote(0, 0, dec.unrecordedRuns)} />
           <span className="text-sec font-normal text-muted">
             {typed
               ? more
@@ -427,6 +427,9 @@ function UnitList({
                   {firstLine(unwrapMachineText(u.asked).body) || u.agent.description}
                 </span>
                 <span className="shrink-0 text-meta text-faint">{where(u)}</span>
+                {!u.agent.unrecorded && unitUnrecorded(u) > 0 && (
+                  <span className="shrink-0 text-meta text-faint">{unitUnrecorded(u)} not recorded</span>
+                )}
                 {u.agent.model && <ModelName name={u.agent.model} className="shrink-0 text-meta text-faint" />}
                 <span className="w-10 shrink-0">
                   <Bar
@@ -446,6 +449,26 @@ function UnitList({
         })}
     </ul>
   )
+}
+
+/** Agent runs with no record of their spend in the subtree of `a` (a itself included). */
+function unrecordedUnder(a: Agent, byId: ReadonlyMap<string, Agent>): number {
+  let n = 0
+  for (const x of byId.values()) {
+    const seen = new Set<string>()
+    for (
+      let cur: Agent | undefined = x;
+      cur && !seen.has(cur.id);
+      cur = cur.parentAgentId ? byId.get(cur.parentAgentId) : undefined
+    ) {
+      if (cur === a) {
+        n += x.cost.unrecordedAgents ?? 0
+        break
+      }
+      seen.add(cur.id)
+    }
+  }
+  return n
 }
 
 /** A piece of work's dollars; for an agent that left no record there are none to print ($0 would be a claim). */
@@ -583,6 +606,7 @@ function UnitDetail({
         parent={a.parentAgentId ? model.agentsById.get(a.parentAgentId) : undefined}
         spawned={[...model.agentsById.values()].filter((x) => x.parentAgentId === a.id)}
         subtreeUSD={model.rows.find((r) => r.agent === a)?.usd ?? a.cost.usd}
+        subtreeUnrecorded={unrecordedUnder(a, model.agentsById)}
         onClose={onClose}
         onSelectAgent={onSelectAgentUnit}
         onSelectTurn={onPin}

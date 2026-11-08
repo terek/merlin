@@ -390,6 +390,9 @@ export interface ProjectSummary {
   cost: Money
   /** Sessions with cost flag unknown; absent for 0. All of them (and a zero cost) means a dash, not $0. */
   unknownSessions?: number
+  /** Unpriced messages of its lower-bound sessions, and agent runs that left no record: `cost` is "at least". */
+  unpricedMessages?: number
+  unrecordedAgents?: number
 }
 
 export interface ProjectList {
@@ -430,6 +433,10 @@ export interface FamilyMember {
   leaf: boolean
   turns: number
   bestUSD: number
+  /** bestUSD is "at least": see SessionCost.lowerBound, unpricedMessages, unrecordedAgents. */
+  lowerBound?: boolean
+  unpricedMessages?: number
+  unrecordedAgents?: number
 }
 
 export interface SessionFamily {
@@ -915,6 +922,8 @@ export interface CostRow extends Money {
   lowerBound?: boolean
   truncatedMessages?: number
   unpricedMessages?: number
+  /** Agent runs that left no record of their spend, in the session (by=session) or the sessions behind the row: "at least". */
+  unrecordedAgents?: number
   /** by=session rows: the session's harness, project and last activity (a scripted row has only project). */
   harness?: string
   project?: string
@@ -934,6 +943,8 @@ export interface CostBacking {
   scriptedRuns: number
   /** Sessions, of any flag, whose best cost is a lower bound. */
   lowerBound?: number
+  /** Agent runs, across the table's sessions, that left no record of their spend. */
+  unrecordedAgents?: number
 }
 
 export interface CostTable {

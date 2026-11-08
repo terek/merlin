@@ -182,7 +182,7 @@ function TurnReadout({
           <span className="text-muted" title="everything between the prompt you typed and your next one">
             turns {dec.start}–{dec.end} together:{' '}
             <span className="font-mono">
-              {dec.unrecorded > 0 ? '≥' : ''}
+              {dec.unrecordedRuns > 0 ? '≥' : ''}
               {formatMoney(dec.usd)}
             </span>
           </span>

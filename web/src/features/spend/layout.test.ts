@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, Message, SessionDetail, Turn } from '../../api/types'
-import { barRoom, buildFrame, dollarScale, slotTotals, windowRow } from './layout'
+import { barRoom, buildFrame, dollarScale, slotTotals, UNRECORDED_MIN_H, windowRow } from './layout'
 import { buildTimeline, findSwarms, sliceWindow, slotLength, timeAxis } from './timeline'
 import { buildTree } from './tree'
 
@@ -111,6 +111,18 @@ describe('buildFrame', () => {
     expect(frame.cTicks[frame.cTicks.length - 1] * frame.kCtx).toBeCloseTo(84, 6)
     // the main row holds the largest context (90k), so its area is the tallest
     expect(frame.layout[0].ctxH).toBeGreaterThan(frame.layout[1].ctxH)
+  })
+
+  test('the row of an agent that left no record is tall enough for its whole frame', () => {
+    const lost = session('s', {
+      turns: [turn(0, 0, 10)],
+      messages: [msg('a0', 1, 50_000, { turn: 0 })],
+      agents: [agent('lost', { spawnTurn: 0, startedAt: at(2), endedAt: at(2.03), unrecorded: true })],
+    })
+    const tl = buildTimeline(buildTree([lost]))
+    const f = buildFrame(tl, findSwarms(tl.lanes), new Set(), 34, 900, [false])
+    const row = f.layout.find((r) => r.row.lanes.some((l) => l.agent?.unrecorded))
+    expect(row?.ctxH).toBeGreaterThanOrEqual(UNRECORDED_MIN_H)
   })
 
   test('an overhead strip stands under each session that has overhead, in the height', () => {

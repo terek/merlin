@@ -7,7 +7,7 @@ import { useJustChanged } from '../../api/events'
 import { useHarness } from '../../api/harnesses'
 import type { SessionDetail, SessionPlaces } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { approxMoney } from '../../lib/cost'
+import { approxMoney, sessionsLowerBound } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { beadPath, sessionPath } from '../../lib/paths'
 import { type PlaceEntry, placeLink, sessionPlaces } from '../../lib/places'
@@ -254,7 +254,7 @@ export function SessionHeader({ detail, tree }: { detail: SessionDetail; tree: T
             {multi && (
               <>
                 {', '}
-                <Money usd={detail.cost.ownUSD} dim /> of it in this one
+                <Money usd={detail.cost.ownUSD} lowerBound={sessionsLowerBound([summary.cost])} dim /> of it in this one
               </>
             )}
           </span>
@@ -451,7 +451,7 @@ export function FamilyStrip({ detail }: { detail: SessionDetail }) {
               <RelTime time={member.lastActivityAt ?? member.startedAt} />
             </span>
             <span className="w-14 shrink-0 text-right">
-              <Money usd={member.bestUSD} />
+              <Money usd={member.bestUSD} lowerBound={sessionsLowerBound([member])} />
             </span>
           </li>
         ))}

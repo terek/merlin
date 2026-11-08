@@ -306,6 +306,10 @@ type Row struct {
 	Bead     string `json:"bead,omitempty"`
 	Family   string `json:"family,omitempty"` // the root bead of the family
 	Sessions int    `json:"sessions"`
+	// UnrecordedAgents is how many agent runs the harness kept no record of, in the sessions
+	// behind the row (SessionCost.UnrecordedAgents; a session that spans several rows counts in
+	// each). Their spend is unknown, not $0, so a row with any is "at least".
+	UnrecordedAgents int `json:"unrecordedAgents,omitempty"`
 	Money
 }
 

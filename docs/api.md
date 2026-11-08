@@ -57,7 +57,9 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
   (`Message.recorded`, Pi), not a recomputation. In the digest, an agent with `unrecorded: true` ran with no
   record of its calls, and `cost.unrecordedAgents` (omitted when 0) counts such agents on a session, turn or
   agent: their spend is unknown, not $0, so the dollars are a lower bound. The session list's `cost` and
-  `/api/sessions/{id}`'s `cost` carry the session's count as `unrecordedAgents` too (omitted when 0).
+  `/api/sessions/{id}`'s `cost` and `family.members[]` (with `lowerBound` and `unpricedMessages`) carry the session's count as `unrecordedAgents` too (omitted when 0), and so do `/api/cost`'s
+  rows (a by=session row has the session's; any other row sums its sessions', a session spanning several rows counting in each)
+  and `backing.unrecordedAgents` (the sum over the table's sessions): any total they belong to is a lower bound.
 - **Dates and times** given as parameters are an RFC 3339 time or a date (`2026-09-16`, local
   midnight). A date-only `until` includes that whole day.
 - **Errors.** Every non-2xx body has this shape:
@@ -147,7 +149,9 @@ a directory: sessions of every harness started there are counted together, and `
 which (`harness` and `projectKey` are those of the first in name order). Filtering `/api/sessions`
 or `/api/cost` by `project` (the directory) selects them all. `unknownSessions` (omitted when 0)
 counts the project's sessions with cost flag `unknown`; when it equals `sessions` and `cost` is 0,
-show a dash, not $0.
+show a dash, not $0. `unpricedMessages` (over the sessions whose cost is a lower bound) and
+`unrecordedAgents` (agent runs that left no record of their spend), each omitted when 0, make `cost`
+a lower bound.
 
 ```json
 {

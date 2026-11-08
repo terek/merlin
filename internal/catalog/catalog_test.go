@@ -462,3 +462,27 @@ func TestUnrecordedAgentsCarried(t *testing.T) {
 		t.Errorf("p2 unrecorded = %d, want 0", in.Cost.UnrecordedAgents)
 	}
 }
+
+// Rollup rows carry the unrecorded agent runs of the sessions behind them.
+func TestRollupUnrecordedAgents(t *testing.T) {
+	c := New()
+	d := syn("pi", "p1", "acme", 0, 10, []model.Turn{turn(0, "u0", "go", 0)}, msgSpec{"m1", 1, 0.01, 0})
+	d.Cost.UnrecordedAgents = 2
+	c.Upsert(d)
+	c.Upsert(syn("pi", "p2", "other", 0, 10, []model.Turn{turn(0, "u0", "go", 0)}, msgSpec{"m1", 1, 0.01, 0}))
+	got := map[string]int{}
+	for _, r := range c.Rollup(Filter{}, ByProject) {
+		got[r.Project] = r.UnrecordedAgents
+	}
+	if got["acme"] != 2 || got["other"] != 0 {
+		t.Errorf("by project unrecorded = %v, want acme 2, other 0", got)
+	}
+	if all := c.Rollup(Filter{}); len(all) != 1 || all[0].UnrecordedAgents != 2 {
+		t.Errorf("total row = %+v, want unrecorded 2", all)
+	}
+	for _, r := range c.Rollup(Filter{}, ByDay) {
+		if r.UnrecordedAgents != 2 {
+			t.Errorf("day %s unrecorded = %d, want 2", r.Day, r.UnrecordedAgents)
+		}
+	}
+}

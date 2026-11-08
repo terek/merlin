@@ -186,6 +186,10 @@ type ProjectSummary struct {
 	// UnknownSessions counts the sessions whose cost is unknown (flag unknown); a project in
 	// which every session is unknown shows a dash, not $0.
 	UnknownSessions int `json:"unknownSessions,omitempty"`
+	// UnpricedMessages (over the sessions whose cost is a lower bound) and UnrecordedAgents (agent
+	// runs that left no record of their spend) make Cost.TotalUSD "at least". Omitted when 0.
+	UnpricedMessages int `json:"unpricedMessages,omitempty"`
+	UnrecordedAgents int `json:"unrecordedAgents,omitempty"`
 }
 
 // RepoList is the body of GET /api/repos: the repositories sessions count under, most
@@ -237,6 +241,11 @@ type FamilyMember struct {
 	Leaf           bool              `json:"leaf"`
 	Turns          int               `json:"turns"`
 	BestUSD        float64           `json:"bestUSD"`
+	// LowerBound, UnpricedMessages and UnrecordedAgents are catalog.SessionCost's: when set,
+	// BestUSD is "at least".
+	LowerBound       bool `json:"lowerBound,omitempty"`
+	UnpricedMessages int  `json:"unpricedMessages,omitempty"`
+	UnrecordedAgents int  `json:"unrecordedAgents,omitempty"`
 }
 
 // SessionFamily is the tree of linked sessions a session belongs to. Leaves are the
@@ -283,6 +292,9 @@ type CostRow struct {
 	LowerBound        bool `json:"lowerBound,omitempty"`
 	TruncatedMessages int  `json:"truncatedMessages,omitempty"`
 	UnpricedMessages  int  `json:"unpricedMessages,omitempty"`
+	// UnrecordedAgents counts the agent runs that left no record of their spend: the session's
+	// on by=session rows, the sum over the sessions behind the row otherwise. Omitted when 0.
+	UnrecordedAgents int `json:"unrecordedAgents,omitempty"`
 	// Harness, Project and LastActivityAt are set for by=session rows (a scripted row has
 	// only Project), so that a row can be shown and linked without a second request.
 	Harness        string    `json:"harness,omitempty"`
@@ -313,6 +325,9 @@ type CostBacking struct {
 	ScriptedRuns int `json:"scriptedRuns"`
 	// LowerBound counts the sessions, of any flag, whose best cost is a lower bound.
 	LowerBound int `json:"lowerBound,omitempty"`
+	// UnrecordedAgents counts the agent runs, across those sessions, that left no record of
+	// their spend: the total is at least what it says.
+	UnrecordedAgents int `json:"unrecordedAgents,omitempty"`
 }
 
 // CostTable is the body of GET /api/cost.

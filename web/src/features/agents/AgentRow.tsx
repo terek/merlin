@@ -151,7 +151,7 @@ export function AgentRow({
             {row.stats.killed > 0 && <Badge tone="bad">{row.stats.killed} killed</Badge>}
             <Money
               usd={row.stats.usd}
-              lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced)}
+              lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced, row.stats.unrecorded)}
               className={heavy ? 'font-semibold' : undefined}
             />
           </span>
@@ -201,7 +201,7 @@ export function AgentRow({
             ) : (
               <Money
                 usd={row.stats.usd}
-                lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced)}
+                lowerBound={lowerBoundNote(row.stats.truncated, row.stats.unpriced, row.stats.unrecorded)}
                 className={heavy ? 'font-semibold' : undefined}
                 title={hasKids ? 'with all its descendants' : undefined}
               />

@@ -5,6 +5,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/cn'
+import { lowerBoundNote } from '../../lib/cost'
 import { formatMoney, plural } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
 import { dayStart, shortDate } from '../../lib/time'
@@ -230,7 +231,7 @@ function Tip({
         {stack === 'compaction' ? (
           <span className="font-mono">~{formatMoney(c?.usd ?? 0)}</span>
         ) : (
-          <Money usd={bucket.total} />
+          <Money usd={bucket.total} lowerBound={lowerBoundNote(0, 0, bucket.unrecorded)} />
         )}
       </div>
       {stack === 'compaction' && c && (

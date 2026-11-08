@@ -43,6 +43,7 @@ export function AgentDetail({
   parent,
   spawned,
   subtreeUSD,
+  subtreeUnrecorded = 0,
   onClose,
   onSelectAgent,
   onSelectTurn,
@@ -54,6 +55,8 @@ export function AgentDetail({
   spawned: Agent[]
   /** Own cost plus descendants, computed from the tree. */
   subtreeUSD: number
+  /** Agent runs among its descendants that left no record of their spend. */
+  subtreeUnrecorded?: number
   onClose: () => void
   onSelectAgent: (id: string) => void
   onSelectTurn: (index: number) => void
@@ -283,7 +286,8 @@ export function AgentDetail({
           )}
           {subtreeUSD - a.cost.usd >= 0.005 && (
             <>
-              , with descendants <Money usd={subtreeUSD} dim className="text-meta" />
+              , with descendants{' '}
+              <Money usd={subtreeUSD} lowerBound={lowerBoundNote(0, 0, subtreeUnrecorded)} dim className="text-meta" />
             </>
           )}
         </p>

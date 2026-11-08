@@ -28,13 +28,16 @@ describe('subtreeStats', () => {
     const f = forestOf([
       agent('a', null, { cost: { usd: 1 }, subtreeUSD: 99 }),
       agent('b', 'a', { cost: { usd: 2, truncatedMessages: 3 }, status: 'killed' }),
-      agent('c', 'b', { cost: { usd: 4, truncatedMessages: 1, unpricedMessages: 2 }, status: 'open' }),
+      agent('c', 'b', {
+        cost: { usd: 4, truncatedMessages: 1, unpricedMessages: 2, unrecordedAgents: 1 },
+        status: 'open',
+      }),
       agent('d', 'a', { cost: { usd: 8 } }),
     ])
     const s = subtreeStats(f)
-    expect(s.get('a')).toEqual({ usd: 15, count: 4, killed: 1, open: 1, truncated: 4, unpriced: 2 })
-    expect(s.get('b')).toEqual({ usd: 6, count: 2, killed: 1, open: 1, truncated: 4, unpriced: 2 })
-    expect(s.get('d')).toEqual({ usd: 8, count: 1, killed: 0, open: 0, truncated: 0, unpriced: 0 })
+    expect(s.get('a')).toEqual({ usd: 15, count: 4, killed: 1, open: 1, truncated: 4, unpriced: 2, unrecorded: 1 })
+    expect(s.get('b')).toEqual({ usd: 6, count: 2, killed: 1, open: 1, truncated: 4, unpriced: 2, unrecorded: 1 })
+    expect(s.get('d')).toEqual({ usd: 8, count: 1, killed: 0, open: 0, truncated: 0, unpriced: 0, unrecorded: 0 })
   })
 
   test('an orphan is a root with its own subtree; a cycle does not hang', () => {

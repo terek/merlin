@@ -83,6 +83,10 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 			if s.Cost.Flag == catalog.CostUnknown {
 				p.UnknownSessions++
 			}
+			if s.Cost.LowerBound {
+				p.UnpricedMessages += s.Cost.UnpricedMessages
+			}
+			p.UnrecordedAgents += s.Cost.UnrecordedAgents
 			if s.LastActivityAt.After(p.LastActivityAt) {
 				p.LastActivityAt = s.LastActivityAt
 			}
@@ -377,7 +381,8 @@ func (a *API) family(cat *catalog.Catalog, key model.SessionKey, lv catalog.Live
 		}
 		m := FamilyMember{Key: k, Title: in.Title, Kind: in.Kind, StartedAt: in.StartedAt,
 			LastActivityAt: in.LastActivityAt, State: lv.StateOf(k, in.LastActivityAt), Leaf: in.Leaf,
-			Turns: in.Turns, BestUSD: in.Cost.BestUSD}
+			Turns: in.Turns, BestUSD: in.Cost.BestUSD, LowerBound: in.Cost.LowerBound,
+			UnpricedMessages: in.Cost.UnpricedMessages, UnrecordedAgents: in.Cost.UnrecordedAgents}
 		if in.Parent != nil {
 			p := in.Parent.Parent
 			m.Parent = &p
@@ -512,7 +517,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			c := in.Cost
 			out.Rows = append(out.Rows, CostRow{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: c.Flag,
 				LowerBound: c.LowerBound, TruncatedMessages: c.TruncatedMessages, UnpricedMessages: c.UnpricedMessages,
-				Harness: in.Key.Harness, Project: in.Project, LastActivityAt: in.LastActivityAt,
+				UnrecordedAgents: c.UnrecordedAgents, Harness: in.Key.Harness, Project: in.Project, LastActivityAt: in.LastActivityAt,
 				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD + c.EstimatedUncoveredUSD, Compactions: c.Compactions}})
 		}
 		perProject := map[string]*CostRow{}
@@ -556,7 +561,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		for _, r := range cat.Rollup(f, dim) {
-			row := CostRow{Sessions: r.Sessions, Money: r.Money, Split: parts[rowKey(by, r)]}
+			row := CostRow{Sessions: r.Sessions, UnrecordedAgents: r.UnrecordedAgents, Money: r.Money, Split: parts[rowKey(by, r)]}
 			switch by {
 			case "project":
 				row.Key = r.Project
@@ -611,6 +616,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		if in.Cost.LowerBound {
 			out.Backing.LowerBound++
 		}
+		out.Backing.UnrecordedAgents += in.Cost.UnrecordedAgents
 	}
 	for _, s := range listing.Scripted {
 		out.Backing.ScriptedRuns += s.Count

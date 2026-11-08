@@ -444,6 +444,8 @@ export interface Decision {
   units: number
   /** How many of `units` are agent runs the harness kept no record of: their spend is unknown, not $0. */
   unrecorded: number
+  /** Every agent run with no record in its pieces of work, nested ones too: the money is "at least". */
+  unrecordedRuns: number
   /** Dollars per kind, for a bar. */
   parts: Part[]
   /** The compactions after its turns; their cost is an estimate and in no figure above. */
@@ -765,6 +767,13 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         if (!u.nested.includes(a)) u.nested.push(a)
       }
     }
+    // a sub-agent that left no record has no message to join its piece of work by: it joins by its start
+    for (const a of agents) {
+      const root = a.unrecorded ? rootOf(a) : a
+      if (root === a) continue
+      const u = unitAt(root, bornAt(a, Number.NaN))
+      if (u && !u.nested.includes(a)) u.nested.push(a)
+    }
   } else if (n > 0) {
     // An older daemon, or a page that did not ask for messages: dollars only.
     for (const c of cols) {
@@ -890,6 +899,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
         usd: 0,
         units: 0,
         unrecorded: 0,
+        unrecordedRuns: 0,
         parts: [],
         compactions: [],
         agentCompactions: [],
@@ -911,6 +921,7 @@ export function buildSpend(detail: SessionDetail): SpendModel {
     dec.unitsUSD += launchedUSD
     dec.units += c.launched.length
     dec.unrecorded += c.launched.filter((u) => u.agent.unrecorded).length
+    dec.unrecordedRuns += c.launched.reduce((n, u) => n + unitUnrecorded(u), 0)
     const mine: Record<string, number> = {}
     for (const p of stepParts(c, 'kind')) mine[p.key] = (mine[p.key] ?? 0) + p.usd
     for (const u of c.launched) for (const p of unitParts(u, 'kind')) mine[p.key] = (mine[p.key] ?? 0) + p.usd

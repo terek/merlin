@@ -102,10 +102,19 @@ export function sessionCostSegments(cost: SessionCost): CostSegment[] {
  * (`digest.agents[].cost.usd`, compaction calls included); the main agent is the rest of
  * `digest.cost.usd`. Both are attributed figures, from token counts.
  */
-export function agentCostSplit(digest: Pick<SessionDigest, 'cost' | 'agents'>): { main: number; agents: number } {
+export function agentCostSplit(digest: Pick<SessionDigest, 'cost' | 'agents'>): {
+  main: number
+  agents: number
+  /** Agent runs with no record of their spend: counted as $0 in `agents`, which is then "at least". */
+  unrecorded: number
+} {
   let agents = 0
-  for (const a of digest.agents ?? []) agents += a.cost.usd
-  return { main: Math.max(0, digest.cost.usd - agents), agents }
+  let unrecorded = 0
+  for (const a of digest.agents ?? []) {
+    agents += a.cost.usd
+    unrecorded += a.cost.unrecordedAgents ?? 0
+  }
+  return { main: Math.max(0, digest.cost.usd - agents), agents, unrecorded }
 }
 
 /** "69 sessions exact, 5 partial, 149 estimated, 3,132 scripted runs"; zero parts are left out. */
@@ -126,8 +135,11 @@ export function backingSentence(b: CostBacking): string {
 
 /** The `lowerBound` of a total over a cost table's sessions; '' when none of them is a lower bound. */
 export function backingLowerBound(b: CostBacking): string {
-  if (!b.lowerBound) return ''
-  return `A lower bound: ${plural(b.lowerBound, 'session')} include messages on a model without a price (counted as $0).`
+  const unrecorded = b.unrecordedAgents ?? 0
+  if (!b.lowerBound) return lowerBoundNote(0, 0, unrecorded)
+  const priced = `${plural(b.lowerBound, 'session')} include messages on a model without a price (counted as $0)`
+  if (!unrecorded) return `A lower bound: ${priced}.`
+  return `A lower bound: ${priced}; ${plural(unrecorded, 'agent run')} left no record of ${unrecorded === 1 ? 'its' : 'their'} spend.`
 }
 
 /** The flag a rail row's <Money> takes: `unknown` only when every session counted is unknown and nothing else is billed. */

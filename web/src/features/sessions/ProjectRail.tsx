@@ -9,7 +9,7 @@ import { harnessTitles, useHarnesses } from '../../api/harnesses'
 import { useBeads, useGroups, useProjects, useRepos } from '../../api/queries'
 import type { BeadBrief, CostFlag, GroupDim, RepoGroup } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { groupFlag } from '../../lib/cost'
+import { groupFlag, lowerBoundNote } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { placeLabels, remoteLabels } from '../../lib/places'
 import { BeadStatus, IconButton, Money, ProjectName, QueryBoundary, Select, SkeletonRows } from '../../ui'
@@ -22,6 +22,7 @@ function Item({
   count,
   usd,
   flag,
+  lowerBound,
   title,
   level = 0,
   countTitle,
@@ -33,6 +34,8 @@ function Item({
   usd: number
   /** `unknown` writes a dash for a zero figure. */
   flag?: CostFlag
+  /** lowerBoundNote: the figure is "at least". */
+  lowerBound?: string
   title?: string
   level?: 0 | 1
   countTitle?: string
@@ -54,7 +57,7 @@ function Item({
         <span className="w-8 shrink-0 text-right text-sec text-muted" title={countTitle}>
           {count === undefined ? '' : formatCount(count)}
         </span>
-        <Money usd={usd} flag={flag} dim className="w-14 shrink-0 text-right text-sec" />
+        <Money usd={usd} flag={flag} lowerBound={lowerBound} dim className="w-14 shrink-0 text-right text-sec" />
       </button>
     </li>
   )
@@ -135,6 +138,8 @@ function ProjectList({ selected, onSelect }: { selected: string; onSelect: (proj
         const count = projects.reduce((n, p) => n + p.sessions, 0)
         const usd = projects.reduce((n, p) => n + p.cost.totalUSD, 0)
         const unknown = projects.reduce((n, p) => n + (p.unknownSessions ?? 0), 0)
+        const unpriced = projects.reduce((n, p) => n + (p.unpricedMessages ?? 0), 0)
+        const unrecorded = projects.reduce((n, p) => n + (p.unrecordedAgents ?? 0), 0)
         return (
           <ul className="space-y-px">
             <Item
@@ -144,6 +149,7 @@ function ProjectList({ selected, onSelect }: { selected: string; onSelect: (proj
               count={count}
               usd={usd}
               flag={groupFlag(count, unknown, usd)}
+              lowerBound={lowerBoundNote(0, unpriced, unrecorded)}
             />
             {projects.map((p) => (
               <Item
@@ -154,6 +160,7 @@ function ProjectList({ selected, onSelect }: { selected: string; onSelect: (proj
                 count={p.sessions}
                 usd={p.cost.totalUSD}
                 flag={groupFlag(p.sessions, p.unknownSessions, p.cost.totalUSD)}
+                lowerBound={lowerBoundNote(0, p.unpricedMessages, p.unrecordedAgents)}
                 title={
                   (p.harnesses ?? [p.harness]).length > 1
                     ? `${p.project} (${harnessTitles(harnesses, p.harnesses ?? [])})`

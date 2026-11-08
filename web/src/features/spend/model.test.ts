@@ -20,6 +20,7 @@ import {
   turnAt,
   turnList,
   unitParts,
+  unitUnrecorded,
 } from './model'
 
 // Prices of the fixture, dollars per token: input 10, output 50, cache read 1 (per million).
@@ -639,4 +640,29 @@ test('agentWorkText never prints $0 for runs nothing recorded', () => {
   expect(agentWorkText(2, 0, 0.5)).toBe('2 pieces of agent work $0.50')
   expect(agentWorkText(1, 1, 0)).toBe('1 piece of agent work, not recorded')
   expect(agentWorkText(4, 1, 0.5)).toBe('3 pieces of agent work $0.50 + 1 not recorded')
+})
+
+test('an unrecorded run nested under a recorded agent makes its decision "at least", though no piece of work is itself unrecorded', () => {
+  const m = buildSpend(
+    detail(
+      [turn(0, 0, 5)],
+      [msg(0, { turn: 0 }), msg(1, { agentId: 'p' })],
+      [
+        agent('p', { spawnTurn: 0, startedAt: at(1), endedAt: at(4) }),
+        agent('n', {
+          parentAgentId: 'p',
+          depth: 2,
+          spawnTurn: 0,
+          startedAt: at(2),
+          endedAt: at(3),
+          unrecorded: true,
+          cost: { usd: 0, unrecordedAgents: 1 },
+        }),
+      ],
+    ),
+  )
+  const [dec] = m.decisions
+  expect(dec.unrecorded).toBe(0)
+  expect(dec.unrecordedRuns).toBe(1)
+  expect(m.cols[0].launched.map(unitUnrecorded)).toEqual([1])
 })

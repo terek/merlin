@@ -164,6 +164,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 			if a.last != x.s {
 				a.last = x.s
 				a.row.Sessions++
+				a.row.UnrecordedAgents += int(x.s.d.Cost.UnrecordedAgents)
 			}
 		}
 	}

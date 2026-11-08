@@ -8,7 +8,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useCost, useProjects } from '../../api/queries'
 import type { CompactionTally, CostRow, CostTable } from '../../api/types'
 import { tallyLine, warmLine } from '../../lib/compaction'
-import { backingLowerBound, backingSentence, sessionsLowerBound, unknownNote } from '../../lib/cost'
+import { backingLowerBound, backingSentence, lowerBoundNote, sessionsLowerBound, unknownNote } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
@@ -570,7 +570,7 @@ function CutTable({
             align: 'right',
             width: '84px',
             sortValue: (r) => r.totalUSD,
-            cell: (r) => <Money usd={r.totalUSD} />,
+            cell: (r) => <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />,
           },
           {
             key: 'reported',

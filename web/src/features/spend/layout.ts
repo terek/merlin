@@ -21,6 +21,8 @@ export const TURNS_H = 13
 /** The largest context of the session is this tall. */
 export const CTX_FULL = 84
 export const CTX_MIN = 12
+/** A row of an agent that left no record (no calls, so no context): its frame and label are whole. */
+export const UNRECORDED_MIN_H = 22
 /** A collapsed swarm's row is at least this tall: its label, and a few pixels of lines under it. */
 export const SWARM_MIN_H = 24
 /** The most expensive slot of the session is this tall. */
@@ -100,7 +102,11 @@ export function buildFrame(
     const top = y
     const peak = Math.max(...row.lanes.map((l) => l.peak))
     // a swarm's row has room for its frame label and a few pixels of lines under it
-    const minH = row.lanes.some((l) => l.swarm?.collapsed) ? SWARM_MIN_H : CTX_MIN
+    const minH = row.lanes.some((l) => l.swarm?.collapsed)
+      ? SWARM_MIN_H
+      : row.lanes.some((l) => l.agent?.unrecorded)
+        ? UNRECORDED_MIN_H
+        : CTX_MIN
     const ctxH = Math.max(minH, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
     const spendH = Math.max(SPEND_MIN, Math.ceil(maxes[i] * kUsd) + 2) + (row.main ? TURNS_H : 0)
     layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })

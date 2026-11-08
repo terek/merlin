@@ -629,6 +629,18 @@ export function TimePlot({
                       />
                     ),
                 )}
+                {text !== withModel && (
+                  // the label did not fit: the whole of it is the frame's tooltip
+                  <rect
+                    x={f1(a)}
+                    y={top}
+                    width={Math.max(4, b - a)}
+                    height={Math.max(0, g.base - top)}
+                    fill="transparent"
+                  >
+                    <title>{withModel}</title>
+                  </rect>
+                )}
                 {l.kind === 'fork' && <path d={`M${f1(a)} ${top}h7l-7 7z`} fill={color} />}
                 {text && (
                   <text
