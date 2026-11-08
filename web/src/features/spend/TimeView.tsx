@@ -41,7 +41,17 @@ import type { SessionKey } from '../../api/types'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
-import { niceTicks } from '../context/chart'
+import {
+  AXIS_H,
+  BRACKET_H,
+  buildFrame,
+  dollarScale,
+  type FrameRow,
+  OVER_GAP,
+  OVER_H,
+  SLOT_PX,
+  windowRow,
+} from './layout'
 import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
 import { CLASS_SERIES, KIND_SERIES, type KindKey, missText, type Split, TIER_SERIES, type Unit } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
@@ -53,7 +63,6 @@ import {
   branchWeight,
   carrierWeight,
   clockTicks,
-  collapseSwarms,
   detailAt,
   findSwarms,
   HOLD_MS,
@@ -62,7 +71,6 @@ import {
   mergeBusy,
   modelMarks,
   type Point,
-  packLanes,
   pointAt,
   pxPerTurn,
   type Row,
@@ -88,26 +96,8 @@ export const BREAK_OPACITY = 0.35
 /** Room left of the plot for the context scale. */
 const LABEL_W = 34
 const MR = 12
-const AXIS_H = 24
-const BRACKET_H = 20
-const TURNS_H = 13
-/** The largest context of the tree is this tall. */
-const CTX_FULL = 84
-const CTX_MIN = 12
-/** A collapsed swarm's row is at least this tall: its label, and a few pixels of lines under it. */
-const SWARM_MIN_H = 24
-/** The most expensive slot of the tree is this tall. */
-const SPEND_FULL = 40
-const SPEND_MIN = 5
-const ROW_GAP = 10
-const BRANCH_GAP = 20
-/** A spend bar is at least this wide. */
-const SLOT_PX = 4
 /** A spend bar is drawn at least this wide, centred on its calls. */
 const BAR_MIN_PX = 2
-/** The strip of overhead bands under a session's rows, and the gap above it. */
-const OVER_H = 14
-const OVER_GAP = 6
 
 export const COLOR: Record<KindKey | 'main', string> = {
   ...(Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<KindKey, string>),
@@ -213,14 +203,11 @@ function runsOf(points: readonly Point[], starts: readonly number[] = []): Point
   return out
 }
 
-interface Layout {
-  row: Row
-  top: number
-  /** The context's baseline: the area grows up from it, the spend down. */
-  base: number
-  ctxH: number
-  spendH: number
-  bottom: number
+/** A row of the frame with what the window shows in it: `row` holds the window's slice of each lane, `full` the whole session's. */
+interface Layout extends FrameRow {
+  full: Row
+  /** Whether the row's session (or agents) have anything in the window. */
+  live: boolean
 }
 
 export interface TimePlotProps {
@@ -320,8 +307,29 @@ export function TimePlot({
     const sw = selectedUnit ? swarmOfUnit(timeline.lanes, swarms, selectedUnit.branch, selectedUnit.id) : undefined
     if (sw) setOpen((o) => (o.has(sw.id) ? o : new Set(o).add(sw.id)))
   }, [selectedUnit, timeline, swarms])
-  const shownLanes = useMemo(() => collapseSwarms(tl.lanes, swarms, open), [tl, swarms, open])
-  const rows = useMemo(() => packLanes(shownLanes, axis.x), [shownLanes, axis])
+  // the vertical frame, of the whole session: it does not move with the window
+  const frame = useMemo(
+    () =>
+      buildFrame(
+        timeline,
+        swarms,
+        open,
+        X0,
+        X1,
+        tree.branches.map((b) => b.overhead.length > 0),
+      ),
+    [timeline, swarms, open, X1, tree],
+  )
+  const { strips, height, cTicks, kCtx, labelFrom } = frame
+  // what the window shows in each row of it
+  const layout = useMemo(() => {
+    const sliced = new Map(tl.lanes.map((l) => [l.key, l]))
+    return frame.layout.map((g): Layout => {
+      const w = windowRow(g.row, sliced, swarms)
+      return { ...g, row: w.row, full: g.row, live: w.live }
+    })
+  }, [frame, tl, swarms])
+  const rows = useMemo(() => layout.map((g) => g.row), [layout])
   const slot = slotLength(axis, SLOT_PX)
 
   // ---- the spend per slot of every row, on one dollar scale
@@ -364,33 +372,11 @@ export function TimePlot({
     [rows, slot, axis],
   )
   const maxSlot = Math.max(1e-9, ...slots.flatMap((m) => [...m.values()].map((s) => s.total)))
-  const kUsd = SPEND_FULL / maxSlot
-  const cTicks = niceTicks(tl.peak || 1, 4)
-  const ctxTop = cTicks[cTicks.length - 1]
-  const kCtx = CTX_FULL / ctxTop
-
-  // ---- vertical layout
-  const layout: Layout[] = []
-  const strips: { branch: number; top: number; bottom: number }[] = []
-  let y = AXIS_H
-  rows.forEach((row, i) => {
-    if (i > 0) y += row.main ? BRANCH_GAP : ROW_GAP
-    const top = y
-    const peak = Math.max(...row.lanes.map((l) => l.peak))
-    // a swarm's row has room for its frame label and a few pixels of lines under it
-    const minH = row.lanes.some((l) => l.swarm?.collapsed) ? SWARM_MIN_H : CTX_MIN
-    const ctxH = Math.max(minH, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
-    const maxS = Math.max(0, ...[...slots[i].values()].map((s) => s.total))
-    const spendH = Math.max(SPEND_MIN, Math.ceil(maxS * kUsd) + 2) + (row.main ? TURNS_H : 0)
-    layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })
-    y = top + ctxH + spendH
-    // the session's overhead, under its last row
-    if (rows[i + 1]?.branch !== row.branch && overheads[row.branch]?.length) {
-      strips.push({ branch: row.branch, top: y + OVER_GAP, bottom: y + OVER_GAP + OVER_H })
-      y += OVER_GAP + OVER_H
-    }
-  })
-  const height = y + 6
+  // the window's own dollar scale: the largest at which every row's bars fit the band it has
+  const kUsd = dollarScale(
+    layout,
+    slots.map((m) => Math.max(0, ...[...m.values()].map((s) => s.total))),
+  )
   // how much room a turn has on the main row(s) decides how much of the turns and decisions is drawn
   const detail = detailAt(
     Math.min(
@@ -398,22 +384,12 @@ export function TimePlot({
       ...rows.filter((r) => r.main).map((r) => pxPerTurn(r.lanes[0].turns.map((s) => axis.x(s.t0)))),
     ),
   )
-  // the token scale is labelled once: on the first row, and higher up on a row taller than it
-  const labelFrom: number[] = []
-  {
-    let done = 0
-    layout.forEach((g) => {
-      const n = cTicks.filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2).length
-      labelFrom.push(done)
-      done = Math.max(done, n)
-    })
-  }
   const yCtx = (g: Layout, v: number) => g.base - v * kCtx
 
   // ---- who is where
   const mainRow = (branch: number) => layout.find((g) => g.row.main && g.row.branch === branch)
   const laneByName = new Map<string, { g: Layout; l: Lane }>()
-  for (const g of layout) for (const l of g.row.lanes) if (l.agent?.name) laneByName.set(l.agent.name, { g, l })
+  for (const g of layout) for (const l of g.full.lanes) if (l.agent?.name) laneByName.set(l.agent.name, { g, l })
   /** The row and lane that sent a piece of work: the one its inbox names, else its branch's main row. */
   const senderOf = (l: Lane, u: Unit): { g: Layout; l: Lane } | undefined => {
     const named = u.from ? laneByName.get(u.from) : undefined
@@ -510,7 +486,7 @@ export function TimePlot({
       return { pin: turnOn(g.row.lanes[0], h.t), unit: null }
     }
     // a collapsed swarm is read as a whole
-    if (swarmAt(h.row, h.x)) return { pin: turnOn(mainRow(g.row.lanes[0].branch)?.row.lanes[0], h.t), unit: null }
+    if (swarmAt(h.row, h.x)) return { pin: turnOn(mainRow(g.row.branch)?.row.lanes[0], h.t), unit: null }
     // the piece of work under the pointer, or the nearest within a few pixels
     let best: { lane: Lane; unit: Unit; d: number } | undefined
     for (const l of g.row.lanes)
@@ -821,7 +797,7 @@ export function TimePlot({
     const turnsY = g.bottom - 3
     let lastTurnX = Number.NEGATIVE_INFINITY
     return (
-      <g key={g.row.lanes[0].key}>
+      <g key={g.full.lanes[0].key}>
         {ticks.map((t, n) => (
           <g key={t}>
             <line
@@ -1092,6 +1068,9 @@ export function TimePlot({
     const b = tree.branches[g.row.branch]
     const parent = b.parent !== undefined ? mainRow(b.parent) : undefined
     const l = g.row.lanes[0]
+    // a session over before the window has no spine in it; one that goes on through it comes in from the edge
+    const end = fullLane.get(l.key)?.t1
+    if (range && end !== undefined && end < range.lo) return null
     // when the session began, not its first moment in the window: a window cut after the branch has no branch in it
     const t0 = fullLane.get(l.key)?.t0 ?? l.t0
     if (!Number.isFinite(t0)) return null

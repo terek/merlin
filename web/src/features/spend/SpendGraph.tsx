@@ -474,11 +474,13 @@ export function SpendGraph({
           Time runs across, local; a narrow grey band is time in which nothing ran, left out. Every row shares one token
           scale above its baseline (so the tall ones are the expensive ones to carry) and one dollar scale below it. A
           session that ran long or on more than one day shows a window of it, picked on the strip above the plot (the
-          whole session on one scale, the window highlighted): it opens on the last day of work, and the scales are the
-          window's own. A fork leaves from the top of its parent's context; a sub-agent starts clean, from the baseline.
-          An addressable agent keeps a row of its own, one-shot agents share rows, and four or more launched together
-          are one swarm row (marked +; click it to open it, − folds it). A person's turns are weighted by the price of
-          their model, and the model's name is written where it changes.
+          whole session on one scale, the window highlighted): it opens on the last day of work. The rows and the token
+          scale are those of the whole session, so the plot keeps its shape as the window moves (it looks sparse where
+          the session is quiet); the time axis and the dollar scale are the window's own. A fork leaves from the top of
+          its parent's context; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its
+          own, one-shot agents share rows, and four or more launched together are one swarm row (marked +; click it to
+          open it, − folds it). A person's turns are weighted by the price of their model, and the model's name is
+          written where it changes.
           {overhead &&
             ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
           {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}

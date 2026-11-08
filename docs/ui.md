@@ -317,7 +317,7 @@ From top to bottom:
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
   - **a window at a time** (beads `merlin-t8s.50`, `merlin-zls.6`): the plot shows one **window** of
-    time, with scales (token, dollar, slot length) and breaks of its own; the rest of a long tree is
+    time, with a time axis, breaks, slot length and dollar scale of its own (its rows and token scale are the whole session's, see the vertical frame below); the rest of a long tree is
     reached through an **overview** strip above the readout (`Overview.tsx`). It is shown when the tree
     ran on more than one day or has more than 3 hours of activity; otherwise there is no strip and the
     window is everything. A turn, call, context and mark belongs to a window if it starts inside it
@@ -363,6 +363,18 @@ From top to bottom:
     episode that holds it. The window is the user's: nothing else moves it (the pointer passing over
     the plot does not), and the page keeps room for a scroll bar, so that one appearing mid-drag does
     not shift the strip under the pointer. `?from=<ISO or ms>&to=<ISO or ms>` sets the window (screenshots);
+  - the **vertical frame** is laid out once for the whole session and does not move with the window
+    (`buildFrame` in `layout.ts`, memoized by `TimePlot`; merlin-zls.11): the rows (swarms collapsed unless
+    opened, agents packed on the axis of the whole session), the token scale (from the session's largest
+    context), each row's height above the baseline (its largest context in the whole session) and below it
+    (its largest slot in the whole session, on the whole session's slot length), and a strip of overhead under
+    every session that has overhead anywhere. Rows, gaps and the plot's height are therefore the same for every
+    window; only opening or folding a swarm, or the plot's width, changes them. A window draws into the
+    frame: each row's lanes are the window's slices of the whole lanes, looked up by key (`windowRow`); a lane
+    with nothing in the window draws nothing and a row with nothing in it is empty space with its baseline and
+    gridlines. Zoomed on a simple stretch the plot therefore looks sparse, because the session is complex
+    elsewhere. Identity and geometry (who launched whom, where a fork began) read the whole lanes, data in view
+    the sliced ones. The time axis, the breaks, the slot length and the dollar scale below are the window's own;
   - a **row** per session's main agent and per agent it launched, in the tree's order. Above its
     baseline, the context every call of the agent was sent with (prompt tokens), as a step area, on one
     token scale for every row: a row is as tall as its largest context needs, so the rows that were
@@ -378,7 +390,10 @@ From top to bottom:
     min". A turn whose first call came more than 5 minutes after its prompt (a failed prompt sent
     again) starts its area at that call. A one-shot sub-agent has a single piece of work, so this never shows on its row. An agent's own sub-agents are thin lines on its row;
   - below the baseline, what the row spent in each slot of time (a round length, at least 4 px wide),
-    on one dollar scale for every row, split like the legend. A row pays for its agent's calls, its
+    on one dollar scale for every row, split like the legend. The scale is the window's own (slots are
+    shorter when zoomed in, so a fixed scale would make bars vanish): the largest at which the tallest bar of
+    every row in the window still fits the band the row has in the frame (`dollarScale`), less the room a main
+    row keeps for its turn numbers; "the tallest bar is $X" above the plot is true of it. A row pays for its agent's calls, its
     sub-agents' calls and, for a main row, the compaction calls. A bar is drawn only over the part of
     its slot in which the row was running (`barSpan`): the slot cut to the turns (main row) or
     pieces of work (agent row) that hold its calls, so it never starts before its agent was
