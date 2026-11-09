@@ -6,6 +6,11 @@
 # verifies its SHA-256 and installs it as `merlin`. It starts nothing and does not
 # touch ~/.claude: Claude Code hooks are added only by `merlin hooks install`.
 #
+# This script checks the SHA-256 only (integrity, from the same release as the binary).
+# It does NOT verify the release signature (SHA256SUMS.sig, Ed25519): macOS ships LibreSSL,
+# which has no portable Ed25519 verify for bash. `merlin upgrade` and serve's auto-upgrade
+# do verify it, so the first upgrade after an install is the first signature check.
+#
 # Knobs (env vars):
 #   MERLIN_VERSION       pin a version, e.g. 0.2.0   (default: latest release)
 #   MERLIN_INSTALL_DIR   install location            (default: /usr/local/bin if

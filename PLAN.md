@@ -492,7 +492,8 @@ dash is published as a pre-release, which GitHub does not serve as "latest", so
 release and tag.
 
 **Assets.** `merlin-darwin-arm64`, `merlin-darwin-x64`, `merlin-linux-arm64`, `merlin-linux-x64`,
-`SHA256SUMS` (over the binaries) and `install.sh`; the install script must stay an asset.
+`SHA256SUMS` (over the binaries), `SHA256SUMS.sig` (see Signing) and `install.sh`; the install
+script must stay an asset.
 `merlin-linux-{x64,arm64}-musl` are copies of the static binaries, published only so the
 earlier Merlin's `merlin upgrade` (which asks for them on Alpine) keeps working; drop them from
 the workflow when nobody runs that binary any more. There is no Windows build (the daemon uses
@@ -500,9 +501,42 @@ flock).
 
 **Secrets** (repository settings, Actions): `APPLE_CERT_P12` (base64 Developer ID Application
 certificate), `APPLE_CERT_PASSWORD`, `APPLE_SIGN_IDENTITY`, `APPLE_ID`, `APPLE_TEAM_ID`,
-`APPLE_APP_PASSWORD` (app-specific password), `KEYCHAIN_PASSWORD` (any string). Binaries are
+`APPLE_APP_PASSWORD` (app-specific password), `KEYCHAIN_PASSWORD` (any string),
+`MERLIN_SIGNING_KEY` (base64 Ed25519 seed, see Signing). Binaries are
 signed with the hardened runtime and no entitlements. A bare binary cannot be stapled;
 Gatekeeper checks the notarization online on first launch.
+
+**Signing.** `SHA256SUMS` alone is integrity, not authenticity: whoever can publish a release
+could push code to every running merlin. So the release job signs it with Ed25519
+(`go run ./tools/sign sign`, key from `MERLIN_SIGNING_KEY`, only on that step), verifies the
+result with the same tool, and uploads `SHA256SUMS.sig`; a missing secret fails the release.
+File format, one line per signature: `merlin-sig-v1 <keyid> <base64 signature>`, where keyid is
+the first 8 bytes of the SHA-256 of the public key in hex and the signature covers the exact
+bytes of `SHA256SUMS`. `internal/release` holds `TrustedKeys` (a slice) and
+`Verify(sums, sig)`; `merlin upgrade` (latest or `--version X`) and serve's auto-upgrade fetch
+both files, verify before trusting any checksum, and refuse otherwise, with no override (an
+old release without a `.sig` is installed with `install.sh`, `MERLIN_VERSION=X`, which checks
+the SHA-256 only: bash has no portable Ed25519 verify). On macOS they also run
+`codesign --verify --strict` on the staged binary and require `TeamIdentifier=L258LHG5T6`
+(`release.AppleTeamID`) before running or swapping it. `tools/sign` is a separate `package main`
+that `cmd/explorer` does not import. Tests trust their own keys by assigning
+`release.TrustedKeys`; nothing in the binary lets a build or the environment add a key.
+
+- *Key generation (once).* `go run ./tools/sign keygen key.txt` writes the seed (0600) and prints
+  the public key and keyid. Put the seed in the `MERLIN_SIGNING_KEY` secret, the public key in
+  `productionKeys` in `internal/release/release.go`, and delete `key.txt`.
+- *Rotation.* Generate a new key and add its public key to `productionKeys` next to the old one.
+  Release with a `.sig` of two lines, one per key (concatenate two `sign` outputs): running
+  merlins that only know the old key still verify, and the new binary trusts both. Keep signing
+  with both for a release or two, until merlins have had time to pick up the new key. Then sign
+  with the new key alone and drop the old one from `productionKeys`. (The workflow signs with
+  one secret; for the two-key releases, sign by hand as in the back-fill below and upload with
+  `gh release upload --clobber`, or add a second signing step for the old seed.)
+- *Back-filling a `.sig` onto an existing release.* Download its `SHA256SUMS`, then
+  `MERLIN_SIGNING_KEY=<seed> go run ./tools/sign sign SHA256SUMS > SHA256SUMS.sig`,
+  `go run ./tools/sign verify SHA256SUMS SHA256SUMS.sig`, and
+  `gh release upload vX.Y.Z SHA256SUMS.sig`. Only sign a `SHA256SUMS` you have checked
+  against the binaries (`sha256sum -c`).
 
 **Locally.** `OUT_DIR=/some/dir scripts/release-build.sh 0.2.0 darwin-arm64 linux-x64`, then
 `scripts/release-smoke.sh /some/dir/merlin-darwin-arm64 0.2.0`. `install.sh` honours
@@ -512,7 +546,7 @@ the network. `merlin upgrade` and `merlin serve` read releases the same way (the
 
 **Auto-upgrade.** `merlin serve` (cmd/explorer/autoupgrade.go) checks at startup, before the
 store or engine exist, and every 4 h (`daemon.Options.Upgrade`; the daemon never executes
-anything). A newer release is staged next to the binary, verified (checksum, runs, prints the
+anything). A newer release is staged next to the binary, verified (signature on SHA256SUMS, checksum, macOS code signature, runs, prints the
 version), the current binary is hard-linked to `.merlin.prev`, and the stage is renamed over it.
 `Run` then returns `daemon.ErrRestart` (at startup at once; later after in-flight builds drain,
 at most 10 min) and `serve` re-execs itself with `MERLIN_UPGRADED_FROM` set. If that process

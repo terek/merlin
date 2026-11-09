@@ -11,7 +11,7 @@ name: Release
 #
 # Jobs: checks (tests, vet, web checks) -> web (UI built once, reused by every binary)
 # -> build-macos (cross-builds, signs, notarizes both darwin binaries) and build-linux
-# -> release (assembles SHA256SUMS, verifies the asset list, uploads).
+# -> release (assembles SHA256SUMS, signs it, verifies the asset list, uploads).
 #
 # The build itself is scripts/release-build.sh and the smoke test is
 # scripts/release-smoke.sh; both run the same way on a developer machine.
@@ -24,6 +24,8 @@ name: Release
 #   APPLE_TEAM_ID         10-char Apple Developer Team ID
 #   APPLE_APP_PASSWORD    app-specific password for that Apple ID (notarytool)
 #   KEYCHAIN_PASSWORD     any string - password for the ephemeral CI keychain
+#   MERLIN_SIGNING_KEY    base64 32-byte Ed25519 seed that signs SHA256SUMS (tools/sign keygen);
+#                         its public key must be in internal/release TrustedKeys
 
 on:
   push:
@@ -289,9 +291,33 @@ jobs:
           ls -l
           cat SHA256SUMS
 
+      # Ed25519 signature over the exact bytes of SHA256SUMS (tools/sign); `merlin upgrade`
+      # and serve's auto-upgrade refuse a release without a valid one. A release must not
+      # ship unsigned, so a missing secret fails the job. The tool then checks the result
+      # against the keys embedded in this tree, which catches a wrong or stale secret.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Sign SHA256SUMS
+        env:
+          MERLIN_SIGNING_KEY: ${{ secrets.MERLIN_SIGNING_KEY }}
+        run: |
+          if [ -z "$MERLIN_SIGNING_KEY" ]; then
+            echo "secret MERLIN_SIGNING_KEY is not set: refusing to publish an unsigned release" >&2
+            exit 1
+          fi
+          go run ./tools/sign sign dist/SHA256SUMS > dist/SHA256SUMS.sig
+          cat dist/SHA256SUMS.sig
+
+      - name: Verify the signature
+        run: go run ./tools/sign verify dist/SHA256SUMS dist/SHA256SUMS.sig
+
       - name: Verify the asset list
         run: |
           expected="SHA256SUMS
+          SHA256SUMS.sig
           install.sh
           merlin-darwin-arm64
           merlin-darwin-x64

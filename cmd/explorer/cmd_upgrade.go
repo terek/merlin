@@ -24,6 +24,7 @@ import (
 	"github.com/terek/merlin/internal/claude/hooks"
 	"github.com/terek/merlin/internal/config"
 	"github.com/terek/merlin/internal/paths"
+	"github.com/terek/merlin/internal/release"
 )
 
 // installCommand is how merlin is installed, and the fallback when upgrade fails.
@@ -279,7 +280,7 @@ func stageRelease(ctx context.Context, dest, latest string) (string, error) {
 	}
 	asset := "merlin-" + target
 	base := releasesURL + "/download/v" + latest
-	sums, err := fetch(ctx, base+"/SHA256SUMS", 1<<20)
+	sums, err := fetchSignedSums(ctx, base, latest)
 	if err != nil {
 		return "", err
 	}
@@ -307,6 +308,11 @@ func stageRelease(ctx context.Context, dest, latest string) (string, error) {
 	if err := os.Chmod(name, 0o755); err != nil {
 		return fail(err)
 	}
+	// Before running anything the release host sent: on macOS the binary must carry our
+	// Developer ID signature.
+	if err := codesignCheck(ctx, name); err != nil {
+		return fail(err)
+	}
 	out, err := exec.CommandContext(ctx, name, "version").Output()
 	if err != nil {
 		return fail(fmt.Errorf("the downloaded binary does not run on this machine: %w", err))
@@ -315,6 +321,38 @@ func stageRelease(ctx context.Context, dest, latest string) (string, error) {
 		return fail(fmt.Errorf("the downloaded binary reports %q, want %q", got, "merlin "+latest))
 	}
 	return name, nil
+}
+
+// fetchSignedSums downloads release v's SHA256SUMS and SHA256SUMS.sig from base and
+// returns the checksums only if a trusted release key signed them. Nothing in an unsigned
+// SHA256SUMS is to be believed.
+func fetchSignedSums(ctx context.Context, base, v string) ([]byte, error) {
+	sums, err := fetch(ctx, base+"/SHA256SUMS", 1<<20)
+	if err != nil {
+		return nil, err
+	}
+	refuse := func(why string) error {
+		return fmt.Errorf("SHA256SUMS for %s is not signed by a trusted merlin release key; refusing to install (%s)", v, why)
+	}
+	resp, err := get(ctx, base+"/SHA256SUMS.sig")
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+	defer resp.Body.Close()
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return nil, refuse("the release has no SHA256SUMS.sig; to install an old unsigned release, use the installer: MERLIN_VERSION=" + v + " " + installCommand)
+	case resp.StatusCode != http.StatusOK:
+		return nil, fmt.Errorf("download failed: %s/SHA256SUMS.sig gave %s", base, resp.Status)
+	}
+	sig, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+	if err := release.Verify(sums, sig); err != nil {
+		return nil, refuse(strings.TrimPrefix(err.Error(), release.ErrUnsigned.Error()+": "))
+	}
+	return sums, nil
 }
 
 // swapBinary installs staged as dest. The current binary is first hard-linked (or, where

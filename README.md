@@ -74,8 +74,16 @@ HTTP API and the design.
 
 ## Upgrade
 
-`merlin upgrade` downloads the latest release, verifies its SHA-256 and replaces the binary in
-place; `merlin upgrade --check` only reports whether there is one (and, under
+`merlin upgrade` downloads the latest release, verifies it and replaces the binary in
+place. Releases are signed: the release carries `SHA256SUMS.sig`, an Ed25519 signature over
+`SHA256SUMS` that merlin checks against release keys built into the binary before it believes any
+checksum, then it checks the binary's SHA-256, and on macOS that the binary is validly signed by
+our Developer ID team. A release without a valid signature is refused (no override; for an old
+unsigned release use the installer, `MERLIN_VERSION=X`). `install.sh` checks the SHA-256 only
+(macOS has no portable Ed25519 verify for bash), so the first upgrade after an install is the
+first signature check.
+
+`merlin upgrade --check` only reports whether there is a newer release (and, under
 `"autoUpgrade": "patch"`, the latest patch of your line). `merlin upgrade --version 0.6.1`
 installs exactly that release, older or pre-release included, with the same checks; it refuses a
 version that does not exist, and `--force` reinstalls the one you have. If merlin is installed in a
@@ -85,7 +93,8 @@ directory you cannot write to (such as `/usr/local/bin`), run it with `sudo`. A 
 ### Auto-upgrade
 
 `merlin serve` keeps itself on the latest release: it checks at startup, before it indexes
-anything, and then every 4 hours; when there is a newer release it downloads and verifies it,
+anything, and then every 4 hours; when there is a newer release it downloads it and verifies the signature and checksums (an
+unsigned or badly signed release is never installed; there is no override),
 replaces the binary and re-executes itself (same PID, same port; in-flight indexing finishes
 first). Progress is in `merlin.log` (`auto-upgrade: ...`). The previous binary is kept as
 `.merlin.prev` beside it; if the new version cannot start, the previous one is put back and the

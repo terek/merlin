@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -11,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/terek/merlin/internal/release"
 )
 
 // fakeRelease serves a release laid out like GitHub's: /latest redirects to the tag,
@@ -24,7 +28,20 @@ type fakeRelease struct {
 	checks    int      // hits on /latest
 	extra     []string // more published versions, each with a binary that reports its own version
 	probes    int      // hits on any SHA256SUMS
+	sig       sigMode  // what SHA256SUMS.sig holds
+	sigReqs   int      // hits on any SHA256SUMS.sig
 }
+
+// sigMode says how a fake release signs its SHA256SUMS.
+type sigMode int
+
+const (
+	sigGood     sigMode = iota // signed by the trusted test key
+	sigNone                    // no SHA256SUMS.sig published
+	sigStranger                // signed by a key nobody trusts
+	sigTampered                // valid signature, over different bytes
+	sigGarbage                 // not a signature file
+)
 
 func (f *fakeRelease) start(t *testing.T) {
 	t.Helper()
@@ -42,6 +59,10 @@ func (f *fakeRelease) start(t *testing.T) {
 	if f.badSum {
 		hash = strings.Repeat("0", 64)
 	}
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	_, stranger, _ := ed25519.GenerateKey(nil)
+	setVar(t, &release.TrustedKeys, []ed25519.PublicKey{pub})
+	setVar(t, &codesignCheck, func(context.Context, string) error { return nil })
 	mux := http.NewServeMux()
 	mux.HandleFunc("/latest", func(w http.ResponseWriter, r *http.Request) {
 		f.checks++
@@ -49,9 +70,25 @@ func (f *fakeRelease) start(t *testing.T) {
 	})
 	publish := func(v string, bin []byte, hash string) {
 		dl := "/download/v" + v + "/"
+		sums := []byte(fmt.Sprintf("%s  merlin-other-arch\n%s  merlin-%s\n", strings.Repeat("1", 64), hash, target))
 		mux.HandleFunc(dl+"SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
 			f.probes++
-			fmt.Fprintf(w, "%s  merlin-other-arch\n%s  merlin-%s\n", strings.Repeat("1", 64), hash, target)
+			w.Write(sums)
+		})
+		mux.HandleFunc(dl+"SHA256SUMS.sig", func(w http.ResponseWriter, r *http.Request) {
+			f.sigReqs++
+			switch f.sig {
+			case sigNone:
+				http.NotFound(w, r)
+			case sigStranger:
+				w.Write(release.Sign(sums, stranger))
+			case sigTampered:
+				w.Write(release.Sign(append([]byte("#\n"), sums...), priv))
+			case sigGarbage:
+				fmt.Fprint(w, "not a signature\n")
+			default:
+				w.Write(release.Sign(sums, priv))
+			}
 		})
 		mux.HandleFunc(dl+"merlin-"+target, func(w http.ResponseWriter, r *http.Request) {
 			f.downloads++
