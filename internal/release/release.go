@@ -78,25 +78,22 @@ var ErrUnsigned = errors.New("not signed by a trusted merlin release key")
 // Verify checks sums against the signature file sig using TrustedKeys.
 func Verify(sums, sig []byte) error { return VerifyWith(TrustedKeys, sums, sig) }
 
-// VerifyWith checks sums against sig using the given keys. Any malformed line fails the
-// whole file.
+// VerifyWith checks sums against sig using the given keys: one valid line is enough. A line
+// that is not a well-formed merlin-sig-v1 line is skipped, not fatal, so that a later
+// release can add another format beside v1 without breaking the merlins already installed.
 func VerifyWith(keys []ed25519.PublicKey, sums, sig []byte) error {
-	lines := 0
-	known := 0 // lines naming a trusted key
+	lines := 0 // well-formed v1 lines
+	known := 0 // of those, lines naming a trusted key
 	for _, line := range bytes.Split(sig, []byte("\n")) {
-		s := strings.TrimSpace(string(line))
-		if s == "" {
-			continue
-		}
-		lines++
-		f := strings.Fields(s)
+		f := strings.Fields(string(line))
 		if len(f) != 3 || f[0] != Magic {
-			return fmt.Errorf("%w: malformed signature line %q", ErrUnsigned, trunc(s))
+			continue
 		}
 		raw, err := base64.StdEncoding.DecodeString(f[2])
 		if err != nil || len(raw) != ed25519.SignatureSize {
-			return fmt.Errorf("%w: malformed signature in line for key %s", ErrUnsigned, f[1])
+			continue
 		}
+		lines++
 		for _, k := range keys {
 			if KeyID(k) != f[1] {
 				continue
@@ -109,7 +106,7 @@ func VerifyWith(keys []ed25519.PublicKey, sums, sig []byte) error {
 	}
 	switch {
 	case lines == 0:
-		return fmt.Errorf("%w: the signature file is empty", ErrUnsigned)
+		return fmt.Errorf("%w: the signature file has no %s signature", ErrUnsigned, Magic)
 	case known == 0:
 		return fmt.Errorf("%w: no signature from a key this merlin trusts", ErrUnsigned)
 	}

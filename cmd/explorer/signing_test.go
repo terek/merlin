@@ -20,7 +20,7 @@ func TestUpgradeRefusesUnsignedReleases(t *testing.T) {
 		"missing .sig":  {sigNone, "MERLIN_VERSION=0.9.0"},
 		"untrusted key": {sigStranger, "no signature from a key this merlin trusts"},
 		"tampered":      {sigTampered, "does not match"},
-		"garbage .sig":  {sigGarbage, "malformed"},
+		"garbage .sig":  {sigGarbage, "no merlin-sig-v1 signature"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rel := &fakeRelease{latest: "0.9.0", sig: c.mode}

@@ -49,13 +49,14 @@ func TestVerify(t *testing.T) {
 		{"tampered sums", []byte("abd  merlin-linux-x64\n"), good, false, "does not match"},
 		{"unknown keyid", sums, Sign(sums, privC), false, "no signature from a key"},
 		{"trusted keyid, wrong signer", sums, []byte(strings.Replace(string(Sign(sums, privC)), KeyID(pubC), KeyID(pubA), 1)), false, "does not match"},
-		{"empty", sums, nil, false, "empty"},
-		{"garbage", sums, []byte("hello\n"), false, "malformed"},
-		{"wrong magic", sums, []byte(strings.Replace(string(good), Magic, "merlin-sig-v0", 1)), false, "malformed"},
-		{"bad base64", sums, []byte(Magic + " " + KeyID(pubA) + " !!!\n"), false, "malformed"},
-		{"short signature", sums, []byte(Magic + " " + KeyID(pubA) + " AAAA\n"), false, "malformed"},
-		{"missing field", sums, []byte(Magic + " " + KeyID(pubA) + "\n"), false, "malformed"},
-		{"malformed line before a valid one", sums, cat([]byte("junk\n"), good), false, "malformed"},
+		{"empty", sums, nil, false, "no " + Magic},
+		{"garbage", sums, []byte("hello\n"), false, "no " + Magic},
+		{"wrong magic", sums, []byte(strings.Replace(string(good), Magic, "merlin-sig-v0", 1)), false, "no " + Magic},
+		{"bad base64", sums, []byte(Magic + " " + KeyID(pubA) + " !!!\n"), false, "no " + Magic},
+		{"short signature", sums, []byte(Magic + " " + KeyID(pubA) + " AAAA\n"), false, "no " + Magic},
+		{"missing field", sums, []byte(Magic + " " + KeyID(pubA) + "\n"), false, "no " + Magic},
+		{"malformed line before a valid one", sums, cat([]byte("junk\n"), good), true, ""},
+		{"a future format beside v1", sums, cat([]byte("merlin-sig-v2 k1 opaque payload\n"), good), true, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			err := VerifyWith(trusted, c.sums, c.sig)
