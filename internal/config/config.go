@@ -17,6 +17,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/terek/merlin/internal/pricing"
 )
@@ -30,13 +31,37 @@ type Config struct {
 	Port int
 	// Prices are the "prices" overrides, by model name (see docs/pricing.md).
 	Prices map[string]pricing.Price
-	// AutoUpgrade is the "autoUpgrade" key: whether the daemon may upgrade itself.
-	// True when the file does not say.
-	AutoUpgrade bool
+	// AutoUpgrade is the "autoUpgrade" key: what the daemon may upgrade itself to.
+	// UpgradeOn when the file does not say.
+	AutoUpgrade UpgradePolicy
+}
+
+// UpgradePolicy says which releases the daemon installs by itself. In config.json it is
+// true (UpgradeOn), false (UpgradeOff) or "patch" (UpgradePatch).
+type UpgradePolicy string
+
+const (
+	UpgradeOn    UpgradePolicy = "on"    // every newer release
+	UpgradeOff   UpgradePolicy = "off"   // none
+	UpgradePatch UpgradePolicy = "patch" // newer patch releases of the running major.minor only
+)
+
+// ParseUpgradePolicy reads an environment value: on/true/1/yes, off/false/0/no or patch,
+// in any case. ok is false for anything else.
+func ParseUpgradePolicy(s string) (p UpgradePolicy, ok bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "true", "yes", "on":
+		return UpgradeOn, true
+	case "0", "false", "no", "off":
+		return UpgradeOff, true
+	case "patch":
+		return UpgradePatch, true
+	}
+	return "", false
 }
 
 // Default returns the config of a user with no file.
-func Default() Config { return Config{AutoUpgrade: true} }
+func Default() Config { return Config{AutoUpgrade: UpgradeOn} }
 
 // Load reads the config file of the MERLIN_HOME directory home. It is cheap (one small
 // file) and may be called again to pick up an edit. It never fails: whatever could not be
@@ -73,11 +98,18 @@ func Load(home string) (Config, []string) {
 		}
 	}
 	if raw, ok := top["autoUpgrade"]; ok {
-		var v bool
-		if err := json.Unmarshal(raw, &v); err != nil {
-			bad("autoUpgrade", "true or false", "true", err)
-		} else {
-			c.AutoUpgrade = v
+		var b bool
+		var str string
+		switch {
+		case json.Unmarshal(raw, &b) == nil:
+			c.AutoUpgrade = UpgradeOn
+			if !b {
+				c.AutoUpgrade = UpgradeOff
+			}
+		case json.Unmarshal(raw, &str) == nil && str == "patch":
+			c.AutoUpgrade = UpgradePatch
+		default:
+			bad("autoUpgrade", `true, false or "patch"`, "true", fmt.Errorf("got %s", bytes.TrimSpace(raw)))
 		}
 	}
 	if raw, ok := top["prices"]; ok {

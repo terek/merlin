@@ -16,11 +16,13 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/terek/merlin/internal/claude/hooks"
+	"github.com/terek/merlin/internal/config"
 	"github.com/terek/merlin/internal/paths"
 )
 
@@ -32,6 +34,7 @@ const installCommand = "curl -fsSL https://merlin.dev/install.sh | bash"
 var (
 	releasesURL    = "https://github.com/terek/merlin/releases"
 	executablePath = os.Executable
+	homeDir        = paths.Home
 	healthURL      = func() string {
 		home, err := paths.Home()
 		if err != nil {
@@ -43,8 +46,8 @@ var (
 
 func init() {
 	register("upgrade", command{
-		usage:   "upgrade [--check] [--force]",
-		summary: "replace this binary with the latest release",
+		usage:   "upgrade [--check] [--force] [--version X]",
+		summary: "replace this binary with the latest release (or exactly X)",
 		run:     runUpgrade,
 	})
 }
@@ -53,7 +56,8 @@ func runUpgrade(args []string) int {
 	fs := flag.NewFlagSet("upgrade", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	check := fs.Bool("check", false, "only report whether a newer release exists")
-	force := fs.Bool("force", false, "install the latest release even if it is not newer")
+	force := fs.Bool("force", false, "install the release even if it is not newer (or is already installed)")
+	want := fs.String("version", "", "install exactly this release (e.g. 0.6.1), older and pre-releases included")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -62,7 +66,7 @@ func runUpgrade(args []string) int {
 		return 2
 	}
 	applyReleasesEnv()
-	if err := upgrade(os.Stdout, *check, *force); err != nil {
+	if err := upgrade(os.Stdout, *check, *force, *want); err != nil {
 		fmt.Fprintf(os.Stderr, "merlin upgrade: %v\n\nTo upgrade by hand, run the installer:\n\n  %s\n", err, installCommand)
 		return 1
 	}
@@ -77,7 +81,13 @@ func applyReleasesEnv() {
 	}
 }
 
-func upgrade(w io.Writer, check, force bool) error {
+// upgrade replaces this binary with the latest release, or with exactly release want
+// when it is set (older and pre-releases included). check reports and installs nothing.
+func upgrade(w io.Writer, check, force bool, want string) error {
+	want = strings.TrimPrefix(strings.TrimSpace(want), "v")
+	if want != "" {
+		return upgradeTo(w, check, force, want)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	latest, err := latestVersion(ctx)
 	cancel()
@@ -91,6 +101,11 @@ func upgrade(w io.Writer, check, force bool) error {
 		} else {
 			fmt.Fprintf(w, "merlin %s is up to date (latest release: %s).\n", cur, latest)
 		}
+		if home, err := homeDir(); err == nil {
+			if pol, _ := upgradePolicy(home, false); pol == config.UpgradePatch {
+				fmt.Fprintln(w, patchReport(cur, home))
+			}
+		}
 		return nil
 	}
 	if isDevVersion(cur) && !force {
@@ -100,15 +115,117 @@ func upgrade(w io.Writer, check, force bool) error {
 		fmt.Fprintf(w, "merlin %s is up to date.\n", cur)
 		return nil
 	}
+	return install(w, cur, latest)
+}
 
+// patchReport says what auto-upgrade under "patch" would follow from cur.
+func patchReport(cur, home string) string {
+	v, ok := parseVersion(cur)
+	if !ok {
+		return "auto-upgrade is set to patch releases only."
+	}
+	line := fmt.Sprintf("%d.%d", v.n[0], v.n[1])
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	p, err := latestPatch(ctx, cur, loadBad(home))
+	switch {
+	case err != nil:
+		return fmt.Sprintf("auto-upgrade is set to patch releases of %s only; looking for them failed: %v", line, err)
+	case p == "":
+		return fmt.Sprintf("auto-upgrade is set to patch releases of %s only; %s is the latest of that line.", line, cur)
+	}
+	return fmt.Sprintf("auto-upgrade is set to patch releases of %s only; the latest of that line is %s.", line, p)
+}
+
+// upgradeTo installs release want, whether it is newer or older than this binary.
+func upgradeTo(w io.Writer, check, force bool, want string) error {
+	if _, ok := parseVersion(want); !ok {
+		return fmt.Errorf("%q is not a version (want X.Y.Z, e.g. 0.6.1)", want)
+	}
+	cur := version
+	if !check && isDevVersion(cur) && !force {
+		return fmt.Errorf("this is a development build (%s); use --force to replace it with %s", cur, want)
+	}
+	if want == cur && !force {
+		fmt.Fprintf(w, "merlin is already %s.\n", cur)
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	status, err := releaseStatus(ctx, want)
+	cancel()
+	if err != nil {
+		return err
+	}
+	switch status {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return fmt.Errorf("there is no release %s (%s/download/v%s/SHA256SUMS gave 404)", want, releasesURL, want)
+	default:
+		return fmt.Errorf("looking for release %s: %s/download/v%s/SHA256SUMS gave HTTP %d", want, releasesURL, want, status)
+	}
+	home, homeErr := homeDir()
+	if homeErr == nil && slices.Contains(loadBad(home), want) {
+		fmt.Fprintf(w, "Note: %s is listed in %s as a version that failed to start; installing it because you asked for it.\n", want, upgradeFile)
+	}
+	if check {
+		fmt.Fprintf(w, "merlin %s is available (this is %s). Run: merlin upgrade --version %s\n", want, cur, want)
+		return nil
+	}
+	if err := install(w, cur, want); err != nil {
+		return err
+	}
+	if homeErr == nil {
+		if msg := undoWarning(home, want); msg != "" {
+			fmt.Fprintln(w, msg)
+		}
+	}
+	return nil
+}
+
+// undoWarning says, when auto-upgrade would move the install off the pinned version v,
+// that it will and how to stop it; "" when it would not (or cannot be told).
+func undoWarning(home, v string) string {
+	pol, src := upgradePolicy(home, false)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	var next, how string
+	switch pol {
+	case config.UpgradeOn:
+		latest, err := latestVersion(ctx)
+		if err != nil || compareVersions(latest, v) <= 0 || slices.Contains(loadBad(home), latest) {
+			return ""
+		}
+		next, how = latest, "auto-upgrade is on"
+	case config.UpgradePatch:
+		p, err := latestPatch(ctx, v, loadBad(home))
+		if err != nil || p == "" {
+			return ""
+		}
+		next, how = p, "auto-upgrade follows patch releases"
+	default:
+		return ""
+	}
+	stay := `set "autoUpgrade": false in ~/.merlin/config.json`
+	if strings.HasPrefix(src, "MERLIN_AUTO_UPGRADE=") {
+		stay = "set MERLIN_AUTO_UPGRADE=0 (it overrides config.json)"
+	}
+	return fmt.Sprintf("merlin serve will replace it with %s (%s). To stay on %s, %s.", next, how, v, stay)
+}
+
+// install replaces the binary with release target and reports it.
+func install(w io.Writer, cur, target string) error {
 	dest, err := resolveDest()
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "Upgrading merlin %s to %s...\n", cur, latest)
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Minute)
+	verb := "Upgrading"
+	if compareVersions(target, cur) < 0 {
+		verb = "Downgrading"
+	}
+	fmt.Fprintf(w, "%s merlin %s to %s...\n", verb, cur, target)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	staged, err := stageRelease(ctx, dest, latest)
+	staged, err := stageRelease(ctx, dest, target)
 	if err != nil {
 		return err
 	}
@@ -116,12 +233,24 @@ func upgrade(w io.Writer, check, force bool) error {
 	if err := swapBinary(staged, dest); err != nil {
 		return err
 	}
-	fmt.Fprintf(w, "✓ installed %s (merlin %s)\n", dest, latest)
+	fmt.Fprintf(w, "✓ installed %s (merlin %s)\n", dest, target)
 
-	if v := runningServeVersion(); v != "" && v != latest {
-		fmt.Fprintf(w, "The running merlin serve (%s) switches to %s within a minute.\n", v, latest)
+	if v := runningServeVersion(); v != "" && v != target {
+		fmt.Fprintf(w, "The running merlin serve (%s) switches to %s within a minute.\n", v, target)
 	}
 	return nil
+}
+
+// releaseStatus is the HTTP status of release v's SHA256SUMS: 200 when the release exists.
+// It is a GET (the file is tiny and the body is never read) because release hosts redirect
+// downloads to a CDN whose signed URLs do not always answer HEAD.
+func releaseStatus(ctx context.Context, v string) (int, error) {
+	resp, err := get(ctx, releasesURL+"/download/v"+v+"/SHA256SUMS")
+	if err != nil {
+		return 0, fmt.Errorf("cannot reach the release server to look for %s: %w", v, err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode, nil
 }
 
 // resolveDest is the file `merlin upgrade` replaces: this binary, symlinks resolved.

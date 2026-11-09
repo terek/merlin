@@ -65,7 +65,7 @@ merlin serve [--port 7433] [--no-hooks]   daemon: index, follow, serve
 merlin sessions [--project P] [--kind K] [--since D]   list sessions, newest first
 merlin shape [--json] <path>...            field names, types and counts of JSONL files, never values
 merlin show <session-id>                  turns, agent tree, compactions, cost
-merlin upgrade [--check] [--force]        replace this binary with the latest release
+merlin upgrade [--check] [--force] [--version X]   replace this binary with the latest release (or exactly X)
 merlin version                            print the version
 ```
 
@@ -75,7 +75,10 @@ HTTP API and the design.
 ## Upgrade
 
 `merlin upgrade` downloads the latest release, verifies its SHA-256 and replaces the binary in
-place; `merlin upgrade --check` only reports whether there is one. If merlin is installed in a
+place; `merlin upgrade --check` only reports whether there is one (and, under
+`"autoUpgrade": "patch"`, the latest patch of your line). `merlin upgrade --version 0.6.1`
+installs exactly that release, older or pre-release included, with the same checks; it refuses a
+version that does not exist, and `--force` reinstalls the one you have. If merlin is installed in a
 directory you cannot write to (such as `/usr/local/bin`), run it with `sudo`. A running
 `merlin serve` switches to the new binary within a minute.
 
@@ -90,8 +93,25 @@ bad version is recorded in `~/.merlin/upgrade.json` and not tried again. Develop
 (`make build`) never upgrade themselves, nor does an install in a directory the user cannot
 write to (run `sudo merlin upgrade`). Turn it off with `"autoUpgrade": false` in `config.json`,
 `MERLIN_AUTO_UPGRADE=0`, or `merlin serve --no-auto-upgrade` (flag beats environment beats file).
+`"autoUpgrade": "patch"` (or `MERLIN_AUTO_UPGRADE=patch`) follows only newer patch releases of
+the running major.minor (0.6.1 takes 0.6.2 and 0.6.3, never 0.7.0); the log says so
+(`auto-upgrade: patch releases of 0.6 only`). A version listed in `upgrade.json` is skipped.
 For testing, `MERLIN_RELEASES_URL` points the release lookups at another server (a directory
 laid out like the releases page) and `--upgrade-interval` shortens the 4 hours.
+
+### Pinning a version
+
+Auto-upgrade would undo a downgrade, so to stay on a version turn it off and install it:
+
+```
+# ~/.merlin/config.json:  { "autoUpgrade": false }
+merlin upgrade --version 0.6.1
+```
+
+To take fixes but never a new minor, set `"autoUpgrade": "patch"` instead. After
+`merlin upgrade --version X`, merlin tells you if `merlin serve` would replace X again and how
+to stop it. For a fresh install of a given version, run the installer with `MERLIN_VERSION`
+(`curl -fsSL https://merlin.dev/install.sh | MERLIN_VERSION=0.6.1 bash`).
 
 Versions 0.2.0 and 0.3.0 cannot update themselves: run the installer again to get past them.
 
@@ -105,7 +125,9 @@ keys are optional and unknown keys are ignored:
 ```
 
 - `port`: the TCP port of `merlin serve` and the hooks. `--port` overrides it. Default 7433.
-- `autoUpgrade`: whether the daemon may upgrade merlin by itself. Default `true`.
+- `autoUpgrade`: whether the daemon may upgrade merlin by itself: `true` (default), `false`, or
+  `"patch"` (only newer patch releases of the running major.minor). Anything else is a warning
+  and the default. `MERLIN_AUTO_UPGRADE` takes the same values (`1`/`0`/`patch`).
 - `prices`: model price overrides; see [docs/pricing.md](docs/pricing.md).
 
 A command-line flag beats the file, and the file beats the built-in default. A malformed file or

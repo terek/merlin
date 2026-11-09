@@ -21,7 +21,9 @@ type fakeRelease struct {
 	reports   string // what the downloaded binary says it is; default latest
 	badSum    bool   // SHA256SUMS lists the wrong hash
 	downloads int
-	checks    int // hits on /latest
+	checks    int      // hits on /latest
+	extra     []string // more published versions, each with a binary that reports its own version
+	probes    int      // hits on any SHA256SUMS
 }
 
 func (f *fakeRelease) start(t *testing.T) {
@@ -40,19 +42,28 @@ func (f *fakeRelease) start(t *testing.T) {
 	if f.badSum {
 		hash = strings.Repeat("0", 64)
 	}
-	dl := "/download/v" + f.latest + "/"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/latest", func(w http.ResponseWriter, r *http.Request) {
 		f.checks++
 		http.Redirect(w, r, "/tag/v"+f.latest, http.StatusFound)
 	})
-	mux.HandleFunc(dl+"SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "%s  merlin-other-arch\n%s  merlin-%s\n", strings.Repeat("1", 64), hash, target)
-	})
-	mux.HandleFunc(dl+"merlin-"+target, func(w http.ResponseWriter, r *http.Request) {
-		f.downloads++
-		w.Write(bin)
-	})
+	publish := func(v string, bin []byte, hash string) {
+		dl := "/download/v" + v + "/"
+		mux.HandleFunc(dl+"SHA256SUMS", func(w http.ResponseWriter, r *http.Request) {
+			f.probes++
+			fmt.Fprintf(w, "%s  merlin-other-arch\n%s  merlin-%s\n", strings.Repeat("1", 64), hash, target)
+		})
+		mux.HandleFunc(dl+"merlin-"+target, func(w http.ResponseWriter, r *http.Request) {
+			f.downloads++
+			w.Write(bin)
+		})
+	}
+	publish(f.latest, bin, hash)
+	for _, v := range f.extra {
+		b := []byte("#!/bin/sh\necho merlin " + v + "\n")
+		sum := sha256.Sum256(b)
+		publish(v, b, hex.EncodeToString(sum[:]))
+	}
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	setVar(t, &releasesURL, srv.URL)
@@ -80,6 +91,8 @@ func installed(t *testing.T, current string) string {
 	setVar(t, &version, current)
 	setVar(t, &executablePath, func() (string, error) { return link, nil })
 	setVar(t, &healthURL, func() string { return "" })
+	// Policy lookups read MERLIN_HOME and the environment: keep them off the real machine.
+	t.Setenv("MERLIN_HOME", t.TempDir())
 	return real
 }
 
@@ -116,7 +129,7 @@ func TestUpgradeReplacesBinary(t *testing.T) {
 	setVar(t, &healthURL, func() string { return health.URL + "/healthz" })
 
 	var out bytes.Buffer
-	if err := upgrade(&out, false, false); err != nil {
+	if err := upgrade(&out, false, false, ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(contents(t, real), "merlin 0.9.0") {
@@ -133,11 +146,12 @@ func TestUpgradeReplacesBinary(t *testing.T) {
 }
 
 func TestUpgradeCheckInstallsNothing(t *testing.T) {
+	quietEnv(t)
 	rel := &fakeRelease{latest: "0.9.0"}
 	rel.start(t)
 	real := installed(t, "0.3.0")
 	var out bytes.Buffer
-	if err := upgrade(&out, true, false); err != nil {
+	if err := upgrade(&out, true, false, ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "merlin 0.9.0 is available (this is 0.3.0)") {
@@ -153,7 +167,7 @@ func TestUpgradeUpToDate(t *testing.T) {
 	rel.start(t)
 	installed(t, "0.3.0")
 	var out bytes.Buffer
-	if err := upgrade(&out, false, false); err != nil {
+	if err := upgrade(&out, false, false, ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "up to date") || rel.downloads != 0 {
@@ -169,7 +183,7 @@ func TestUpgradeRefusesBadDownloads(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rel.start(t)
 			real := installed(t, "0.3.0")
-			if err := upgrade(&bytes.Buffer{}, false, false); err == nil {
+			if err := upgrade(&bytes.Buffer{}, false, false, ""); err == nil {
 				t.Fatal("upgrade succeeded")
 			}
 			if !strings.Contains(contents(t, real), "merlin 0.3.0") {
@@ -186,10 +200,10 @@ func TestUpgradeDevBuildNeedsForce(t *testing.T) {
 	rel := &fakeRelease{latest: "0.9.0"}
 	rel.start(t)
 	real := installed(t, "0.1.0-dev")
-	if err := upgrade(&bytes.Buffer{}, false, false); err == nil || !strings.Contains(err.Error(), "--force") {
+	if err := upgrade(&bytes.Buffer{}, false, false, ""); err == nil || !strings.Contains(err.Error(), "--force") {
 		t.Fatalf("err = %v, want a hint to use --force", err)
 	}
-	if err := upgrade(&bytes.Buffer{}, false, true); err != nil {
+	if err := upgrade(&bytes.Buffer{}, false, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(contents(t, real), "merlin 0.9.0") {

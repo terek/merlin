@@ -520,4 +520,10 @@ fails before listening, it restores `.merlin.prev`, records its version in
 `$MERLIN_HOME/upgrade.json` and re-execs without the variable. A once-a-minute stat of the
 binary (`Options.BinaryChanged`) makes `merlin upgrade`/install.sh take effect in a running
 serve. Off for dev builds, `--no-auto-upgrade`, `MERLIN_AUTO_UPGRADE=0`, `autoUpgrade: false`.
+The policy (`upgradePolicy`: flag, then env, then config.json; `config.UpgradePolicy` on/off/patch)
+is shared with `merlin upgrade`. Under `patch`, `latestPatch` finds the target without the
+releases API: it GETs `download/vX.Y.(z+1)/SHA256SUMS`, z+2, ... (at most 50; a pre-release
+X.Y.Z-rc1 starts at X.Y.Z) until one is missing, and takes the highest that is not in
+`upgrade.json`. `merlin upgrade --version X` installs exactly X (downgrades and pre-releases
+included, same checks, `.merlin.prev` kept) and warns when auto-upgrade would undo it.
 A new binary that crashes (rather than fails to start) is not rolled back.

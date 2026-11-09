@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,34 +86,81 @@ func (a *autoUpgrader) wasInstalled() bool {
 	return a.installed
 }
 
-// disabled says why auto-upgrade is off, "" if it is on. Precedence: the flag, then
-// MERLIN_AUTO_UPGRADE, then config.json (re-read, so an edit applies without a restart).
-func (a *autoUpgrader) disabled() string {
-	switch {
-	case isDevVersion(version):
-		return "auto-upgrade: off (development build " + version + ")"
-	case a.off:
-		return "auto-upgrade: off (--no-auto-upgrade)"
+// upgradePolicy resolves what auto-upgrade may install. Precedence: the flag, then
+// MERLIN_AUTO_UPGRADE (an unrecognised value is ignored), then config.json (re-read, so an
+// edit applies without a restart). source names where the answer came from. Development
+// builds are the caller's business: this is also what `merlin upgrade` consults.
+func upgradePolicy(home string, flagOff bool) (p config.UpgradePolicy, source string) {
+	if flagOff {
+		return config.UpgradeOff, "--no-auto-upgrade"
 	}
 	if v, ok := os.LookupEnv("MERLIN_AUTO_UPGRADE"); ok {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "0", "false", "no", "off":
-			return "auto-upgrade: off (MERLIN_AUTO_UPGRADE=" + v + ")"
-		case "1", "true", "yes", "on":
-			return ""
+		if p, ok := config.ParseUpgradePolicy(v); ok {
+			return p, "MERLIN_AUTO_UPGRADE=" + v
 		}
 	}
-	if cfg, _ := config.Load(a.home); !cfg.AutoUpgrade {
-		return "auto-upgrade: off (autoUpgrade is false in config.json)"
+	cfg, _ := config.Load(home)
+	switch cfg.AutoUpgrade {
+	case config.UpgradeOff:
+		return config.UpgradeOff, "autoUpgrade is false in config.json"
+	case config.UpgradePatch:
+		return config.UpgradePatch, `autoUpgrade is "patch" in config.json`
 	}
-	return ""
+	return config.UpgradeOn, "autoUpgrade in config.json"
+}
+
+// policy is upgradePolicy for this process, where a development build never upgrades.
+func (a *autoUpgrader) policy() (config.UpgradePolicy, string) {
+	if isDevVersion(version) {
+		return config.UpgradeOff, "development build " + version
+	}
+	return upgradePolicy(a.home, a.off)
+}
+
+// maxPatchProbes caps how many consecutive patch releases latestPatch looks for.
+const maxPatchProbes = 50
+
+// latestPatch finds the newest release of cur's major.minor line without the release
+// host's API (rate limits; it must work against MERLIN_RELEASES_URL): it asks for
+// download/vX.Y.(z+1)/SHA256SUMS, then z+2, and so on until one is not there. For a
+// pre-release X.Y.Z-rc1 the first candidate is X.Y.Z itself. Versions in bad are probed
+// past but never returned. It returns "" when there is nothing newer.
+func latestPatch(ctx context.Context, cur string, bad []string) (string, error) {
+	v, ok := parseVersion(cur)
+	if !ok {
+		return "", fmt.Errorf("%q is not a release version", cur)
+	}
+	z := v.n[2] + 1
+	if v.pre != "" {
+		z = v.n[2]
+	}
+	best := ""
+	for i := 0; i < maxPatchProbes; i++ {
+		cand := fmt.Sprintf("%d.%d.%d", v.n[0], v.n[1], z+i)
+		status, err := releaseStatus(ctx, cand)
+		if err != nil {
+			return "", err
+		}
+		if status != http.StatusOK {
+			break
+		}
+		if !slices.Contains(bad, cand) {
+			best = cand
+		}
+	}
+	return best, nil
 }
 
 // run is daemon.Options.Upgrade: it reports true once a newer binary is installed.
 func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool {
-	if why := a.disabled(); why != "" {
-		a.once(logf, why)
+	pol, src := a.policy()
+	if pol == config.UpgradeOff {
+		a.once(logf, "auto-upgrade: off ("+src+")")
 		return false
+	}
+	patch := pol == config.UpgradePatch
+	if cur, ok := parseVersion(version); patch && ok {
+		a.once(logf, fmt.Sprintf("auto-upgrade: patch releases of %d.%d only", cur.n[0], cur.n[1]))
 	}
 	dest, err := resolveDest()
 	if err != nil {
@@ -132,7 +180,15 @@ func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool 
 	}
 
 	cctx, cancel := context.WithTimeout(ctx, startupCheckTimeout)
-	latest, err := latestVersion(cctx)
+	var latest string
+	if patch {
+		latest, err = latestPatch(cctx, version, loadBad(a.home))
+		if err == nil && latest == "" {
+			latest = version // nothing newer in this line
+		}
+	} else {
+		latest, err = latestVersion(cctx)
+	}
 	cancel()
 	if err != nil {
 		if ctx.Err() == nil {
@@ -141,7 +197,11 @@ func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool 
 		return false
 	}
 	if compareVersions(latest, version) <= 0 {
-		a.once(logf, fmt.Sprintf("auto-upgrade: %s is current (latest release %s)", version, latest))
+		if patch {
+			a.once(logf, fmt.Sprintf("auto-upgrade: %s is current (no newer patch release)", version))
+		} else {
+			a.once(logf, fmt.Sprintf("auto-upgrade: %s is current (latest release %s)", version, latest))
+		}
 		return false
 	}
 	if slices.Contains(loadBad(a.home), latest) {
