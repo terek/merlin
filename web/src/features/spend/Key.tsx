@@ -1,6 +1,5 @@
-// The legend of the spend graph: a full-height column on the right of the Spend card, always shown. It
-// starts with the map of the breakdown's bars (Breakdown.tsx hands it in), then is the key of the plot: a
-// small sample of every mark it uses with a few words, one entry to a row, in groups by meaning. The
+// The key of the spend graph's plot: under the plot, in three columns, always shown. A small sample of
+// every mark it uses with a few words, one entry to a row, in groups by meaning. The
 // samples are drawn with the plot's own constants and colours (exported by TimeView.tsx), so that a
 // change to the plot's look changes its legend; marks the tree cannot have are listed too, faint.
 import { type ReactNode, useId } from 'react'
@@ -111,11 +110,8 @@ const base = (color = 'var(--faint)') => (
   <line x1={0} x2={W} y1={B + 0.5} y2={B + 0.5} stroke={color} strokeWidth={0.75} />
 )
 
-/**
- * The column on the right of the card, one column top to bottom: `spend` (the map of the breakdown), then
- * the key's groups.
- */
-export function Legend({ facts, spend }: { facts: KeyFacts; spend: ReactNode }) {
+/** The key's groups, in three columns under the plot (fewer where the card is narrower than about 900px). */
+export function Legend({ facts }: { facts: KeyFacts }) {
   const id = useId().replace(/[^a-zA-Z0-9-]/g, '')
   const f = facts
   const held = (strong: boolean) => {
@@ -502,14 +498,12 @@ export function Legend({ facts, spend }: { facts: KeyFacts; spend: ReactNode }) 
   }
   return (
     <aside
-      className="w-72 shrink-0 self-stretch border-l border-line text-meta text-muted"
-      aria-label="Legend: the parts of the spend and how the marks of the graph look"
+      className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] items-start gap-x-6 border-t border-line pt-3 text-meta text-muted"
+      aria-label="Key: how the marks of the graph look"
     >
-      {/* taller than the screen, the column sticks and scrolls on its own */}
-      <div className="sticky top-0 max-h-screen overflow-y-auto px-3 pb-2">
-        {spend}
-        {group('Sessions and agents')}
-        {group('Context')}
+      <div>{group('Sessions and agents')}</div>
+      <div>{group('Context')}</div>
+      <div>
         {group('Your turns')}
         {group('Spend')}
         {group('Time')}

@@ -298,9 +298,8 @@ From top to bottom:
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
   by when it happened. At the top the **breakdown** of the spend as three bars (below); then a line adding up the compactions, the strip,
-  the **readout** above the plot, and the plot. All of that is the card's content, a flex row (`flex-1 min-w-0`) with the
-  **legend** as a full-height column on its right, so the strip and the plot (which measure their own width) are as wide
-  as what is left.
+  the **readout** above the plot, and the plot. All of that is the card's content, at its full width (the strip and the plot
+  measure it), with the plot's **key** under the plot.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
@@ -309,10 +308,9 @@ From top to bottom:
     by-who chips and notes on cache misses, compactions, typed-while-running prompts and reports) or the
     selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
     how to read and pin, and the scales;
-  - the **legend** (`Key.tsx`, once the "key" under the plot) is always shown: no button, no toggle, nothing
-    in `localStorage`. It is a column on the right of the card's content (`w-72`, a left border, as tall as the content;
-    taller than the screen it is sticky and scrolls on its own), in ONE column top to bottom: the breakdown's map
-    (`SpendMap`, below), then the key of the plot in groups: *Sessions and agents*; *Context*; *Your turns*, *Spend* and *Time*. Entries are
+  - the plot's **key** (`Key.tsx`, `Legend`) is always shown: no button, no toggle, nothing
+    in `localStorage`. It sits under the plot, below a rule, in three balanced columns (a grid of `auto-fit` columns of at
+    least 17rem, so about three above 900 px and fewer below): *Sessions and agents*; *Context*; *Your turns*, *Spend* and *Time*. Entries are
     rows of a column: an inline SVG sample (28x16 px) and its words, samples
     lined up and texts starting at one x, in
     groups with a small heading (the same on the three columns): *Sessions and agents* (session line by tier, forked or continued session,
@@ -581,13 +579,16 @@ From top to bottom:
     top edge of `CTX_LINE` (1.25 px), both imported from `TimeView.tsx`. The **token class** bar is in black-and-white
     patterns of theme tokens (`CLASS_PATTERNS`: dark grey output, light grey cache read, diagonal hatch cache write,
     dots uncached input) at the same opacity, so it reads as another kind of partition than the coloured bars; the
-    cache miss alone stays pink, as everywhere. Labels keep the normal text colour. The swatches of the legend's map
+    cache miss alone stays pink, as everywhere. Labels keep the normal text colour. The swatches of the names
     have the same look.
-  - **The map** (the legend's first part): three groups headed *Who*, *Token class*, *Model tier*, a row each per
-    series (swatch, label, dollars, percent of the window; tabular figures in columns of a fixed width) and, once, the
-    overhead's row (hatch swatch, "Not in messages"). **Every series is listed, a part of $0 faint**, so that the
-    column keeps its rows while a window is dragged. Hovering a segment or a row is one shared state (held by the card):
-    the segment gets a 1.5 px frame and the row's label is underlined; nothing dims. The overhead frames its tail in all
+  - **The names** (the bars' legend): right of the bars, three narrow columns side by side, *Who* | *Token class* |
+    *Model tier*, each a small heading over a vertical list of swatch and name, swatches lined up (the columns are as
+    narrow as their longest name; the bars' track takes all the rest of the width, less 150 px for the price). The
+    dollars and percents are in each segment's hover title. The overhead's "Not in messages" (hatch swatch) is the last
+    entry of the *Model tier* column, the shortest list, always present as the overhead is in every bar. **Every series
+    is listed, a part of $0 faint**, so that nothing jumps while a window is dragged. Hovering a segment or a name is
+    one shared state (held by the card):
+    the segment gets a 1.5 px frame and the name is underlined; nothing dims. The overhead frames its tail in all
     three rows.
   - What is counted is summed from the timeline's calls in one pure function (`sumRange`: the three partitions of a
     range add up to the same total; a call is in when its time is, as in the plot's slots). **Overhead** (what the

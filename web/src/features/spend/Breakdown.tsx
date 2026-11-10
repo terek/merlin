@@ -1,6 +1,6 @@
 // The structure of the spend, at the top of the Spend card: three bars of linear shares, one per partition
-// of the same dollars (by who, by token class, by model tier), and the map of them in the legend's column
-// (`SpendMap`, handed to Legend in Key.tsx). What is counted is what the plot shows (the effective window).
+// of the same dollars (by who, by token class, by model tier), and to their right the names of their parts,
+// as three narrow columns (swatch and name only; the figures are in each part's hover title). What is counted is what the plot shows (the effective window).
 //
 // Each row has the whole session's rectangle, outlined, whose length is the session's dollars on a
 // logarithmic, saturating scale (`lengthShare`: $1 or less tiny, $100 four fifths, then toward the whole
@@ -9,7 +9,7 @@
 // tail last), so that the whole session fills it and a part of it fills a part. The fills are as faint as
 // the agent strips of the plot (`CTX_FILL` under a full-colour top edge of `CTX_LINE`).
 //
-// Hovering a segment or a row of the map frames the segment and underlines the row (one shared state,
+// Hovering a segment or a name of the legend frames the segment and underlines the name (one shared state,
 // held by the card); nothing dims. Nothing moves while a window is dragged: the rows have a fixed height,
 // the price's place depends only on the session's rectangle, and the figures are tabular.
 import { type CSSProperties, useMemo, useRef } from 'react'
@@ -122,25 +122,23 @@ export type BreakdownData = ReturnType<typeof useBreakdown>
 function Swatch({ row, s }: { row: RowKey; s: Segment }) {
   const l = look(row, s)
   return (
-    <span aria-hidden className="relative inline-block h-2.5 w-7 shrink-0 overflow-hidden rounded-[2px]">
+    <span aria-hidden className="relative inline-block h-2.5 w-5 shrink-0 overflow-hidden rounded-[2px]">
       <span className="absolute inset-0" style={{ ...l.fill, opacity: l.opacity }} />
       <span className="absolute inset-x-0 top-0" style={{ height: CTX_LINE, background: l.edge }} />
     </span>
   )
 }
 
-/** One row of the map. Zero parts are faint, so that the column keeps its rows while a window is dragged. */
-function SpendRow({
+/** One name of the bars' legend: swatch and name, faint when the window has none of it (so nothing jumps). */
+function Name({
   row,
   s,
-  total,
   tip,
   hover,
   onHover,
 }: {
   row: RowKey
   s: Segment
-  total: number
   tip: string
   hover: Hover | null
   onHover: (h: Hover | null) => void
@@ -152,60 +150,11 @@ function SpendRow({
       onMouseEnter={() => onHover({ row: s.hatched ? '' : row, key: s.key })}
       onMouseLeave={() => onHover(null)}
       data-on={on || undefined}
-      className={`grid grid-cols-[28px_minmax(0,1fr)_3.75rem_2.5rem] items-center gap-x-2 rounded-[3px] ${
-        s.usd > 0 ? '' : 'opacity-40'
-      }`}
+      className={`flex items-center gap-1.5 whitespace-nowrap ${s.usd > 0 ? '' : 'opacity-40'}`}
     >
       <Swatch row={row} s={s} />
-      <span className={`truncate underline-offset-2 ${on ? 'text-text underline' : ''}`}>{s.label}</span>
-      <span className="text-right tabular-nums">{formatMoney(s.usd)}</span>
-      <span className="text-right tabular-nums">{formatPercent(s.usd, total)}</span>
+      <span className={`underline-offset-2 ${on ? 'text-text underline' : ''}`}>{s.label}</span>
     </li>
-  )
-}
-
-/** The breakdown's map, the legend column's first part: every series of the three partitions, then the overhead. */
-export function SpendMap({
-  data,
-  hover,
-  onHover,
-}: {
-  data: BreakdownData
-  hover: Hover | null
-  onHover: (h: Hover | null) => void
-}) {
-  const { rows, overhead, winTotal, partial } = data
-  return (
-    <section aria-label="The spend of the window">
-      {rows.map((row) => (
-        <div key={row.key} className="mb-2.5">
-          <h4 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wide text-faint">{row.head}</h4>
-          <ul className="space-y-0.5">
-            {row.all.map((s) => (
-              <SpendRow
-                key={s.key}
-                row={row.key}
-                s={s}
-                total={winTotal}
-                tip={tipOf(row.head, s, winTotal, partial)}
-                hover={hover}
-                onHover={onHover}
-              />
-            ))}
-          </ul>
-        </div>
-      ))}
-      <ul className="mb-2.5">
-        <SpendRow
-          row="kind"
-          s={overhead}
-          total={winTotal}
-          tip={tipOf('Overhead', overhead, winTotal, partial)}
-          hover={hover}
-          onHover={onHover}
-        />
-      </ul>
-    </section>
   )
 }
 
@@ -285,48 +234,80 @@ export interface BreakdownProps {
 export function Breakdown({ data, hover, onHover }: BreakdownProps) {
   const track = useRef<HTMLDivElement>(null)
   const width = useWidth(track)
-  const { rows, winTotal, wholeTotal, partial } = data
+  const { rows, overhead, winTotal, wholeTotal, partial } = data
   const lenWhole = Math.round(lengthShare(wholeTotal) * width)
   const inner = Math.max(0, lenWhole - 2) // inside the rectangle's 1 px outline
 
   return (
     <section
-      className="relative mb-3 text-sec tabular-nums"
+      className="mb-3 flex items-start text-sec tabular-nums"
       aria-label="The spend in three bars: by who, by token class, by model tier"
     >
-      <div ref={track} style={{ marginRight: PRICE_ROOM }}>
-        {rows.map((row) => (
-          <div key={row.key} className="h-7 py-0.5">
-            <div
-              className="relative h-full rounded-[3px]"
-              style={{ width: lenWhole, boxShadow: 'inset 0 0 0 1px var(--faint)' }}
-            >
-              <div className="absolute inset-px overflow-hidden rounded-[2px]">
-                {winTotal > 0 && (
-                  <Bar
-                    row={row.key}
-                    head={row.head}
-                    segs={row.segs}
-                    px={inner}
-                    scale={wholeTotal}
-                    total={winTotal}
-                    partial={partial}
-                    hover={hover}
-                    onHover={onHover}
-                  />
-                )}
+      <div className="relative min-w-0 flex-1">
+        <div ref={track} style={{ marginRight: PRICE_ROOM }}>
+          {rows.map((row) => (
+            <div key={row.key} className="h-7 py-0.5">
+              <div
+                className="relative h-full rounded-[3px]"
+                style={{ width: lenWhole, boxShadow: 'inset 0 0 0 1px var(--faint)' }}
+              >
+                <div className="absolute inset-px overflow-hidden rounded-[2px]">
+                  {winTotal > 0 && (
+                    <Bar
+                      row={row.key}
+                      head={row.head}
+                      segs={row.segs}
+                      px={inner}
+                      scale={wholeTotal}
+                      total={winTotal}
+                      partial={partial}
+                      hover={hover}
+                      onHover={onHover}
+                    />
+                  )}
+                </div>
               </div>
             </div>
+          ))}
+        </div>
+        {/* the price, once, right of the session's rectangle: it moves only with the session, not as the window is dragged */}
+        <div
+          className="pointer-events-none absolute inset-y-0 flex items-center gap-1.5 whitespace-nowrap pl-3"
+          style={{ left: lenWhole }}
+        >
+          <span className="font-semibold text-text">{formatMoney(winTotal)}</span>
+          {partial && <span className="text-muted">of {formatMoney(wholeTotal)}</span>}
+        </div>
+      </div>
+      {/* the names: three columns as narrow as their longest name, side by side, a heading each; the swatches
+          line up in each. The overhead (in every bar) ends the last column, once. */}
+      <div className="flex shrink-0 items-start gap-x-5 pl-5 text-meta text-muted">
+        {rows.map((row, i) => (
+          <div key={row.key}>
+            <h4 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wide text-faint">{row.head}</h4>
+            <ul className="space-y-0.5">
+              {row.all.map((s) => (
+                <Name
+                  key={s.key}
+                  row={row.key}
+                  s={s}
+                  tip={tipOf(row.head, s, winTotal, partial)}
+                  hover={hover}
+                  onHover={onHover}
+                />
+              ))}
+              {i === rows.length - 1 && (
+                <Name
+                  row="kind"
+                  s={overhead}
+                  tip={tipOf('Overhead', overhead, winTotal, partial)}
+                  hover={hover}
+                  onHover={onHover}
+                />
+              )}
+            </ul>
           </div>
         ))}
-      </div>
-      {/* the price, once, right of the session's rectangle: it moves only with the session, not as the window is dragged */}
-      <div
-        className="pointer-events-none absolute inset-y-0 flex items-center gap-1.5 whitespace-nowrap pl-3"
-        style={{ left: lenWhole }}
-      >
-        <span className="font-semibold text-text">{formatMoney(winTotal)}</span>
-        {partial && <span className="text-muted">of {formatMoney(wholeTotal)}</span>}
       </div>
     </section>
   )

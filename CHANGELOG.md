@@ -4,7 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
-- The session page's Spend card shows the spend as three horizontal bars (by who, by token class, by model tier) whose total length grows with the session's cost, with the selected window drawn inside the session's outline; the legend is a column on the right.
+- The session page's Spend card shows the spend as three horizontal bars (by who, by token class, by model tier) whose total length grows with the session's cost, with the selected window drawn inside the session's outline; the names of the bars' parts stand to their right in three narrow columns, and the plot's key is in three columns under the plot.
 
 ## 0.7.2 — 2026-11-10
 

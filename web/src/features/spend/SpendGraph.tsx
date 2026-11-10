@@ -1,4 +1,4 @@
-// The spend graph: the card around the time view (TimeView.tsx), with the bars (Breakdown.tsx) and the legend column (Key.tsx), the compactions,
+// The spend graph: the card around the time view (TimeView.tsx), with the bars and their names (Breakdown.tsx) and the plot's key below the plot (Key.tsx), the compactions,
 // the readout of what is under the cursor and the key handling. The pinned turn and the selected
 // piece of agent work are the page's; the panels under the card open them.
 import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
@@ -11,7 +11,7 @@ import { unwrapMachineText } from '../../lib/wrapper'
 import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
-import { Breakdown, type Hover, SpendMap, useBreakdown } from './Breakdown'
+import { Breakdown, type Hover, useBreakdown } from './Breakdown'
 import { keyFacts, Legend } from './Key'
 import { kindColor } from './marks'
 import {
@@ -258,7 +258,7 @@ export function SpendGraph({
       : null,
   )
   const [hoverUnit, setHoverUnit] = useState<UnitRef | null>(null)
-  // the part of the spend under the pointer, in a bar or in the legend's map
+  // the part of the spend under the pointer, in a bar or in the bars' names
   const [hoverPart, setHoverPart] = useState<Hover | null>(null)
 
   const { branches } = tree
@@ -350,73 +350,67 @@ export function SpendGraph({
 
   return (
     <Card title="Spend">
-      {/* the legend is a full-height column on the right: what is left of the width is the content's, and
-          the strip and the plot measure it */}
-      <div className="flex items-stretch gap-3">
-        <div className="min-w-0 flex-1">
-          <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} />
-          {unrecordedRuns > 0 && (
-            <p
-              className="mb-2 flex items-center gap-1.5 text-sec text-muted"
-              title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
-            >
-              <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
-              <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
-            </p>
-          )}
-          {compactions.calls + compactions.unknown > 0 && (
-            <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
-              <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
-              <span className={compactions.cold > 0 ? 'text-bad' : undefined}>
-                Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
-              </span>
-              {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
-              {compactions.inAgents > 0 && (
-                <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
-              )}
-              <span className="text-muted">
-                {compactions.unknown > 0 &&
-                  compactions.calls > 0 &&
-                  `${compactions.unknown} more without an estimate. `}
-                {compactions.calls === 0
-                  ? 'The harness recorded no estimate of their calls.'
-                  : compactions.recorded === compactions.calls
-                    ? 'Recorded by the harness; already in the figures on this page.'
-                    : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
-              </span>
-            </p>
-          )}
-          <div ref={stripRef}>
-            <Overview
-              timeline={timeline}
-              days={days}
-              win={win}
-              eff={eff}
-              onWin={setWin}
-              pinnedT={turnStart(pinned)}
-              latest={latest}
-            />
-          </div>
-          <div className="relative">
-            <TimePlot
-              tree={tree}
-              timeline={timeline}
-              range={eff}
-              pinned={valid(pinned) ? pinned : null}
-              cursor={cur}
-              selectedUnit={selectedUnit}
-              hoverUnit={hoverUnit}
-              onCursor={setCursor}
-              onHoverUnit={setHoverUnit}
-              onPin={onPin}
-              onSelectUnit={onSelectUnit}
-              onKey={onKey}
-              current={current}
-              turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
-            />
-          </div>
+      <div className="min-w-0">
+        <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} />
+        {unrecordedRuns > 0 && (
+          <p
+            className="mb-2 flex items-center gap-1.5 text-sec text-muted"
+            title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
+          >
+            <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
+            <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
+          </p>
+        )}
+        {compactions.calls + compactions.unknown > 0 && (
+          <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
+            <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
+            <span className={compactions.cold > 0 ? 'text-bad' : undefined}>
+              Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
+            </span>
+            {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
+            {compactions.inAgents > 0 && (
+              <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
+            )}
+            <span className="text-muted">
+              {compactions.unknown > 0 && compactions.calls > 0 && `${compactions.unknown} more without an estimate. `}
+              {compactions.calls === 0
+                ? 'The harness recorded no estimate of their calls.'
+                : compactions.recorded === compactions.calls
+                  ? 'Recorded by the harness; already in the figures on this page.'
+                  : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
+            </span>
+          </p>
+        )}
+        <div ref={stripRef}>
+          <Overview
+            timeline={timeline}
+            days={days}
+            win={win}
+            eff={eff}
+            onWin={setWin}
+            pinnedT={turnStart(pinned)}
+            latest={latest}
+          />
         </div>
-        <Legend facts={facts} spend={<SpendMap data={breakdown} hover={hoverPart} onHover={setHoverPart} />} />
+        <div className="relative">
+          <TimePlot
+            tree={tree}
+            timeline={timeline}
+            range={eff}
+            pinned={valid(pinned) ? pinned : null}
+            cursor={cur}
+            selectedUnit={selectedUnit}
+            hoverUnit={hoverUnit}
+            onCursor={setCursor}
+            onHoverUnit={setHoverUnit}
+            onPin={onPin}
+            onSelectUnit={onSelectUnit}
+            onKey={onKey}
+            current={current}
+            turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
+          />
+        </div>
+        <Legend facts={facts} />
       </div>
     </Card>
   )
