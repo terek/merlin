@@ -5,7 +5,6 @@ import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
 import { usePrices } from '../../api/queries'
 import type { SessionKey } from '../../api/types'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
-import { spendBasis } from '../../lib/cost'
 import { formatCount, formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
@@ -13,11 +12,10 @@ import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
 import { Breakdown } from './Breakdown'
-import { Key, keyFacts } from './Key'
+import { keyFacts, Legend, LegendButton, useLegendOpen } from './Key'
 import { kindColor } from './marks'
 import {
   compactionTally,
-  missSummary,
   missText,
   type Part,
   stepParts,
@@ -66,10 +64,6 @@ export interface SpendGraphProps {
   initialCursor?: number
   /** Dev and screenshots: the window of time to show first (`?from=&to=`). */
   initialWindow?: Partial<Win>
-  /** Sessions of the tree whose cost is unknown (work, no billed message). */
-  unknownSessions?: number
-  /** Sessions of the tree whose dollars the harness recorded per call (flag recorded). */
-  recordedSessions?: number
   /** The session the page is about: its main row is marked in the plot. */
   current?: SessionKey
 }
@@ -256,8 +250,6 @@ export function SpendGraph({
   onSelectUnit,
   initialCursor,
   initialWindow,
-  unknownSessions = 0,
-  recordedSessions = 0,
   current,
 }: SpendGraphProps) {
   const [cursor, setCursor] = useState<Pin | null>(
@@ -266,11 +258,10 @@ export function SpendGraph({
       : null,
   )
   const [hoverUnit, setHoverUnit] = useState<UnitRef | null>(null)
+  const [legendOpen, setLegendOpen] = useLegendOpen()
 
   const { branches } = tree
   const focus = pinned?.branch ?? home
-  // the parts add up to the harness's figure: the messages, and what it reported beyond them
-  const overhead = tree.overheadUSD >= 0.005
   // agent runs that left no record of their spend (a Pi `--no-session` child): unknown, so in no figure
   const unrecordedRuns = branches.reduce((n, b) => n + (b.detail.digest.cost.unrecordedAgents ?? 0), 0)
   const compactions = useMemo(
@@ -355,91 +346,75 @@ export function SpendGraph({
   }
 
   return (
-    <Card title="Spend" actions={<Key facts={facts} />}>
-      <Breakdown tree={tree} timeline={timeline} range={eff} />
-      {unrecordedRuns > 0 && (
-        <p
-          className="mb-2 flex items-center gap-1.5 text-sec text-muted"
-          title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
-        >
-          <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
-          <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
-        </p>
-      )}
-      {compactions.calls + compactions.unknown > 0 && (
-        <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
-          <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
-          <span className={compactions.cold > 0 ? 'text-bad' : undefined}>
-            Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
-          </span>
-          {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
-          {compactions.inAgents > 0 && (
-            <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
+    <Card title="Spend" actions={<LegendButton open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)} />}>
+      {/* the legend is a column on the right: what is left of the width is the content's, and the
+          plot and the strip measure it, so they follow when the column opens or closes */}
+      <div className="flex items-stretch gap-3">
+        <div className="min-w-0 flex-1">
+          <Breakdown tree={tree} timeline={timeline} range={eff} />
+          {unrecordedRuns > 0 && (
+            <p
+              className="mb-2 flex items-center gap-1.5 text-sec text-muted"
+              title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
+            >
+              <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
+              <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
+            </p>
           )}
-          <span className="text-muted">
-            {compactions.unknown > 0 && compactions.calls > 0 && `${compactions.unknown} more without an estimate. `}
-            {compactions.calls === 0
-              ? 'The harness recorded no estimate of their calls.'
-              : compactions.recorded === compactions.calls
-                ? 'Recorded by the harness; already in the figures on this page.'
-                : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
-          </span>
-        </p>
-      )}
-      <div ref={stripRef}>
-        <Overview
-          timeline={timeline}
-          days={days}
-          win={win}
-          eff={eff}
-          onWin={setWin}
-          pinnedT={turnStart(pinned)}
-          latest={latest}
-        />
+          {compactions.calls + compactions.unknown > 0 && (
+            <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
+              <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
+              <span className={compactions.cold > 0 ? 'text-bad' : undefined}>
+                Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
+              </span>
+              {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
+              {compactions.inAgents > 0 && (
+                <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
+              )}
+              <span className="text-muted">
+                {compactions.unknown > 0 &&
+                  compactions.calls > 0 &&
+                  `${compactions.unknown} more without an estimate. `}
+                {compactions.calls === 0
+                  ? 'The harness recorded no estimate of their calls.'
+                  : compactions.recorded === compactions.calls
+                    ? 'Recorded by the harness; already in the figures on this page.'
+                    : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
+              </span>
+            </p>
+          )}
+          <div ref={stripRef}>
+            <Overview
+              timeline={timeline}
+              days={days}
+              win={win}
+              eff={eff}
+              onWin={setWin}
+              pinnedT={turnStart(pinned)}
+              latest={latest}
+            />
+          </div>
+          <div className="relative">
+            <TimePlot
+              tree={tree}
+              timeline={timeline}
+              range={eff}
+              pinned={valid(pinned) ? pinned : null}
+              cursor={cur}
+              selectedUnit={selectedUnit}
+              hoverUnit={hoverUnit}
+              onCursor={setCursor}
+              onHoverUnit={setHoverUnit}
+              onPin={onPin}
+              onSelectUnit={onSelectUnit}
+              onKey={onKey}
+              current={current}
+              turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
+            />
+          </div>
+        </div>
+        {legendOpen && <Legend facts={facts} onClose={() => setLegendOpen(false)} />}
       </div>
-      <div className="relative">
-        <TimePlot
-          tree={tree}
-          timeline={timeline}
-          range={eff}
-          pinned={valid(pinned) ? pinned : null}
-          cursor={cur}
-          selectedUnit={selectedUnit}
-          hoverUnit={hoverUnit}
-          onCursor={setCursor}
-          onHoverUnit={setHoverUnit}
-          onPin={onPin}
-          onSelectUnit={onSelectUnit}
-          onKey={onKey}
-          current={current}
-          turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
-        />
-      </div>
-      <details className="mt-2 text-meta text-muted">
-        <summary className="cursor-pointer select-none text-sec">How to read this graph</summary>
-        <p className="mt-1">
-          The bars at the top show how the spend of the window shown (the faint bar behind each: of the whole session)
-          divides by who, by token class and by model tier; their length is logarithmic. Time runs across, local; a
-          narrow grey band is time in which nothing ran, left out. Every row shares one token scale above its baseline
-          (so the tall ones are the expensive ones to carry) and one dollar scale below it. The plot shows a window of
-          the session, picked on the strip above it (the whole session on one scale, the window highlighted): it opens
-          on all of it, and Latest goes to the last day of work. The rows and the token scale are those of the whole
-          session, so the plot keeps its shape as the window moves (it looks sparse where the session is quiet); the
-          time axis and the dollar scale are the window's own. A fork leaves from the top of its parent's context; a
-          sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot agents share
-          rows, and four or more launched together are one swarm row (marked +; click it to open it, − folds it). A
-          person's turns are weighted by the price of their model, and the model's name is written where it changes.
-          {overhead &&
-            ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
-          {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}
-          {tree.fromMessages ? '' : '; this daemon sent no messages, so the token classes and cache misses are missing'}
-          .
-          {tree.rereads.length > 0 &&
-            ` ${plural(tree.rereads.length, 'cache miss', 'cache misses')} (context that had been cached and was billed again in full): ${missSummary(tree.rereads)}.`}
-          {tree.wakeups.count > 0 &&
-            ` ${plural(tree.wakeups.count, 'piece')} of agent work nobody asked for: an agent woken by its own background work (an expired watch, say) after it had reported, ${formatMoney(tree.wakeups.usd)}.`}
-        </p>
-      </details>
     </Card>
   )
 }

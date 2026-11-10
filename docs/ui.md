@@ -298,7 +298,7 @@ From top to bottom:
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
   by when it happened. A **breakdown** of the spend (below), a line adding up the compactions, a
-  **readout** above the plot, and a drawn **legend** over the plot.
+  **readout** above the plot, and a drawn **legend** in a column on the right.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
@@ -308,14 +308,16 @@ From top to bottom:
     selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
     how to read and pin, and the scales;
   - the **legend** (`Key.tsx`, once the "key" under the plot) is a "Legend" button in the card's header (the
-    `Card` `actions` slot, top right) and a panel dropping down from it, floating over the card's content
-    (absolute, above everything), so that opening or closing it neither changes the card's layout nor passes
-    pointer events or keys to the plot. The panel is about 34rem wide (surface background, border, shadow, a
-    close ×, its own scroll when taller than 75% of the viewport) and its groups flow into **two columns**
-    (CSS columns, each group kept whole), about half as tall as one column. Open or closed is remembered per
+    `Card` `actions` slot, top right) that opens a **column** on the right of the card's content: the content
+    (breakdown, compactions line, window readout, strip, readout, plot) and the column are a flex row, the
+    content `flex-1 min-w-0` and the column 16rem wide with a left border, as tall as the content (stretch).
+    The strip and the plot measure their own width (`useWidth`, a `ResizeObserver`), so they shrink when it
+    opens and grow back when it closes, and the window (a span of time) keeps covering the same time. Closed,
+    there is no column. When taller than the screen the column is sticky at the top of the page scroll and
+    scrolls on its own; it has a close ×. Open or closed is remembered per
     viewer in `localStorage` (`merlin.spend.legend`, default closed, every access in try/catch). Entries are
-    inline SVG samples (28x16 px) in one column and their words in the next, in each legend column, so samples
-    line up and texts start at one x, in
+    one column of rows: an inline SVG sample (28x16 px) and its words, samples
+    lined up and texts starting at one x, in
     groups with a small heading: *Sessions and agents* (session line by tier, forked or continued session,
     agent spine, fork with its copied context, agent frame, fork notch, workflow dashed, swarm "+", report),
     *Context* (the context area, held strong and faint, cache miss, compactions cold, warm, unknown), *Your
@@ -325,9 +327,6 @@ From top to bottom:
     overhead) is drawn faint, with the title "not in this session". The samples use the constants and patterns
     TimeView.tsx exports and draws with (widths, dashes, opacities, tints, the hatching, `elbowPath`), so a
     change to the plot's look changes its legend.
-    Under the plot a **How to read this graph** disclosure holds the rules a picture does not carry: one scale for
-    every row, breaks, the window and overview, forks and sub-agents, swarms, how the dollars are recomputed,
-    and the sentences about cache misses and wake-ups;
   - stretches longer than 10 minutes in which nothing ran (no call, no turn, no piece of agent work)
     are squeezed into a narrow **break** (a pause, so that the work around it reads first) labelled with its length. A break is not a band: the page stays white, and a veil (a rect of the page colour at `BREAK_VEIL`, 0.6, over the rows) fades whatever crosses it, the baselines, gridlines, held contexts, agent lines and spend, which stay visible. The veil lies over the plot's lines and under the cursor, and the texts written on rows (model names, frame labels) are drawn above it so that they stay readable; it takes no pointer. Two slash ticks and the length label mark it on the axis; with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the

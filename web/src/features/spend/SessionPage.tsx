@@ -126,8 +126,6 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
           onSelectUnit={selectUnit}
           initialCursor={num(params.get('cursor')) ?? undefined}
           initialWindow={{ lo: parseTime(params.get('from')), hi: parseTime(params.get('to')) }}
-          unknownSessions={details.filter((d) => d.cost.flag === 'unknown').length}
-          recordedSessions={details.filter((d) => d.cost.flag === 'recorded').length}
         />
       </div>
       <div ref={opened} className="scroll-mt-4 space-y-4">

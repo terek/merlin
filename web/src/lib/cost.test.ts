@@ -11,7 +11,6 @@ import {
   lowerBoundNote,
   sessionCostSegments,
   sessionsLowerBound,
-  spendBasis,
   unknownNote,
   weakestFlag,
 } from './cost'
@@ -57,12 +56,6 @@ test('unknown sessions are named in the cost sentences', () => {
   expect(unknownNote(0)).toBe('')
   expect(unknownNote(1)).toContain('1 session did work but recorded no cost: it is in no total')
   expect(unknownNote(2)).toContain('2 sessions did work but recorded no cost: they are in no total')
-  expect(spendBasis(2, 0)).toBe('Dollars are recomputed from token counts')
-  expect(spendBasis(1, 1)).not.toContain('recomputed')
-  expect(spendBasis(3, 1)).toContain('1 session of the tree recorded no cost')
-  expect(spendBasis(1, 0, 1)).toBe('Dollars are the per-call figures the harness recorded (its own estimate)')
-  expect(spendBasis(3, 1, 2)).not.toContain('recomputed')
-  expect(spendBasis(3, 0, 1)).toContain('except 1 session whose per-call figures the harness recorded')
 })
 
 test('backing sentence', () => {

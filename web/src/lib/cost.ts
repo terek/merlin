@@ -153,28 +153,6 @@ export function unknownNote(n: number): string {
   return `${plural(n, 'session')} did work but recorded no cost: ${n === 1 ? 'it is' : 'they are'} in no total, so the real figure may be higher.`
 }
 
-/**
- * Why a spend graph's dollars are what they are: recomputed from tokens, recorded per call by the
- * harness, or not known at all. `recorded` counts the sessions whose figures the harness recorded.
- */
-export function spendBasis(sessions: number, unknown: number, recorded = 0): string {
-  if (sessions > 0 && unknown >= sessions) {
-    return sessions === 1
-      ? 'This session recorded work but no billed message and no cost figure, so its dollars are not known'
-      : 'These sessions recorded work but no billed message and no cost figure, so their dollars are not known'
-  }
-  const base =
-    recorded > 0 && recorded + unknown >= sessions
-      ? 'Dollars are the per-call figures the harness recorded (its own estimate)'
-      : recorded > 0
-        ? `Dollars are recomputed from token counts, except ${plural(recorded, 'session')} whose per-call figures the harness recorded`
-        : 'Dollars are recomputed from token counts'
-  if (unknown > 0) {
-    return `${base} (${plural(unknown, 'session')} of the tree recorded no cost and counts as unknown, not $0)`
-  }
-  return base
-}
-
 /** The weakest flag of several (unknown < estimated < partial < exact); undefined for none. */
 export function weakestFlag(flags: (CostFlag | undefined)[]): CostFlag | undefined {
   const rank: Record<CostFlag, number> = { unknown: -1, estimated: 0, recorded: 1, partial: 2, exact: 3 }

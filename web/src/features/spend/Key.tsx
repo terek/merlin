@@ -1,5 +1,6 @@
-// The legend of the spend graph: a panel dropped from a button in the Spend card's header, floating over the card's top-right (as a map's legend
-// does), a small sample of every mark the plot uses with a few words, in groups by meaning. The
+// The legend of the spend graph: a column on the right of the Spend card's content, opened from a
+// button in the card's header, a small sample of every mark the plot uses with a few words, one entry
+// to a row, in groups by meaning. The
 // samples are drawn with the plot's own constants and colours (exported by TimeView.tsx), so that a
 // change to the plot's look changes its legend; marks the tree cannot have are listed too, faint.
 import { type ReactNode, useId, useState } from 'react'
@@ -120,9 +121,8 @@ const base = (color = 'var(--faint)') => (
   <line x1={0} x2={W} y1={B + 0.5} y2={B + 0.5} stroke={color} strokeWidth={0.75} />
 )
 
-export function Key({ facts }: { facts: KeyFacts }) {
-  const id = useId().replace(/[^a-zA-Z0-9-]/g, '')
-  const f = facts
+/** Whether the legend is open, remembered per viewer. */
+export function useLegendOpen(): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(readOpen)
   const set = (o: boolean) => {
     setOpen(o)
@@ -130,6 +130,30 @@ export function Key({ facts }: { facts: KeyFacts }) {
       localStorage.setItem(OPEN_KEY, o ? 'open' : 'closed')
     } catch {}
   }
+  return [open, set]
+}
+
+/** The button in the card's header that opens and closes the legend column. */
+export function LegendButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="rounded-badge border border-line bg-surface px-2 py-0.5 text-meta text-sec hover:text-text"
+    >
+      Legend
+    </button>
+  )
+}
+
+/** The width of the legend column: one column of entries, their words wrapping little. */
+export const LEGEND_WIDTH = 'w-64'
+
+/** The legend column: as tall as the card's content, with its own scroll when the entries are taller. */
+export function Legend({ facts, onClose }: { facts: KeyFacts; onClose: () => void }) {
+  const id = useId().replace(/[^a-zA-Z0-9-]/g, '')
+  const f = facts
   const held = (strong: boolean) => {
     const l = strong ? HELD_LINE.strong : HELD_LINE.faint
     return (
@@ -497,47 +521,37 @@ export function Key({ facts }: { facts: KeyFacts }) {
     },
   ]
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => set(!open)}
-        aria-expanded={open}
-        className="rounded-badge border border-line bg-surface px-2 py-0.5 text-meta text-sec hover:text-text"
-      >
-        Legend
-      </button>
-      {open && (
-        <section
-          className="absolute top-full right-0 z-50 mt-1.5 max-h-[75vh] w-[34rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-badge border border-line bg-surface text-meta text-muted shadow-lg"
-          aria-label="Legend: how the marks of the graph look"
-        >
-          <header className="sticky top-0 flex items-center justify-between bg-surface px-2.5 py-1.5">
-            <h3 className="font-medium text-sec">Legend</h3>
-            <button
-              type="button"
-              onClick={() => set(false)}
-              aria-label="Close the legend"
-              className="rounded px-1.5 text-sec hover:text-text focus-visible:outline-2"
-            >
-              ×
-            </button>
-          </header>
-          <div className="columns-2 gap-x-5 px-2.5 pb-2.5">
-            {groups.map((g) => (
-              <section key={g.title} className="mb-2.5 break-inside-avoid">
-                <h4 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wide text-faint">{g.title}</h4>
-                <ul className="grid grid-cols-[28px_1fr] items-center gap-x-2 gap-y-1.5">
-                  {g.entries.map((e) => (
-                    <Entry key={e.label} label={e.label} title={e.title} absent={!e.has}>
-                      {e.sample}
-                    </Entry>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
+    <aside
+      className={`${LEGEND_WIDTH} shrink-0 self-stretch border-l border-line text-meta text-muted`}
+      aria-label="Legend: how the marks of the graph look"
+    >
+      <div className="sticky top-0 max-h-screen overflow-y-auto">
+        <header className="sticky top-0 flex items-center justify-between bg-surface py-1 pr-1 pl-3">
+          <h3 className="font-medium text-sec">Legend</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close the legend"
+            className="rounded px-1.5 text-sec hover:text-text focus-visible:outline-2"
+          >
+            ×
+          </button>
+        </header>
+        <div className="px-3 pb-2">
+          {groups.map((g) => (
+            <section key={g.title} className="mb-2.5">
+              <h4 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wide text-faint">{g.title}</h4>
+              <ul className="grid grid-cols-[28px_1fr] items-center gap-x-2 gap-y-1.5">
+                {g.entries.map((e) => (
+                  <Entry key={e.label} label={e.label} title={e.title} absent={!e.has}>
+                    {e.sample}
+                  </Entry>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      </div>
+    </aside>
   )
 }

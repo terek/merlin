@@ -216,21 +216,6 @@ export function missCause(prev: Message, m: Message): MissCause {
   return Number.isFinite(gap) && gap >= ((m.cacheWrite1h ?? 0) > 0 ? TTL_1H : TTL_5M) ? 'idle' : 'unexplained'
 }
 
-/** The misses counted by cause: "2 after idle time, 1 on a model switch". */
-export function missSummary(rereads: readonly Reread[]): string {
-  const n = (c: MissCause) => rereads.filter((r) => r.cause === c).length
-  const parts: [number, string][] = [
-    [n('idle'), 'after idle time'],
-    [n('model'), 'on a model switch'],
-    [n('fast'), 'on turning fast mode on or off'],
-    [n('unexplained'), 'with no visible cause'],
-  ]
-  return parts
-    .filter(([k]) => k > 0)
-    .map(([k, t]) => `${k} ${t}`)
-    .join(', ')
-}
-
 /** How a miss reads after "cache miss": "after 14h idle", "on a switch from …", … */
 export function missText(r: Reread): string {
   const gap = r.gapMs !== undefined ? formatDuration(r.gapMs) : undefined

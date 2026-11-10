@@ -9,7 +9,6 @@ import {
   decisionItems,
   fitPrices,
   missCause,
-  missSummary,
   missText,
   newBucket,
   promptLine,
@@ -159,9 +158,6 @@ describe('cache misses without cache writes (Codex)', () => {
     expect(missText(m.rereads[0])).toBe('on turning fast mode on')
     expect(missText(m.rereads[1])).toBe('on a switch from model-a')
     expect(missText(m.rereads[2])).toMatch(/^only .* after the last call, with no visible cause$/)
-    expect(missSummary(m.rereads)).toBe(
-      '1 on a model switch, 1 on turning fast mode on or off, 1 with no visible cause',
-    )
   })
   test("a miss is taken out of the uncached input, at the call's own price (fast doubles it)", () => {
     const c = m.cols[1].step
