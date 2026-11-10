@@ -74,6 +74,8 @@ HTTP API and the design.
 
 ## Upgrade
 
+What each release changed is in the [changelog](CHANGELOG.md).
+
 `merlin upgrade` downloads the latest release, verifies it and replaces the binary in
 place. Releases are signed: the release carries `SHA256SUMS.sig`, an Ed25519 signature over
 `SHA256SUMS` that merlin checks against release keys built into the binary before it believes any

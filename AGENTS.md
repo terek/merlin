@@ -90,6 +90,9 @@ worktree beside it.
   `~/work/merlin/main` (see Worktrees).
   This repository opts in to the beads team-maintainer profile, `bd dolt push` included. Tags make
   releases: push one only when the user asks.
+- **Changelog.** A change users would notice adds a one-line bullet under `## Unreleased` in
+  [CHANGELOG.md](CHANGELOG.md), in the same commit: what the user sees, not how it is built.
+  Internal-only changes add nothing.
 
 ## Web UI (`web/`)
 

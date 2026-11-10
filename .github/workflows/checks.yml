@@ -35,6 +35,7 @@ jobs:
       - run: make test
       - run: make vet
       - run: make web-check
+      - run: scripts/changelog-notes_test.sh
 
       # The release build and smoke test, so a broken embed or build script is
       # caught here rather than on a tag.

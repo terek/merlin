@@ -472,11 +472,16 @@ Read for ideas; do not port.
 A release is a git tag. `.github/workflows/release.yml` does the rest; `checks.yml` runs the
 same checks on every push and pull request.
 
-**Cut a release.** On `main`, with `make test`, `make vet` and `make web-check` green:
+**Cut a release.** On `main`, with `make test`, `make vet` and `make web-check` green, first
+close the changelog: in `CHANGELOG.md` rename `## Unreleased` to `## 0.3.0 — <date>`, add a fresh
+empty `## Unreleased` above it, commit and push to `main`. Then tag:
 
 ```
 git tag v0.3.0 && git push origin v0.3.0
 ```
+
+The workflow publishes that section as the release notes (`scripts/changelog-notes.sh`) and
+refuses a tag without one before it builds anything.
 
 The tag name is the version: `merlin version` prints `merlin 0.3.0`. The workflow runs the
 checks, builds the web UI once, cross-compiles with `scripts/release-build.sh` (CGO off,
