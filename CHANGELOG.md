@@ -2,9 +2,12 @@
 
 What changed in each release of Merlin Explorer for the people using it, newest first. To install or upgrade, see the [README](README.md).
 
-## Unreleased
+## 0.7.3 — 2026-11-10
 
-- The session page's Spend card shows the spend as three horizontal bars (by who, by token class, by model tier) whose total length grows with the session's cost, with the selected window drawn inside the session's outline; the names of the bars' parts stand to their right in three narrow columns, and the plot's key is in three columns under the plot.
+- The session page's Spend card shows the spend as three horizontal bars (by who, by token class, by model tier) whose total length grows with the session's cost, with the selected window drawn inside the session's outline; the names of the bars' parts stand to their right in three narrow columns. The "By who / By token class / By model tier" switch is gone: the graph's spend is one quiet grey, cache misses pink.
+- The graph's key is drawn under the plot in three columns, listing every mark; those a session does not have are faint.
+- A pause in which nothing ran no longer darkens the graph: it fades the lines that cross it, is wider the longer it was (a night stands out), and is marked on the time axis by a light dotted stretch with its length, rounded.
+- An agent's model is written at the bottom left of its row, its name and cost at the top.
 
 ## 0.7.2 — 2026-11-10
 
