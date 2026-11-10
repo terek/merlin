@@ -353,6 +353,7 @@ const (
 	EventScanProgress   = "scan-progress"
 	EventSessionState   = "session-state"
 	EventHello          = "hello"
+	EventUpdate         = "update"
 )
 
 // SessionStateEvent is the data of a session-state event: a listed session changed
@@ -377,6 +378,12 @@ type SessionMissingEvent struct {
 // Hello is the data of a hello event: the first event of every stream, sent when the
 // daemon was given a version.
 type Hello struct {
+	Version string `json:"version"`
+}
+
+// UpdateEvent is the data of an update event: a newer release than the daemon's own exists
+// and is not installed. An empty Version means there is nothing to report (any more).
+type UpdateEvent struct {
 	Version string `json:"version"`
 }
 

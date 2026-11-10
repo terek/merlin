@@ -3,7 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { keyString } from '../lib/session'
-import { initialVersion, seeVersion, type VersionState } from '../lib/version'
+import { initialVersion, seeAvailable, seeVersion, type VersionState } from '../lib/version'
 import { applyEvent } from './cache'
 import type { EventMap, ScanProgress, SessionKey } from './types'
 
@@ -58,6 +58,12 @@ export class EventStore {
     this.version = next
     this.emit()
   }
+  setAvailable(seen: string) {
+    const next = seeAvailable(this.version, seen)
+    if (next === this.version) return
+    this.version = next
+    this.emit()
+  }
   setProgress(p: ScanProgress) {
     this.progress = p
     this.emit()
@@ -88,7 +94,7 @@ export class EventStore {
 const idleStore = new EventStore()
 const Ctx = createContext<EventStore>(idleStore)
 
-const NAMES = ['session-updated', 'session-state', 'session-missing', 'scan-progress', 'hello'] as const
+const NAMES = ['session-updated', 'session-state', 'session-missing', 'scan-progress', 'hello', 'update'] as const
 
 export function EventsProvider({ children, url = '/api/events' }: { children: ReactNode; url?: string }) {
   const qc = useQueryClient()
@@ -134,6 +140,10 @@ export function EventsProvider({ children, url = '/api/events' }: { children: Re
         }
         if (name === 'hello') {
           store.setVersion((data as EventMap['hello']).version)
+          return
+        }
+        if (name === 'update') {
+          store.setAvailable((data as EventMap['update']).version)
           return
         }
         if (name === 'scan-progress') {

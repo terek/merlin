@@ -208,6 +208,8 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
   - `session-state`: patch the row's `state` in the cached lists and in a cached detail.
   - `session-missing`: invalidate lists (sessions and trees) and that detail.
   - `scan-progress`: kept in a small store read by `useScanProgress()`.
+  - `hello` and `update`: the daemon's version and the newer release it did not install, kept in
+    the same store (`useVersion()`; `availableToShow` decides whether the top bar offers it).
   - on `open` after an error (a reconnect): invalidate everything, because events are not replayed.
   - `useConnection()` gives `connecting | live | offline` for the indicator in the top bar.
 - A row that changed through an event gets the 150 ms highlight.
@@ -215,6 +217,11 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
 ## 7. Shell
 
 A top bar, 44px: the name "Explorer", the two destinations (Sessions, Cost), and on the right the
+update notices (nothing most of the time): "Merlin updated to X · Reload" once the daemon has
+replaced itself, and, quieter, a muted link "X available" to that release's page when the daemon
+found a newer release and did not install it (an `update` event; the tooltip says `merlin upgrade`
+installs it and `merlin autoupgrade` keeps Merlin up to date; hidden while the "updated" notice is
+up, and when X is the version the daemon runs), the
 scan indicator ("indexing 120 / 3,355" with a thin progress bar while `pending > 0`, otherwise
 nothing), the connection state (a dot: live, or "offline, retrying"), and the total spend of the
 last 7 days as a quiet link to Cost. `g s` and `g c` switch pages; `/` focuses search on Sessions.

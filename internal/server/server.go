@@ -44,6 +44,10 @@ type Options struct {
 	// Version is the daemon's version, announced by a hello event at the start of every
 	// /api/events stream; empty sends no hello.
 	Version string
+	// Available returns a newer release than Version that was found and not installed, ""
+	// for none; nil means never. /api/events tells every stream with an update event: after
+	// hello when there is one, then whenever the answer changes (looked at every StateInterval).
+	Available func() string
 	// Now is the clock for liveness; nil means time.Now. Handlers read no other clock.
 	Now func() time.Time
 	// Location buckets days and parses date-only parameters; nil means time.Local.

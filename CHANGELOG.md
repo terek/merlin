@@ -4,6 +4,9 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Auto-upgrade is now opt-in: it means trusting every future release without looking at it. `merlin serve` still checks every 4 hours and tells you about a new release, in `merlin.log` and as a quiet "X available" link in the top bar; `merlin upgrade` installs it.
+- `merlin autoupgrade` turns auto-upgrade on and installs the latest release right away (`patch` for fixes only, `off`, `status`).
+
 ## 0.7.1 — 2026-11-09
 
 - Releases are signed. `merlin upgrade` and auto-upgrade refuse a release without a valid signature, and on macOS check the Apple signature too (`install.sh` still checks only the checksum).

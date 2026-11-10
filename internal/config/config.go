@@ -1,6 +1,7 @@
 // Package config reads <MERLIN_HOME>/config.json, the one file of user preferences.
 //
-// The file is the user's: it is never written, created or moved. A missing file, a
+// The file is the user's. Merlin writes it only for `merlin autoupgrade` (SetKey: one
+// key, every other key kept as it was); it is never moved. A missing file, a
 // malformed one and a key of the wrong type are all survivable: Load returns the default
 // for what it could not read, and a warning that names the file, the key and the default.
 // Unknown keys are ignored, so a newer or older merlin can share the file.
@@ -32,8 +33,10 @@ type Config struct {
 	// Prices are the "prices" overrides, by model name (see docs/pricing.md).
 	Prices map[string]pricing.Price
 	// AutoUpgrade is the "autoUpgrade" key: what the daemon may upgrade itself to.
-	// UpgradeOn when the file does not say.
+	// UpgradeOff when the file does not say: installing releases by itself is opt-in.
 	AutoUpgrade UpgradePolicy
+	// AutoUpgradeSet: the file has a valid "autoUpgrade" key (false is a choice; absence is the default).
+	AutoUpgradeSet bool
 }
 
 // UpgradePolicy says which releases the daemon installs by itself. In config.json it is
@@ -61,7 +64,7 @@ func ParseUpgradePolicy(s string) (p UpgradePolicy, ok bool) {
 }
 
 // Default returns the config of a user with no file.
-func Default() Config { return Config{AutoUpgrade: UpgradeOn} }
+func Default() Config { return Config{AutoUpgrade: UpgradeOff} }
 
 // Load reads the config file of the MERLIN_HOME directory home. It is cheap (one small
 // file) and may be called again to pick up an edit. It never fails: whatever could not be
@@ -102,14 +105,14 @@ func Load(home string) (Config, []string) {
 		var str string
 		switch {
 		case json.Unmarshal(raw, &b) == nil:
-			c.AutoUpgrade = UpgradeOn
+			c.AutoUpgrade, c.AutoUpgradeSet = UpgradeOn, true
 			if !b {
 				c.AutoUpgrade = UpgradeOff
 			}
 		case json.Unmarshal(raw, &str) == nil && str == "patch":
-			c.AutoUpgrade = UpgradePatch
+			c.AutoUpgrade, c.AutoUpgradeSet = UpgradePatch, true
 		default:
-			bad("autoUpgrade", `true, false or "patch"`, "true", fmt.Errorf("got %s", bytes.TrimSpace(raw)))
+			bad("autoUpgrade", `true, false or "patch"`, "false", fmt.Errorf("got %s", bytes.TrimSpace(raw)))
 		}
 	}
 	if raw, ok := top["prices"]; ok {

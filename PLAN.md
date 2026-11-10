@@ -92,7 +92,7 @@ merlin/                         (repository root)
 
 ```
 ~/.merlin/                        (MERLIN_HOME; shared with the earlier Merlin, whose files are left alone)
-  config.json                     port, autoUpgrade, price overrides
+  config.json                     port, autoUpgrade (default off), price overrides
   merlin.lock                     flock — one instance
   merlin.log
   claude/                         one directory per harness; codex/, pi/ … later
@@ -558,9 +558,19 @@ at most 10 min) and `serve` re-execs itself with `MERLIN_UPGRADED_FROM` set. If 
 fails before listening, it restores `.merlin.prev`, records its version in
 `$MERLIN_HOME/upgrade.json` and re-execs without the variable. A once-a-minute stat of the
 binary (`Options.BinaryChanged`) makes `merlin upgrade`/install.sh take effect in a running
-serve. Off for dev builds, `--no-auto-upgrade`, `MERLIN_AUTO_UPGRADE=0`, `autoUpgrade: false`.
-The policy (`upgradePolicy`: flag, then env, then config.json; `config.UpgradePolicy` on/off/patch)
-is shared with `merlin upgrade`. Under `patch`, `latestPatch` finds the target without the
+serve. Installing is opt-in: off unless `autoUpgrade` in config.json is `true` or `"patch"` (set by
+`merlin autoupgrade [on|patch|off|status]`, which also installs the newest allowed release at
+once through the `merlin upgrade` code) or MERLIN_AUTO_UPGRADE says so; `--no-auto-upgrade`
+forces it off. The reason to default off is trust: it installs every future release unseen. The
+policy (`upgradePolicy`: flag, then env, then config.json, then off; `config.UpgradePolicy`
+on/off/patch) is shared with `merlin upgrade`. `run` checks even when the policy is off (not for
+a dev build): it asks `latestVersion`, installs the target the policy allows (latest for on,
+`latestPatch` for patch, nothing for off) and reports what is newer and not installed (not a
+version in `upgrade.json`): one `update:` log line per version and `autoUpgrader.available()`,
+wired as `Options.Available` into `server.Options.Available`, which `/api/events` sends as an
+`update` event after `hello` and on every change (liveness tick). The top bar shows it as a muted
+"X available" link. Config's only writer is `config.SetKey` (atomic, other keys kept, refuses a
+file that is not a JSON object). Under `patch`, `latestPatch` finds the target without the
 releases API: it GETs `download/vX.Y.(z+1)/SHA256SUMS`, z+2, ... (at most 50; a pre-release
 X.Y.Z-rc1 starts at X.Y.Z) until one is missing, and takes the highest that is not in
 `upgrade.json`. `merlin upgrade --version X` installs exactly X (downgrades and pre-releases

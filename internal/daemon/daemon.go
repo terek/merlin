@@ -73,6 +73,11 @@ type Options struct {
 	BinaryChanged       func() bool
 	BinaryCheckInterval time.Duration
 
+	// Available, if set, returns a newer release that was found and not installed ("" for
+	// none). The daemon only keeps it for the API (Daemon.Available); whatever sets it is
+	// the Upgrade check.
+	Available func() string
+
 	IdlePoll time.Duration // how often to look for in-flight builds before a restart; default 2 s
 	IdleMax  time.Duration // how long to wait for them; then restart anyway; default 10 min
 
@@ -170,6 +175,15 @@ func (d *Daemon) Handle(pattern string, h http.Handler) { d.mux.Handle(pattern, 
 // Events is the bus the engine's write events are published on, after the catalog has
 // been updated: a subscriber that reads the catalog on an event sees at least that state.
 func (d *Daemon) Events() *Bus { return &d.bus }
+
+// Available is Options.Available, or "" when it is not set: a newer release that has not
+// been installed.
+func (d *Daemon) Available() string {
+	if d.opts.Available == nil {
+		return ""
+	}
+	return d.opts.Available()
+}
 
 // Catalog returns the in-memory catalog. It is nil until Run has loaded it, which is
 // before the listener starts: handlers served from Mux always see it.

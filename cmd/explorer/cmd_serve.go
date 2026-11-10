@@ -37,7 +37,7 @@ func runServe(args []string) int {
 	rescan := fs.Duration("rescan", daemon.DefaultRescanInterval, "full rescan interval")
 	debounce := fs.Duration("debounce", daemon.DefaultDebounce, "at most one build per live session per this")
 	workers := fs.Int("workers", 0, "concurrent builders (default: number of CPUs)")
-	noUpgrade := fs.Bool("no-auto-upgrade", false, "do not install new releases by itself (also: MERLIN_AUTO_UPGRADE=0, \"autoUpgrade\": false in config.json)")
+	noUpgrade := fs.Bool("no-auto-upgrade", false, "do not install new releases by itself, whatever MERLIN_AUTO_UPGRADE and config.json say (it is off unless \"merlin autoupgrade\" turned it on; new releases are still reported)")
 	upgradeEvery := fs.Duration("upgrade-interval", defaultUpgradeInterval, "how often to check for a new release (for testing)")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -80,6 +80,7 @@ func runServe(args []string) int {
 	au := newAutoUpgrader(home, *noUpgrade)
 	opts.Upgrade, opts.UpgradeInterval = au.run, *upgradeEvery
 	opts.BinaryChanged = au.binaryChanged
+	opts.Available = au.available
 	if !*noHooks {
 		// Hooks are opt-in (merlin hooks install). Once any of a harness's are there, serve
 		// keeps its set complete and pointing at this binary.
@@ -174,6 +175,7 @@ func apiOptions(d *daemon.Daemon, pricer *pricing.Table) server.Options {
 	return server.Options{
 		Prices:    pricer,
 		Version:   version,
+		Available: d.Available,
 		Catalog:   d.Catalog,
 		Subscribe: d.Events().Subscribe,
 		Harnesses: harnessInfos(),

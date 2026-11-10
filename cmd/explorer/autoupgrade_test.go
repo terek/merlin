@@ -32,7 +32,19 @@ func (l *logs) text() string {
 func (l *logs) count(sub string) int { return strings.Count(l.text(), sub) }
 
 // quietEnv clears every switch that could leak in from the machine running the tests.
+// It returns a scratch home with auto-upgrade turned on, as a user who ran `merlin
+// autoupgrade` has; cleanEnv gives the default, which is off.
 func quietEnv(t *testing.T) string {
+	t.Helper()
+	home := cleanEnv(t)
+	if err := os.WriteFile(filepath.Join(home, "config.json"), []byte(`{"autoUpgrade": true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+// cleanEnv is quietEnv with an empty home: no config.json.
+func cleanEnv(t *testing.T) string {
 	t.Helper()
 	t.Setenv("MERLIN_AUTO_UPGRADE", "")
 	os.Unsetenv("MERLIN_AUTO_UPGRADE")
@@ -179,8 +191,9 @@ func TestAutoUpgradeUnwritableDestination(t *testing.T) {
 	if l.count("sudo ") != 1 || !strings.Contains(l.text(), "cannot write to "+dir) {
 		t.Errorf("want the sudo hint once, log:\n%s", l.text())
 	}
-	if rel.checks != 0 {
-		t.Error("asked the network although the directory is not writable")
+	// Not being able to install does not stop the reporting.
+	if rel.downloads != 0 || au.available() != "0.6.3" || l.count("update: merlin 0.6.3 is available") != 1 {
+		t.Errorf("downloads %d, available %q, log:\n%s", rel.downloads, au.available(), l.text())
 	}
 }
 

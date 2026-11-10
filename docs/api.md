@@ -1125,12 +1125,13 @@ moment's symptom did not fire. Clients ignore moment ids they do not know.
 
 A Server-Sent Events stream (`Content-Type: text/event-stream`), for live updates without polling.
 Use `new EventSource("/api/events")`. The stream starts with `retry: 3000` and a `: connected`
-comment, then a `hello` event with the daemon's version, then a `scan-progress` event with the
-current state.
+comment, then a `hello` event with the daemon's version, then an `update` event if a newer release
+is waiting, then a `scan-progress` event with the current state.
 
 | Event | When | Data |
 |---|---|---|
 | `hello` | first event of every stream, so again after each reconnect | `{"version": "0.4.2"}`: the daemon's version, as on `/healthz` |
+| `update` | right after `hello` when a newer release was found and not installed; later whenever that changes (checked every 2 s) | `{"version": "0.4.3"}`: the release. `{"version": ""}`: nothing to report (any more) |
 | `session-updated` | a session's digest was written (new, or changed) | `{"key": {...}, "session": <session summary>}`: the same shape as a row of `/api/sessions` |
 | `session-missing` | a session's files are gone (the digest is kept, `sourceMissing` is set) | `{"key": {...}}` |
 | `session-state` | a listed session changed between `busy`, `idle`, `recent` and `ended` | `{"key": {...}, "state": "idle", "previous": "busy"}` |
@@ -1161,6 +1162,13 @@ data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"s
   web UI is embedded in the binary, and `merlin serve` can replace itself and restart on the same
   port. Compare the version with the one seen first; a mismatch means the page is stale. The event
   is absent when the daemon has no version to report.
+- `update` is how a page learns that a newer release exists. `merlin serve` checks at startup and
+  every 4 hours, whatever the auto-upgrade setting, and reports what it did not install (all of
+  it when auto-upgrade is off, the default; under `"patch"` also a release outside the line). It is
+  sent only when the answer differs from the one this stream last sent, so a stream opened while
+  nothing is waiting never sees it, and one that saw a version sees `""` when it goes away
+  (installed, or no longer the latest). A daemon that never checks (a development build) never
+  sends it. The page should hide it when it equals the version the daemon runs.
 - A line starting with `:` (`: heartbeat, every 15 s) is a comment; ignore it.
 - The stream never holds up the indexer: if a client cannot keep up, events are dropped for that
   client, and a write that stalls for 10 s ends its stream. After a reconnect (EventSource does

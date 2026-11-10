@@ -42,6 +42,7 @@ type autoUpgrader struct {
 	mu     sync.Mutex
 	logged map[string]bool
 
+	avail     string  // a newer release that was found and not installed (guarded by mu)
 	installed bool    // this process put a new binary in place (guarded by mu)
 	baseline  fileSig // the installed binary as it was when serve started (BinaryChanged only)
 }
@@ -88,8 +89,9 @@ func (a *autoUpgrader) wasInstalled() bool {
 
 // upgradePolicy resolves what auto-upgrade may install. Precedence: the flag, then
 // MERLIN_AUTO_UPGRADE (an unrecognised value is ignored), then config.json (re-read, so an
-// edit applies without a restart). source names where the answer came from. Development
-// builds are the caller's business: this is also what `merlin upgrade` consults.
+// edit applies without a restart), then the default, which is off. source names where the
+// answer came from. Development builds are the caller's business: this is also what
+// `merlin upgrade` and `merlin autoupgrade` consult.
 func upgradePolicy(home string, flagOff bool) (p config.UpgradePolicy, source string) {
 	if flagOff {
 		return config.UpgradeOff, "--no-auto-upgrade"
@@ -100,21 +102,15 @@ func upgradePolicy(home string, flagOff bool) (p config.UpgradePolicy, source st
 		}
 	}
 	cfg, _ := config.Load(home)
-	switch cfg.AutoUpgrade {
-	case config.UpgradeOff:
+	switch {
+	case !cfg.AutoUpgradeSet:
+		return config.UpgradeOff, "off by default; run merlin autoupgrade to turn it on"
+	case cfg.AutoUpgrade == config.UpgradeOff:
 		return config.UpgradeOff, "autoUpgrade is false in config.json"
-	case config.UpgradePatch:
+	case cfg.AutoUpgrade == config.UpgradePatch:
 		return config.UpgradePatch, `autoUpgrade is "patch" in config.json`
 	}
 	return config.UpgradeOn, "autoUpgrade in config.json"
-}
-
-// policy is upgradePolicy for this process, where a development build never upgrades.
-func (a *autoUpgrader) policy() (config.UpgradePolicy, string) {
-	if isDevVersion(version) {
-		return config.UpgradeOff, "development build " + version
-	}
-	return upgradePolicy(a.home, a.off)
 }
 
 // maxPatchProbes caps how many consecutive patch releases latestPatch looks for.
@@ -151,43 +147,38 @@ func latestPatch(ctx context.Context, cur string, bad []string) (string, error) 
 	return best, nil
 }
 
-// run is daemon.Options.Upgrade: it reports true once a newer binary is installed.
+// run is daemon.Options.Upgrade: it checks for a newer release, installs the one the policy
+// allows and reports true once a newer binary is in place. What it does not install it
+// reports (a log line once per version, and available() for the UI), so a user who has not
+// turned auto-upgrade on still learns that a release exists. A development build checks
+// nothing.
 func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool {
-	pol, src := a.policy()
-	if pol == config.UpgradeOff {
-		a.once(logf, "auto-upgrade: off ("+src+")")
+	if isDevVersion(version) {
+		a.once(logf, "auto-upgrade: off (development build "+version+")")
+		a.setAvailable("")
 		return false
 	}
-	patch := pol == config.UpgradePatch
-	if cur, ok := parseVersion(version); patch && ok {
+	pol, src := upgradePolicy(a.home, a.off)
+	switch cur, ok := parseVersion(version); {
+	case pol == config.UpgradeOff:
+		a.once(logf, "auto-upgrade: off ("+src+")")
+	case pol == config.UpgradePatch && ok:
 		a.once(logf, fmt.Sprintf("auto-upgrade: patch releases of %d.%d only", cur.n[0], cur.n[1]))
 	}
-	dest, err := resolveDest()
-	if err != nil {
-		a.once(logf, "auto-upgrade: "+err.Error())
-		return false
-	}
-	if p, err := os.CreateTemp(filepath.Dir(dest), ".merlin.probe.*"); err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			a.once(logf, fmt.Sprintf("auto-upgrade: off (cannot write to %s; run: sudo %s upgrade)", filepath.Dir(dest), dest))
-		} else {
-			a.once(logf, "auto-upgrade: off ("+err.Error()+")")
-		}
-		return false
-	} else {
-		p.Close()
-		os.Remove(p.Name())
-	}
 
+	// latest is the newest release there is; target is the one policy pol installs ("" for
+	// none). Under "patch" the two differ, and the patch probe decides whether the check
+	// worked: not knowing the latest release only means there is nothing to report.
+	bad := loadBad(a.home)
 	cctx, cancel := context.WithTimeout(ctx, startupCheckTimeout)
-	var latest string
-	if patch {
-		latest, err = latestPatch(cctx, version, loadBad(a.home))
-		if err == nil && latest == "" {
-			latest = version // nothing newer in this line
-		}
-	} else {
-		latest, err = latestVersion(cctx)
+	latest, err := latestVersion(cctx)
+	known := err == nil
+	var target string
+	switch {
+	case pol == config.UpgradePatch:
+		target, err = latestPatch(cctx, version, bad)
+	case pol == config.UpgradeOn && known && compareVersions(latest, version) > 0:
+		target = latest
 	}
 	cancel()
 	if err != nil {
@@ -196,23 +187,54 @@ func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool 
 		}
 		return false
 	}
-	if compareVersions(latest, version) <= 0 {
-		if patch {
+	if known && slices.Contains(bad, latest) {
+		if target == latest {
+			a.once(logf, fmt.Sprintf("auto-upgrade: skipping %s (it failed to start before; see %s)", latest, upgradeFile))
+			target = ""
+		}
+		latest = "" // a version that does not start is nothing to announce either
+	}
+
+	if target != "" && a.install(ctx, logf, target) {
+		return true
+	}
+	if target == "" && pol != config.UpgradeOff && (pol == config.UpgradePatch || latest != "") {
+		if pol == config.UpgradePatch {
 			a.once(logf, fmt.Sprintf("auto-upgrade: %s is current (no newer patch release)", version))
-		} else {
+		} else if compareVersions(latest, version) <= 0 {
 			a.once(logf, fmt.Sprintf("auto-upgrade: %s is current (latest release %s)", version, latest))
 		}
+	}
+	if known {
+		a.report(logf, pol, latest)
+	}
+	return false
+}
+
+// install downloads, checks and swaps in release target, and reports whether a new binary
+// is in place. Failures are logged and leave the installed binary alone.
+func (a *autoUpgrader) install(ctx context.Context, logf func(string, ...any), target string) bool {
+	dest, err := resolveDest()
+	if err != nil {
+		a.once(logf, "auto-upgrade: "+err.Error())
 		return false
 	}
-	if slices.Contains(loadBad(a.home), latest) {
-		a.once(logf, fmt.Sprintf("auto-upgrade: skipping %s (it failed to start before; see %s)", latest, upgradeFile))
+	if p, err := os.CreateTemp(filepath.Dir(dest), ".merlin.probe.*"); err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			a.once(logf, fmt.Sprintf("auto-upgrade: cannot install (cannot write to %s; run: sudo %s upgrade)", filepath.Dir(dest), dest))
+		} else {
+			a.once(logf, "auto-upgrade: cannot install ("+err.Error()+")")
+		}
 		return false
+	} else {
+		p.Close()
+		os.Remove(p.Name())
 	}
-	logf("auto-upgrade: %s -> %s available", version, latest)
+	logf("auto-upgrade: %s -> %s available", version, target)
 
 	dctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
-	staged, err := stageRelease(dctx, dest, latest)
+	staged, err := stageRelease(dctx, dest, target)
 	if err != nil {
 		logf("auto-upgrade: %v", err)
 		return false
@@ -225,8 +247,38 @@ func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool 
 	a.mu.Lock()
 	a.installed = true
 	a.mu.Unlock()
-	logf("auto-upgrade: installed %s at %s (previous kept as %s)", latest, dest, prevName)
+	logf("auto-upgrade: installed %s at %s (previous kept as %s)", target, dest, prevName)
 	return true
+}
+
+// report makes release latest, when it is newer than this binary, the available one: a log
+// line the first time each version is seen, and available() for the UI. Anything else
+// ("" included) clears it.
+func (a *autoUpgrader) report(logf func(string, ...any), pol config.UpgradePolicy, latest string) {
+	if latest == "" || compareVersions(latest, version) <= 0 {
+		a.setAvailable("")
+		return
+	}
+	a.setAvailable(latest)
+	tail := "merlin upgrade installs it, merlin autoupgrade keeps merlin current"
+	if pol == config.UpgradeOn {
+		tail = "auto-upgrade could not install it (see above); merlin upgrade installs it"
+	}
+	a.once(logf, fmt.Sprintf("update: merlin %s is available (running %s); %s", latest, version, tail))
+}
+
+func (a *autoUpgrader) setAvailable(v string) {
+	a.mu.Lock()
+	a.avail = v
+	a.mu.Unlock()
+}
+
+// available is Options.Available: the newest release, newer than this binary, that the
+// last check found and did not install; "" for none.
+func (a *autoUpgrader) available() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.avail
 }
 
 // binaryChanged is daemon.Options.BinaryChanged: the installed file changed (merlin

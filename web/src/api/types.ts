@@ -1015,12 +1015,18 @@ export interface HelloEvent {
   version: string
 }
 
+/** A newer release exists and is not installed; an empty version means there is nothing to report (any more). */
+export interface UpdateEvent {
+  version: string
+}
+
 export interface EventMap {
   'session-updated': SessionUpdatedEvent
   'session-missing': SessionMissingEvent
   'session-state': SessionStateEvent
   'scan-progress': ScanProgress
   hello: HelloEvent
+  update: UpdateEvent
 }
 
 // ---- moments (experimental, docs/moments.md) -------------------------------------------

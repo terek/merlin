@@ -10,7 +10,7 @@ import (
 func TestNoFile(t *testing.T) {
 	dir := t.TempDir()
 	c, warns := Load(dir)
-	if c.Port != 0 || c.AutoUpgrade != UpgradeOn || len(c.Prices) != 0 || len(warns) != 0 {
+	if c.Port != 0 || c.AutoUpgrade != UpgradeOff || len(c.Prices) != 0 || len(warns) != 0 {
 		t.Errorf("%+v %q", c, warns)
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
@@ -27,25 +27,25 @@ func TestValues(t *testing.T) {
 		prices    []string // model names expected in Prices
 		warnParts []string
 	}{
-		{"empty file", " \n", 0, UpgradeOn, nil, nil},
-		{"port", `{"port": 8001}`, 8001, UpgradeOn, nil, nil},
+		{"empty file", " \n", 0, UpgradeOff, nil, nil},
+		{"port", `{"port": 8001}`, 8001, UpgradeOff, nil, nil},
 		{"autoUpgrade false", `{"autoUpgrade": false}`, 0, UpgradeOff, nil, nil},
 		{"autoUpgrade true", `{"autoUpgrade": true}`, 0, UpgradeOn, nil, nil},
-		{"unknown keys ignored", `{"theme": "dark", "nested": {"a": 1}, "port": 9000}`, 9000, UpgradeOn, nil, nil},
-		{"prices", `{"prices": {"m": {"input": 1, "output": 2, "cacheRead": 3}}}`, 0, UpgradeOn, []string{"m"}, nil},
-		{"malformed JSON", `{"port": `, 0, UpgradeOn, nil, []string{"config.json", "default settings"}},
-		{"not an object", `[1, 2]`, 0, UpgradeOn, nil, []string{"not a JSON object"}},
+		{"unknown keys ignored", `{"theme": "dark", "nested": {"a": 1}, "port": 9000}`, 9000, UpgradeOff, nil, nil},
+		{"prices", `{"prices": {"m": {"input": 1, "output": 2, "cacheRead": 3}}}`, 0, UpgradeOff, []string{"m"}, nil},
+		{"malformed JSON", `{"port": `, 0, UpgradeOff, nil, []string{"config.json", "default settings"}},
+		{"not an object", `[1, 2]`, 0, UpgradeOff, nil, []string{"not a JSON object"}},
 		{"port is a string", `{"port": "80", "autoUpgrade": false}`, 0, UpgradeOff, nil, []string{`"port"`, "default port"}},
-		{"port out of range", `{"port": 70000}`, 0, UpgradeOn, nil, []string{`"port"`, "1 and 65535"}},
-		{"port fractional", `{"port": 80.5}`, 0, UpgradeOn, nil, []string{`"port"`}},
+		{"port out of range", `{"port": 70000}`, 0, UpgradeOff, nil, []string{`"port"`, "1 and 65535"}},
+		{"port fractional", `{"port": 80.5}`, 0, UpgradeOff, nil, []string{`"port"`}},
 		{"autoUpgrade patch", `{"autoUpgrade": "patch"}`, 0, UpgradePatch, nil, nil},
-		{"autoUpgrade other string", `{"autoUpgrade": "minor"}`, 0, UpgradeOn, nil, []string{`"autoUpgrade"`, `"patch"`, "using true"}},
-		{"autoUpgrade number", `{"autoUpgrade": 1}`, 0, UpgradeOn, nil, []string{`"autoUpgrade"`, "using true"}},
-		{"autoUpgrade wrong type", `{"autoUpgrade": "no", "port": 9000}`, 9000, UpgradeOn, nil, []string{`"autoUpgrade"`, "using true"}},
-		{"prices wrong type", `{"prices": [1]}`, 0, UpgradeOn, nil, []string{`"prices"`, "built-in prices"}},
-		{"one bad price entry", `{"prices": {"bad": 5, "ok": {"input": 1, "output": 1, "cacheRead": 1}}}`, 0, UpgradeOn,
+		{"autoUpgrade other string", `{"autoUpgrade": "minor"}`, 0, UpgradeOff, nil, []string{`"autoUpgrade"`, `"patch"`, "using false"}},
+		{"autoUpgrade number", `{"autoUpgrade": 1}`, 0, UpgradeOff, nil, []string{`"autoUpgrade"`, "using false"}},
+		{"autoUpgrade wrong type", `{"autoUpgrade": "no", "port": 9000}`, 9000, UpgradeOff, nil, []string{`"autoUpgrade"`, "using false"}},
+		{"prices wrong type", `{"prices": [1]}`, 0, UpgradeOff, nil, []string{`"prices"`, "built-in prices"}},
+		{"one bad price entry", `{"prices": {"bad": 5, "ok": {"input": 1, "output": 1, "cacheRead": 1}}}`, 0, UpgradeOff,
 			[]string{"ok"}, []string{`"prices.bad"`}},
-		{"price field wrong type", `{"prices": {"bad": {"input": "x"}}}`, 0, UpgradeOn, nil, []string{`"prices.bad"`}},
+		{"price field wrong type", `{"prices": {"bad": {"input": "x"}}}`, 0, UpgradeOff, nil, []string{`"prices.bad"`}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

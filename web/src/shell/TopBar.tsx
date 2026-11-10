@@ -5,7 +5,7 @@ import { useSpend7d } from '../api/queries'
 import { cn } from '../lib/cn'
 import { backingLowerBound, unknownNote } from '../lib/cost'
 import { formatCount } from '../lib/format'
-import { releaseUrl } from '../lib/version'
+import { availableToShow, releaseUrl } from '../lib/version'
 import { IconButton, Money } from '../ui'
 import { nextTheme, useTheme } from './theme'
 
@@ -54,6 +54,23 @@ function UpdateNotice() {
         Reload
       </button>
     </div>
+  )
+}
+
+/** A newer release the daemon found and did not install: muted text, no accent; the tooltip names the two commands. */
+function AvailableNotice() {
+  const available = availableToShow(useVersion())
+  if (!available) return null
+  return (
+    <a
+      href={releaseUrl(available)}
+      target="_blank"
+      rel="noreferrer"
+      className="whitespace-nowrap text-sec text-muted hover:text-fg"
+      title="merlin upgrade installs it; merlin autoupgrade keeps Merlin up to date"
+    >
+      {available} available
+    </a>
   )
 }
 
@@ -114,6 +131,7 @@ export function TopBar() {
       </nav>
       <div className="ml-auto flex items-center gap-4">
         <UpdateNotice />
+        <AvailableNotice />
         <ScanIndicator />
         <ConnectionIndicator />
         <SpendLink />

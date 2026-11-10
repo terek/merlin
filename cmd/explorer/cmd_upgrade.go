@@ -206,7 +206,7 @@ func undoWarning(home, v string) string {
 	default:
 		return ""
 	}
-	stay := `set "autoUpgrade": false in ~/.merlin/config.json`
+	stay := "run: merlin autoupgrade off"
 	if strings.HasPrefix(src, "MERLIN_AUTO_UPGRADE=") {
 		stay = "set MERLIN_AUTO_UPGRADE=0 (it overrides config.json)"
 	}

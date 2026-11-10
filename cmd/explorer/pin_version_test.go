@@ -61,13 +61,13 @@ func TestUpgradeVersionWarnsWhenAutoUpgradeWouldUndo(t *testing.T) {
 		want   string // "" = no warning
 	}{
 		{name: "on", extra: []string{"0.6.1"},
-			want: `merlin serve will replace it with 0.7.0 (auto-upgrade is on). To stay on 0.6.1, set "autoUpgrade": false in ~/.merlin/config.json.`},
+			want: `merlin serve will replace it with 0.7.0 (auto-upgrade is on). To stay on 0.6.1, run: merlin autoupgrade off.`},
 		{name: "on from env", env: "1", config: `{"autoUpgrade": false}`, extra: []string{"0.6.1"},
 			want: "merlin serve will replace it with 0.7.0 (auto-upgrade is on). To stay on 0.6.1, set MERLIN_AUTO_UPGRADE=0"},
 		{name: "off", config: `{"autoUpgrade": false}`, extra: []string{"0.6.1"}},
 		{name: "off by env", env: "0", extra: []string{"0.6.1"}},
 		{name: "patch with newer patch", config: `{"autoUpgrade": "patch"}`, extra: []string{"0.6.1", "0.6.2", "0.6.3"},
-			want: `merlin serve will replace it with 0.6.3 (auto-upgrade follows patch releases). To stay on 0.6.1, set "autoUpgrade": false`},
+			want: `merlin serve will replace it with 0.6.3 (auto-upgrade follows patch releases). To stay on 0.6.1, run: merlin autoupgrade off`},
 		{name: "patch at the top of its line", config: `{"autoUpgrade": "patch"}`, extra: []string{"0.6.1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -289,10 +289,11 @@ func TestUpgradePolicy(t *testing.T) {
 		config string
 		want   config.UpgradePolicy
 	}{
-		{name: "default", want: config.UpgradeOn},
+		{name: "default", want: config.UpgradeOff},
 		{name: "config false", config: `{"autoUpgrade": false}`, want: config.UpgradeOff},
 		{name: "config patch", config: `{"autoUpgrade": "patch"}`, want: config.UpgradePatch},
-		{name: "config wrong value", config: `{"autoUpgrade": "minor"}`, want: config.UpgradeOn},
+		{name: "config true", config: `{"autoUpgrade": true}`, want: config.UpgradeOn},
+		{name: "config wrong value", config: `{"autoUpgrade": "minor"}`, want: config.UpgradeOff},
 		{name: "env patch beats config false", env: "patch", config: `{"autoUpgrade": false}`, want: config.UpgradePatch},
 		{name: "env Patch", env: "Patch", want: config.UpgradePatch},
 		{name: "env 0 beats config patch", env: "0", config: `{"autoUpgrade": "patch"}`, want: config.UpgradeOff},
@@ -300,7 +301,7 @@ func TestUpgradePolicy(t *testing.T) {
 		{name: "flag beats env", flag: true, env: "patch", want: config.UpgradeOff},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			home := quietEnv(t)
+			home := cleanEnv(t)
 			if tc.env != "" {
 				t.Setenv("MERLIN_AUTO_UPGRADE", tc.env)
 			}
@@ -345,8 +346,8 @@ func TestAutoUpgradePatchFollowsOnlyItsLine(t *testing.T) {
 					t.Errorf("log lacks %q:\n%s", want, l.text())
 				}
 			}
-			if rel.checks != 0 {
-				t.Error("patch policy asked for the latest release")
+			if rel.downloads != 1 {
+				t.Errorf("downloads = %d, want only the patch release", rel.downloads)
 			}
 		})
 	}

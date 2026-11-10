@@ -45,6 +45,7 @@ func (s *stream) event(name string, data any) error {
 //	session-missing  a session's files are gone
 //	scan-progress    indexing is under way (throttled; sent when it changes)
 //	session-state    a listed session changed between busy, idle, recent and ended
+//	update           a newer release exists and is not installed (hello comes first)
 //
 // Liveness is looked at every StateInterval. The first look after the stream opens sends
 // nothing, and neither does a session first seen later (its session-updated announces it).
@@ -73,6 +74,22 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if a.o.Version != "" && s.event(EventHello, Hello{Version: a.o.Version}) != nil {
+		return
+	}
+
+	// told is the available release last sent on this stream; update events follow its changes.
+	told := ""
+	sendUpdate := func() error {
+		if a.o.Available == nil {
+			return nil
+		}
+		if v := a.o.Available(); v != told {
+			told = v
+			return s.event(EventUpdate, UpdateEvent{Version: v})
+		}
+		return nil
+	}
+	if sendUpdate() != nil {
 		return
 	}
 
@@ -218,7 +235,7 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 					more = false
 				}
 			}
-			if look(false) != nil {
+			if look(false) != nil || sendUpdate() != nil {
 				return
 			}
 		case <-heartbeat.C:
