@@ -1594,11 +1594,12 @@ function OverheadText({ o }: { o: Overhead }) {
   )
 }
 
-/** A break's length, short: "25m", "3h 30m", "2d 4h". */
+/** A break's length, short and rounded: "15m", "40m", "8h", "21h", "3d". */
 function gapText(ms: number): string {
-  const m = Math.round(ms / 60_000)
-  if (m < 60) return `${m}m`
-  const h = Math.floor(m / 60)
-  if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`
-  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`
+  // rounded: how long a pause was matters, not to the minute (the tooltip has it exactly)
+  const m = ms / 60_000
+  if (m < 57.5) return `${Math.max(5, Math.round(m / 5) * 5)}m`
+  const h = Math.round(m / 60)
+  if (h < 48) return `${h}h`
+  return `${Math.round(h / 24)}d`
 }
