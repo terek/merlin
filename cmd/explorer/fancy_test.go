@@ -138,3 +138,12 @@ func TestFailLineAndTilde(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+// The wizard banner is serve's alone: help shows only the commands.
+func TestFancyHelpHasNoBanner(t *testing.T) {
+	var buf bytes.Buffer
+	printHelp(&buf, term.Profile{TTY: true, Color: term.TrueColor, Width: 100}, commands)
+	if s := buf.String(); strings.Contains(s, "█") || strings.Contains(s, "▀") || !strings.Contains(s, "\x1b[") {
+		t.Errorf("help should be styled without the banner:\n%s", s)
+	}
+}

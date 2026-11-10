@@ -4,7 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
-- In a terminal, `merlin` greets you with the wizard and a MERLIN banner (the UI link is clickable), shows a progress bar while it indexes, and ends the first index with a one-line summary; `merlin scan` does the same, and `merlin help` groups the commands. Piped or redirected output, and `NO_COLOR`, keep the plain text.
+- In a terminal, `merlin` greets you with the wizard and a MERLIN banner (the UI link is clickable), shows a progress bar while it indexes, and ends the first index with a one-line summary; `merlin scan` does the same; `merlin help` groups the commands. Piped or redirected output, and `NO_COLOR`, keep the plain text.
 
 ## 0.7.3 — 2026-11-10
 

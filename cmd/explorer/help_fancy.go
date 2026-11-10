@@ -24,11 +24,7 @@ const helpColCap = 36
 func printUsageFancy(w io.Writer, p term.Profile) { printHelp(w, p, commands) }
 
 func printHelp(w io.Writer, p term.Profile, cmds map[string]command) {
-	fmt.Fprint(w, term.Banner(p, term.BannerInfo{
-		Version: version,
-		Tagline: "what your agents did, and what it cost",
-		Lines:   []term.BannerLine{{Label: "docs", Value: p.Link("https://github.com/terek/merlin", "github.com/terek/merlin")}},
-	}))
+	// The wizard banner belongs to serve alone; help is just the commands.
 	heading := func(s string) { fmt.Fprintln(w, p.Bold(p.Fg(term.Lavender, s))) }
 	heading("Usage")
 	fmt.Fprintln(w, "  merlin [serve-flags]")
