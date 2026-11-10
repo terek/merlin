@@ -3,7 +3,9 @@
 Merlin keeps a summary of every [Claude Code](https://claude.com/claude-code) session on your
 machine: what it cost (subagents included), what you asked, what the agent last said, and where
 it stopped. It follows running sessions and serves the result as a web page on a local port,
-and as commands in the terminal. Nothing leaves your machine and no model is called.
+and as commands in the terminal. Your sessions never leave your machine and no model is called.
+The only request merlin makes on its own is to GitHub, at startup and every 4 hours, to see
+whether there is a newer release ([Upgrade](#upgrade)); it sends nothing from your machine.
 
 ## Install
 
