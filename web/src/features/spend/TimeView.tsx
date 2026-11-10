@@ -92,6 +92,8 @@ import { useWidth } from './useWidth'
 
 /** How strongly a break's veil covers what crosses it: the page colour over the lines, so that they fade but stay visible. */
 export const BREAK_VEIL = 0.6
+/** The dots of a break on the time axis. */
+export const BREAK_DOTS = '1 2'
 
 /** Room left of the plot for the context scale. */
 const LABEL_W = 34
@@ -1428,14 +1430,20 @@ export function TimePlot({
         className={`relative mt-1 rounded-badge ${hot ? 'cursor-pointer' : 'cursor-crosshair'}`}
       >
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
-          {/* breaks: idle time left out */}
+          {/* breaks: idle time left out, a light dotted stretch of the time axis (its length is written above it) */}
           {axis.breaks.map((b) => (
             <g key={b.t0}>
-              <path
-                d={`M${f1(b.x0 + 3)} ${AXIS_H - 6}l3 -4M${f1(b.x1 - 6)} ${AXIS_H - 6}l3 -4`}
+              <line
+                x1={f1(b.x0 + 2)}
+                x2={f1(b.x1 - 2)}
+                y1={AXIS_H - 6.5}
+                y2={AXIS_H - 6.5}
                 stroke="var(--faint)"
                 strokeWidth={1}
+                strokeDasharray={BREAK_DOTS}
               />
+              {/* room for the pointer to find its tooltip */}
+              <rect x={b.x0} y={0} width={Math.max(0, b.x1 - b.x0)} height={AXIS_H - 2} fill="transparent" />
               <title>{`${formatDuration(b.t1 - b.t0)} in which nothing ran, left out`}</title>
             </g>
           ))}

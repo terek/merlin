@@ -4,6 +4,7 @@
 // change to the plot's look changes its legend; marks the tree cannot have are listed too, faint.
 import { type ReactNode, useId } from 'react'
 import {
+  BREAK_DOTS,
   BREAK_VEIL,
   BranchNode,
   CHIP,
@@ -473,7 +474,7 @@ export function Legend({ facts }: { facts: KeyFacts }) {
               <line x1={0} x2={W} y1={5.5} y2={5.5} stroke="var(--border)" />
               <line x1={0} x2={W} y1={B + 0.5} y2={B + 0.5} stroke="var(--faint)" />
               <rect x={8} y={1} width={W - 16} height={H - 2} fill="var(--surface)" opacity={BREAK_VEIL} />
-              <path d="M8 4l3 -3M17 4l3 -3" stroke="var(--faint)" />
+              <line x1={8} x2={W - 8} y1={2.5} y2={2.5} stroke="var(--faint)" strokeDasharray={BREAK_DOTS} />
             </>
           ),
         },
