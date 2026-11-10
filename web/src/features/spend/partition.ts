@@ -18,9 +18,6 @@ import type { Overhead } from './tree'
  */
 export const LENGTH_K = 1.5
 
-/** The ticks of the scale under the bars, in dollars. */
-export const SCALE_TICKS = [1, 10, 100, 1000]
-
 /** The share of the track (0 to 1) a bar of `usd` dollars takes: logarithmic, and an infinite spend takes all of it. */
 export function lengthShare(usd: number): number {
   if (!(usd > 0)) return 0

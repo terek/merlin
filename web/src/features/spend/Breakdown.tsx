@@ -4,12 +4,13 @@
 // counted is what the plot shows (the effective window); behind each bar, faint, is the whole session's
 // bar on the same scale. Overhead no message explains is a hatched tail on every bar.
 //
-// The layout does not move while a window is dragged: the rows have a fixed height, the header a fixed
-// width, the figures are tabular, and the room for the dollars after a bar is reserved.
+// The layout does not move while a window is dragged: the rows have a fixed height and the price, written
+// once to the right of the bars, a fixed place.
 import { useMemo, useRef } from 'react'
 import { formatMoney, formatPercent } from '../../lib/format'
 import { CLASS_SERIES, KIND_SERIES, TIER_SERIES } from './model'
-import { lengthShare, overheadIn, type RangeSpend, SCALE_TICKS, type Segment, segmentsOf, sumRange } from './partition'
+import { lengthShare, overheadIn, type RangeSpend, type Segment, segmentsOf, sumRange } from './partition'
+import { MISS_COLOR } from './TimeView'
 import type { Timeline, Win } from './timeline'
 import type { Tree } from './tree'
 import { useWidth } from './useWidth'
@@ -17,8 +18,22 @@ import { useWidth } from './useWidth'
 /** The hatching of the overhead, as a background (the same as the legend's swatch of old). */
 export const HATCH_BG = 'repeating-linear-gradient(45deg, var(--muted) 0 1px, transparent 1px 3.5px)'
 
-/** Room after the track for "$12.30 of $45.10", so that a bar can be as long as the track. */
-const END_ROOM = 'mr-44'
+/**
+ * The token classes are drawn in black and white, as patterns of the theme's own tokens (so they read in
+ * both themes), to look like another kind of partition than the coloured ones; the cache miss alone
+ * keeps its pink, as everywhere. A class without a pattern is drawn in its colour.
+ */
+export const CLASS_PATTERNS: Record<string, { background: string; backgroundSize?: string }> = {
+  output: { background: 'color-mix(in srgb, var(--text) 62%, var(--surface))' },
+  read: { background: 'color-mix(in srgb, var(--text) 14%, var(--surface))' },
+  write: {
+    background: 'repeating-linear-gradient(45deg, var(--muted) 0 1.5px, var(--surface) 1.5px 5px)',
+  },
+  reread: { background: MISS_COLOR },
+  input: {
+    background: 'radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px) 0 0 / 6px 6px, var(--surface)',
+  },
+}
 /** Approximate width of a character of a segment's label, and its padding, to decide whether the label fits. */
 const CHAR_PX = 6.4
 const PAD_PX = 14
@@ -27,26 +42,23 @@ const ROWS = [
   {
     key: 'kind',
     head: 'Who',
-    title: 'Who spent it: the main agent, agents by kind, cache misses',
     series: KIND_SERIES,
   },
   {
     key: 'class',
     head: 'Token class',
-    title: 'What the dollars bought: output, cache reads and writes, uncached input, cache misses',
     series: CLASS_SERIES,
   },
   {
     key: 'tier',
     head: 'Model tier',
-    title: 'Heavy, mid and light models, by what their input costs (heavy from $4 per million tokens, light up to $1)',
     series: TIER_SERIES,
   },
 ] as const
 
-const tipOf = (s: Segment, total: number, partial: boolean) =>
+const tipOf = (head: string, s: Segment, total: number, partial: boolean) =>
   [
-    `${s.label}: ${formatMoney(s.usd)} (${formatPercent(s.usd, total)})`,
+    `${head}: ${s.label} · ${formatMoney(s.usd)} · ${formatPercent(s.usd, total)}`,
     s.names && s.names.length > 0 ? `Models: ${s.names.join(', ')}` : '',
     s.hatched
       ? `Spend the harness reported that no message explains, in no part of the three. ${partial ? 'Of each reported stretch, the share inside this window is counted.' : ''}`.trim()
@@ -59,8 +71,14 @@ function Bar({
   segs,
   px,
   partial,
+  head,
+  patterned,
 }: {
   segs: Segment[]
+  /** The partition's name, for the hover titles. */
+  head: string
+  /** Draw the segments as black-and-white patterns (the token classes). */
+  patterned?: boolean
   /** The length of the whole bar. */
   px: number
   partial: boolean
@@ -75,16 +93,20 @@ function Bar({
         return (
           <div
             key={s.key}
-            title={tipOf(s, total, partial)}
+            title={tipOf(head, s, total, partial)}
             className="flex h-full min-w-px items-center justify-center overflow-hidden"
             style={{
               width: w,
-              background: s.hatched ? HATCH_BG : s.color,
+              ...(s.hatched
+                ? { background: HATCH_BG }
+                : patterned && CLASS_PATTERNS[s.key]
+                  ? CLASS_PATTERNS[s.key]
+                  : { background: s.color }),
               boxShadow: 'inset -1px 0 0 var(--surface)',
             }}
           >
             {fits && (
-              <span className="whitespace-nowrap rounded-[3px] bg-surface/80 px-1 text-meta leading-4 text-text">
+              <span className="whitespace-nowrap rounded-[3px] bg-surface/90 px-1 text-meta leading-4 text-text">
                 {text}
               </span>
             )}
@@ -120,47 +142,39 @@ export function Breakdown({ tree, timeline, range }: BreakdownProps) {
   }
   const len = lengthShare(winTotal) * width
   const lenWhole = lengthShare(wholeTotal) * width
-  const ticks = SCALE_TICKS.map((v) => ({ v, x: lengthShare(v) * width })).filter((t) => t.x <= width - 16)
 
   return (
-    <div className="mb-2 text-sec tabular-nums">
-      {ROWS.map((row) => (
-        <div key={row.key} className="flex h-7 items-center">
-          <div className="w-24 shrink-0 text-muted" title={row.title}>
-            {row.head}
-          </div>
-          {/* the track is measured on the first row only; every row has the same one */}
-          <div ref={row.key === 'kind' ? track : undefined} className={`relative h-full min-w-0 flex-1 ${END_ROOM}`}>
+    <div className="relative mb-2 text-sec tabular-nums">
+      <div>
+        {ROWS.map((row) => (
+          // the track is measured on the first row only; every row has the same one
+          <div key={row.key} ref={row.key === 'kind' ? track : undefined} className="relative h-7">
             <div
               aria-hidden
               className="absolute inset-y-0.5 left-0 rounded-[3px] bg-surface-2"
               style={{ width: lenWhole }}
               title={partial ? `The whole session: ${formatMoney(wholeTotal)}` : undefined}
             />
-            {winTotal > 0 && <Bar segs={segs(win, row.key)} px={len} partial={partial} />}
-            <div
-              className="absolute inset-y-0 flex items-center gap-1.5 whitespace-nowrap pl-2"
-              style={{ left: Math.max(len, 0) }}
-            >
-              <span className="font-semibold text-text">{formatMoney(winTotal)}</span>
-              {partial && <span className="text-muted">of {formatMoney(wholeTotal)}</span>}
-            </div>
+            {winTotal > 0 && (
+              <Bar
+                segs={segs(win, row.key)}
+                px={len}
+                partial={partial}
+                head={row.head}
+                patterned={row.key === 'class'}
+              />
+            )}
           </div>
-        </div>
-      ))}
-      <div className="flex h-4 items-start">
-        <div className="w-24 shrink-0" />
-        <div className={`relative h-full min-w-0 flex-1 ${END_ROOM}`}>
-          <div className="absolute inset-x-0 top-0 border-t border-line" />
-          {ticks.map((t) => (
-            <div key={t.v} className="absolute top-0" style={{ left: t.x }}>
-              <div className="h-1 border-l border-line" />
-              <div className="-translate-x-1/2 text-meta leading-3 text-faint">
-                {t.v >= 1000 ? `$${t.v / 1000}k` : `$${t.v}`}
-              </div>
-            </div>
-          ))}
-        </div>
+        ))}
+      </div>
+      {/* the price, once, right after the whole session's bar (the longest a bar gets): it moves only
+          with the session, not as the window is dragged */}
+      <div
+        className="absolute inset-y-0 flex items-center gap-1.5 whitespace-nowrap pl-3"
+        style={{ left: Math.max(lenWhole, 0) }}
+      >
+        <span className="font-semibold text-text">{formatMoney(winTotal)}</span>
+        {partial && <span className="text-muted">of {formatMoney(wholeTotal)}</span>}
       </div>
     </div>
   )

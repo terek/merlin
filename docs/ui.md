@@ -307,13 +307,15 @@ From top to bottom:
     by-who chips and notes on cache misses, compactions, typed-while-running prompts and reports) or the
     selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
     how to read and pin, and the scales;
-  - the **legend** (`Key.tsx`, once the "key" under the plot) is a map-style panel floating over the top-right
-    corner of the plot (`SpendGraph` puts it beside `TimePlot` in one relative box, so it neither
-    changes the plot's width or layout nor passes pointer events or keys to it). Closed it is a small
-    "Legend" button; open it is a vertical panel (surface background, border, shadow, a close ×, its own scroll
-    when taller than the plot). Open or closed is remembered per viewer in `localStorage`
-    (`merlin.spend.legend`, default closed, every access in try/catch). Entries are inline SVG samples
-    (28x16 px) in one column and their words in the next, so samples line up and texts start at one x, in
+  - the **legend** (`Key.tsx`, once the "key" under the plot) is a "Legend" button in the card's header (the
+    `Card` `actions` slot, top right) and a panel dropping down from it, floating over the card's content
+    (absolute, above everything), so that opening or closing it neither changes the card's layout nor passes
+    pointer events or keys to the plot. The panel is about 34rem wide (surface background, border, shadow, a
+    close ×, its own scroll when taller than 75% of the viewport) and its groups flow into **two columns**
+    (CSS columns, each group kept whole), about half as tall as one column. Open or closed is remembered per
+    viewer in `localStorage` (`merlin.spend.legend`, default closed, every access in try/catch). Entries are
+    inline SVG samples (28x16 px) in one column and their words in the next, in each legend column, so samples
+    line up and texts start at one x, in
     groups with a small heading: *Sessions and agents* (session line by tier, forked or continued session,
     agent spine, fork with its copied context, agent frame, fork notch, workflow dashed, swarm "+", report),
     *Context* (the context area, held strong and faint, cache miss, compactions cold, warm, unknown), *Your
@@ -560,9 +562,15 @@ From top to bottom:
 - **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
   switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the
   plots draw spend as thin uniform lines): three rows, one per partition of the same dollars, each
-  ONE stacked bar, all of the same length. A short header at the left (Who, Token class, Model tier;
-  fixed width), then the bar, then `$12.30` and, when the window is not all of the session, `of $45.10`
-  muted. The segments are linear shares of the total in the order of the series (`KIND_SERIES`,
+  ONE stacked bar, all of the same length, with no row headers (the labels inside the bars name the
+  segments; each segment's hover title starts with its partition, "Token class: Cache read · $1.20 · 39%").
+  The bars start at the card's left edge. The **token class** row is drawn in black-and-white patterns of
+  theme tokens (`CLASS_PATTERNS`: dark grey output, light grey cache read, diagonal hatch cache write,
+  dots uncached input) so that it reads as another kind of partition than the coloured rows; the cache
+  miss alone stays pink, as everywhere. The price is written **once**, `$12.30` and, when the window is
+  not all of the session, `of $45.10` muted, vertically centred on the three rows right after the
+  whole session's bar (the longest a bar gets), so it moves only with the session, never while the window
+  is dragged. The segments are linear shares of the total in the order of the series (`KIND_SERIES`,
   `CLASS_SERIES`, `TIER_SERIES`), zero parts skipped, the label and percent written inside when they
   fit; every segment has a hover title with its label, dollars and percent, and for a model tier the
   models in it (the tier is by input price per million tokens from `GET /api/prices`: **heavy** from
@@ -570,8 +578,7 @@ From top to bottom:
   prices missing it goes by the family in the name; the whole call, cache miss included, is in its
   tier). The **length** is logarithmic and saturating: the share of the track is
   `log10(1+s) / (log10(1+s) + K)` with `K = LENGTH_K = 1.5` (`lengthShare`), so that $1 is 17%, $10 41%,
-  $100 57%, $1000 67% and an infinite spend all of it; a faint scale under the rows ticks $1, $10,
-  $100 and $1k where they fit. What is counted is the plot's **effective window** (`eff`), summed from
+  $100 57%, $1000 67% and an infinite spend all of it; there is no scale axis. What is counted is the plot's **effective window** (`eff`), summed from
   the timeline's calls in one pure function (`sumRange`: the three partitions of a range add up to the
   same total; a call is in when its time is, as in the plot's slots); behind each bar, faint, is the
   whole session's bar on the same scale. **Overhead** (what the harness reported that no message

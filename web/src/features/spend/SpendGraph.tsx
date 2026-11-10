@@ -355,7 +355,7 @@ export function SpendGraph({
   }
 
   return (
-    <Card title="Spend">
+    <Card title="Spend" actions={<Key facts={facts} />}>
       <Breakdown tree={tree} timeline={timeline} range={eff} />
       {unrecordedRuns > 0 && (
         <p
@@ -414,7 +414,6 @@ export function SpendGraph({
           current={current}
           turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
         />
-        <Key facts={facts} />
       </div>
       <details className="mt-2 text-meta text-muted">
         <summary className="cursor-pointer select-none text-sec">How to read this graph</summary>

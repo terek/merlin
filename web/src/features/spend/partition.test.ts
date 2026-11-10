@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { CLASS_SERIES, KIND_SERIES, TIER_SERIES } from './model'
-import { LENGTH_K, lengthShare, overheadIn, SCALE_TICKS, segmentsOf, sumRange } from './partition'
+import { LENGTH_K, lengthShare, overheadIn, segmentsOf, sumRange } from './partition'
 import type { Lane, Timeline } from './timeline'
 import type { Overhead } from './tree'
 
@@ -48,7 +48,6 @@ describe('lengthShare', () => {
     expect(lengthShare(10)).toBeCloseTo(0.41, 1)
     expect(lengthShare(100)).toBeCloseTo(0.57, 2)
     expect(lengthShare(1000)).toBeCloseTo(0.67, 2)
-    expect(SCALE_TICKS).toEqual([1, 10, 100, 1000])
   })
 })
 
