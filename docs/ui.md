@@ -297,8 +297,8 @@ From top to bottom:
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
-  by when it happened. A legend split by who, by token class or by model tier, a line adding up the compactions, a
-  **readout** above the plot, and under it a drawn **key**.
+  by when it happened. A **breakdown** of the spend (below), a line adding up the compactions, a
+  **readout** above the plot, and a drawn **legend** over the plot.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
@@ -307,20 +307,27 @@ From top to bottom:
     by-who chips and notes on cache misses, compactions, typed-while-running prompts and reports) or the
     selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
     how to read and pin, and the scales;
-  - the **key** (`Key.tsx`) is a row of small inline SVG samples (28x16 px) with a few words each: the context
-    area, held context (strong and faint, tinted), cache miss, compactions (cold, warm, unknown), prompt dots
-    (solid, hollow), the decision bracket (and the pinned one), the session line by tier, the
-    spend per slot, the agent spine with its elbow, a fork leaving a baseline with its copied context, the agent frame
-    (sub-agent, fork notch, workflow dashed), the swarm "+", the report line, a forked or continued session's
-    line leaving a baseline with its node, the break band and the overhead hatching. Marks the tree cannot have are left out (`keyFacts`:
+  - the **legend** (`Key.tsx`, once the "key" under the plot) is a map-style panel floating over the top-right
+    corner of the plot (`SpendGraph` puts it beside `TimePlot` in one relative box, so it neither
+    changes the plot's width or layout nor passes pointer events or keys to it). Closed it is a small
+    "Legend" button; open it is a vertical panel (surface background, border, shadow, a close ×, its own scroll
+    when taller than the plot). Open or closed is remembered per viewer in `localStorage`
+    (`merlin.spend.legend`, default closed, every access in try/catch). Entries are inline SVG samples
+    (28x16 px) in one column and their words in the next, so samples line up and texts start at one x, in
+    groups with a small heading: *Sessions and agents* (session line by tier, forked or continued session,
+    agent spine, fork with its copied context, agent frame, fork notch, workflow dashed, swarm "+", report),
+    *Context* (the context area, held strong and faint, cache miss, compactions cold, warm, unknown), *Your
+    turns* (prompt, typed while a turn ran, decision, pinned decision), *Spend* (spend per slot, not explained
+    by messages) and *Time* (break, drawn as the veil over a baseline and a gridline). All entries are always listed: a mark the tree cannot have (`keyFacts`:
     cache misses, each kind of compaction, queued prompts, agents, forks, workflows, swarms, reports, sessions,
-    overhead). The samples use the constants and patterns TimeView.tsx exports and draws with (widths,
-    dashes, opacities, tints, the hatching, `elbowPath`), so a change to the plot's look changes its key.
-    Under it a **How to read this graph** disclosure holds the rules a picture does not carry: one scale for
+    overhead) is drawn faint, with the title "not in this session". The samples use the constants and patterns
+    TimeView.tsx exports and draws with (widths, dashes, opacities, tints, the hatching, `elbowPath`), so a
+    change to the plot's look changes its legend.
+    Under the plot a **How to read this graph** disclosure holds the rules a picture does not carry: one scale for
     every row, breaks, the window and overview, forks and sub-agents, swarms, how the dollars are recomputed,
     and the sentences about cache misses and wake-ups;
   - stretches longer than 10 minutes in which nothing ran (no call, no turn, no piece of agent work)
-    are squeezed into a narrow, faint grey **break** (a pause, so that the work around it reads first) labelled with its length; with more than 12 such
+    are squeezed into a narrow **break** (a pause, so that the work around it reads first) labelled with its length. A break is not a band: the page stays white, and a veil (a rect of the page colour at `BREAK_VEIL`, 0.6, over the rows) fades whatever crosses it, the baselines, gridlines, held contexts, agent lines and spend, which stay visible. The veil lies over the plot's lines and under the cursor, and the texts written on rows (model names, frame labels) are drawn above it so that they stay readable; it takes no pointer. Two slash ticks and the length label mark it on the axis; with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
   - **a window at a time** (beads `merlin-t8s.50`, `merlin-zls.6`): the plot shows one **window** of
@@ -338,7 +345,7 @@ From top to bottom:
   - the **overview** is 54 px tall and full width: the whole tree on one linear wall-clock scale, idle
     time squeezed out as in the plot (`timeAxis` over every span, at most 16 breaks, so long nights do
     not eat the strip). It draws the context of the main rows as a light area (the largest of the main
-    lanes, `contextEnvelope`), the spend as thin stacked columns along the bottom in the legend's split
+    lanes, `contextEnvelope`), the spend as thin columns along the bottom, one grey with the cache miss in its colour like the plot
     (`spendDensity`), a faint tick at each midnight, the date of each day (from `splitDays`: the
     day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
     marker. The **brush** is the window: a highlighted rectangle with a handle at each edge, the rest
@@ -397,7 +404,7 @@ From top to bottom:
     again) starts its area at that call. A one-shot sub-agent has a single piece of work, so this never shows on its row. An agent's own sub-agents are thin lines on its row;
   - below the baseline, what the row spent in each slot of time (a round length, at least 4 px wide),
     on one dollar scale for every row, as a 1 px line per slot (at the middle of where the row ran in
-    it), one quiet grey (`--muted`) whatever the split, with the slot's cache miss in the miss colour at
+    it), one quiet grey (`--muted`), with the slot's cache miss in the miss colour at
     its bottom; the lines are drawn under everything on the baseline, so the agent's and session's
     weighted lines stay readable. The scale is the window's own (slots are
     shorter when zoomed in, so a fixed scale would make bars vanish): the largest at which the tallest bar of
@@ -465,9 +472,10 @@ From top to bottom:
     of agent work** to the last call of its last: its start down to the baseline, its top, and a short
     stem at its end, like a decision's bracket turned round (no fill, so the context tint under it
     reads alone; its pieces show in the context, an area while they run, dotted between them). A
-    sub-agent solid, a fork with a notch, a workflow dashed. The frame carries the agent's name, its main model (the model of most of its calls, as `Sonnet 5.5`)
-    and its spend, `name · Sonnet 5.5 · $1.20`; where room is short the model goes first, then the
-    spend. A piece is one of the
+    sub-agent solid, a fork with a notch, a workflow dashed. The frame carries the agent's name and its spend at the top left, `name · $1.20` (the spend goes
+    first when room is short), and its main model (the model of most of its calls, as `Sonnet 5.5`) at the
+    bottom left, just above the baseline and right of the elbow, as main rows write theirs; the model is
+    written only if it fits inside the frame. What is left out is in the frame's tooltip, `name · Sonnet 5.5 · $1.20`. A piece is one of the
     agent's turns (`agent.turns`): a sub-agent or fork has one, an addressable agent (a Claude Code
     teammate, a Codex agent) one per message or task that set it working again (from a daemon without
     `turns`: one per message it was sent); a workflow run (`digest.workflows`) is one piece with all
@@ -482,8 +490,7 @@ From top to bottom:
     thin line (35%) under a light envelope of their largest (`swarmEnvelope`), the spend of all of them
     summed per slot on the usual dollar scale, one spine from the sender at the first launch weighted by
     the tier most of the swarm's dollars went on (`dominantTier`), one frame over the swarm's whole span
-    labelled `25 × Explore · Haiku 5.5 · $0.60` (`25 agents` for mixed types, `mixed` for mixed models;
-    the model, then the spend, go first when room is short), and the agents' misses and compactions.
+    labelled `25 × Explore · $0.60` (`25 agents` for mixed types; the spend goes first when room is short), with the swarm's model (`Haiku 5.5`, `mixed` for mixed models) at the bottom left, and the agents' misses and compactions.
     Hover reads count, types, models, spend and the span in the line above the plot. A click on the
     frame or its "+" chip, or Enter while the pointer is over it, opens the swarm into its agents' own
     rows, packed as any (`collapseSwarms`); a "−" chip left of the first agent's frame, or Enter while
@@ -550,21 +557,31 @@ From top to bottom:
     opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
     fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
     colour.
-- **The third split, by model tier** (`?split=tier`): a bar and the legend are split by what the
-  model of each call costs, from `GET /api/prices` (`lib/tiers.ts`, `tierOf`). By its **input price
-  per million tokens**: **heavy** from $4, **light** up to $1, **mid** in between, **unpriced** for a
-  model the table does not know. The model name is resolved as the daemon does (no `[1m]`, a dated id,
-  an alias); while the table is loading or failed, and for a model it does not price, the tier goes by
-  the family in the name (Fable and Opus heavy, Sonnet mid, Haiku light; Codex `astra` heavy, `sol`
-  mid, `luna` light), and unpriced when even that does not tell. The whole call goes in its tier,
-  its cache miss included (the miss is a fact about the cache, not about the model; the other splits
-  show it). The tiers are one hue, strongest for heavy and lightest for light, the unpriced grey. The
-  legend lists each tier with its dollars, its percent and, after the label, the models in it as
-  short names, the most expensive first: `Heavy models (Opus 5.5, Fable 5.1) $20.10 72%`. The line
-  under the plot that reads a turn or a piece of work keeps its split by who in this view. The
-  timeline keeps for each call its model and tier, and for each row its **model runs** (consecutive
-  calls on one model, `{ t0, t1, model, tier }`) and its main model, for drawing the weight of a line
-  by model;
+- **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
+  switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the
+  plots draw spend as thin uniform lines): three rows, one per partition of the same dollars, each
+  ONE stacked bar, all of the same length. A short header at the left (Who, Token class, Model tier;
+  fixed width), then the bar, then `$12.30` and, when the window is not all of the session, `of $45.10`
+  muted. The segments are linear shares of the total in the order of the series (`KIND_SERIES`,
+  `CLASS_SERIES`, `TIER_SERIES`), zero parts skipped, the label and percent written inside when they
+  fit; every segment has a hover title with its label, dollars and percent, and for a model tier the
+  models in it (the tier is by input price per million tokens from `GET /api/prices`: **heavy** from
+  $4, **light** up to $1, **mid** between, **unpriced** for a model the table does not know; with the
+  prices missing it goes by the family in the name; the whole call, cache miss included, is in its
+  tier). The **length** is logarithmic and saturating: the share of the track is
+  `log10(1+s) / (log10(1+s) + K)` with `K = LENGTH_K = 1.5` (`lengthShare`), so that $1 is 17%, $10 41%,
+  $100 57%, $1000 67% and an infinite spend all of it; a faint scale under the rows ticks $1, $10,
+  $100 and $1k where they fit. What is counted is the plot's **effective window** (`eff`), summed from
+  the timeline's calls in one pure function (`sumRange`: the three partitions of a range add up to the
+  same total; a call is in when its time is, as in the plot's slots); behind each bar, faint, is the
+  whole session's bar on the same scale. **Overhead** (what the harness reported that no message
+  explains) is in no partition: it is a hatched tail on every row, so that the rows stay equal. For a
+  window it is apportioned by how much of each reported stretch (`Branch.overhead`, which has its
+  time span) lies in the window (`overheadIn`). Rows have a fixed height and the figures are tabular,
+  so that the widget does not move while the window is dragged. The line under the plot that reads a
+  turn or a piece of work shows the chips by who. The timeline keeps for each call its model and
+  tier, and for each row its **model runs** (consecutive calls on one model, `{ t0, t1, model, tier }`)
+  and its main model, for drawing the weight of a line by model;
 - **Decision panel**: the pinned turn's decision, its total split by who, then every step and every
   piece of agent work in it, most expensive first, and the compactions after its turns. A decision
   is only "everything between two typed prompts": work an earlier prompt asked for is counted where
@@ -581,8 +598,8 @@ From top to bottom:
 
 Addresses: `#t<n>` pins turn n (a copied turn on the session that ran it), `#a<agentId>` opens that
 agent's piece of work (a nested agent opens the piece it is inside), `#c<n>` pins the turn of
-compaction n; search results and the Cost page link with these. `?pin=`, `?unit=`, `?split=class`
-(or `tier`) and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harness/:id` redirects
+compaction n; search results and the Cost page link with these. `?pin=`, `?unit=`
+and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harness/:id` redirects
 here.
 
 The previous page (a timeline of every turn with Cost, Agents and Context cards in a side panel)

@@ -6,13 +6,13 @@ import { usePrices } from '../../api/queries'
 import type { SessionKey } from '../../api/types'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
 import { spendBasis } from '../../lib/cost'
-import { formatCount, formatDuration, formatMoney, formatPercent, formatTokens, plural } from '../../lib/format'
-import { modelLabel } from '../../lib/models'
+import { formatCount, formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
-import { Card, ModelName, SegmentedControl } from '../../ui'
+import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
+import { Breakdown } from './Breakdown'
 import { Key, keyFacts } from './Key'
 import { kindColor } from './marks'
 import {
@@ -20,9 +20,7 @@ import {
   missSummary,
   missText,
   type Part,
-  type Split,
   stepParts,
-  TIER_SERIES,
   turnList,
   type Unit,
   unitParts,
@@ -38,7 +36,6 @@ import {
   effectiveWindow,
   revealWindow,
   splitDays,
-  tierSpend,
   type Win,
 } from './timeline'
 import type { Branch, Tree } from './tree'
@@ -65,7 +62,6 @@ export interface SpendGraphProps {
   onPin: (pin: Pin | null) => void
   selectedUnit: UnitRef | null
   onSelectUnit: (unit: UnitRef) => void
-  initialSplit?: Split
   /** Dev and screenshots: start with the cursor on this turn of the home branch. */
   initialCursor?: number
   /** Dev and screenshots: the window of time to show first (`?from=&to=`). */
@@ -82,17 +78,6 @@ const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
 
 function Swatch({ color }: { color: string }) {
   return <span aria-hidden className="inline-block size-2 shrink-0 rounded-[2px]" style={{ background: color }} />
-}
-
-/** The overhead bands' hatching, as a legend swatch. */
-function HatchSwatch() {
-  return (
-    <span
-      aria-hidden
-      className="inline-block size-2.5 shrink-0 rounded-[2px] border border-muted/60"
-      style={{ background: 'repeating-linear-gradient(45deg, var(--muted) 0 1px, transparent 1px 3.5px)' }}
-    />
-  )
 }
 
 function Chips({ parts }: { parts: Part[] }) {
@@ -117,12 +102,10 @@ function TurnReadout({
   tree,
   at,
   unit,
-  split,
 }: {
   tree: Tree
   at: Pin | undefined
   unit: { branch: Branch; unit: Unit } | undefined
-  split: Split
 }) {
   const b = unit ? unit.branch : tree.branches[at?.branch ?? 0]
   const c = b.model.cols[unit ? unit.unit.launch : (at?.col ?? 0)]
@@ -237,7 +220,7 @@ function TurnReadout({
             )}
           </div>
           <div className="flex items-center gap-x-3">
-            <Chips parts={unitParts(u, split)} />
+            <Chips parts={unitParts(u, 'kind')} />
             <span className="min-w-0 flex-1 truncate text-muted">
               {firstLine(unwrapMachineText(u.asked).body) || u.agent.description}
             </span>
@@ -247,7 +230,7 @@ function TurnReadout({
         <>
           <div className="truncate text-muted">{c.prompt || '(no prompt text)'}</div>
           <div className="flex items-center gap-x-3 overflow-hidden whitespace-nowrap">
-            <Chips parts={stepParts(c, split)} />
+            <Chips parts={stepParts(c, 'kind')} />
             {notes.length > 0 && (
               <span className="min-w-0 flex-1 truncate" title={notes.map((n) => n.text).join('\n')}>
                 {notes.map((n) => (
@@ -271,14 +254,12 @@ export function SpendGraph({
   onPin,
   selectedUnit,
   onSelectUnit,
-  initialSplit = 'kind',
   initialCursor,
   initialWindow,
   unknownSessions = 0,
   recordedSessions = 0,
   current,
 }: SpendGraphProps) {
-  const [split, setSplit] = useState<Split>(initialSplit)
   const [cursor, setCursor] = useState<Pin | null>(
     initialCursor !== undefined && tree.branches[home]?.model.cols[initialCursor]
       ? { branch: home, col: initialCursor }
@@ -292,7 +273,6 @@ export function SpendGraph({
   const overhead = tree.overheadUSD >= 0.005
   // agent runs that left no record of their spend (a Pi `--no-session` child): unknown, so in no figure
   const unrecordedRuns = branches.reduce((n, b) => n + (b.detail.digest.cost.unrecordedAgents ?? 0), 0)
-  const grand = tree.total + (overhead ? tree.overheadUSD : 0)
   const compactions = useMemo(
     () => ({
       ...compactionTally(branches.flatMap((b) => [...b.model.compactions, ...b.model.agentCompactions])),
@@ -305,7 +285,6 @@ export function SpendGraph({
   const prices = usePrices().data?.models // until it arrives (or if it fails) tiers go by the model's family
   const timeline = useMemo(() => buildTimeline(tree, prices), [tree, prices])
   const facts = useMemo(() => keyFacts(tree, timeline), [tree, timeline])
-  const byTier = useMemo(() => tierSpend(timeline), [timeline])
   const days = useMemo(() => splitDays(timeline), [timeline])
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
   const turnStart = (p: Pin | null | undefined) =>
@@ -376,66 +355,17 @@ export function SpendGraph({
   }
 
   return (
-    <Card
-      title="Spend"
-      actions={
-        <SegmentedControl
-          label="How a bar is split"
-          value={split}
-          onChange={setSplit}
-          options={[
-            { value: 'kind', label: 'By who', title: 'Main agent, agents by kind, cache misses' },
-            { value: 'class', label: 'By token class', title: 'Output, cache reads and writes, uncached input' },
-            {
-              value: 'tier',
-              label: 'By model tier',
-              title:
-                'Heavy, mid and light models, by what their input costs (heavy from $4 per million tokens, light up to $1)',
-            },
-          ]}
-        />
-      }
-    >
-      <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sec">
-        {(split === 'tier'
-          ? byTier.map((t) => {
-              const def = TIER_SERIES.find((s) => s.key === t.tier) ?? TIER_SERIES[3]
-              const names = [...new Set(t.models.map((m) => modelLabel(m.model)))]
-              return { key: t.tier, color: def.color, label: def.label, usd: t.usd, names }
-            })
-          : (split === 'kind' ? tree.byKind : tree.byClass).map((p) => ({ ...p, names: [] as string[] }))
-        ).map((p) => (
-          <span key={p.key} className="inline-flex items-center gap-1.5">
-            <Swatch color={p.color} />
-            <span>
-              {p.label}
-              {p.names.length > 0 && <span className="text-muted"> ({p.names.join(', ')})</span>}
-            </span>
-            <span className="font-mono">{formatMoney(p.usd)}</span>
-            <span className="text-faint">{formatPercent(p.usd, grand)}</span>
-          </span>
-        ))}
-        {unrecordedRuns > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 text-muted"
-            title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
-          >
-            <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
-            <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
-          </span>
-        )}
-        {overhead && (
-          <span
-            className="inline-flex items-center gap-1.5"
-            title="Spend the harness reported that no message in the transcripts explains: calls it does not write down. It belongs to a whole reported stretch, so it is drawn under the rows and is in no turn, agent or decision."
-          >
-            <HatchSwatch />
-            <span>Not explained by messages</span>
-            <span className="font-mono">{formatMoney(tree.overheadUSD)}</span>
-            <span className="text-faint">{formatPercent(tree.overheadUSD, grand)}</span>
-          </span>
-        )}
-      </div>
+    <Card title="Spend">
+      <Breakdown tree={tree} timeline={timeline} range={eff} />
+      {unrecordedRuns > 0 && (
+        <p
+          className="mb-2 flex items-center gap-1.5 text-sec text-muted"
+          title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
+        >
+          <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
+          <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
+        </p>
+      )}
       {compactions.calls + compactions.unknown > 0 && (
         <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
           <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
@@ -460,7 +390,6 @@ export function SpendGraph({
         <Overview
           timeline={timeline}
           days={days}
-          split={split}
           win={win}
           eff={eff}
           onWin={setWin}
@@ -468,37 +397,39 @@ export function SpendGraph({
           latest={latest}
         />
       </div>
-      <TimePlot
-        tree={tree}
-        timeline={timeline}
-        range={eff}
-        split={split}
-        pinned={valid(pinned) ? pinned : null}
-        cursor={cur}
-        selectedUnit={selectedUnit}
-        hoverUnit={hoverUnit}
-        onCursor={setCursor}
-        onHoverUnit={setHoverUnit}
-        onPin={onPin}
-        onSelectUnit={onSelectUnit}
-        onKey={onKey}
-        current={current}
-        turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} split={split} /> : null}
-      />
-      <Key facts={facts} className="mt-2" />
+      <div className="relative">
+        <TimePlot
+          tree={tree}
+          timeline={timeline}
+          range={eff}
+          pinned={valid(pinned) ? pinned : null}
+          cursor={cur}
+          selectedUnit={selectedUnit}
+          hoverUnit={hoverUnit}
+          onCursor={setCursor}
+          onHoverUnit={setHoverUnit}
+          onPin={onPin}
+          onSelectUnit={onSelectUnit}
+          onKey={onKey}
+          current={current}
+          turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
+        />
+        <Key facts={facts} />
+      </div>
       <details className="mt-2 text-meta text-muted">
         <summary className="cursor-pointer select-none text-sec">How to read this graph</summary>
         <p className="mt-1">
-          Time runs across, local; a narrow grey band is time in which nothing ran, left out. Every row shares one token
-          scale above its baseline (so the tall ones are the expensive ones to carry) and one dollar scale below it. The
-          plot shows a window of the session, picked on the strip above it (the whole session on one scale, the window
-          highlighted): it opens on all of it, and Latest goes to the last day of work. The rows and the token scale are
-          those of the whole session, so the plot keeps its shape as the window moves (it looks sparse where the session
-          is quiet); the time axis and the dollar scale are the window's own. A fork leaves from the top of its parent's
-          context; a sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot
-          agents share rows, and four or more launched together are one swarm row (marked +; click it to open it, −
-          folds it). A person's turns are weighted by the price of their model, and the model's name is written where it
-          changes.
+          The bars at the top show how the spend of the window shown (the faint bar behind each: of the whole session)
+          divides by who, by token class and by model tier; their length is logarithmic. Time runs across, local; a
+          narrow grey band is time in which nothing ran, left out. Every row shares one token scale above its baseline
+          (so the tall ones are the expensive ones to carry) and one dollar scale below it. The plot shows a window of
+          the session, picked on the strip above it (the whole session on one scale, the window highlighted): it opens
+          on all of it, and Latest goes to the last day of work. The rows and the token scale are those of the whole
+          session, so the plot keeps its shape as the window moves (it looks sparse where the session is quiet); the
+          time axis and the dollar scale are the window's own. A fork leaves from the top of its parent's context; a
+          sub-agent starts clean, from the baseline. An addressable agent keeps a row of its own, one-shot agents share
+          rows, and four or more launched together are one swarm row (marked +; click it to open it, − folds it). A
+          person's turns are weighted by the price of their model, and the model's name is written where it changes.
           {overhead &&
             ' A hatched band under a session spans a stretch the harness reported a cost for and carries what it reported beyond the messages of that stretch; it is on no scale.'}{' '}
           {spendBasis(tree.branches.length, unknownSessions, recordedSessions)}

@@ -53,7 +53,7 @@ import {
   windowRow,
 } from './layout'
 import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
-import { KIND_SERIES, type KindKey, missText, type Split, type Unit } from './model'
+import { KIND_SERIES, type KindKey, missText, type Unit } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
@@ -90,8 +90,8 @@ import {
 import { type Overhead, shortTitle, type Tree } from './tree'
 import { useWidth } from './useWidth'
 
-/** How strongly a break shows: a faint pause, so that the work around it reads first. */
-export const BREAK_OPACITY = 0.35
+/** How strongly a break's veil covers what crosses it: the page colour over the lines, so that they fade but stay visible. */
+export const BREAK_VEIL = 0.6
 
 /** Room left of the plot for the context scale. */
 const LABEL_W = 34
@@ -133,7 +133,7 @@ export const COMPACT_MARK = {
 /** A cache miss's diamond: its side and colour. */
 export const MISS_SIZE = 8
 export const MISS_COLOR = 'var(--series-5)'
-/** The spend per slot under a baseline: one quiet grey, whatever the split; only a cache miss is coloured. */
+/** The spend per slot under a baseline: one quiet grey; only a cache miss is coloured. */
 export const SPEND_COLOR = 'var(--muted)'
 /** A person's message: the dot's radius. */
 export const DOT_R = 2.8
@@ -219,7 +219,6 @@ export interface TimePlotProps {
   timeline: Timeline
   /** The window of time to show, of a tree too long for one view. */
   range: Win | undefined
-  split: Split
   pinned: Pin | null
   cursor: Pin | undefined
   selectedUnit: UnitRef | null
@@ -269,7 +268,6 @@ export function TimePlot({
   tree,
   timeline,
   range,
-  split,
   pinned,
   cursor,
   selectedUnit,
@@ -344,13 +342,13 @@ export function TimePlot({
           for (const c of l.calls) {
             const k = Math.floor(c.t / slot)
             const s = m.get(k) ?? {}
-            addCall(s, c, split)
+            addCall(s, c)
             s.miss = (s.miss ?? 0) + c.reread
             m.set(k, s)
           }
         return m
       }),
-    [rows, slot, split],
+    [rows, slot],
   )
   // where each bar is drawn: over the part of its slot in which the row was running, not all of it
   const bars = useMemo(
@@ -562,6 +560,8 @@ export function TimePlot({
 
   const colors = [...new Set(Object.values(COLOR))]
   const hatchOf = (color: string) => `url(#${hatch}-${colors.indexOf(color)})`
+  // text a break's veil must not fade: the labels written on rows are drawn after it
+  const labels: ReactNode[] = []
   const drawLane = (g: Layout, l: Lane) => {
     const color = COLOR[l.kind]
     const inherited = inheritOf(l)
@@ -598,12 +598,52 @@ export function TimePlot({
             // an agent that left no record has no spend to print: $0 would be a claim
             const cost = l.agent?.unrecorded ? 'not recorded' : formatMoney(l.usd)
             const room = b - a - (l.kind === 'fork' ? 9 : 4) - 4
-            // name · model · cost; the model goes first when room is short, then the cost
+            // name · cost at the top left, the cost dropped first when room is short; the model bottom left, just
+            // above the baseline, clear of the elbow that comes in from the sender
             const fits = (s: string) => room >= s.length * 5.6
             const withCost = [label, cost].filter(Boolean).join(' · ')
             const modelText = l.swarm?.collapsed ? l.swarm.modelText : l.model && modelLabel(l.model)
             const withModel = [label, modelText, cost].filter(Boolean).join(' · ')
-            const text = fits(withModel) ? withModel : fits(withCost) ? withCost : fits(label) ? label : ''
+            const text = fits(withCost) ? withCost : fits(label) ? label : ''
+            const modelX = a + ELBOW_R + 2
+            // always, where the frame is wide enough: above the baseline where the lane is tall enough not to run
+            // into the top label, else just under it, over the quiet spend lines
+            const modelFits = !!modelText && b - modelX - 2 >= modelText.length * 4.9
+            const modelY = g.base - top >= (text ? 27 : 18) ? g.base - 6 : g.base + 9
+            // a label left out (or the model, which is not in the top one) is still in the frame's tooltip
+            const tip = text !== withModel || !modelFits
+            if (text)
+              labels.push(
+                <text
+                  key={`t${l.key}`}
+                  x={a + (l.kind === 'fork' ? 9 : 4)}
+                  y={top + 10}
+                  fontSize={9.5}
+                  fill="var(--muted)"
+                  stroke="var(--surface)"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                  pointerEvents="none"
+                >
+                  {text}
+                </text>,
+              )
+            if (modelFits)
+              labels.push(
+                <text
+                  key={`m${l.key}`}
+                  x={modelX}
+                  y={modelY}
+                  fontSize={9}
+                  fill="var(--muted)"
+                  stroke="var(--surface)"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                  pointerEvents="none"
+                >
+                  {modelText}
+                </text>,
+              )
             return (
               <g>
                 <path
@@ -629,8 +669,8 @@ export function TimePlot({
                       />
                     ),
                 )}
-                {text !== withModel && (
-                  // the label did not fit: the whole of it is the frame's tooltip
+                {tip && (
+                  // a part of the label is not on the frame: the whole of it is the frame's tooltip
                   <rect
                     x={f1(a)}
                     y={top}
@@ -642,19 +682,6 @@ export function TimePlot({
                   </rect>
                 )}
                 {l.kind === 'fork' && <path d={`M${f1(a)} ${top}h7l-7 7z`} fill={color} />}
-                {text && (
-                  <text
-                    x={a + (l.kind === 'fork' ? 9 : 4)}
-                    y={top + 10}
-                    fontSize={9.5}
-                    fill="var(--muted)"
-                    stroke="var(--surface)"
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                  >
-                    {text}
-                  </text>
-                )}
                 {l.swarm && (l.swarm.collapsed || l.swarm.first) && (
                   <g>
                     <rect
@@ -826,6 +853,24 @@ export function TimePlot({
             const held = pinned?.branch === g.row.branch && b.model.cols[pinned.col]?.decision === dec.index
             const on = held || (cursor?.branch === g.row.branch && b.model.cols[cursor.col]?.decision === dec.index)
             const text = formatMoney(dec.usd)
+            if (xb - xa >= text.length * 6 + 4 || on)
+              labels.push(
+                <text
+                  key={`d${dec.index}`}
+                  x={(xa + xb) / 2}
+                  y={yy - 3}
+                  textAnchor="middle"
+                  fontSize={10}
+                  fontWeight={on ? 600 : 400}
+                  fill={on ? 'var(--text)' : 'var(--muted)'}
+                  stroke="var(--surface)"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                  pointerEvents="none"
+                >
+                  {text}
+                </text>,
+              )
             return (
               <g key={dec.index} pointerEvents="none">
                 <path
@@ -834,21 +879,6 @@ export function TimePlot({
                   stroke={held ? 'var(--accent)' : on ? 'var(--text)' : 'var(--faint)'}
                   strokeWidth={held ? 3 : 1}
                 />
-                {(xb - xa >= text.length * 6 + 4 || on) && (
-                  <text
-                    x={(xa + xb) / 2}
-                    y={yy - 3}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fontWeight={on ? 600 : 400}
-                    fill={on ? 'var(--text)' : 'var(--muted)'}
-                    stroke="var(--surface)"
-                    strokeWidth={3}
-                    paintOrder="stroke"
-                  >
-                    {text}
-                  </text>
-                )}
               </g>
             )
           })}
@@ -866,7 +896,7 @@ export function TimePlot({
               if (x < end + 14) return null
               const role = k === 0 && lead ? `${lead} · ` : ''
               end = x + (role.length + m.text.length) * 4.9
-              return (
+              labels.push(
                 <text
                   key={`mm${m.t}`}
                   x={x}
@@ -884,8 +914,9 @@ export function TimePlot({
                     </tspan>
                   )}
                   {m.text}
-                </text>
+                </text>,
               )
+              return null
             })
           })()}
         {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included) */}
@@ -1390,14 +1421,6 @@ export function TimePlot({
           {/* breaks: idle time left out */}
           {axis.breaks.map((b) => (
             <g key={b.t0}>
-              <rect
-                x={b.x0 + 3}
-                y={AXIS_H - 6}
-                width={b.x1 - b.x0 - 6}
-                height={height - AXIS_H}
-                fill="var(--surface-2)"
-                opacity={BREAK_OPACITY}
-              />
               <path
                 d={`M${f1(b.x0 + 3)} ${AXIS_H - 6}l3 -4M${f1(b.x1 - 6)} ${AXIS_H - 6}l3 -4`}
                 stroke="var(--faint)"
@@ -1482,6 +1505,20 @@ export function TimePlot({
             }),
           )}
           {connectors}
+          {/* a break's veil: the page colour over what crosses it, so that it fades without a band of its own */}
+          {axis.breaks.map((b) => (
+            <rect
+              key={`v${b.t0}`}
+              x={b.x0 + 3}
+              y={AXIS_H - 6}
+              width={b.x1 - b.x0 - 6}
+              height={height - AXIS_H + 6}
+              fill="var(--surface)"
+              opacity={BREAK_VEIL}
+              pointerEvents="none"
+            />
+          ))}
+          {labels}
           {crossX !== undefined && (
             <g pointerEvents="none">
               <line

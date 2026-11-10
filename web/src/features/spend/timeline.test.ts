@@ -342,12 +342,19 @@ describe('model tiers on a timeline', () => {
     expect(ts[2].models.map((m) => m.model)).toEqual(['haiku-x'])
   })
 
-  test('the split by tier puts the whole call, cache miss included, in its tier', () => {
+  test('a plot bar holds the calls total and their cache miss', () => {
     const bar: Record<string, number> = {}
     const c = { usd: 1, reread: 0.4, tier: 'mid', kind: 'main', byClass: {} } as unknown as Lane['calls'][number]
-    addCall(bar, c, 'tier')
-    addCall(bar, { ...c, usd: 2, reread: 0, tier: 'heavy' }, 'tier')
-    expect(bar).toEqual({ mid: 1, heavy: 2, total: 3 })
+    addCall(bar, c)
+    addCall(bar, { ...c, usd: 2, reread: 0 })
+    expect(bar.total).toBeCloseTo(3, 9)
+    expect(bar.miss).toBeCloseTo(0.4, 9)
+  })
+
+  test('the tier spend of a range counts only the calls in it', () => {
+    const tl = buildTimeline(buildTree([detail]), prices)
+    expect(tierSpend(tl, tl.t0, tl.t1 + 1)).toEqual(tierSpend(tl))
+    expect(tierSpend(tl, tl.t1 + 1, tl.t1 + 2)).toEqual([])
   })
 })
 
@@ -775,7 +782,7 @@ describe('windows', () => {
     const env = contextEnvelope(tl, axis, 2)
     expect(env).toHaveLength(50)
     expect(Math.max(...env)).toBe(300)
-    const bars = spendDensity(tl, axis, 2, 'kind')
+    const bars = spendDensity(tl, axis, 2)
     expect(bars.reduce((s, b) => s + (b.total ?? 0), 0)).toBe(5)
   })
 

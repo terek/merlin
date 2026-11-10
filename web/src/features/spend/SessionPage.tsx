@@ -4,7 +4,7 @@
 // decisions. The header, the resume command and the family list come first and last.
 // URL: #t<n> pins turn n, #a<agentId> opens that agent's work, #c<n> pins the turn of compaction n
 // (search results and other pages link with these). Also ?pin=<turn>, ?unit=<agentId>#<n>,
-// ?split=class and ?cursor=<turn> for development and screenshots.
+// ?cursor=<turn> for development and screenshots.
 import { useQueries } from '@tanstack/react-query'
 import { SearchX } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -18,7 +18,6 @@ import { sessionPath } from '../../lib/paths'
 import { sessionTitle } from '../../lib/session'
 import { EmptyState, ErrorState, Id, ProjectName, QueryBoundary, RelTime, Skeleton, SkeletonRows } from '../../ui'
 import { Banners, Diagnostics, FamilyStrip, ResumeBox, SessionHeader } from './Header'
-import { splitParam } from './model'
 import { type Pin, SpendGraph, type UnitRef } from './SpendGraph'
 import { parseHash, resolveTarget } from './session'
 import { DecisionPanel, TopDecisions, TurnInspector } from './TurnInspector'
@@ -125,7 +124,6 @@ function Loaded({ home, details, missing }: { home: SessionDetail; details: Sess
           onPin={pin}
           selectedUnit={unit}
           onSelectUnit={selectUnit}
-          initialSplit={splitParam(params.get('split'))}
           initialCursor={num(params.get('cursor')) ?? undefined}
           initialWindow={{ lo: parseTime(params.get('from')), hi: parseTime(params.get('to')) }}
           unknownSessions={details.filter((d) => d.cost.flag === 'unknown').length}

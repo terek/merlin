@@ -5,7 +5,7 @@
 // time when it is a day).
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
 import { formatDuration, formatMoney } from '../../lib/format'
-import { CLASS_SERIES, KIND_SERIES, type Split, TIER_SERIES } from './model'
+import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
   boundsOf,
   centerWindow,
@@ -42,8 +42,6 @@ const GRAB = 7
 /** The most breaks the strip makes: more idle stretches are squeezed together. */
 const STRIP_BREAKS = 16
 
-const ORDER = { kind: KIND_SERIES, class: CLASS_SERIES, tier: TIER_SERIES }
-
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const longDate = (t: number) => new Date(t).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
@@ -53,7 +51,6 @@ export interface OverviewProps {
   /** The whole tree. */
   timeline: Timeline
   days: readonly Day[]
-  split: Split
   win: Win
   /** What the plot really shows: `win`, grown to the end of the turn it cuts (`effectiveWindow`). */
   eff: Win
@@ -73,7 +70,7 @@ type Drag =
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
-export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, latest }: OverviewProps) {
+export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: OverviewProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
@@ -85,7 +82,7 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
 
   const env = useMemo(() => contextEnvelope(timeline, axis, COL), [timeline, axis])
   const peak = Math.max(1, ...env)
-  const dens = useMemo(() => spendDensity(timeline, axis, COL, split), [timeline, axis, split])
+  const dens = useMemo(() => spendDensity(timeline, axis, COL), [timeline, axis])
   const maxBar = Math.max(1e-9, ...dens.map((d) => d.total ?? 0))
   const area = useMemo(() => {
     const k = (CTX_BASE - CTX_TOP) / peak
@@ -288,17 +285,16 @@ export function Overview({ timeline, days, split, win, eff, onWin, pinnedT, late
           <path d={area} fill="var(--series-1)" fillOpacity={0.28} stroke="none" />
           <line x1={x0} x2={x1} y1={CTX_BASE + 0.5} y2={CTX_BASE + 0.5} stroke="var(--line)" strokeWidth={1} />
           {dens.map((d, i) => {
-            let y = BAR_BASE
+            const total = d.total ?? 0
+            if (total <= 0) return null
+            const k = (BAR_BASE - BAR_TOP) / maxBar
+            const h = Math.max(0.75, total * k)
+            const miss = Math.min(h, (d.miss ?? 0) * k)
             return (
               // biome-ignore lint/suspicious/noArrayIndexKey: columns are positions
               <g key={i}>
-                {ORDER[split].map((p) => {
-                  const v = d[p.key] ?? 0
-                  if (v <= 0) return null
-                  const h = Math.max(0.75, (v / maxBar) * (BAR_BASE - BAR_TOP))
-                  y -= h
-                  return <rect key={p.key} x={x0 + i * COL} y={y} width={COL} height={h} fill={p.color} />
-                })}
+                <rect x={x0 + i * COL} y={BAR_BASE - h} width={COL} height={h - miss} fill={SPEND_COLOR} />
+                {miss > 0 && <rect x={x0 + i * COL} y={BAR_BASE - miss} width={COL} height={miss} fill={MISS_COLOR} />}
               </g>
             )
           })}

@@ -23,7 +23,6 @@ import {
   newBucket,
   promptTokens,
   type Reread,
-  type Split,
   type Unit,
 } from './model'
 import type { Tree } from './tree'
@@ -46,13 +45,13 @@ export interface Call {
   usd: number
   /** Dollars by token class; the cache miss is `reread`. */
   byClass: Record<ClassKey, number>
-  /** Who, for the split by who: the lane's kind, or `compact` for a compaction call. */
+  /** Who, for the breakdown by who: the lane's kind, or `compact` for a compaction call. */
   kind: KindKey
   /** Dollars of `usd` that were a cache miss. */
   reread: number
   /** The model the message was billed on, as recorded. */
   model: string
-  /** Its tier by price (lib/tiers.ts), for the split by model tier. */
+  /** Its tier by price (lib/tiers.ts), for the breakdown by model tier. */
   tier: Tier
 }
 
@@ -498,18 +497,10 @@ export const slotLength = (axis: TimeAxis, minPx: number) =>
 /** "30 s", "5 min", "1 h" */
 export const slotText = (ms: number) => (ms < MIN ? `${ms / 1000} s` : ms < HOUR ? `${ms / MIN} min` : `${ms / HOUR} h`)
 
-/**
- * Adds a call to a bar's parts: by token class, by model tier (the whole call, cache miss included: the tier
- * is about the model, not about what went wrong), or by who with the cache miss apart; and to its total.
- */
-export function addCall(bar: Record<string, number>, c: Call, split: Split) {
-  if (split === 'class') for (const [key, v] of Object.entries(c.byClass)) bar[key] = (bar[key] ?? 0) + v
-  else if (split === 'tier') bar[c.tier] = (bar[c.tier] ?? 0) + c.usd
-  else {
-    bar[c.kind] = (bar[c.kind] ?? 0) + c.usd - c.reread
-    bar.reread = (bar.reread ?? 0) + c.reread
-  }
+/** Adds a call to a bar of the plot: its total and the cache miss among it (the rest is drawn as one grey). */
+export function addCall(bar: Record<string, number>, c: Call) {
   bar.total = (bar.total ?? 0) + c.usd
+  bar.miss = (bar.miss ?? 0) + c.reread
 }
 
 /** What one tier spent: its dollars, and on which models, the most expensive first. */
@@ -519,11 +510,15 @@ export interface TierSpend {
   models: { model: string; usd: number }[]
 }
 
-/** What the timeline's calls spent by model tier (only tiers with dollars), in the order of `TIERS`. */
-export function tierSpend(tl: Timeline): TierSpend[] {
+/**
+ * What the timeline's calls spent by model tier (only tiers with dollars), in the order of `TIERS`.
+ * Only the calls from `lo` up to (not including) `hi`: all of them by default.
+ */
+export function tierSpend(tl: Timeline, lo = Number.NEGATIVE_INFINITY, hi = Number.POSITIVE_INFINITY): TierSpend[] {
   const by = new Map<Tier, Map<string, number>>()
   for (const l of tl.lanes)
     for (const c of l.calls) {
+      if (!(c.t >= lo && c.t < hi)) continue
       const m = by.get(c.tier) ?? new Map<string, number>()
       m.set(c.model, (m.get(c.model) ?? 0) + c.usd)
       by.set(c.tier, m)
@@ -875,11 +870,11 @@ export function contextEnvelope(tl: Timeline, axis: TimeAxis, step: number): num
   return out
 }
 
-/** What the tree spent in each column of `step` pixels, in a bar's parts (`addCall`). */
-export function spendDensity(tl: Timeline, axis: TimeAxis, step: number, split: Split): Record<string, number>[] {
+/** What the tree spent in each column of `step` pixels: its total and its cache miss (`addCall`). */
+export function spendDensity(tl: Timeline, axis: TimeAxis, step: number): Record<string, number>[] {
   const n = columns(axis, step)
   const out = Array.from({ length: n }, () => ({}) as Record<string, number>)
-  for (const l of tl.lanes) for (const c of l.calls) addCall(out[columnOf(axis, step, n, c.t)], c, split)
+  for (const l of tl.lanes) for (const c of l.calls) addCall(out[columnOf(axis, step, n, c.t)], c)
   return out
 }
 

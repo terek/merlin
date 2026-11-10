@@ -33,9 +33,8 @@ import type { Tier } from '../../lib/tiers'
 export type ClassKey = 'output' | 'read' | 'write' | 'reread' | 'input'
 /** Who spent them. `reread` is taken out of whoever paid it. */
 export type KindKey = 'main' | 'reread' | 'compact' | 'subagent' | 'addressable' | 'fork'
-export type Split = 'kind' | 'class' | 'tier'
-/** The split a `?split=` value names; anything else is by who. */
-export const splitParam = (v: string | null): Split => (v === 'class' || v === 'tier' ? v : 'kind')
+/** How the pieces of a step or a unit are split: by who, or by token class (the hover reads them by who). */
+export type Split = 'kind' | 'class'
 export type Tone = 'series-1' | 'series-2' | 'series-3' | 'series-4' | 'series-5' | 'series-other'
 
 export interface SeriesDef<K extends string = string> {
@@ -46,7 +45,7 @@ export interface SeriesDef<K extends string = string> {
   tone: Tone
 }
 
-// The cache miss keeps its colour in both splits.
+// The cache miss keeps its colour in the breakdown by who and by token class.
 export const KIND_SERIES: SeriesDef<KindKey>[] = [
   { key: 'main', label: 'Main agent', color: 'var(--series-1)', tone: 'series-1' },
   { key: 'reread', label: 'Cache miss', color: 'var(--series-5)', tone: 'series-5' },
