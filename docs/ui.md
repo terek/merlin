@@ -297,8 +297,9 @@ From top to bottom:
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
-  by when it happened. A **breakdown** of the spend (below), a line adding up the compactions, a
-  **readout** above the plot, and a drawn **legend** in a column on the right.
+  by when it happened. At the top, in one row, the **breakdown** of the spend as three rings (below) and
+  the **legend** in four columns to the right of them; then a line adding up the compactions, the strip,
+  the **readout** above the plot, and the plot, which take the card's whole width.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
@@ -307,18 +308,14 @@ From top to bottom:
     by-who chips and notes on cache misses, compactions, typed-while-running prompts and reports) or the
     selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
     how to read and pin, and the scales;
-  - the **legend** (`Key.tsx`, once the "key" under the plot) is a "Legend" button in the card's header (the
-    `Card` `actions` slot, top right) that opens a **column** on the right of the card's content: the content
-    (breakdown, compactions line, window readout, strip, readout, plot) and the column are a flex row, the
-    content `flex-1 min-w-0` and the column 16rem wide with a left border, as tall as the content (stretch).
-    The strip and the plot measure their own width (`useWidth`, a `ResizeObserver`), so they shrink when it
-    opens and grow back when it closes, and the window (a span of time) keeps covering the same time. Closed,
-    there is no column. When taller than the screen the column is sticky at the top of the page scroll and
-    scrolls on its own; it has a close ×. Open or closed is remembered per
-    viewer in `localStorage` (`merlin.spend.legend`, default closed, every access in try/catch). Entries are
-    one column of rows: an inline SVG sample (28x16 px) and its words, samples
+  - the **legend** (`Key.tsx`, once the "key" under the plot) is always shown: no button, no toggle, nothing
+    in `localStorage`. It is four columns right of the rings (a grid, `min-w-[26rem] flex-1`, four columns from
+    1100px of viewport and two rows of two below, so that nothing overflows at 1000px). Column 1 is the
+    arcs' (Breakdown, below); columns 2 to 4 are the key of the plot, each group whole and the columns
+    about as high as each other: *Sessions and agents*; *Context*; *Your turns*, *Spend* and *Time*. Entries are
+    rows of a column: an inline SVG sample (28x16 px) and its words, samples
     lined up and texts starting at one x, in
-    groups with a small heading: *Sessions and agents* (session line by tier, forked or continued session,
+    groups with a small heading (the same on the three columns): *Sessions and agents* (session line by tier, forked or continued session,
     agent spine, fork with its copied context, agent frame, fork notch, workflow dashed, swarm "+", report),
     *Context* (the context area, held strong and faint, cache miss, compactions cold, warm, unknown), *Your
     turns* (prompt, typed while a turn ran, decision, pinned decision), *Spend* (spend per slot, not explained
@@ -558,33 +555,36 @@ From top to bottom:
     opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
     fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
     colour.
-- **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
+- **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`, geometry in `ring.ts`; the card's top, in place of the old
   switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the
-  plots draw spend as thin uniform lines): three rows, one per partition of the same dollars, each
-  ONE stacked bar, all of the same length, with no row headers (the labels inside the bars name the
-  segments; each segment's hover title starts with its partition, "Token class: Cache read · $1.20 · 39%").
-  The bars start at the card's left edge. The **token class** row is drawn in black-and-white patterns of
-  theme tokens (`CLASS_PATTERNS`: dark grey output, light grey cache read, diagonal hatch cache write,
-  dots uncached input) so that it reads as another kind of partition than the coloured rows; the cache
-  miss alone stays pink, as everywhere. The price is written **once**, `$12.30` and, when the window is
-  not all of the session, `of $45.10` muted, vertically centred on the three rows right after the
-  whole session's bar (the longest a bar gets), so it moves only with the session, never while the window
-  is dragged. The segments are linear shares of the total in the order of the series (`KIND_SERIES`,
-  `CLASS_SERIES`, `TIER_SERIES`), zero parts skipped, the label and percent written inside when they
-  fit; every segment has a hover title with its label, dollars and percent, and for a model tier the
-  models in it (the tier is by input price per million tokens from `GET /api/prices`: **heavy** from
-  $4, **light** up to $1, **mid** between, **unpriced** for a model the table does not know; with the
-  prices missing it goes by the family in the name; the whole call, cache miss included, is in its
-  tier). The **length** is logarithmic and saturating: the share of the track is
-  `log10(1+s) / (log10(1+s) + K)` with `K = LENGTH_K = 1.5` (`lengthShare`), so that $1 is 17%, $10 41%,
-  $100 57%, $1000 67% and an infinite spend all of it; there is no scale axis. What is counted is the plot's **effective window** (`eff`), summed from
+  plots draw spend as thin uniform lines): **three thin concentric rings** (176 px square, each 10 px thick with 3 px
+  between, `RING`), one per partition of the same dollars: outside in by who, by token class, by model
+  tier. Each ring is a full circle cut into arcs by **linear share** (the length of an arc is its share, no
+  logarithm), in the order of the series, from 12 o'clock clockwise, with a 1 px gap between neighbours
+  (`arcPath`); zero parts are skipped and a part of 100% is a full ring. In the middle is the price, large,
+  `$12.30` and, when the window is not all of the session, `of $45.10` small and muted under it. The **token
+  class** ring is drawn in black-and-white patterns of theme tokens (`CLASS_PATTERNS` for the swatches,
+  the same look as SVG patterns for the arcs: dark grey output, light grey cache read, diagonal hatch cache
+  write, dots uncached input) so that it reads as another kind of partition than the coloured rings; the
+  cache miss alone stays pink, as everywhere. Every arc has a hover title with its partition, label,
+  dollars and percent, "Token class: Cache read · $1.20 · 39%", and for a model tier the models in it (the tier is by
+  input price per million tokens from `GET /api/prices`: **heavy** from $4, **light** up to $1, **mid**
+  between, **unpriced** for a model the table does not know; with the prices missing it goes by the
+  family in the name; the whole call, cache miss included, is in its tier). **Column 1 of the legend**
+  maps the arcs: three groups headed *Who*, *Token class*, *Model tier*, a row each per series (swatch with
+  the arc's colour or pattern, label, dollars, percent of the window; tabular figures in columns of a
+  fixed width) and, once, the overhead's row (hatch swatch, "Not in messages"). **Every series is
+  listed, a part of $0 faint**, so that the column keeps its rows while a window is dragged. Hovering an arc
+  or a row is one shared state: the arc gets a frame (drawn over the rings, taking no pointer) and the
+  row's label is underlined; nothing else changes, so the colours keep their contrast. The hover is let go
+  only when the pointer leaves the rings, so crossing the gap between arcs does not flicker; the overhead
+  frames its arc in all three rings. Nothing moves while a window is dragged: the size and place
+  of the rings are fixed. What is counted is the plot's **effective window** (`eff`), summed from
   the timeline's calls in one pure function (`sumRange`: the three partitions of a range add up to the
-  same total; a call is in when its time is, as in the plot's slots); behind each bar, faint, is the
-  whole session's bar on the same scale. **Overhead** (what the harness reported that no message
-  explains) is in no partition: it is a hatched tail on every row, so that the rows stay equal. For a
+  same total; a call is in when its time is, as in the plot's slots). **Overhead** (what the harness reported that no message
+  explains) is in no partition: it is a hatched arc at the end of every ring, so that the rings stay equal. For a
   window it is apportioned by how much of each reported stretch (`Branch.overhead`, which has its
-  time span) lies in the window (`overheadIn`). Rows have a fixed height and the figures are tabular,
-  so that the widget does not move while the window is dragged. The line under the plot that reads a
+  time span) lies in the window (`overheadIn`). The line under the plot that reads a
   turn or a piece of work shows the chips by who. The timeline keeps for each call its model and
   tier, and for each row its **model runs** (consecutive calls on one model, `{ t0, t1, model, tier }`)
   and its main model, for drawing the weight of a line by model;

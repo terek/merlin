@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { CLASS_SERIES, KIND_SERIES, TIER_SERIES } from './model'
-import { LENGTH_K, lengthShare, overheadIn, segmentsOf, sumRange } from './partition'
+import { overheadIn, segmentsOf, sumRange } from './partition'
 import type { Lane, Timeline } from './timeline'
 import type { Overhead } from './tree'
 
@@ -27,29 +27,6 @@ const timeline = (...calls: Call[][]): Timeline =>
   }) as unknown as Timeline
 
 const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0)
-
-describe('lengthShare', () => {
-  test('is 0 for nothing, grows with spend and never reaches the whole track', () => {
-    expect(lengthShare(0)).toBe(0)
-    expect(lengthShare(-3)).toBe(0)
-    let prev = 0
-    for (const s of [0.01, 0.5, 1, 10, 100, 1000, 1e6]) {
-      const v = lengthShare(s)
-      expect(v).toBeGreaterThan(prev)
-      expect(v).toBeLessThan(1)
-      prev = v
-    }
-    expect(lengthShare(Number.POSITIVE_INFINITY)).toBe(1)
-  })
-
-  test('has the shape the key promises', () => {
-    expect(LENGTH_K).toBe(1.5)
-    expect(lengthShare(1)).toBeCloseTo(0.17, 2)
-    expect(lengthShare(10)).toBeCloseTo(0.41, 1)
-    expect(lengthShare(100)).toBeCloseTo(0.57, 2)
-    expect(lengthShare(1000)).toBeCloseTo(0.67, 2)
-  })
-})
 
 describe('sumRange', () => {
   const tl = timeline(

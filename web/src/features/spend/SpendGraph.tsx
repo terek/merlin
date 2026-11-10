@@ -1,4 +1,4 @@
-// The spend graph: the card around the time view (TimeView.tsx), with the legend, the compactions,
+// The spend graph: the card around the time view (TimeView.tsx), with the rings and the legend (Breakdown.tsx), the compactions,
 // the readout of what is under the cursor and the key handling. The pinned turn and the selected
 // piece of agent work are the page's; the panels under the card open them.
 import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
@@ -12,7 +12,7 @@ import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
 import { Breakdown } from './Breakdown'
-import { keyFacts, Legend, LegendButton, useLegendOpen } from './Key'
+import { keyFacts } from './Key'
 import { kindColor } from './marks'
 import {
   compactionTally,
@@ -258,7 +258,6 @@ export function SpendGraph({
       : null,
   )
   const [hoverUnit, setHoverUnit] = useState<UnitRef | null>(null)
-  const [legendOpen, setLegendOpen] = useLegendOpen()
 
   const { branches } = tree
   const focus = pinned?.branch ?? home
@@ -346,12 +345,11 @@ export function SpendGraph({
   }
 
   return (
-    <Card title="Spend" actions={<LegendButton open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)} />}>
-      {/* the legend is a column on the right: what is left of the width is the content's, and the
-          plot and the strip measure it, so they follow when the column opens or closes */}
-      <div className="flex items-stretch gap-3">
-        <div className="min-w-0 flex-1">
-          <Breakdown tree={tree} timeline={timeline} range={eff} />
+    <Card title="Spend">
+      {/* the rings and the legend are the top block; the strip and the plot below it have the card's whole width */}
+      <div>
+        <div className="min-w-0">
+          <Breakdown tree={tree} timeline={timeline} range={eff} facts={facts} />
           {unrecordedRuns > 0 && (
             <p
               className="mb-2 flex items-center gap-1.5 text-sec text-muted"
@@ -413,7 +411,6 @@ export function SpendGraph({
             />
           </div>
         </div>
-        {legendOpen && <Legend facts={facts} onClose={() => setLegendOpen(false)} />}
       </div>
     </Card>
   )

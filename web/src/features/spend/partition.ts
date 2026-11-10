@@ -1,30 +1,15 @@
 // The numbers behind the Spend card's breakdown (Breakdown.tsx): what a range of time spent, in the three
-// partitions of the same dollars (by who, by token class, by model tier), and how long a bar of that
-// much is. Pure.
+// partitions of the same dollars (by who, by token class, by model tier). Pure.
 //
 // A range is summed from the calls of the timeline, the same calls the plot draws its spend from, so
 // the widget and the plot agree. Overhead (what the harness reported that no message explains) is in no
-// call and so in no partition: it is added to each bar as a tail of its own (`segmentsOf`).
+// call and so in no partition: it is added to each ring as an arc of its own (`segmentsOf`).
 
 import { modelLabel } from '../../lib/models'
 import type { Tier } from '../../lib/tiers'
 import { CLASS_SERIES, type ClassKey, KIND_SERIES, type KindKey, type SeriesDef, TIER_SERIES } from './model'
 import { type TierSpend, type Timeline, tierSpend } from './timeline'
 import type { Overhead } from './tree'
-
-/**
- * How fast a bar's length saturates: its share of the track is log10(1+s) / (log10(1+s) + K).
- * With 1.5, $1 is 17% of the track, $10 42%, $100 57%, $1000 67%.
- */
-export const LENGTH_K = 1.5
-
-/** The share of the track (0 to 1) a bar of `usd` dollars takes: logarithmic, and an infinite spend takes all of it. */
-export function lengthShare(usd: number): number {
-  if (!(usd > 0)) return 0
-  if (!Number.isFinite(usd)) return 1
-  const l = Math.log10(1 + usd)
-  return l / (l + LENGTH_K)
-}
 
 /** What a range spent, in the three partitions (each adds up to `usd`). */
 export interface RangeSpend {
@@ -89,33 +74,37 @@ export function overheadIn(
   return usd
 }
 
-/** A segment of a bar. */
+/** A part of a ring. */
 export interface Segment {
   key: string
   label: string
-  /** A CSS colour; none for the hatched tail. */
+  /** A CSS colour; none for the hatched arc. */
   color?: string
   usd: number
-  /** The overhead tail. */
+  /** The overhead arc. */
   hatched?: boolean
   /** The models of a model tier. */
   names?: string[]
 }
 
-/** The non-zero parts of one partition in the order of its series, with the overhead (if any) as a hatched tail. */
+/**
+ * The non-zero parts of one partition in the order of its series, with the overhead (if any) as a hatched
+ * arc at the end; with `keepZero`, the zero parts too (for the legend, which lists every series).
+ */
 export function segmentsOf(
   series: readonly SeriesDef[],
   values: Record<string, number>,
   overhead: number,
   tiers?: readonly TierSpend[],
+  keepZero = false,
 ): Segment[] {
   const segs: Segment[] = series
-    .filter((s) => (values[s.key] ?? 0) > 0)
+    .filter((s) => keepZero || (values[s.key] ?? 0) > 0)
     .map((s) => ({
       key: s.key,
       label: s.label,
       color: s.color,
-      usd: values[s.key],
+      usd: values[s.key] ?? 0,
       names: tiers
         ? [...new Set((tiers.find((t) => t.tier === s.key)?.models ?? []).map((m) => modelLabel(m.model)))]
         : undefined,
