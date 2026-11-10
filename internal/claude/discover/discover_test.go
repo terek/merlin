@@ -299,22 +299,6 @@ func TestUnreadableDirIsWarning(t *testing.T) {
 	}
 }
 
-func TestMissingRoot(t *testing.T) {
-	if _, err := Scan(filepath.Join(t.TempDir(), "nope")); !os.IsNotExist(unwrap(err)) {
-		t.Errorf("err = %v", err)
-	}
-}
-
-func unwrap(err error) error {
-	for {
-		u, ok := err.(interface{ Unwrap() error })
-		if !ok {
-			return err
-		}
-		err = u.Unwrap()
-	}
-}
-
 // Claude Code writes the agents of a workflow run below subagents/, in
 // workflows/<runId>/, next to the run's journal. They belong to the session like the files
 // directly in subagents/.
@@ -362,5 +346,25 @@ func TestAgentsInSubdirectories(t *testing.T) {
 	// main + 4 transcripts + 2 meta files; the journal and the script are not read
 	if len(s.Fingerprint) != 7 {
 		t.Errorf("fingerprint has %d files: %v", len(s.Fingerprint), s.Fingerprint)
+	}
+}
+
+// No Claude Code on the machine: a missing projects directory is zero sessions, not an error.
+func TestScanMissingProjectsDir(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nonexistent", "projects")
+	res, err := Scan(missing)
+	if err != nil || len(res.Sessions) != 0 || len(res.Warnings) != 0 {
+		t.Fatalf("Scan(missing) = %+v, %v; want empty, nil", res, err)
+	}
+	if _, found, _, err := ScanSession(missing, "", "abc"); err != nil || found {
+		t.Fatalf("ScanSession(missing) found=%v err=%v; want false, nil", found, err)
+	}
+	// Not a directory stays an error.
+	file := filepath.Join(t.TempDir(), "projects")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Scan(file); err == nil {
+		t.Fatal("Scan on a regular file: want an error")
 	}
 }

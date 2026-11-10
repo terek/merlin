@@ -6,6 +6,7 @@
 package discover
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -89,10 +90,14 @@ func (f Fingerprint) String() string {
 	return b.String()
 }
 
-// Scan walks projectsDir. A projectsDir that cannot be listed is an error; anything below
+// Scan walks projectsDir. A projectsDir that does not exist (no Claude Code on this
+// machine) holds no sessions and is not an error; one that exists but cannot be listed is; anything below
 // it that cannot be read is skipped and reported in Result.Warnings.
 func Scan(projectsDir string) (Result, error) {
 	entries, err := os.ReadDir(projectsDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return Result{}, nil
+	}
 	if err != nil {
 		return Result{}, fmt.Errorf("discover: %w", err)
 	}

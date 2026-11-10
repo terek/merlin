@@ -1,6 +1,8 @@
 package discover
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -17,6 +19,9 @@ func ScanSession(projectsDir, projectKey, id string) (src Source, found bool, wa
 	}
 	if projectKey == "" {
 		entries, err := os.ReadDir(projectsDir)
+		if errors.Is(err, fs.ErrNotExist) {
+			return Source{}, false, nil, nil
+		}
 		if err != nil {
 			return Source{}, false, nil, err
 		}

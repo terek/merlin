@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -90,5 +91,17 @@ func TestScanRebuildsWhenPricesChange(t *testing.T) {
 	}
 	if p, u := scanCounts(t, e); p != 0 || u == 0 {
 		t.Errorf("third scan, nothing changed: processed %d, unchanged %d", p, u)
+	}
+}
+
+// A machine without Claude Code (no CLAUDE_CONFIG_DIR on disk) scans cleanly.
+func TestScanWithoutClaudeDir(t *testing.T) {
+	e := &readEnv{t: t, home: t.TempDir(), claud: filepath.Join(t.TempDir(), "nonexistent")}
+	out, errs, code := e.run(nil, "scan")
+	if code != 0 || strings.Contains(errs, "claude") || strings.Contains(out, "claude: discover") {
+		t.Fatalf("scan: code %d\n%s\n%s", code, out, errs)
+	}
+	if !strings.Contains(out, "seen 0") {
+		t.Errorf("no summary line in %q", out)
 	}
 }
