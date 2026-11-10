@@ -634,3 +634,22 @@ func TestUnknownCostForWorkWithoutMessages(t *testing.T) {
 		t.Errorf("SessionsUnknown = %d", n)
 	}
 }
+
+// Claude Code and Codex record no per-call cost: Money has no recorded part, so Total is
+// Reported + Attributed, per session and over the whole fixture set.
+func TestMoneyWithoutRecordedSpend(t *testing.T) {
+	c := fixtureCatalog(t)
+	tot := c.Total(Filter{})
+	if tot.RecordedUSD != 0 || tot.BilledUSD != 0 {
+		t.Errorf("recorded %v billed %v, want 0", tot.RecordedUSD, tot.BilledUSD)
+	}
+	wantNear(t, "total", tot.TotalUSD, tot.ReportedUSD+tot.AttributedUSD)
+	for _, in := range c.List(Filter{}, Liveness{}).Sessions {
+		m := in.Cost.Money()
+		wantNear(t, in.Key.ID+" total", m.TotalUSD, in.Cost.BestUSD)
+		wantNear(t, in.Key.ID+" parts", m.TotalUSD, m.ReportedUSD+m.AttributedUSD)
+		if in.Cost.Flag == CostBilled || in.Cost.Flag == CostRecorded {
+			t.Errorf("%s flag %q", in.Key.ID, in.Cost.Flag)
+		}
+	}
+}

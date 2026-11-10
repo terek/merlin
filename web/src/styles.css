@@ -20,6 +20,7 @@
   --bad: #c42f2f;
   --reported: #3568d4;
   --attributed: #d48a1c;
+  --recorded: #1f9a8f;
   --overhead: #8a6bd0;
   --human: #3568d4;
   --machine: #c9ced7;
@@ -55,6 +56,7 @@
     --bad: #f27474;
     --reported: #6c9cff;
     --attributed: #e0a145;
+    --recorded: #3fbfb2;
     --overhead: #b496f0;
     --human: #6c9cff;
     --machine: #3a404c;
@@ -88,6 +90,7 @@
   --bad: #f27474;
   --reported: #6c9cff;
   --attributed: #e0a145;
+  --recorded: #3fbfb2;
   --overhead: #b496f0;
   --human: #6c9cff;
   --machine: #3a404c;
@@ -126,6 +129,7 @@
   --color-bad-soft: var(--bad-soft);
   --color-reported: var(--reported);
   --color-attributed: var(--attributed);
+  --color-recorded: var(--recorded);
   --color-overhead: var(--overhead);
   --color-human: var(--human);
   --color-machine: var(--machine);

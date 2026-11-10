@@ -32,6 +32,9 @@ Cost block
               trace in the transcript
   attributed  recomputed from the transcript tokens, for the messages this
               session owns (subagents included)
+  billed      Pi: the provider's charge for each call, as Pi recorded it
+  recorded    Pi: its own per-call figure (price-catalog estimate) where the
+              provider reported no charge; shown instead of attributed
   overhead    reported minus attributed inside the windows: calls not in the
               transcript. A session-level figure, never spread over turns/agents
   outside     spend outside every reported window, recomputed from tokens; it
@@ -257,6 +260,8 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 		p.printf("   exact: %s's own figure; nothing lies outside its windows\n", harnessTitle(in.Key.Harness))
 	case catalog.CostRecorded:
 		p.printf("   recorded: %s's own figure for each call (its catalog estimate); it reported no session total\n", harnessTitle(in.Key.Harness))
+	case catalog.CostBilled:
+		p.printf("   billed: the provider's charge for each call, as %s recorded it; it reported no session total\n", harnessTitle(in.Key.Harness))
 	case catalog.CostPartial:
 		p.printf("   partial: %s's figure plus %s recomputed for spend outside its windows\n", harnessTitle(in.Key.Harness), usd(c.UncoveredUSD))
 	case catalog.CostUnknown:
@@ -282,9 +287,14 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 		attributed = fmt.Sprintf("at least; recomputed from tokens, %s cut short in the transcript", plural(c.TruncatedMessages, "message", "messages"))
 	}
 	if c.RecordedUSD > 0 {
-		// Pi writes a cost on every call: that part is the harness's own figure, and only the rest
-		// was recomputed from tokens.
-		row("recorded", c.RecordedUSD, fmt.Sprintf("%s's own per-call figure, messages this session owns", harnessTitle(in.Key.Harness)))
+		// Pi writes a cost on every call: that part is the harness's own figure (the provider's
+		// charge when it reported one), and only the rest was recomputed from tokens.
+		if c.BilledUSD > 0 {
+			row("billed", c.BilledUSD, "the provider's charge per call, messages this session owns")
+		}
+		if rec := c.RecordedUSD - c.BilledUSD; rec > 1e-9 {
+			row("recorded", rec, fmt.Sprintf("%s's own per-call figure (its catalog estimate), messages this session owns", harnessTitle(in.Key.Harness)))
+		}
 		if rest := c.OwnUSD - c.RecordedUSD; rest > 1e-9 {
 			row("recomputed", rest, "from tokens, for the calls that carry no cost of their own")
 		}
@@ -366,9 +376,17 @@ func (p *printer) cost(d *model.SessionDigest, in catalog.SessionInfo) {
 	})
 	if len(sorted) > 0 {
 		p.printf("\n  by model\n")
-		cols := []column{{head: "  MODEL"}, {head: "ATTRIBUTED", right: true}}
+		// Pi's own per-call figures are not recomputed: name the column for what they are.
+		attHead := "ATTRIBUTED"
+		if c.RecordedUSD > 0 {
+			attHead = "RECORDED"
+			if c.BilledUSD >= c.RecordedUSD-1e-9 {
+				attHead = "BILLED"
+			}
+		}
+		cols := []column{{head: "  MODEL"}, {head: attHead, right: true}}
 		if len(c.Windows) > 0 {
-			cols = []column{{head: "  MODEL"}, {head: "REPORTED", right: true}, {head: "ATTRIBUTED", right: true}}
+			cols = []column{{head: "  MODEL"}, {head: "REPORTED", right: true}, {head: attHead, right: true}}
 		}
 		var rows [][]string
 		for _, m := range sorted {

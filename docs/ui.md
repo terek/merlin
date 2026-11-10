@@ -137,7 +137,8 @@ One component, `<Money>`, renders every dollar figure, so the rules hold everywh
   `estimated`: the figure prefixed with `~`. The tooltip explains the flag in a sentence:
   *exact* "reported by Claude Code for the whole session"; *partial* "partly reported; the rest
   recomputed from token counts"; *estimated* "recomputed from token counts; Claude Code reported
-  nothing for this session".
+  nothing for this session". *recorded* (Pi) "the harness's own per-call figures, its catalog
+  estimate", shown with `~`; *billed* "billed by the provider, per call", shown plain.
 - **Lower bound.** A figure that is only a floor is prefixed with `≥` (in place of `~`), and the
   tooltip says why: messages cut short in the transcript (partial output tokens, mostly sub-agent
   messages) or messages on a model without a price (counted as $0). A session's best cost is one

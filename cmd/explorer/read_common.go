@@ -413,7 +413,8 @@ func commas(s string) string {
 }
 
 // marked adds the cost notation: "≈" before an amount that is only recomputed from
-// tokens (estimated), "*" after one that is partly recomputed (partial).
+// tokens (estimated) or is the harness's own catalog estimate (recorded), "*" after one that
+// is partly recomputed (partial). A billed amount is the provider's charge: no marker.
 func marked(v float64, flag catalog.CostFlag) string {
 	switch flag {
 	case catalog.CostUnknown:
@@ -426,9 +427,18 @@ func marked(v float64, flag catalog.CostFlag) string {
 	return usd(v)
 }
 
-// moneyFlag derives the notation for an aggregate from its reported/attributed split.
+// moneyFlag derives the notation for an aggregate from its reported/attributed/recorded split.
 func moneyFlag(m catalog.Money) catalog.CostFlag {
 	switch {
+	case m.RecordedUSD > 0 && m.AttributedUSD == 0 && m.ReportedUSD == 0:
+		if m.BilledUSD >= m.RecordedUSD-1e-9 {
+			return catalog.CostBilled
+		}
+		return catalog.CostRecorded
+	case m.RecordedUSD > 0 && m.AttributedUSD == 0:
+		return catalog.CostPartial
+	case m.RecordedUSD > 0 && m.ReportedUSD == 0:
+		return catalog.CostEstimated
 	case m.AttributedUSD > 0 && m.ReportedUSD == 0:
 		return catalog.CostEstimated
 	case m.AttributedUSD > 0:

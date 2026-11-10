@@ -78,7 +78,9 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 		p.Sessions += len(pf.Sessions)
 		for _, s := range pf.Sessions {
 			p.Cost.ReportedUSD += s.Cost.ReportedUSD
-			p.Cost.AttributedUSD += s.Cost.UncoveredUSD
+			p.Cost.AttributedUSD += s.Cost.UncoveredUSD - s.Cost.RecordedUSD
+			p.Cost.RecordedUSD += s.Cost.RecordedUSD
+			p.Cost.BilledUSD += s.Cost.BilledUSD
 			p.Cost.TotalUSD += s.Cost.BestUSD
 			if s.Cost.Flag == catalog.CostUnknown {
 				p.UnknownSessions++
@@ -95,6 +97,8 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 			p.ScriptedRuns += l.Count
 			p.Cost.ReportedUSD += l.ReportedUSD
 			p.Cost.AttributedUSD += l.AttributedUSD
+			p.Cost.RecordedUSD += l.RecordedUSD
+			p.Cost.BilledUSD += l.BilledUSD
 			p.Cost.TotalUSD += l.TotalUSD
 		}
 	}
@@ -518,7 +522,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			out.Rows = append(out.Rows, CostRow{Key: in.Key.ID, Label: in.Title, Sessions: 1, Flag: c.Flag,
 				LowerBound: c.LowerBound, TruncatedMessages: c.TruncatedMessages, UnpricedMessages: c.UnpricedMessages,
 				UnrecordedAgents: c.UnrecordedAgents, Harness: in.Key.Harness, Project: in.Project, LastActivityAt: in.LastActivityAt,
-				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD + c.EstimatedUncoveredUSD, Compactions: c.Compactions}})
+				Money: c.Money()})
 		}
 		perProject := map[string]*CostRow{}
 		var order []string
@@ -533,6 +537,8 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			row.TotalUSD += s.TotalUSD
 			row.ReportedUSD += s.ReportedUSD
 			row.AttributedUSD += s.AttributedUSD
+			row.RecordedUSD += s.RecordedUSD
+			row.BilledUSD += s.BilledUSD
 		}
 		for _, p := range order {
 			out.Rows = append(out.Rows, *perProject[p])
@@ -541,6 +547,8 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			out.Total.TotalUSD += row.TotalUSD
 			out.Total.ReportedUSD += row.ReportedUSD
 			out.Total.AttributedUSD += row.AttributedUSD
+			out.Total.RecordedUSD += row.RecordedUSD
+			out.Total.BilledUSD += row.BilledUSD
 			out.Sessions += row.Sessions
 		}
 	} else {
@@ -608,6 +616,8 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			out.Backing.Partial++
 		case catalog.CostRecorded:
 			out.Backing.Recorded++
+		case catalog.CostBilled:
+			out.Backing.Billed++
 		case catalog.CostUnknown:
 			out.Backing.Unknown++
 		default:

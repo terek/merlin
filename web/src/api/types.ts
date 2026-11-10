@@ -15,7 +15,8 @@ export type EndState = 'clean' | 'interrupted' | 'mid-turn' | 'unknown'
 /** Liveness: busy and idle are running; recent = not running, active in the last 10 minutes. */
 export type State = 'busy' | 'idle' | 'recent' | 'ended'
 /** `unknown`: work but no billed message and no reported figure; the cost is unknown, not $0. */
-export type CostFlag = 'exact' | 'partial' | 'recorded' | 'estimated' | 'unknown'
+/** `recorded`: every figure is the harness's own per-call figure (Pi's catalog estimate); `billed`: and each one is the provider's charge. */
+export type CostFlag = 'exact' | 'partial' | 'recorded' | 'billed' | 'estimated' | 'unknown'
 /** `spawned`: the parent started the child through a tool (a heuristic match, nothing shared). */
 export type LinkKind = 'fork' | 'continuation' | 'spawned'
 export type TurnOrigin =
@@ -37,11 +38,16 @@ export type SearchField = 'title' | 'prompt' | 'final' | 'compaction' | 'project
 
 // ---- money ----------------------------------------------------------------------------
 
-/** A dollar amount split by source. totalUSD = reportedUSD + attributedUSD. */
+/**
+ * A dollar amount split by source. totalUSD = reportedUSD + attributedUSD + recordedUSD. Recorded is
+ * the harness's own per-call figure (Pi), not recomputed; billedUSD is the part of it the provider charged.
+ */
 export interface Money {
   totalUSD: number
   reportedUSD: number
   attributedUSD: number
+  recordedUSD?: number
+  billedUSD?: number
   /** Compaction calls in the same scope, estimated; see CompactionTally. */
   compactions?: CompactionTally
 }
@@ -343,6 +349,8 @@ export interface ScriptedLine {
   totalUSD: number
   reportedUSD: number
   attributedUSD: number
+  recordedUSD?: number
+  billedUSD?: number
 }
 
 export interface SessionList {
@@ -500,6 +508,10 @@ export interface SessionCost {
   ownUSD: number
   coveredUSD: number
   uncoveredUSD: number
+  /** The part of uncoveredUSD that is the harness's own per-call figure (Pi), not recomputed. */
+  recordedUSD?: number
+  /** The part of recordedUSD the provider reported as its charge for the call. */
+  billedUSD?: number
   /** reportedUSD - coveredUSD (>= 0): reported spend no transcript message explains. */
   overheadUSD: number
   /** Estimated output of truncated messages inside the windows (capped): it explains that much of overheadUSD. */
@@ -938,6 +950,8 @@ export interface CostBacking {
   estimated: number
   /** Sessions with no reported window whose priced messages all carry the harness's own per-call figure. */
   recorded?: number
+  /** Sessions whose priced messages are all the provider's own charge, as the harness recorded it. */
+  billed?: number
   /** Sessions whose cost is unknown (work, but no billed message). */
   unknown?: number
   scriptedRuns: number

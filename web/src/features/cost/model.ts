@@ -78,6 +78,10 @@ export interface Bucket {
   total: number
   reported: number
   attributed: number
+  /** The harness's own per-call figures (Pi); absent when none. */
+  recorded?: number
+  /** The part of `recorded` the provider billed. */
+  billed?: number
   /** Agent runs with no record of their spend in the sessions of the bucket's days: the total is "at least". */
   unrecorded?: number
   /** Spend by model, largest first. */
@@ -96,6 +100,8 @@ function addParts(into: Map<string, CostSplitEntry>, parts: CostSplitEntry[] | u
     cur.totalUSD += p.totalUSD
     cur.reportedUSD += p.reportedUSD
     cur.attributedUSD += p.attributedUSD
+    if (p.recordedUSD) cur.recordedUSD = (cur.recordedUSD ?? 0) + p.recordedUSD
+    if (p.billedUSD) cur.billedUSD = (cur.billedUSD ?? 0) + p.billedUSD
     into.set(p.key, cur)
   }
 }
@@ -142,6 +148,8 @@ export function makeBuckets(rows: CostRow[], window: Window, weekly: boolean): B
     e.b.total += row.totalUSD
     e.b.reported += row.reportedUSD
     e.b.attributed += row.attributedUSD
+    if (row.recordedUSD) e.b.recorded = (e.b.recorded ?? 0) + row.recordedUSD
+    if (row.billedUSD) e.b.billed = (e.b.billed ?? 0) + row.billedUSD
     if (row.unrecordedAgents) e.b.unrecorded = (e.b.unrecorded ?? 0) + row.unrecordedAgents
     if (row.compactions) e.b.compactions = addTally(e.b.compactions, row.compactions)
     addParts(e.parts, row.split)
@@ -170,6 +178,7 @@ export type Tone =
   | 'overhead'
   | 'reported'
   | 'attributed'
+  | 'recorded'
   | 'faint'
   | 'bad'
 
@@ -181,7 +190,7 @@ export interface Segment {
 
 const SERIES: Tone[] = ['series-1', 'series-2', 'series-3', 'series-4', 'series-5']
 
-/** By model, by source (reported or attributed), or the estimated compaction calls on their own. */
+/** By model, by source (reported, attributed or recorded), or the estimated compaction calls on their own. */
 export type Stack = 'model' | 'source' | 'compaction'
 
 export function parseStack(s: string | null): Stack {
@@ -205,7 +214,7 @@ export function modelTone(key: string, top: string[]): Tone {
 
 /**
  * The stack of one bar, bottom first. By model: the top models in rank order, "other" (every
- * other model) and (overhead) on top. By source: reported, then attributed. The segments add up
+ * other model) and (overhead) on top. By source: reported, attributed, then recorded. The segments add up
  * to the bucket's total. By compaction: the warm-cache cost of the calls, then the extra the cold
  * ones cost; they add up to the estimate.
  */
@@ -223,6 +232,7 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
     return [
       { key: 'reported', tone: 'reported' as const, usd: b.reported },
       { key: 'attributed', tone: 'attributed' as const, usd: b.attributed },
+      { key: 'recorded', tone: 'recorded' as const, usd: b.recorded ?? 0 },
     ].filter((s) => s.usd > 0)
   }
   let other = 0

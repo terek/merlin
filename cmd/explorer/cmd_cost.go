@@ -25,14 +25,18 @@ const costHelp = `Usage: merlin cost [--by project|day|model|session|kind] [--si
 What did my sessions cost, subagents included? One table, grouped by --by
 (default project), with a total row.
 
-  COST       what the rows add up to: the reported figure plus the attributed one
+  COST       what the rows add up to: reported plus attributed (plus recorded)
   REPORTED   the harness's own cost figure, for the stretches of each session it
              reported on (its "windows"); includes calls that leave no trace in
              the transcript. Claude Code reports one; Codex does not
   ATTRIBUTED spend outside every window, recomputed from the transcript tokens at
              list prices; the estimate used where the harness reported nothing
+  RECORDED   shown only when there is some (Pi): spend outside every window that is
+             the harness's own per-call figure, not recomputed. Pi 1.5 marks the
+             calls whose figure is the provider's billed charge; the rest is Pi's
+             price-catalog estimate. Not in ATTRIBUTED
 
-Sessions of Claude Code and Codex are counted together. History that a forked or
+Sessions of Claude Code, Codex and Pi are counted together. History that a forked or
 continued session copied from another session is paid for once, by the session
 that has it first. Scripted runs (one-shot 'claude -p' or 'codex exec' calls) are
 counted in every table; in --by session they are summed per project.
@@ -132,7 +136,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 		for _, in := range listing.Sessions {
 			c := in.Cost
 			rows = append(rows, costRowJSON{Key: in.Key.ID, Harness: in.Key.Harness, Label: in.Title, Sessions: 1, Flag: string(c.Flag),
-				Money: catalog.Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD, AttributedUSD: c.UncoveredUSD + c.EstimatedUncoveredUSD, Compactions: c.Compactions}})
+				Money: c.Money()})
 		}
 		perProject := map[string]*costRowJSON{}
 		var order []string
@@ -147,6 +151,8 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 			r.TotalUSD += s.TotalUSD
 			r.ReportedUSD += s.ReportedUSD
 			r.AttributedUSD += s.AttributedUSD
+			r.RecordedUSD += s.RecordedUSD
+			r.BilledUSD += s.BilledUSD
 		}
 		for _, p := range order {
 			perProject[p].Flag = string(moneyFlag(perProject[p].Money))
@@ -156,6 +162,8 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 			total.TotalUSD += r.TotalUSD
 			total.ReportedUSD += r.ReportedUSD
 			total.AttributedUSD += r.AttributedUSD
+			total.RecordedUSD += r.RecordedUSD
+			total.BilledUSD += r.BilledUSD
 			total.Compactions = addTally(total.Compactions, r.Compactions)
 			nSessions += r.Sessions
 		}
@@ -204,7 +212,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	}
 
 	// How the figures are backed, over the sessions in the table.
-	var exact, partial, estimated, recorded, unknown int
+	var exact, partial, estimated, recorded, billed, unknown int
 	for _, in := range listing.Sessions {
 		switch in.Cost.Flag {
 		case catalog.CostExact:
@@ -213,6 +221,8 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 			partial++
 		case catalog.CostRecorded:
 			recorded++
+		case catalog.CostBilled:
+			billed++
 		case catalog.CostUnknown:
 			unknown++
 		default:
@@ -243,6 +253,7 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 				Partial   int `json:"partial"`
 				Estimated int `json:"estimated"`
 				Recorded  int `json:"recorded,omitempty"`
+				Billed    int `json:"billed,omitempty"`
 				Unknown   int `json:"unknown,omitempty"`
 				Scripted  int `json:"scriptedRuns"`
 			} `json:"backing"`
@@ -252,14 +263,25 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 				Partial   int `json:"partial"`
 				Estimated int `json:"estimated"`
 				Recorded  int `json:"recorded,omitempty"`
+				Billed    int `json:"billed,omitempty"`
 				Unknown   int `json:"unknown,omitempty"`
 				Scripted  int `json:"scriptedRuns"`
-			}{exact, partial, estimated, recorded, unknown, scriptedRuns}})
+			}{exact, partial, estimated, recorded, billed, unknown, scriptedRuns}})
 	}
 
 	w.emptyHint("cost")
+	// RECORDED (spend that is the harness's own per-call figure, Pi) appears only when there is
+	// some, so output for Claude Code and Codex alone is unchanged.
+	withRecorded := total.RecordedUSD > 0
+	if withRecorded {
+		cols = append(cols, column{head: "RECORDED", right: true})
+	}
 	money := func(m catalog.Money) []string {
-		return []string{usd(m.TotalUSD), usd(m.ReportedUSD), usd(m.AttributedUSD)}
+		out := []string{usd(m.TotalUSD), usd(m.ReportedUSD), usd(m.AttributedUSD)}
+		if withRecorded {
+			out = append(out, usd(m.RecordedUSD))
+		}
+		return out
 	}
 	switch by {
 	case "session":
@@ -298,6 +320,8 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 			rest.TotalUSD += r.TotalUSD
 			rest.ReportedUSD += r.ReportedUSD
 			rest.AttributedUSD += r.AttributedUSD
+			rest.RecordedUSD += r.RecordedUSD
+			rest.BilledUSD += r.BilledUSD
 		}
 		more := fmt.Sprintf("… %d more rows", len(rows)-len(shown))
 		var line []string
@@ -324,29 +348,32 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 
 	fmt.Println()
 	if total.TotalUSD > 0 {
-		// Some harnesses (Pi) write a cost on every call: that part of the attributed spend is the
-		// harness's own figure, not a recomputation. Its share is taken from the sessions listed;
-		// exact unless the dates cut a session.
-		var recorded, outside float64
-		for _, in := range listing.Sessions {
-			recorded += in.Cost.RecordedUSD
-			outside += in.Cost.UncoveredUSD + in.Cost.EstimatedUncoveredUSD
-		}
-		if recorded > 0 && outside > 0 {
-			rec := total.AttributedUSD * min(recorded/outside, 1)
+		// Some harnesses (Pi) write a cost on every call: that spend is recorded, not
+		// recomputed; the part the provider billed is a real charge, the rest the harness's
+		// own catalog estimate.
+		pct := func(v float64) float64 { return 100 * v / total.TotalUSD }
+		if total.RecordedUSD == 0 {
+			fmt.Printf("Of %s: %s (%.0f%%) was reported by the harness itself; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
+				usd(total.TotalUSD), usd(total.ReportedUSD), pct(total.ReportedUSD), usd(total.AttributedUSD), pct(total.AttributedUSD))
+		} else {
 			var parts []string
-			pct := func(v float64) float64 { return 100 * v / total.TotalUSD }
 			if total.ReportedUSD > 0 {
 				parts = append(parts, fmt.Sprintf("%s (%.0f%%) was reported by the harness itself", usd(total.ReportedUSD), pct(total.ReportedUSD)))
 			}
-			parts = append(parts, fmt.Sprintf("%s (%.0f%%) is the harness's own per-call figure, its price-catalog estimate", usd(rec), pct(rec)))
-			if rest := total.AttributedUSD - rec; rest > 1e-9 {
-				parts = append(parts, fmt.Sprintf("%s (%.0f%%) is recomputed from tokens where it recorded nothing", usd(rest), pct(rest)))
+			if total.BilledUSD > 0 {
+				parts = append(parts, fmt.Sprintf("%s (%.0f%%) was billed by the provider per call", usd(total.BilledUSD), pct(total.BilledUSD)))
+			}
+			if est := total.RecordedUSD - total.BilledUSD; est > 1e-9 {
+				parts = append(parts, fmt.Sprintf("%s (%.0f%%) is the harness's own per-call figure, its price-catalog estimate", usd(est), pct(est)))
+			}
+			if total.AttributedUSD > 1e-9 || len(parts) == 0 {
+				where := "where it reported nothing"
+				if total.RecordedUSD > 0 {
+					where = "where it recorded nothing"
+				}
+				parts = append(parts, fmt.Sprintf("%s (%.0f%%) is recomputed from tokens %s", usd(total.AttributedUSD), pct(total.AttributedUSD), where))
 			}
 			fmt.Printf("Of %s: %s.\n", usd(total.TotalUSD), strings.Join(parts, "; "))
-		} else {
-			fmt.Printf("Of %s: %s (%.0f%%) was reported by the harness itself; %s (%.0f%%) is recomputed from tokens where it reported nothing.\n",
-				usd(total.TotalUSD), usd(total.ReportedUSD), 100*total.ReportedUSD/total.TotalUSD, usd(total.AttributedUSD), 100*total.AttributedUSD/total.TotalUSD)
 		}
 	}
 	if line := compactionLine(total.Compactions); line != "" {
@@ -356,6 +383,9 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	if recorded > 0 {
 		parts = append(parts, fmt.Sprintf("%d recorded", recorded))
 	}
+	if billed > 0 {
+		parts = append(parts, fmt.Sprintf("%d billed", billed))
+	}
 	if unknown > 0 {
 		parts = append(parts, fmt.Sprintf("%d unknown", unknown))
 	}
@@ -363,7 +393,11 @@ func doCost(by, project, since string, limit int, asJSON bool) error {
 	if scriptedRuns > 0 {
 		line += fmt.Sprintf("; plus %s, counting any that made no API call", plural(scriptedRuns, "scripted run", "scripted runs"))
 	}
-	fmt.Println(line + "  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported; recorded: the harness's own per-call figures, no total; unknown: work but no billed message, cost shown as —, not counted)")
+	billedNote := ""
+	if billed > 0 {
+		billedNote = "billed: the provider's charge for each call, no total; "
+	}
+	fmt.Println(line + "  (exact: fully reported; partial: some spend outside the reported windows; estimated: nothing reported; recorded: the harness's own per-call figures, no total; " + billedNote + "unknown: work but no billed message, cost shown as —, not counted)")
 	return nil
 }
 

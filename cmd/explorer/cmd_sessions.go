@@ -144,14 +144,15 @@ func doSessions(project, kind, since string, limit int, asJSON bool) error {
 		{head: "LINEAGE", flex: true},
 	}
 	var rows [][]string
-	var legend bool
+	var legend, recorded bool
 	for _, in := range l.Sessions {
 		title := snip(in.Title, 200)
 		if title == "" {
 			title = "(untitled)"
 		}
 		c := marked(in.Cost.BestUSD, in.Cost.Flag)
-		legend = legend || in.Cost.Flag != catalog.CostExact
+		recorded = recorded || in.Cost.Flag == catalog.CostBilled || in.Cost.Flag == catalog.CostRecorded
+		legend = legend || (in.Cost.Flag != catalog.CostExact && in.Cost.Flag != catalog.CostBilled)
 		rows = append(rows, []string{
 			w.shortID(in.Key.ID), when(in.LastActivityAt, w.now), w.label(in.Project), title,
 			fmt.Sprint(in.Turns), fmt.Sprint(agents(in.Key)), c, stateText(in), w.lineageMarker(in),
@@ -175,7 +176,7 @@ func doSessions(project, kind, since string, limit int, asJSON bool) error {
 		})
 		var srows [][]string
 		for _, s := range lines {
-			legend = legend || moneyFlag(s.Money) != catalog.CostExact
+			legend = legend || (moneyFlag(s.Money) != catalog.CostExact && moneyFlag(s.Money) != catalog.CostBilled)
 			srows = append(srows, []string{s.Day, w.label(s.Project),
 				plural(s.Count, "scripted run", "scripted runs"), marked(s.TotalUSD, moneyFlag(s.Money))})
 		}
@@ -190,7 +191,13 @@ func doSessions(project, kind, since string, limit int, asJSON bool) error {
 		}
 		fmt.Println()
 		if legend {
-			fmt.Println(costLegend)
+			legendText := costLegend
+			if recorded {
+				// Pi: the harness's own figure is a catalog estimate unless the provider billed it.
+				legendText = strings.Replace(legendText, "or recorded per call by the harness (no reported figure)",
+					"or Pi's own per-call catalog estimate (no reported figure); no mark on a figure the provider billed", 1)
+			}
+			fmt.Println(legendText)
 		}
 	}
 	return nil

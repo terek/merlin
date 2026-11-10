@@ -32,7 +32,9 @@ type fact struct {
 	s          *sess
 	day, model string
 	reported   float64
-	attributed float64
+	attributed float64         // outside every window, recomputed; excludes recorded
+	recorded   float64         // outside every window, the harness's own figure
+	billed     float64         // part of recorded the provider charged
 	comp       CompactionTally // compaction calls; nothing else set on such a fact
 }
 
@@ -540,11 +542,12 @@ func (v *view) costs() {
 		}
 		var order []key
 		sums := make(map[key]float64)
+		recSums, billSums := make(map[key]float64), make(map[key]float64)
 		perWin := make([][]dayAmount, len(s.windows))
 		coveredBy := make([]float64, len(s.windows))
 		estBy := make([]float64, len(s.windows))
 		c.UnrecordedAgents = int(s.d.Cost.UnrecordedAgents)
-		var priced, recorded int // owned messages with a price, and of those the harness's own figure
+		var priced, recorded, billed int // owned messages with a price, and of those the harness's own figure
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)
 			k := key{v.day(m.At), m.Model, wi >= 0}
@@ -562,8 +565,16 @@ func (v *view) costs() {
 				priced++
 				if m.Recorded {
 					recorded++
+					if m.Billed {
+						billed++
+					}
 					if wi < 0 {
 						c.RecordedUSD += m.USD
+						recSums[k] += m.USD
+						if m.Billed {
+							c.BilledUSD += m.USD
+							billSums[k] += m.USD
+						}
 					}
 				}
 			}
@@ -620,7 +631,8 @@ func (v *view) costs() {
 			if k.cov {
 				f.reported = sums[k]
 			} else {
-				f.attributed = sums[k]
+				f.recorded, f.billed = recSums[k], billSums[k]
+				f.attributed = sums[k] - f.recorded
 			}
 			v.facts = append(v.facts, f)
 		}
@@ -673,6 +685,9 @@ func (v *view) costs() {
 			c.Flag = CostEstimated
 			if priced > 0 && recorded == priced {
 				c.Flag = CostRecorded
+				if billed == recorded && c.UnpricedMessages == 0 {
+					c.Flag = CostBilled
+				}
 			}
 			v.diag.SessionsEstimate++
 		case c.UncoveredUSD > 0:

@@ -391,6 +391,7 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `unpriced` | the model has no price (it is in `diagnostics.unpricedModels`): `usd` is 0 although the tokens were billed; omitted when false |
 | `fast` | the call was made in fast mode (Claude Code's fast speed, Codex's `priority` service tier); the prompt cache is not shared between fast and standard calls; omitted when false |
 | `recorded` | `usd` is the harness's own per-call figure (Pi writes a cost on every call), not a recomputation from tokens with Merlin's price table; it is the harness's catalog estimate, not an invoice. Omitted when false (recomputed, or `unpriced`) |
+| `billed` | with `recorded`: Pi reported `usage.cost.totalFromProvider: true`, so `usd` is the amount the provider charged for the call (OpenRouter), not an estimate. Only set together with `recorded`; omitted when false |
 
 ## SessionSpawn
 

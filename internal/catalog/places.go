@@ -728,7 +728,7 @@ func (c *Catalog) Repos(f Filter) []RepoGroup {
 			wts[sf.repo], brs[sf.repo] = map[string]*CheckoutGroup{}, map[string]*BranchGroup{}
 		}
 		c := &s.info.Cost
-		g.Money.add(c.ReportedUSD, c.UncoveredUSD+c.EstimatedUncoveredUSD)
+		g.Money.add(c.ReportedUSD, c.UncoveredUSD+c.EstimatedUncoveredUSD-c.RecordedUSD, c.RecordedUSD, c.BilledUSD)
 		last := s.d.LastActivityAt
 		if s.d.Kind == model.KindSDK {
 			continue

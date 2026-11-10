@@ -14,7 +14,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 4
+const ParserVersion = 5
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -486,7 +486,8 @@ func (b *builder) modelOf(i int) (modelName, provider string) {
 // price turns a usage record into a billed message. ok is false when nothing was billed (no
 // tokens and no cost).
 //
-// The cost is Pi's own figure when it is above 0 (Recorded); a 0 with tokens means Pi has no
+// The cost is Pi's own figure when it is above 0 (Recorded; Billed when the provider reported
+// it); a 0 with tokens means Pi has no
 // price for the model, so the price table is asked by model name; a model the table does not
 // know, and any local model, is Unpriced: tokens billed, dollars unknown.
 func (b *builder) price(id string, at time.Time, modelName, provider string, u *usage) (model.Message, bool) {
@@ -505,7 +506,7 @@ func (b *builder) price(id string, at time.Time, modelName, provider string, u *
 	m := model.Message{ID: id, At: at, Model: modelName, Tokens: tok}
 	switch {
 	case cost > 0:
-		m.USD, m.Recorded = cost, true
+		m.USD, m.Recorded, m.Billed = cost, true, bool(u.Cost.TotalFromProvider)
 	case localProviders[strings.ToLower(provider)]:
 		b.markUnpriced(&m)
 	default:

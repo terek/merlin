@@ -349,7 +349,7 @@ func (c *Catalog) Groups(by GroupBy, f Filter) ([]Group, error) {
 			groups[key] = g
 		}
 		cost := &s.info.Cost
-		g.Money.add(cost.ReportedUSD, cost.UncoveredUSD+cost.EstimatedUncoveredUSD)
+		g.Money.add(cost.ReportedUSD, cost.UncoveredUSD+cost.EstimatedUncoveredUSD-cost.RecordedUSD, cost.RecordedUSD, cost.BilledUSD)
 		if s.d.Kind == model.KindSDK {
 			continue
 		}

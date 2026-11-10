@@ -320,6 +320,8 @@ type CostBacking struct {
 	// Recorded counts sessions with no reported window whose priced messages all carry the
 	// harness's own per-call figure (Pi).
 	Recorded int `json:"recorded,omitempty"`
+	// Billed counts the sessions whose priced messages are all the provider's own charge.
+	Billed int `json:"billed,omitempty"`
 	// Unknown counts sessions with work but no billed message: their cost is unknown, not 0.
 	Unknown      int `json:"unknown,omitempty"`
 	ScriptedRuns int `json:"scriptedRuns"`

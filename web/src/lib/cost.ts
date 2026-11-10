@@ -3,7 +3,7 @@
 import type { CostBacking, CostFlag, SessionCost, SessionDigest } from '../api/types'
 import { formatCount, formatMoney, plural } from './format'
 
-/** The marker written with a figure: prefix "~" (estimated), suffix "+est" (partial), none (exact). */
+/** The marker written with a figure: prefix "~" (estimated), suffix "+est" (partial), none (exact, billed). */
 export function flagMarkers(flag: CostFlag | undefined): { prefix: string; suffix: string } {
   if (flag === 'estimated' || flag === 'recorded') return { prefix: '~', suffix: '' }
   if (flag === 'partial') return { prefix: '', suffix: '+est' }
@@ -18,7 +18,9 @@ export function flagExplanation(flag: CostFlag | undefined): string {
     case 'partial':
       return 'Partly reported; the rest recomputed from token counts.'
     case 'recorded':
-      return 'Recorded per call by the harness (its own catalog estimate, not an invoice); no total was reported for the session.'
+      return 'Recorded per call by the harness (its own price-catalog estimate, not an invoice); no total was reported for the session.'
+    case 'billed':
+      return 'Billed by the provider, per call, as the harness recorded it (a real charge, not an estimate); no total was reported for the session.'
     case 'estimated':
       return 'Recomputed from token counts; no figure was reported for this session.'
     case 'unknown':
@@ -72,7 +74,7 @@ export function estimateNote(estimatedUSD: number, truncated: number): string {
 }
 
 export interface CostSegment {
-  key: 'reported' | 'attributed' | 'overhead'
+  key: 'reported' | 'attributed' | 'recorded' | 'overhead'
   label: string
   usd: number
 }
@@ -126,6 +128,7 @@ export function backingSentence(b: CostBacking): string {
   if (b.partial) parts.push(lead(b.partial, 'partial'))
   if (b.estimated) parts.push(lead(b.estimated, 'estimated'))
   if (b.recorded) parts.push(lead(b.recorded, 'recorded'))
+  if (b.billed) parts.push(lead(b.billed, 'billed'))
   if (b.unknown) parts.push(lead(b.unknown, 'unknown'))
   if (b.scriptedRuns) parts.push(`${formatCount(b.scriptedRuns)} scripted run${b.scriptedRuns === 1 ? '' : 's'}`)
   if (!parts.length) return 'no sessions'
@@ -155,7 +158,14 @@ export function unknownNote(n: number): string {
 
 /** The weakest flag of several (unknown < estimated < partial < exact); undefined for none. */
 export function weakestFlag(flags: (CostFlag | undefined)[]): CostFlag | undefined {
-  const rank: Record<CostFlag, number> = { unknown: -1, estimated: 0, recorded: 1, partial: 2, exact: 3 }
+  const rank: Record<CostFlag, number> = {
+    unknown: -1,
+    estimated: 0,
+    recorded: 1,
+    partial: 2,
+    billed: 2.5,
+    exact: 3,
+  }
   let best: CostFlag | undefined
   for (const f of flags) if (f && (!best || rank[f] < rank[best])) best = f
   return best

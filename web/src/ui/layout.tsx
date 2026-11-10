@@ -74,6 +74,7 @@ export function Section({
 export type BarTone =
   | 'reported'
   | 'attributed'
+  | 'recorded'
   | 'overhead'
   | 'accent'
   | 'ok'
@@ -90,6 +91,7 @@ export type BarTone =
 const BAR_BG: Record<BarTone, string> = {
   reported: 'bg-reported',
   attributed: 'bg-attributed',
+  recorded: 'bg-recorded',
   overhead: 'bg-overhead',
   accent: 'bg-accent',
   ok: 'bg-ok',

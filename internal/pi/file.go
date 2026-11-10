@@ -70,6 +70,9 @@ type usage struct {
 	TotalTokens  num `json:"totalTokens"`
 	Cost         struct {
 		Total num `json:"total"`
+		// TotalFromProvider (Pi 1.5) is true when the provider reported the billed amount, so
+		// Total is the actual charge, not Pi's catalog estimate.
+		TotalFromProvider flag `json:"totalFromProvider"`
 	} `json:"cost"`
 }
 

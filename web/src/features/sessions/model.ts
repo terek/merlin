@@ -160,7 +160,14 @@ export function treeState(t: TreeSummary): State {
   return t.sessions.reduce<State>((st, s) => (BUSY[s.state] > BUSY[st] ? s.state : st), 'ended')
 }
 
-const FLAG_RANK: Record<CostFlag, number> = { exact: 0, partial: 1, recorded: 2, estimated: 3, unknown: -1 }
+const FLAG_RANK: Record<CostFlag, number> = {
+  exact: 0,
+  billed: 0.5,
+  partial: 1,
+  recorded: 2,
+  estimated: 3,
+  unknown: -1,
+}
 
 /** How well a tree's cost is backed: the weakest of its members. */
 /** The PRs of every session of a tree, each once, in member order. */

@@ -169,7 +169,12 @@ export function CostPage() {
                 onChange={(v) => set({ stack: v === 'model' ? undefined : v })}
                 options={[
                   { value: 'model', label: 'By model' },
-                  { value: 'source', label: 'Reported / attributed', title: 'Stack by where the figure comes from' },
+                  {
+                    value: 'source',
+                    label: 'Reported / attributed',
+                    title:
+                      "Stack by where the figure comes from (reported, recomputed, or the harness's own per-call figure)",
+                  },
                   {
                     value: 'compaction',
                     label: 'Compactions',
@@ -315,6 +320,7 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
       <QueryBoundary query={query} skeleton={<Skeleton className="h-16" />}>
         {(d) => {
           const { totalUSD, reportedUSD, attributedUSD } = d.total
+          const recordedUSD = d.total.recordedUSD ?? 0
           return (
             <div className="grid items-center gap-x-10 gap-y-3 grid-cols-[auto_1fr]">
               <div>
@@ -330,11 +336,20 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
                   segments={[
                     { value: reportedUSD, tone: 'reported', title: 'Reported by the harness' },
                     { value: attributedUSD, tone: 'attributed', title: 'Attributed from token counts' },
+                    { value: recordedUSD, tone: 'recorded', title: 'Recorded per call by the harness' },
                   ]}
                 />
                 <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-sec">
                   <Source tone="reported" name="Reported" usd={reportedUSD} note="the harness's own figure" />
                   <Source tone="attributed" name="Attributed" usd={attributedUSD} note="recomputed from token counts" />
+                  {recordedUSD > 0 && (
+                    <Source
+                      tone="recorded"
+                      name="Recorded"
+                      usd={recordedUSD}
+                      note={recordedNote(recordedUSD, d.total.billedUSD ?? 0)}
+                    />
+                  )}
                 </div>
                 <div className="text-sec text-muted">{backingSentence(d.backing)}</div>
                 {(d.backing.unknown ?? 0) > 0 && (
@@ -366,13 +381,21 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
   )
 }
 
+/** What the Recorded source is: the harness's own per-call figures, and how much of them the provider billed. */
+function recordedNote(recordedUSD: number, billedUSD: number): string {
+  const own = "the harness's own per-call figures"
+  if (billedUSD <= 0) return `${own}, its price-catalog estimate`
+  if (billedUSD >= recordedUSD - 1e-9) return `${own}, billed by the provider per call`
+  return `${own}; ${formatMoney(billedUSD)} of it billed by the provider per call, the rest its catalog estimate`
+}
+
 function Source({
   tone,
   name,
   usd,
   note,
 }: {
-  tone: 'reported' | 'attributed'
+  tone: 'reported' | 'attributed' | 'recorded'
   name: string
   usd: number
   note: string
@@ -474,7 +497,7 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
   for (const b of buckets) for (const s of stackOf(b, stack, top)) seen.set(s.key, s.tone)
   const order =
     stack === 'source'
-      ? ['reported', 'attributed']
+      ? ['reported', 'attributed', 'recorded']
       : stack === 'compaction'
         ? ['compaction-warm', 'compaction-cold']
         : [...top, 'other', OVERHEAD]
@@ -588,6 +611,22 @@ function CutTable({
             sortValue: (r) => r.attributedUSD,
             cell: (r) => <Money usd={r.attributedUSD} dim />,
           },
+          // Pi's own per-call figures: a column only when the table has some, so Claude Code and
+          // Codex users see the same three.
+          ...((d.total.recordedUSD ?? 0) > 0
+            ? [
+                {
+                  key: 'recorded',
+                  header: 'Recorded',
+                  align: 'right' as const,
+                  width: '92px',
+                  sortValue: (r: CostRow) => r.recordedUSD ?? 0,
+                  cell: (r: CostRow) => (
+                    <Money usd={r.recordedUSD ?? 0} dim title={recordedNote(r.recordedUSD ?? 0, r.billedUSD ?? 0)} />
+                  ),
+                },
+              ]
+            : []),
         ]
         const note = footer?.(d)
         return (

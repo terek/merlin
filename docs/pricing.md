@@ -4,7 +4,10 @@ Merlin reports what sessions cost. Where that number comes from depends on the h
 
 ## Where prices come from
 
-- **Pi** records a cost on every call. Merlin uses that figure when it is above zero. When it is
+- **Pi** records a cost on every call. Merlin uses that figure when it is above zero. Usually it
+  is Pi's own price-catalog estimate (shown with `≈`); when the provider reported the amount it
+  billed (`cost.totalFromProvider`, OpenRouter) it is the actual charge, per call, and is shown
+  as a real figure without `≈`. When it is
   zero or missing, it prices the call's tokens from the table below. When the model is not in
   the table either, the call is unpriced.
 - **Claude Code and Codex** record no cost. Merlin prices their tokens from the table.

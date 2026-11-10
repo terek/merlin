@@ -5,6 +5,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 ## Unreleased
 
 - `merlin scan` and the server no longer report an error on a machine without Claude Code (no `~/.claude/projects`); it simply has no Claude sessions, like a missing Codex or Pi directory.
+- Pi sessions on a provider that reports what it billed (OpenRouter, with Pi 1.5) now show that amount as the real charge, with no `≈`, instead of "Pi's catalog estimate" (`merlin show`: "billed"; `merlin cost`: "billed by the provider per call"). Pi's own per-call figures are no longer counted as "recomputed from token counts": `merlin cost` gains a RECORDED column and the Cost page a "Recorded" source, both only when you have Pi spend. The total is unchanged. Pi sessions are re-indexed once.
 - In a terminal, `merlin` greets you with the wizard and a MERLIN banner (the UI link is clickable), shows a progress bar while it indexes, and ends the first index with a one-line summary; `merlin scan` does the same; `merlin help` groups the commands. Piped or redirected output, and `NO_COLOR`, keep the plain text.
 
 ## 0.7.3 — 2026-11-10

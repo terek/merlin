@@ -133,3 +133,9 @@ test('weakest flag', () => {
   expect(weakestFlag(['estimated', 'unknown', 'exact'])).toBe('unknown')
   expect(weakestFlag([])).toBeUndefined()
 })
+
+test('billed flag is shown without an estimate marker, recorded with one', () => {
+  expect(flagMarkers('billed')).toEqual({ prefix: '', suffix: '' })
+  expect(flagMarkers('recorded')).toEqual({ prefix: '~', suffix: '' })
+  expect(flagExplanation('billed')).toContain('Billed by the provider')
+})

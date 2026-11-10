@@ -29,30 +29,51 @@ const (
 	// CostEstimated: no reported windows at all; the cost is recomputed from tokens.
 	CostEstimated CostFlag = "estimated"
 	// CostRecorded: no reported windows, but every priced message the session owns carries the
-	// harness's own per-call figure (Message.Recorded). It is the harness's catalog estimate,
-	// not an invoice. A mix of recorded and recomputed messages stays CostEstimated.
+	// harness's own per-call figure (Message.Recorded). Unless billed, it is the harness's
+	// catalog estimate, not an invoice. A mix of recorded and recomputed messages stays
+	// CostEstimated.
 	CostRecorded CostFlag = "recorded"
+	// CostBilled: like CostRecorded, and every one of those figures is also the provider's own
+	// charge for the call (Message.Billed), with no unpriced message. A real charge: shown
+	// without the estimate marker.
+	CostBilled CostFlag = "billed"
 	// CostUnknown: the session shows work (a final text or tool calls) but no billed
 	// message and no reported window, so its cost is unknown, not zero. Totals skip it.
 	CostUnknown CostFlag = "unknown"
 )
 
 // Money is a dollar amount split by where it comes from. TotalUSD = ReportedUSD +
-// AttributedUSD. Reported is spend inside a harness-reported window (the window's total,
-// overhead included); attributed is spend outside every window, recomputed from tokens.
+// AttributedUSD + RecordedUSD. Reported is spend inside a harness-reported window (the
+// window's total, overhead included); attributed is spend outside every window, recomputed
+// from tokens; recorded is spend outside every window that is the harness's own per-call
+// figure (Pi), not recomputed. BilledUSD is the part of RecordedUSD the provider reported as
+// its charge.
 type Money struct {
 	TotalUSD      float64 `json:"totalUSD"`
 	ReportedUSD   float64 `json:"reportedUSD"`
 	AttributedUSD float64 `json:"attributedUSD"`
+	RecordedUSD   float64 `json:"recordedUSD,omitempty"`
+	BilledUSD     float64 `json:"billedUSD,omitempty"`
 	// Compactions is the estimated cost of the compaction calls in the same scope; see
 	// CompactionTally for how it relates to TotalUSD.
 	Compactions CompactionTally `json:"compactions,omitzero"`
 }
 
-func (m *Money) add(reported, attributed float64) {
+// add counts spend. attributed excludes the recorded part; billed is part of recorded.
+func (m *Money) add(reported, attributed, recorded, billed float64) {
 	m.ReportedUSD += reported
 	m.AttributedUSD += attributed
-	m.TotalUSD += reported + attributed
+	m.RecordedUSD += recorded
+	m.BilledUSD += billed
+	m.TotalUSD += reported + attributed + recorded
+}
+
+// Money returns the session's best cost split by source: reported windows, recomputed
+// attribution, and the harness's recorded per-call figures. Total is BestUSD.
+func (c *SessionCost) Money() Money {
+	return Money{TotalUSD: c.BestUSD, ReportedUSD: c.ReportedUSD,
+		AttributedUSD: c.UncoveredUSD + c.EstimatedUncoveredUSD - c.RecordedUSD,
+		RecordedUSD:   c.RecordedUSD, BilledUSD: c.BilledUSD, Compactions: c.Compactions}
 }
 
 // CompactionTally sums the estimated cost of compaction calls (model.CompactionCall); a
@@ -122,6 +143,9 @@ type SessionCost struct {
 	// RecordedUSD is the part of UncoveredUSD that is the harness's own per-call figure
 	// (Message.Recorded), not a recomputation from tokens. 0 for Claude Code and Codex.
 	RecordedUSD float64 `json:"recordedUSD,omitempty"`
+	// BilledUSD is the part of RecordedUSD whose messages are Billed: the provider's own
+	// charge for the call (Message.Billed).
+	BilledUSD float64 `json:"billedUSD,omitempty"`
 
 	// The estimated output truncated messages are missing (Message.EstimatedUSD).
 	// EstimatedCoveredUSD is the part inside the windows, capped per window at its overhead:

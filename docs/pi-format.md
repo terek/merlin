@@ -97,7 +97,7 @@ the 820 sessions.
 
 Role `system` messages, `usage`, `context_edit`, `compaction.systemMessage`, `thinkingLevel` and
 `providerThinkingLevel` on assistant messages, `responseModel`, `durationMs`, `endTurn`,
-`toolResult.usage`, `nestedCalls` and `cost.totalFromProvider` are in the source's types and **not or
+`toolResult.usage` and `nestedCalls` are in the source's types and **not or
 barely in the corpus**: whether Pi writes them in the versions the corpus covers, or the exporter
 dropped them, is unknown. `ToolCall` in the source has `thoughtSignature`, `namespace`,
 `argumentsError`; the files also hold a `partialJson` string on tool-call blocks (in 357 of 626
@@ -353,7 +353,7 @@ spend is unknown, so the session's dollars are a lower bound.
 - A subagent relationship in Pi's core: it has no subagents (see Subagents for what extensions
   leave in a session file). A child started with `--no-session` writes no file anywhere.
 - The current leaf, and which branch the user was on when a session was closed (see Tree).
-- A billed amount, except `totalFromProvider` for providers that report one (none seen).
+- A billed amount, except `cost.totalFromProvider: true` (Pi 1.5.0 on OpenRouter writes it on every call; the corpus above predates it).
 - Git branch, app mode, plan or permission settings: none in the header.
 
 ## Older versions
@@ -464,12 +464,14 @@ Cost: Pi's `usage.cost.total` when it is above 0; otherwise the price table by m
 providers and models no table knows stay `Unpriced`. A cost of 0 with tokens is "Pi has no price",
 not "free" (1,405 messages; github-copilot, LlamaBarn, llama-cpp, gemini-cli, codex models). `cost`
 is never absent, so absence needs no handling, only a fallback for 0. A `totalFromProvider` of
-true means a billed amount.
+true means a billed amount: seen with OpenRouter (`z-ai/glm-5.3`, Pi 1.5.0), on every one of 179
+calls of a user's sessions there.
 *Implemented.* `Message.Recorded` marks a message whose dollars are Pi's figure; the catalog flag
 `recorded` means no reported windows and every priced owned message is `Recorded` (a mix stays
 `estimated`). A local provider (`llama-cpp`, `LlamaBarn`, `ollama`, `lmstudio`, `vllm`, `localai`,
-`local`) with a zero cost stays `Unpriced` without asking the table; `totalFromProvider` is not
-read.
+`local`) with a zero cost stays `Unpriced` without asking the table. `Message.Billed` (with
+`Recorded`) marks a call whose `cost.totalFromProvider` is true: the figure is the provider's charge,
+not Pi's catalog estimate; the catalog flag `billed` means every priced owned message is `Billed`.
 
 **Current path and abandoned turns.** Read the file whole, index by id, take the last non-header
 entry as the leaf and walk `parentId` to the root: that is the current path. Evidence: the source

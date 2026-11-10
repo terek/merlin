@@ -157,7 +157,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 				rows[p.k] = a
 				keys = append(keys, p.k)
 			}
-			a.row.add(x.reported*p.frac, x.attributed*p.frac)
+			a.row.add(x.reported*p.frac, x.attributed*p.frac, x.recorded*p.frac, x.billed*p.frac)
 			if i == big {
 				a.row.Compactions.add(x.comp)
 			}
@@ -223,7 +223,7 @@ func (c *Catalog) Total(f Filter) Money {
 	var m Money
 	v, _, f := c.prepare(f, false)
 	for _, x := range v.selected(f) {
-		m.add(x.reported, x.attributed)
+		m.add(x.reported, x.attributed, x.recorded, x.billed)
 		m.Compactions.add(x.comp)
 	}
 	return m
@@ -259,7 +259,7 @@ func (v *view) scripted(f Filter) []ScriptedLine {
 	}
 	for _, x := range v.selected(f) {
 		if x.s.d.Kind == model.KindSDK {
-			line(key{x.s.project, x.day}).add(x.reported, x.attributed)
+			line(key{x.s.project, x.day}).add(x.reported, x.attributed, x.recorded, x.billed)
 		}
 	}
 	out := make([]ScriptedLine, 0, len(lines))

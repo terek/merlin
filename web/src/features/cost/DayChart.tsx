@@ -20,6 +20,7 @@ export function segmentLabel(key: string): string {
   if (key === 'other') return 'Other models'
   if (key === 'reported') return 'Reported'
   if (key === 'attributed') return 'Attributed'
+  if (key === 'recorded') return 'Recorded'
   if (key === 'compaction-warm') return 'At the warm-cache price'
   if (key === 'compaction-cold') return 'Extra for a cold cache'
   return modelLabel(key)
