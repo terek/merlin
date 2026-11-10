@@ -7,17 +7,21 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/terek/merlin/internal/catalog"
 	"github.com/terek/merlin/internal/claude/hooks"
 	"github.com/terek/merlin/internal/daemon"
+	"github.com/terek/merlin/internal/engine"
 	"github.com/terek/merlin/internal/hookfile"
 	"github.com/terek/merlin/internal/paths"
 	"github.com/terek/merlin/internal/pricing"
 	"github.com/terek/merlin/internal/server"
+	"github.com/terek/merlin/internal/term"
 	"github.com/terek/merlin/internal/webui"
 )
 
@@ -46,10 +50,17 @@ func runServe(args []string) int {
 		fmt.Fprintln(os.Stderr, "merlin serve: unexpected arguments")
 		return 2
 	}
+	pe := term.Detect(os.Stderr)
+	fancy := pe.Fancy()
 	fail := func(err error) int {
-		fmt.Fprintf(os.Stderr, "merlin serve: %v\n", err)
+		if fancy {
+			fmt.Fprintln(os.Stderr, failLine(pe, "serve", err))
+		} else {
+			fmt.Fprintf(os.Stderr, "merlin serve: %v\n", err)
+		}
 		return 1
 	}
+	var con *term.Console
 
 	home, err := paths.Home()
 	if err != nil {
@@ -76,6 +87,11 @@ func runServe(args []string) int {
 		RescanInterval: *rescan,
 		Debounce:       *debounce,
 		Version:        version,
+	}
+	if fancy {
+		con = term.NewConsole(os.Stderr, pe)
+		opts.Stderr = con.LogWriter()
+		opts.OnProgress = func(pr engine.Progress) { con.SetProgress(progressOf(pr)) }
 	}
 	au := newAutoUpgrader(home, *noUpgrade)
 	opts.Upgrade, opts.UpgradeInterval = au.run, *upgradeEvery
@@ -107,7 +123,9 @@ func runServe(args []string) int {
 
 	d.Handle("/api/", server.New(apiOptions(d, pricer)).Handler())
 	d.Handle("/", webui.Handler())
-	if webui.Built() {
+	if fancy {
+		printServeBanner(pe, *port, home)
+	} else if webui.Built() {
 		fmt.Fprintf(os.Stderr, "merlin: UI at http://127.0.0.1:%d/\n", *port)
 	} else {
 		fmt.Fprintf(os.Stderr, "merlin: this binary has no UI (make build includes it); the API is at http://127.0.0.1:%d/api/\n", *port)
@@ -115,7 +133,17 @@ func runServe(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	var watched chan struct{}
+	runDone := make(chan struct{})
+	if fancy {
+		watched = make(chan struct{})
+		go func() { defer close(watched); watchFirstIndex(d, con, pe, runDone) }()
+	}
 	err = d.Run(ctx)
+	close(runDone)
+	if watched != nil {
+		<-watched
+	}
 	switch {
 	case err == nil:
 		return 0
@@ -127,10 +155,66 @@ func runServe(args []string) int {
 	case os.Getenv(upgradedFromEnv) != "" && !started(d) && !isLocked(err):
 		// The binary we just upgraded to cannot start: go back to the one that could.
 		if rerr := rollback(home, err); rerr != nil {
-			fmt.Fprintf(os.Stderr, "merlin serve: %v\n", rerr)
+			if fancy {
+				fmt.Fprintln(os.Stderr, failLine(pe, "serve", rerr))
+			} else {
+				fmt.Fprintf(os.Stderr, "merlin serve: %v\n", rerr)
+			}
 		}
 	}
 	return fail(err)
+}
+
+// printServeBanner is the styled start-up banner (stderr is a terminal).
+func printServeBanner(p term.Profile, port int, home string) {
+	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
+	lines := []term.BannerLine{{Label: "ui", Value: p.Link(url, url)}}
+	if !webui.Built() {
+		lines = []term.BannerLine{
+			{Label: "api", Value: p.Link(url+"api/", url+"api/")},
+			{Label: "note", Value: "this binary has no UI (make build includes it)"},
+		}
+	}
+	lines = append(lines,
+		term.BannerLine{Label: "home", Value: tilde(home)},
+		term.BannerLine{Label: "log", Value: tilde(filepath.Join(home, "merlin.log"))})
+	fmt.Fprint(os.Stderr, term.Banner(p, term.BannerInfo{
+		Version: version,
+		Tagline: "what your agents did, and what it cost",
+		Lines:   lines,
+	}))
+}
+
+// watchFirstIndex shows a progress bar from when the daemon is listening until its first
+// index is complete (a reconcile has queued everything and the queue has drained), prints
+// the summary, and returns. Later rescans show nothing. It also returns when runDone closes.
+func watchFirstIndex(d *daemon.Daemon, con *term.Console, p term.Profile, runDone <-chan struct{}) {
+	select {
+	case <-d.Ready():
+	case <-runDone:
+		return
+	}
+	con.StartProgress("indexing")
+	t := time.NewTicker(100 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-runDone:
+			con.StopProgress()
+			return
+		case <-t.C:
+		}
+		if h := d.Health(); h.Rescans >= 1 && h.QueueDepth == 0 {
+			break
+		}
+	}
+	con.StopProgress()
+	e := d.Engine()
+	if e == nil {
+		return
+	}
+	con.Println(indexSummary(p, e.Stats()))
+	con.Println(p.Fg(term.Green, "◉") + p.Dim(" watching for changes") + p.Dim(" — Ctrl+C to stop"))
 }
 
 // started reports whether the daemon got as far as listening.

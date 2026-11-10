@@ -16,6 +16,7 @@ import (
 	"github.com/terek/merlin/internal/model"
 	"github.com/terek/merlin/internal/paths"
 	"github.com/terek/merlin/internal/store"
+	"github.com/terek/merlin/internal/term"
 )
 
 func init() {
@@ -39,59 +40,87 @@ func runScan(args []string) int {
 		return 2
 	}
 
+	pe, po := term.Detect(os.Stderr), term.Detect(os.Stdout)
+	fail := func(err error) int {
+		if pe.Fancy() {
+			fmt.Fprintln(os.Stderr, failLine(pe, "scan", err))
+		} else {
+			fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
+		}
+		return 1
+	}
+
 	home, err := paths.Home()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
+		return fail(err)
 	}
 	_, pricer := loadConfig(home, "merlin scan")
 	harnesses, err := buildHarnesses(pricer)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
+		return fail(err)
 	}
 	st, err := store.New(home)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
+		return fail(err)
 	}
-	st.Warn = func(msg string) { fmt.Fprintln(os.Stderr, "merlin scan: "+msg) }
+	// say writes a line to stderr; with a bar showing it goes through the console, above the bar.
+	say := func(s string) { fmt.Fprintln(os.Stderr, s) }
+	st.Warn = func(msg string) { say("merlin scan: " + msg) }
 
 	p := &progressPrinter{w: os.Stderr, enabled: !*quiet}
+	onProgress := p.update
+	var con *term.Console
+	if !*quiet && pe.Fancy() {
+		con = term.NewConsole(os.Stderr, pe)
+		say = con.Println
+		onProgress = func(pr engine.Progress) { con.SetProgress(progressOf(pr)) }
+	}
 	eng, err := engine.New(engine.Options{
 		Store:         st,
 		Harnesses:     harnesses,
 		Workers:       *workers,
 		PricesVersion: pricer.Version(),
-		Logf:          func(format string, a ...any) { fmt.Fprintf(os.Stderr, "merlin scan: "+format+"\n", a...) },
-		OnProgress:    p.update,
+		Logf:          func(format string, a ...any) { say(fmt.Sprintf("merlin scan: "+format, a...)) },
+		OnProgress:    onProgress,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
+		return fail(err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+	if con != nil {
+		con.StartProgress("indexing")
+	}
 	sum, err := eng.Scan(ctx)
+	if con != nil {
+		con.StopProgress()
+	}
 	p.finish()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
+		return fail(err)
 	}
-	fmt.Printf("seen %d, processed %d, unchanged %d, failed %d, missing %d, elapsed %s\n",
-		sum.Seen, sum.Processed, sum.Unchanged, sum.Failed, sum.Missing, sum.Elapsed.Round(time.Millisecond))
+	if po.Fancy() {
+		fmt.Println(indexSummary(po, sum))
+	} else {
+		fmt.Printf("seen %d, processed %d, unchanged %d, failed %d, missing %d, elapsed %s\n",
+			sum.Seen, sum.Processed, sum.Unchanged, sum.Failed, sum.Missing, sum.Elapsed.Round(time.Millisecond))
+	}
 
 	// Where the sessions worked: repositories and bead databases.
 	cat, err := catalog.Load(st, "")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "merlin scan: %v\n", err)
-		return 1
+		return fail(err)
 	}
 	var dirs []string
 	cat.Each(func(d *model.SessionDigest) { dirs = append(dirs, links.Dirs(d)...) })
-	if _, err := links.Open(home).Refresh(dirs, time.Now()); err != nil {
+	res, err := links.Open(home).Refresh(dirs, time.Now())
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "merlin scan: links: %v\n", err)
+	}
+	if po.Fancy() {
+		fmt.Println(po.Fg(term.Green, "✔") + " linked " + po.Bold(thousands(res.Resolved)) + " directories, " +
+			po.Bold(thousands(res.Databases)) + " bead databases")
 	}
 	return 0
 }

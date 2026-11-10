@@ -51,6 +51,9 @@ type Options struct {
 	// logged; an error is logged and does not stop the daemon (hooks are only hints).
 	InstallHooks func() (string, error)
 
+	// OnProgress is called after each build, serialised; must not block; nil = none.
+	OnProgress func(engine.Progress)
+
 	Workers         int           // concurrent builders; 0 = GOMAXPROCS
 	PricesVersion   string        // pricing.Table.Version of the harnesses' table; computed once
 	RescanInterval  time.Duration // full reconcile; default 10 s
@@ -288,6 +291,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		Logf:          func(format string, a ...any) { d.logf(format, a...) },
 		OnWrite:       d.onWrite,
 		OnDiscover:    d.onDiscover,
+		OnProgress:    d.opts.OnProgress,
 	})
 	if err != nil {
 		return err

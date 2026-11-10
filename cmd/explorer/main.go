@@ -6,6 +6,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/terek/merlin/internal/term"
 )
 
 // A command runs a subcommand with its arguments (without the subcommand name)
@@ -56,6 +58,10 @@ func dispatch(args []string) int {
 }
 
 func printUsage(w *os.File) {
+	if p := term.Detect(w); p.Fancy() {
+		printUsageFancy(w, p)
+		return
+	}
 	fmt.Fprintln(w, "Usage: merlin [serve-flags]")
 	fmt.Fprintln(w, "       merlin <command> [arguments]")
 	fmt.Fprintln(w)

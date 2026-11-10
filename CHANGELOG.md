@@ -2,6 +2,10 @@
 
 What changed in each release of Merlin Explorer for the people using it, newest first. To install or upgrade, see the [README](README.md).
 
+## Unreleased
+
+- In a terminal, `merlin` greets you with the wizard and a MERLIN banner (the UI link is clickable), shows a progress bar while it indexes, and ends the first index with a one-line summary; `merlin scan` does the same, and `merlin help` groups the commands. Piped or redirected output, and `NO_COLOR`, keep the plain text.
+
 ## 0.7.3 — 2026-11-10
 
 - The session page's Spend card shows the spend as three horizontal bars (by who, by token class, by model tier) whose total length grows with the session's cost, with the selected window drawn inside the session's outline; the names of the bars' parts stand to their right in three narrow columns. The "By who / By token class / By model tier" switch is gone: the graph's spend is one quiet grey, cache misses pink.
