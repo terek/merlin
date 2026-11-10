@@ -322,6 +322,16 @@ export function TimePlot({
     [timeline, swarms, open, X1, tree],
   )
   const { strips, height, cTicks, kCtx } = frame
+  // the y-ranges a break's veil covers: the rows, never an overhead strip (cut around each one)
+  const veilSpans: [number, number][] = []
+  {
+    let y = AXIS_H - 6
+    for (const s of strips) {
+      if (s.top > y) veilSpans.push([y, s.top])
+      y = Math.max(y, s.bottom)
+    }
+    if (height > y) veilSpans.push([y, height])
+  }
   // what the window shows in each row of it
   const layout = useMemo(() => {
     const sliced = new Map(tl.lanes.map((l) => [l.key, l]))
@@ -1506,18 +1516,20 @@ export function TimePlot({
           )}
           {connectors}
           {/* a break's veil: the page colour over what crosses it, so that it fades without a band of its own */}
-          {axis.breaks.map((b) => (
-            <rect
-              key={`v${b.t0}`}
-              x={b.x0 + 3}
-              y={AXIS_H - 6}
-              width={b.x1 - b.x0 - 6}
-              height={height - AXIS_H + 6}
-              fill="var(--surface)"
-              opacity={BREAK_VEIL}
-              pointerEvents="none"
-            />
-          ))}
+          {axis.breaks.flatMap((b) =>
+            veilSpans.map(([y0, y1]) => (
+              <rect
+                key={`v${b.t0}-${y0}`}
+                x={b.x0 + 3}
+                y={y0}
+                width={b.x1 - b.x0 - 6}
+                height={y1 - y0}
+                fill="var(--surface)"
+                opacity={BREAK_VEIL}
+                pointerEvents="none"
+              />
+            )),
+          )}
           {labels}
           {crossX !== undefined && (
             <g pointerEvents="none">

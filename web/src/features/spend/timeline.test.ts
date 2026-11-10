@@ -3,11 +3,15 @@ import type { Agent, AgentTurn, Message, SessionDetail, Turn } from '../../api/t
 import type { Col } from './model'
 import {
   addCall,
+  BREAK_BASE_PX,
+  BREAK_MAX_PX,
+  BREAK_MIN_PX,
   barSpan,
   boundsOf,
   bracketed,
   branchRole,
   branchWeight,
+  breakWidth,
   buildTimeline,
   carrierWeight,
   centerWindow,
@@ -149,6 +153,53 @@ describe('timeAxis', () => {
     for (const t of [T0, T0 + 0.5 * H, T0 + 2 * H, T0 + 4.2 * H]) expect(axis.t(axis.x(t))).toBeCloseTo(t, 0)
     const xs = [0, 0.5, 1, 2, 3, 4, 4.5].map((h) => axis.x(T0 + h * H))
     expect([...xs].sort((p, q) => p - q)).toEqual(xs)
+  })
+
+  test('a break is a constant plus a logarithm of its length, bounded', () => {
+    expect(breakWidth(GAP_MS)).toBeCloseTo(BREAK_BASE_PX, 9)
+    expect(breakWidth(GAP_MS / 2)).toBeCloseTo(BREAK_BASE_PX, 9)
+    // a quarter of an hour is barely wider than the base, a night is clearly wider
+    expect(breakWidth(15 * 60_000) - BREAK_BASE_PX).toBeLessThan(4)
+    expect(breakWidth(10 * H)).toBeGreaterThan(40)
+    expect(breakWidth(10 * H)).toBeLessThan(BREAK_MAX_PX)
+    expect(breakWidth(1000 * H)).toBe(BREAK_MAX_PX)
+    const ws = [11, 20, 60, 120, 480, 720].map((m) => breakWidth(m * 60_000))
+    expect([...ws].sort((p, q) => p - q)).toEqual(ws)
+  })
+
+  test('breaks of mixed lengths are as wide as their length says; the axis stays monotonic and invertible', () => {
+    const mixed = timeAxis(
+      [
+        [T0, T0 + H],
+        [T0 + H + 15 * 60_000, T0 + 2 * H],
+        [T0 + 2 * H + H, T0 + 3 * H],
+        [T0 + 3 * H + 10 * H, T0 + 14 * H],
+      ],
+      100,
+      1400,
+    )
+    expect(mixed.breaks).toHaveLength(3)
+    const w = mixed.breaks.map((b) => b.x1 - b.x0)
+    expect(w[0]).toBeLessThan(w[1])
+    expect(w[1]).toBeLessThan(w[2])
+    expect(w[2]).toBeLessThanOrEqual(BREAK_MAX_PX)
+    expect(mixed.pieces[mixed.pieces.length - 1].x1).toBeCloseTo(1400, 6)
+    let last = Number.NEGATIVE_INFINITY
+    for (let t = T0 - 5 * 60_000; t <= T0 + 14 * H + 5 * 60_000; t += 7 * 60_000) {
+      const x = mixed.x(t)
+      expect(x).toBeGreaterThanOrEqual(last)
+      last = x
+      expect(mixed.t(x)).toBeCloseTo(Math.min(Math.max(t, mixed.pieces[0].t0), mixed.pieces[3].t1), -1)
+    }
+  })
+
+  test('many breaks, or a narrow plot, are made narrower so that they take a tenth of the width at most', () => {
+    const spans: [number, number][] = Array.from({ length: 9 }, (_, i) => [T0 + i * 12 * H, T0 + i * 12 * H + H])
+    const narrow = timeAxis(spans, 0, 800)
+    const total = narrow.breaks.reduce((s, b) => s + b.x1 - b.x0, 0)
+    expect(narrow.breaks).toHaveLength(8)
+    expect(total).toBeLessThanOrEqual(80 + 1e-6)
+    for (const b of narrow.breaks) expect(b.x1 - b.x0).toBeGreaterThanOrEqual(BREAK_MIN_PX - 1e-9)
   })
 
   test('spans closer than the gap are one piece', () => {

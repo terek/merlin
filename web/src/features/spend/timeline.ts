@@ -29,8 +29,13 @@ import type { Tree } from './tree'
 
 /** Idle time longer than this is squeezed into a break on the axis. */
 export const GAP_MS = 10 * 60_000
-/** The width of a break, at most. */
-export const BREAK_PX = 22
+/** The width of a break: `BREAK_BASE_PX` plus `BREAK_LOG_PX` per e-fold of its length over `GAP_MS`, at most `BREAK_MAX_PX`. */
+export const BREAK_BASE_PX = 12
+export const BREAK_LOG_PX = 8
+export const BREAK_MAX_PX = 60
+/** Together the breaks take at most this share of the axis (each is made narrower to fit), none under `BREAK_MIN_PX`. */
+export const BREAK_SHARE = 0.1
+export const BREAK_MIN_PX = 6
 /** With more breaks than this, a longer idle time is needed for one. */
 export const MAX_BREAKS = 12
 const GAPS = [10, 20, 30, 60, 120, 240, 480, 960].map((m) => m * 60_000)
@@ -385,9 +390,15 @@ export interface TimeAxis {
   t: (x: number) => number
 }
 
+/** The width of a break that left out `lengthMs` of idle time: a constant and a logarithm, so a night shows. */
+export function breakWidth(lengthMs: number): number {
+  const w = BREAK_BASE_PX + BREAK_LOG_PX * Math.log(Math.max(1, lengthMs / GAP_MS))
+  return Math.min(BREAK_MAX_PX, w)
+}
+
 /**
  * Lays `spans` out between `x0` and `x1`: spans closer than `gapMs` are one piece, every piece is on
- * the same scale, and the time between two pieces is a break `breakPx` wide. Every piece is padded a
+ * the same scale, and the time between two pieces is a break `breakWidth` wide (less when the breaks would take more than `BREAK_SHARE` of the axis). Every piece is padded a
  * little, so that a lone call still has a place.
  */
 export function timeAxis(
@@ -404,22 +415,32 @@ export function timeAxis(
     if (merged.length - 1 <= maxBreaks) break
   }
   if (merged.length === 0) merged.push([0, 1])
-  // breaks take at most a tenth of the width
-  const breakPx = Math.max(6, Math.min(BREAK_PX, ((x1 - x0) * 0.1) / Math.max(1, merged.length - 1)))
+  // each break's width follows the idle time it leaves out; together they take at most BREAK_SHARE of the width
+  const idle = merged.slice(1).map(([a], i) => a - merged[i][1])
+  const want = idle.map(breakWidth)
+  const fit = Math.min(
+    1,
+    ((x1 - x0) * BREAK_SHARE) /
+      Math.max(
+        1,
+        want.reduce((s, w) => s + w, 0),
+      ),
+  )
+  const widths = want.map((w) => Math.max(BREAK_MIN_PX, w * fit))
   const active = merged.reduce((s, [a, b]) => s + (b - a), 0)
   // a pad of 1% of the active time on each side of a piece (at least a minute)
   const pad = Math.max(60_000, active * 0.01)
   const padded = merged.map(([a, b]) => [a - pad, b + pad] as [number, number])
   const total = padded.reduce((s, [a, b]) => s + (b - a), 0)
-  const room = Math.max(1, x1 - x0 - breakPx * (padded.length - 1))
+  const room = Math.max(1, x1 - x0 - widths.reduce((s, w) => s + w, 0))
   const scale = room / total
   const pieces: Piece[] = []
   const breaks: Break[] = []
   let x = x0
   padded.forEach(([a, b], i) => {
     if (i > 0) {
-      breaks.push({ t0: padded[i - 1][1], t1: a, x0: x, x1: x + breakPx })
-      x += breakPx
+      breaks.push({ t0: padded[i - 1][1], t1: a, x0: x, x1: x + widths[i - 1] })
+      x += widths[i - 1]
     }
     pieces.push({ t0: a, t1: b, x0: x, x1: x + (b - a) * scale })
     x += (b - a) * scale
@@ -430,7 +451,7 @@ export function timeAxis(
       const p = pieces[i]
       if (t <= p.t1) return p.x0 + (t - p.t0) * scale
       const g = breaks[i]
-      if (g && t < g.t1) return g.x0 + ((t - g.t0) / (g.t1 - g.t0)) * breakPx
+      if (g && t < g.t1) return g.x0 + ((t - g.t0) / (g.t1 - g.t0)) * (g.x1 - g.x0)
     }
     return pieces[pieces.length - 1].x1
   }
@@ -440,7 +461,7 @@ export function timeAxis(
       const p = pieces[i]
       if (px <= p.x1) return p.t0 + (px - p.x0) / scale
       const g = breaks[i]
-      if (g && px < g.x1) return g.t0 + ((px - g.x0) / breakPx) * (g.t1 - g.t0)
+      if (g && px < g.x1) return g.t0 + ((px - g.x0) / (g.x1 - g.x0)) * (g.t1 - g.t0)
     }
     return pieces[pieces.length - 1].t1
   }
