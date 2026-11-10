@@ -4,8 +4,11 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+## 0.7.2 — 2026-11-10
+
 - Auto-upgrade is now opt-in: it means trusting every future release without looking at it. `merlin serve` still checks every 4 hours and tells you about a new release, in `merlin.log` and as a quiet "X available" link in the top bar; `merlin upgrade` installs it.
 - `merlin autoupgrade` turns auto-upgrade on and installs the latest release right away (`patch` for fixes only, `off`, `status`).
+- If 0.7.0 or 0.7.1 brought you here by auto-upgrading, auto-upgrade is now off for you too, unless your `config.json` says `"autoUpgrade": true`; run `merlin autoupgrade` to keep it.
 
 ## 0.7.1 — 2026-11-09
 
