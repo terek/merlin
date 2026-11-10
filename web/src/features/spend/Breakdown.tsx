@@ -1,23 +1,33 @@
-// The structure of the spend, at the top of the Spend card: three thin rings, one per partition of the
-// same dollars (outside in: by who, by token class, by model tier), each a full circle cut into arcs by
-// linear share, from 12 o'clock clockwise; in the middle the price. To the right of them the legend in
-// four columns, the first of which maps the arcs (swatch, label, dollars, percent) and the other three
-// are the plot's key (Key.tsx). What is counted is what the plot shows (the effective window).
-// Overhead no message explains is a hatched arc at the end of every ring.
+// The structure of the spend, at the top of the Spend card: three bars of linear shares, one per partition
+// of the same dollars (by who, by token class, by model tier), and the map of them in the legend's column
+// (`SpendMap`, handed to Legend in Key.tsx). What is counted is what the plot shows (the effective window).
 //
-// Hovering an arc or a row of the first column frames the arc and underlines the row (one shared state);
-// nothing else changes, so the colours keep their full contrast and moving the pointer does not flicker.
-// Nothing moves while a window is dragged: the rings and their price are a fixed size, and the figures
-// of the first column are tabular in columns of a fixed width.
-import { type CSSProperties, useId, useMemo, useState } from 'react'
+// Each row has the whole session's rectangle, outlined, whose length is the session's dollars on a
+// logarithmic, saturating scale (`lengthShare`: $1 or less tiny, $100 four fifths, then toward the whole
+// track). The coloured segments are the window's parts, scaled linearly inside that rectangle (a part of
+// $x is x / the session's total of the rectangle's width, from its left edge, series order, the overhead
+// tail last), so that the whole session fills it and a part of it fills a part. The fills are as faint as
+// the agent strips of the plot (`CTX_FILL` under a full-colour top edge of `CTX_LINE`).
+//
+// Hovering a segment or a row of the map frames the segment and underlines the row (one shared state,
+// held by the card); nothing dims. Nothing moves while a window is dragged: the rows have a fixed height,
+// the price's place depends only on the session's rectangle, and the figures are tabular.
+import { type CSSProperties, useMemo, useRef } from 'react'
 import { formatMoney, formatPercent } from '../../lib/format'
-import { type KeyFacts, Legend } from './Key'
 import { CLASS_SERIES, KIND_SERIES, TIER_SERIES } from './model'
-import { overheadIn, type RangeSpend, type Segment, segmentsOf, sumRange } from './partition'
-import { arcPath, spansOf } from './ring'
-import { MISS_COLOR } from './TimeView'
+import {
+  lengthShare,
+  overheadIn,
+  type RangeSpend,
+  type Segment,
+  type SeriesRowKey,
+  segmentsOf,
+  sumRange,
+} from './partition'
+import { CTX_FILL, CTX_LINE, MISS_COLOR } from './TimeView'
 import type { Timeline, Win } from './timeline'
 import type { Tree } from './tree'
+import { useWidth } from './useWidth'
 
 /** The hatching of the overhead, as a background (the swatch of its row). */
 export const HATCH_BG = 'repeating-linear-gradient(45deg, var(--muted) 0 1px, transparent 1px 3.5px)'
@@ -25,33 +35,34 @@ export const HATCH_BG = 'repeating-linear-gradient(45deg, var(--muted) 0 1px, tr
 /**
  * The token classes are drawn in black and white, as patterns of the theme's own tokens (so they read in
  * both themes), to look like another kind of partition than the coloured ones; the cache miss alone
- * keeps its pink, as everywhere. These are the swatches (CSS); the arcs use the same look as SVG patterns
- * (`ClassDefs`). A class without a pattern is drawn in its colour.
+ * keeps its pink, as everywhere. They are laid on nothing, so that they take the same faint opacity as the
+ * coloured fills (`look`). A class without a pattern is drawn in its colour.
  */
-export const CLASS_PATTERNS: Record<string, { background: string; backgroundSize?: string }> = {
-  output: { background: 'color-mix(in srgb, var(--text) 62%, var(--surface))' },
-  read: { background: 'color-mix(in srgb, var(--text) 14%, var(--surface))' },
-  write: {
-    background: 'repeating-linear-gradient(45deg, var(--muted) 0 1.5px, var(--surface) 1.5px 5px)',
-  },
-  reread: { background: MISS_COLOR },
-  input: {
-    background: 'radial-gradient(circle, var(--muted) 1.1px, transparent 1.5px) 0 0 / 6px 6px, var(--surface)',
-  },
+export const CLASS_PATTERNS: Record<string, CSSProperties> = {
+  output: { background: 'var(--text)' },
+  read: { background: 'color-mix(in srgb, var(--text) 40%, transparent)' },
+  write: { background: 'repeating-linear-gradient(45deg, var(--text) 0 1.5px, transparent 1.5px 5px)' },
+  input: { background: 'radial-gradient(circle, var(--text) 1.1px, transparent 1.5px) 0 0 / 6px 6px' },
 }
 
-/** The size of the rings, in pixels: the whole drawing, a ring's thickness, the gap between rings, the gap between arcs. */
-export const RING = { size: 176, thick: 10, between: 3, arcGap: 1 } as const
+/** How a part is drawn: its fill (at an opacity, like the plot's context areas) and the colour of its top edge. */
+function look(row: RowKey, s: Segment): { fill: CSSProperties; opacity: number; edge: string } {
+  if (s.hatched) return { fill: { background: HATCH_BG }, opacity: 1, edge: 'transparent' }
+  const pattern = row === 'class' ? CLASS_PATTERNS[s.key] : undefined
+  if (pattern) return { fill: pattern, opacity: CTX_FILL, edge: 'var(--muted)' }
+  const color = row === 'class' && s.key === 'reread' ? MISS_COLOR : (s.color ?? 'var(--muted)')
+  return { fill: { background: color }, opacity: CTX_FILL, edge: color }
+}
 
 const ROWS = [
   { key: 'kind', head: 'Who', series: KIND_SERIES },
   { key: 'class', head: 'Token class', series: CLASS_SERIES },
   { key: 'tier', head: 'Model tier', series: TIER_SERIES },
 ] as const
-type RowKey = (typeof ROWS)[number]['key']
+type RowKey = (typeof ROWS)[number]['key'] & SeriesRowKey
 
-/** What is under the pointer: a part of a ring, or the overhead (`row` is empty: it is in every ring). */
-interface Hover {
+/** What is under the pointer: a part of a bar, or the overhead (`row` is empty: it is in every bar). */
+export interface Hover {
   row: RowKey | ''
   key: string
 }
@@ -68,59 +79,57 @@ const tipOf = (head: string, s: Segment, total: number, partial: boolean) =>
     .filter(Boolean)
     .join('\n')
 
-/** The token classes' patterns as SVG, for the arcs; `id` prefixes their ids. */
-function ClassDefs({ id }: { id: string }) {
-  return (
-    <defs>
-      <pattern id={`${id}-write`} width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-        <rect width={5} height={5} style={{ fill: 'var(--surface)' }} />
-        <rect width={1.5} height={5} style={{ fill: 'var(--muted)' }} />
-      </pattern>
-      <pattern id={`${id}-input`} width={6} height={6} patternUnits="userSpaceOnUse">
-        <rect width={6} height={6} style={{ fill: 'var(--surface)' }} />
-        <circle cx={3} cy={3} r={1.1} style={{ fill: 'var(--muted)' }} />
-      </pattern>
-      <pattern
-        id={`${id}-overhead`}
-        width={3.5}
-        height={3.5}
-        patternUnits="userSpaceOnUse"
-        patternTransform="rotate(45)"
-      >
-        <rect width={1} height={3.5} style={{ fill: 'var(--muted)' }} />
-      </pattern>
-    </defs>
+/** The numbers of the card's breakdown: the window's parts in the three partitions, and the session's total. */
+export function useBreakdown(tree: Tree, timeline: Timeline, range: Win) {
+  const overheads = useMemo(() => tree.branches.flatMap((b) => b.overhead), [tree])
+  // the overhead of the whole session is the tree's; a daemon that does not split it by reported window
+  // leaves part (or all) of it at no time, which only a window over the whole session holds
+  const whole = useMemo(
+    () => ({ ...sumRange(timeline), over: Math.max(tree.overheadUSD, overheadIn(overheads)) }),
+    [timeline, overheads, tree],
   )
-}
-
-/** The fill of an arc: its colour, or for the token classes and the overhead their pattern. */
-function fillOf(id: string, row: RowKey, s: Segment): CSSProperties {
-  if (s.hatched) return { fill: `url(#${id}-overhead)` }
-  if (row === 'class') {
-    if (s.key === 'write' || s.key === 'input') return { fill: `url(#${id}-${s.key})` }
-    const b = CLASS_PATTERNS[s.key]?.background
-    if (b) return { fill: b }
+  const win = useMemo(() => {
+    const r = sumRange(timeline, range.lo, range.hi)
+    const placed = overheadIn(overheads, range.lo, range.hi)
+    const all = r.usd >= whole.usd - 0.005
+    return { ...r, over: all ? Math.max(whole.over, placed) : placed }
+  }, [timeline, overheads, range, whole])
+  const wholeTotal = whole.usd + whole.over
+  const winTotal = win.usd + win.over
+  const partial = winTotal < wholeTotal - 0.005
+  const valuesOf = (r: RangeSpend, key: RowKey) => r[key] as Record<string, number>
+  const rows = ROWS.map((row) => {
+    const tiers = row.key === 'tier' ? win.tiers : undefined
+    return {
+      ...row,
+      // the segments: what is there, and the overhead; the map's rows: every series, zero ones included
+      segs: segmentsOf(row.series, valuesOf(win, row.key), win.over, tiers),
+      all: segmentsOf(row.series, valuesOf(win, row.key), 0, tiers, true),
+    }
+  })
+  const overhead: Segment = {
+    key: 'overhead',
+    // short, for the row; the hover says the rest
+    label: 'Not in messages',
+    usd: win.over,
+    hatched: true,
   }
-  return { fill: s.color }
+  return { rows, overhead, winTotal, wholeTotal, partial }
 }
+export type BreakdownData = ReturnType<typeof useBreakdown>
 
-/** A swatch of a row of the first column: the arc's colour or pattern. */
+/** The swatch of a part, in the faint look of its segment. */
 function Swatch({ row, s }: { row: RowKey; s: Segment }) {
-  const style: CSSProperties = s.hatched
-    ? { background: HATCH_BG }
-    : row === 'class' && CLASS_PATTERNS[s.key]
-      ? CLASS_PATTERNS[s.key]
-      : { background: s.color }
+  const l = look(row, s)
   return (
-    <span
-      aria-hidden
-      className="inline-block h-2.5 w-7 shrink-0 rounded-[2px] border border-line/60"
-      style={{ ...style, boxSizing: 'border-box' }}
-    />
+    <span aria-hidden className="relative inline-block h-2.5 w-7 shrink-0 overflow-hidden rounded-[2px]">
+      <span className="absolute inset-0" style={{ ...l.fill, opacity: l.opacity }} />
+      <span className="absolute inset-x-0 top-0" style={{ height: CTX_LINE, background: l.edge }} />
+    </span>
   )
 }
 
-/** One row of the first column. Zero parts are faint, so that the column keeps its rows while a window is dragged. */
+/** One row of the map. Zero parts are faint, so that the column keeps its rows while a window is dragged. */
 function SpendRow({
   row,
   s,
@@ -155,55 +164,18 @@ function SpendRow({
   )
 }
 
-export interface BreakdownProps {
-  tree: Tree
-  timeline: Timeline
-  /** The window the plot shows. */
-  range: Win
-  /** What the legend is told about the tree. */
-  facts: KeyFacts
-}
-
-export function Breakdown({ tree, timeline, range, facts }: BreakdownProps) {
-  const id = useId().replace(/[^a-zA-Z0-9-]/g, '')
-  const [hover, setHover] = useState<Hover | null>(null)
-  const overheads = useMemo(() => tree.branches.flatMap((b) => b.overhead), [tree])
-  // the overhead of the whole session is the tree's; a daemon that does not split it by reported window
-  // leaves part (or all) of it at no time, which only a window over the whole session holds
-  const whole = useMemo(
-    () => ({ ...sumRange(timeline), over: Math.max(tree.overheadUSD, overheadIn(overheads)) }),
-    [timeline, overheads, tree],
-  )
-  const win = useMemo(() => {
-    const r = sumRange(timeline, range.lo, range.hi)
-    const placed = overheadIn(overheads, range.lo, range.hi)
-    const all = r.usd >= whole.usd - 0.005
-    return { ...r, over: all ? Math.max(whole.over, placed) : placed }
-  }, [timeline, overheads, range, whole])
-  const wholeTotal = whole.usd + whole.over
-  const winTotal = win.usd + win.over
-  const partial = winTotal < wholeTotal - 0.005
-  const valuesOf = (r: RangeSpend, key: RowKey) => r[key] as Record<string, number>
-  const rows = ROWS.map((row) => {
-    const tiers = row.key === 'tier' ? win.tiers : undefined
-    return {
-      ...row,
-      // the arcs: what is there, and the overhead; the legend rows: every series, zero ones included
-      arcs: segmentsOf(row.series, valuesOf(win, row.key), win.over, tiers),
-      all: segmentsOf(row.series, valuesOf(win, row.key), 0, tiers, true),
-    }
-  })
-  const overhead: Segment = {
-    key: 'overhead',
-    // short, for the row; the hover says the rest
-    label: 'Not in messages',
-    usd: win.over,
-    hatched: true,
-  }
-  const c = RING.size / 2
-  const big = formatMoney(winTotal)
-
-  const spend = (
+/** The breakdown's map, the legend column's first part: every series of the three partitions, then the overhead. */
+export function SpendMap({
+  data,
+  hover,
+  onHover,
+}: {
+  data: BreakdownData
+  hover: Hover | null
+  onHover: (h: Hover | null) => void
+}) {
+  const { rows, overhead, winTotal, partial } = data
+  return (
     <section aria-label="The spend of the window">
       {rows.map((row) => (
         <div key={row.key} className="mb-2.5">
@@ -217,96 +189,145 @@ export function Breakdown({ tree, timeline, range, facts }: BreakdownProps) {
                 total={winTotal}
                 tip={tipOf(row.head, s, winTotal, partial)}
                 hover={hover}
-                onHover={setHover}
+                onHover={onHover}
               />
             ))}
           </ul>
         </div>
       ))}
-      <ul>
+      <ul className="mb-2.5">
         <SpendRow
           row="kind"
           s={overhead}
           total={winTotal}
           tip={tipOf('Overhead', overhead, winTotal, partial)}
           hover={hover}
-          onHover={setHover}
+          onHover={onHover}
         />
       </ul>
     </section>
   )
+}
+
+/** Approximate width of a character of a segment's label, and its padding, to decide whether the label fits. */
+const CHAR_PX = 6.4
+const PAD_PX = 14
+/** The room right of the track for the price: it never moves, so the track is the same for every window. */
+const PRICE_ROOM = 150
+
+function Bar({
+  row,
+  head,
+  segs,
+  px,
+  scale,
+  total,
+  partial,
+  hover,
+  onHover,
+}: {
+  row: RowKey
+  head: string
+  segs: Segment[]
+  /** The width, in pixels, inside the session's rectangle. */
+  px: number
+  /** The dollars the rectangle stands for. */
+  scale: number
+  /** The window's total, for the percents. */
+  total: number
+  partial: boolean
+  hover: Hover | null
+  onHover: (h: Hover | null) => void
+}) {
+  return (
+    <div className="absolute inset-0 flex" onMouseLeave={() => onHover(null)}>
+      {segs.map((s) => {
+        const w = scale > 0 ? (s.usd / scale) * px : 0
+        const text = `${s.label} ${formatPercent(s.usd, total)}`
+        const fits = !s.hatched && w >= text.length * CHAR_PX + PAD_PX
+        const l = look(row, s)
+        const on = same(hover, row, s)
+        return (
+          <div
+            key={s.key}
+            title={tipOf(head, s, total, partial)}
+            onMouseEnter={() => onHover({ row: s.hatched ? '' : row, key: s.key })}
+            className="relative h-full shrink-0 overflow-hidden"
+            style={{ width: w }}
+          >
+            <div className="absolute inset-0" style={{ ...l.fill, opacity: l.opacity }} />
+            <div className="absolute inset-x-0 top-0" style={{ height: CTX_LINE, background: l.edge }} />
+            {/* the gap between neighbours, and the frame of the part hovered */}
+            <div
+              className="absolute inset-0"
+              style={{
+                boxShadow: on ? 'inset 0 0 0 1.5px var(--text)' : 'inset -1px 0 0 var(--surface)',
+              }}
+            />
+            {fits && (
+              <span className="absolute inset-0 flex items-center justify-center whitespace-nowrap text-meta text-text">
+                {text}
+              </span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export interface BreakdownProps {
+  data: BreakdownData
+  hover: Hover | null
+  onHover: (h: Hover | null) => void
+}
+
+export function Breakdown({ data, hover, onHover }: BreakdownProps) {
+  const track = useRef<HTMLDivElement>(null)
+  const width = useWidth(track)
+  const { rows, winTotal, wholeTotal, partial } = data
+  const lenWhole = Math.round(lengthShare(wholeTotal) * width)
+  const inner = Math.max(0, lenWhole - 2) // inside the rectangle's 1 px outline
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-3 text-sec">
-      <div className="relative shrink-0" style={{ width: RING.size, height: RING.size }}>
-        <svg
-          width={RING.size}
-          height={RING.size}
-          // the hover is let go only when the pointer leaves the rings: crossing the gap between two arcs keeps it
-          onMouseLeave={() => setHover(null)}
-          role="img"
-          aria-label="The spend in three rings: by who, by token class, by model tier"
-        >
-          <ClassDefs id={id} />
-          {rows.map((row, i) => {
-            const rOut = c - 1 - i * (RING.thick + RING.between)
-            const rIn = rOut - RING.thick
-            const spans = spansOf(row.arcs.map((s) => s.usd))
-            return (
-              <g key={row.key}>
-                {/* the empty ring, under the arcs: what a window of no spend leaves */}
-                <path
-                  d={arcPath(c, c, rIn, rOut, { from: 0, to: 1 })}
-                  fillRule="evenodd"
-                  style={{ fill: 'var(--surface-2)' }}
-                />
-                {winTotal > 0 &&
-                  row.arcs.map((s, k) => (
-                    <path
-                      key={s.key}
-                      d={arcPath(c, c, rIn, rOut, spans[k], RING.arcGap)}
-                      fillRule="evenodd"
-                      style={fillOf(id, row.key, s)}
-                      onMouseEnter={() => setHover({ row: s.hatched ? '' : row.key, key: s.key })}
-                    >
-                      <title>{tipOf(row.head, s, winTotal, partial)}</title>
-                    </path>
-                  ))}
-              </g>
-            )
-          })}
-          {/* the frame of the arc hovered (in every ring, for the overhead), over the rings and taking no pointer */}
-          {hover &&
-            winTotal > 0 &&
-            rows.map((row, i) => {
-              const k = row.arcs.findIndex((s) => same(hover, row.key, s))
-              if (k < 0) return null
-              const rOut = c - 1 - i * (RING.thick + RING.between)
-              const span = spansOf(row.arcs.map((s) => s.usd))[k]
-              return (
-                <path
-                  key={`frame-${row.key}`}
-                  d={arcPath(c, c, rOut - RING.thick, rOut, span, RING.arcGap)}
-                  fill="none"
-                  stroke="var(--text)"
-                  strokeWidth={1.5}
-                  strokeLinejoin="round"
-                  pointerEvents="none"
-                />
-              )
-            })}
-        </svg>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center tabular-nums">
-          <span
-            className="font-semibold leading-none text-text"
-            style={{ fontSize: big.length > 6 ? '1.125rem' : '1.5rem' }}
-          >
-            {big}
-          </span>
-          {partial && <span className="mt-1 text-meta text-muted">of {formatMoney(wholeTotal)}</span>}
-        </div>
+    <section
+      className="relative mb-3 text-sec tabular-nums"
+      aria-label="The spend in three bars: by who, by token class, by model tier"
+    >
+      <div ref={track} style={{ marginRight: PRICE_ROOM }}>
+        {rows.map((row) => (
+          <div key={row.key} className="h-7 py-0.5">
+            <div
+              className="relative h-full rounded-[3px]"
+              style={{ width: lenWhole, boxShadow: 'inset 0 0 0 1px var(--faint)' }}
+            >
+              <div className="absolute inset-px overflow-hidden rounded-[2px]">
+                {winTotal > 0 && (
+                  <Bar
+                    row={row.key}
+                    head={row.head}
+                    segs={row.segs}
+                    px={inner}
+                    scale={wholeTotal}
+                    total={winTotal}
+                    partial={partial}
+                    hover={hover}
+                    onHover={onHover}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-      <Legend facts={facts} spend={spend} />
-    </div>
+      {/* the price, once, right of the session's rectangle: it moves only with the session, not as the window is dragged */}
+      <div
+        className="pointer-events-none absolute inset-y-0 flex items-center gap-1.5 whitespace-nowrap pl-3"
+        style={{ left: lenWhole }}
+      >
+        <span className="font-semibold text-text">{formatMoney(winTotal)}</span>
+        {partial && <span className="text-muted">of {formatMoney(wholeTotal)}</span>}
+      </div>
+    </section>
   )
 }

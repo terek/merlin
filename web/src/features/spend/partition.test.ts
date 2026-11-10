@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { CLASS_SERIES, KIND_SERIES, TIER_SERIES } from './model'
-import { overheadIn, segmentsOf, sumRange } from './partition'
+import { lengthShare, overheadIn, segmentsOf, sumRange } from './partition'
 import type { Lane, Timeline } from './timeline'
 import type { Overhead } from './tree'
 
@@ -27,6 +27,31 @@ const timeline = (...calls: Call[][]): Timeline =>
   }) as unknown as Timeline
 
 const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0)
+
+describe('lengthShare', () => {
+  test('hits its anchors', () => {
+    expect(lengthShare(0)).toBe(0)
+    expect(lengthShare(-3)).toBe(0)
+    expect(lengthShare(0.01)).toBe(0.05)
+    expect(lengthShare(1)).toBeCloseTo(0.05, 10)
+    expect(lengthShare(10)).toBeCloseTo(0.425, 10)
+    expect(lengthShare(100)).toBeCloseTo(0.8, 10)
+    expect(lengthShare(1000)).toBeCloseTo(0.969, 3)
+    expect(lengthShare(Number.POSITIVE_INFINITY)).toBe(1)
+  })
+
+  test('is monotonic, never above 1, and smooth at $100', () => {
+    let prev = 0
+    for (const s of [0.001, 0.5, 1, 1.01, 3, 10, 50, 99, 100, 101, 300, 1000, 1e4, 1e6, 1e12]) {
+      const v = lengthShare(s)
+      expect(v).toBeGreaterThanOrEqual(prev)
+      expect(v).toBeLessThanOrEqual(1)
+      prev = v
+    }
+    const slope = (a: number, b: number) => (lengthShare(b) - lengthShare(a)) / (Math.log10(b) - Math.log10(a))
+    expect(slope(100, 100.01)).toBeCloseTo(slope(99.99, 100), 2)
+  })
+})
 
 describe('sumRange', () => {
   const tl = timeline(

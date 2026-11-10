@@ -1,5 +1,5 @@
-// The legend of the spend graph: four columns to the right of the Spend card's rings, always shown. The
-// first maps the arcs of the rings (Breakdown.tsx hands it in); the other three are the key of the plot: a
+// The legend of the spend graph: a full-height column on the right of the Spend card, always shown. It
+// starts with the map of the breakdown's bars (Breakdown.tsx hands it in), then is the key of the plot: a
 // small sample of every mark it uses with a few words, one entry to a row, in groups by meaning. The
 // samples are drawn with the plot's own constants and colours (exported by TimeView.tsx), so that a
 // change to the plot's look changes its legend; marks the tree cannot have are listed too, faint.
@@ -112,8 +112,8 @@ const base = (color = 'var(--faint)') => (
 )
 
 /**
- * The four columns: `spend` (the arcs' column) and the key's groups in three, each group whole and the
- * columns about as high as each other. Below 1100px they wrap to two rows of two.
+ * The column on the right of the card, one column top to bottom: `spend` (the map of the breakdown), then
+ * the key's groups.
  */
 export function Legend({ facts, spend }: { facts: KeyFacts; spend: ReactNode }) {
   const id = useId().replace(/[^a-zA-Z0-9-]/g, '')
@@ -501,18 +501,19 @@ export function Legend({ facts, spend }: { facts: KeyFacts; spend: ReactNode }) 
     )
   }
   return (
-    <section
-      aria-label="Legend: the arcs of the rings and how the marks of the graph look"
-      className="grid min-w-[26rem] flex-1 grid-cols-2 gap-x-6 text-meta text-muted min-[1100px]:grid-cols-4"
+    <aside
+      className="w-72 shrink-0 self-stretch border-l border-line text-meta text-muted"
+      aria-label="Legend: the parts of the spend and how the marks of the graph look"
     >
-      <div className="min-w-0">{spend}</div>
-      <div className="min-w-0">{group('Sessions and agents')}</div>
-      <div className="min-w-0">{group('Context')}</div>
-      <div className="min-w-0">
+      {/* taller than the screen, the column sticks and scrolls on its own */}
+      <div className="sticky top-0 max-h-screen overflow-y-auto px-3 pb-2">
+        {spend}
+        {group('Sessions and agents')}
+        {group('Context')}
         {group('Your turns')}
         {group('Spend')}
         {group('Time')}
       </div>
-    </section>
+    </aside>
   )
 }

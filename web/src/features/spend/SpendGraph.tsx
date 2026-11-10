@@ -1,4 +1,4 @@
-// The spend graph: the card around the time view (TimeView.tsx), with the rings and the legend (Breakdown.tsx), the compactions,
+// The spend graph: the card around the time view (TimeView.tsx), with the bars (Breakdown.tsx) and the legend column (Key.tsx), the compactions,
 // the readout of what is under the cursor and the key handling. The pinned turn and the selected
 // piece of agent work are the page's; the panels under the card open them.
 import { type KeyboardEvent, useMemo, useRef, useState } from 'react'
@@ -11,8 +11,8 @@ import { unwrapMachineText } from '../../lib/wrapper'
 import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
-import { Breakdown } from './Breakdown'
-import { keyFacts } from './Key'
+import { Breakdown, type Hover, SpendMap, useBreakdown } from './Breakdown'
+import { keyFacts, Legend } from './Key'
 import { kindColor } from './marks'
 import {
   compactionTally,
@@ -258,6 +258,8 @@ export function SpendGraph({
       : null,
   )
   const [hoverUnit, setHoverUnit] = useState<UnitRef | null>(null)
+  // the part of the spend under the pointer, in a bar or in the legend's map
+  const [hoverPart, setHoverPart] = useState<Hover | null>(null)
 
   const { branches } = tree
   const focus = pinned?.branch ?? home
@@ -306,6 +308,8 @@ export function SpendGraph({
     reveal(turnStart(pinned))
   }
 
+  const breakdown = useBreakdown(tree, timeline, eff)
+
   if (branches.length === 0) return null
 
   // ---- what is under the cursor, pinned, selected
@@ -346,10 +350,11 @@ export function SpendGraph({
 
   return (
     <Card title="Spend">
-      {/* the rings and the legend are the top block; the strip and the plot below it have the card's whole width */}
-      <div>
-        <div className="min-w-0">
-          <Breakdown tree={tree} timeline={timeline} range={eff} facts={facts} />
+      {/* the legend is a full-height column on the right: what is left of the width is the content's, and
+          the strip and the plot measure it */}
+      <div className="flex items-stretch gap-3">
+        <div className="min-w-0 flex-1">
+          <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} />
           {unrecordedRuns > 0 && (
             <p
               className="mb-2 flex items-center gap-1.5 text-sec text-muted"
@@ -411,6 +416,7 @@ export function SpendGraph({
             />
           </div>
         </div>
+        <Legend facts={facts} spend={<SpendMap data={breakdown} hover={hoverPart} onHover={setHoverPart} />} />
       </div>
     </Card>
   )

@@ -297,9 +297,10 @@ From top to bottom:
   leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
-  by when it happened. At the top, in one row, the **breakdown** of the spend as three rings (below) and
-  the **legend** in four columns to the right of them; then a line adding up the compactions, the strip,
-  the **readout** above the plot, and the plot, which take the card's whole width.
+  by when it happened. At the top the **breakdown** of the spend as three bars (below); then a line adding up the compactions, the strip,
+  the **readout** above the plot, and the plot. All of that is the card's content, a flex row (`flex-1 min-w-0`) with the
+  **legend** as a full-height column on its right, so the strip and the plot (which measure their own width) are as wide
+  as what is left.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
@@ -309,10 +310,9 @@ From top to bottom:
     selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
     how to read and pin, and the scales;
   - the **legend** (`Key.tsx`, once the "key" under the plot) is always shown: no button, no toggle, nothing
-    in `localStorage`. It is four columns right of the rings (a grid, `min-w-[26rem] flex-1`, four columns from
-    1100px of viewport and two rows of two below, so that nothing overflows at 1000px). Column 1 is the
-    arcs' (Breakdown, below); columns 2 to 4 are the key of the plot, each group whole and the columns
-    about as high as each other: *Sessions and agents*; *Context*; *Your turns*, *Spend* and *Time*. Entries are
+    in `localStorage`. It is a column on the right of the card's content (`w-72`, a left border, as tall as the content;
+    taller than the screen it is sticky and scrolls on its own), in ONE column top to bottom: the breakdown's map
+    (`SpendMap`, below), then the key of the plot in groups: *Sessions and agents*; *Context*; *Your turns*, *Spend* and *Time*. Entries are
     rows of a column: an inline SVG sample (28x16 px) and its words, samples
     lined up and texts starting at one x, in
     groups with a small heading (the same on the three columns): *Sessions and agents* (session line by tier, forked or continued session,
@@ -555,36 +555,45 @@ From top to bottom:
     opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
     fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
     colour.
-- **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`, geometry in `ring.ts`; the card's top, in place of the old
+- **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
   switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the
-  plots draw spend as thin uniform lines): **three thin concentric rings** (176 px square, each 10 px thick with 3 px
-  between, `RING`), one per partition of the same dollars: outside in by who, by token class, by model
-  tier. Each ring is a full circle cut into arcs by **linear share** (the length of an arc is its share, no
-  logarithm), in the order of the series, from 12 o'clock clockwise, with a 1 px gap between neighbours
-  (`arcPath`); zero parts are skipped and a part of 100% is a full ring. In the middle is the price, large,
-  `$12.30` and, when the window is not all of the session, `of $45.10` small and muted under it. The **token
-  class** ring is drawn in black-and-white patterns of theme tokens (`CLASS_PATTERNS` for the swatches,
-  the same look as SVG patterns for the arcs: dark grey output, light grey cache read, diagonal hatch cache
-  write, dots uncached input) so that it reads as another kind of partition than the coloured rings; the
-  cache miss alone stays pink, as everywhere. Every arc has a hover title with its partition, label,
-  dollars and percent, "Token class: Cache read · $1.20 · 39%", and for a model tier the models in it (the tier is by
-  input price per million tokens from `GET /api/prices`: **heavy** from $4, **light** up to $1, **mid**
-  between, **unpriced** for a model the table does not know; with the prices missing it goes by the
-  family in the name; the whole call, cache miss included, is in its tier). **Column 1 of the legend**
-  maps the arcs: three groups headed *Who*, *Token class*, *Model tier*, a row each per series (swatch with
-  the arc's colour or pattern, label, dollars, percent of the window; tabular figures in columns of a
-  fixed width) and, once, the overhead's row (hatch swatch, "Not in messages"). **Every series is
-  listed, a part of $0 faint**, so that the column keeps its rows while a window is dragged. Hovering an arc
-  or a row is one shared state: the arc gets a frame (drawn over the rings, taking no pointer) and the
-  row's label is underlined; nothing else changes, so the colours keep their contrast. The hover is let go
-  only when the pointer leaves the rings, so crossing the gap between arcs does not flicker; the overhead
-  frames its arc in all three rings. Nothing moves while a window is dragged: the size and place
-  of the rings are fixed. What is counted is the plot's **effective window** (`eff`), summed from
-  the timeline's calls in one pure function (`sumRange`: the three partitions of a range add up to the
-  same total; a call is in when its time is, as in the plot's slots). **Overhead** (what the harness reported that no message
-  explains) is in no partition: it is a hatched arc at the end of every ring, so that the rings stay equal. For a
-  window it is apportioned by how much of each reported stretch (`Branch.overhead`, which has its
-  time span) lies in the window (`overheadIn`). The line under the plot that reads a
+  plots draw spend as thin uniform lines): **three horizontal stacked bars**, one per partition of the same dollars
+  (by who, by token class, by model tier), in rows of a fixed height (28 px).
+  - **The session's rectangle.** Each row has the whole session's dollars as an outlined rectangle (1 px, `--faint`, no
+    fill) whose length is a share of the track from `lengthShare` (`partition.ts`, pure): nothing for $0; a tiny 5% for
+    $1 or less ("nobody cares"); from $1 to $100 linear in log10 of the dollars, 5% at $1, 42.5% at $10, 80% at $100;
+    beyond $100 it saturates toward the whole track, continuous at $100 with the same slope, 80% + 20% x
+    (1 - e^(-(log10 s - 2) x 0.375 / 0.20)) (about 97% at $1000). The track is the card's content less 150 px for the
+    price.
+  - **The window inside it.** The coloured segments are the plot's **effective window**'s parts, scaled **linearly**
+    in the rectangle: a part of $x is x / the session's total of the rectangle's width, from its left edge, in the order
+    of the series (`KIND_SERIES`, `CLASS_SERIES`, `TIER_SERIES`), zero parts skipped, the overhead tail last. With the
+    whole session they fill the rectangle exactly; with part of it they fill a proportional part from the left and the
+    rest of the rectangle is empty (a window of $0 leaves the empty rectangles). A segment writes its label and
+    percent of the window inside when they fit. Every segment has a hover title, "Token class: Cache read · $1.20 · 39%",
+    and for a model tier the models in it (the tier is by input price per million tokens from `GET /api/prices`:
+    **heavy** from $4, **light** up to $1, **mid** between, **unpriced** for a model the table does not know; with the
+    prices missing it goes by the family in the name; the whole call, cache miss included, is in its tier).
+  - **The price** is written once, right of the rectangles and vertically centred on the three rows: `$12.30` for the
+    window and, when it is not the whole session, `of $45.10` muted. Its x depends only on the session's rectangle, so
+    nothing moves while a window is dragged (the rows are fixed, the figures tabular).
+  - **Faint fills**, like the agent strips of the plot: a segment is its colour at `CTX_FILL` (0.22) under a full-colour
+    top edge of `CTX_LINE` (1.25 px), both imported from `TimeView.tsx`. The **token class** bar is in black-and-white
+    patterns of theme tokens (`CLASS_PATTERNS`: dark grey output, light grey cache read, diagonal hatch cache write,
+    dots uncached input) at the same opacity, so it reads as another kind of partition than the coloured bars; the
+    cache miss alone stays pink, as everywhere. Labels keep the normal text colour. The swatches of the legend's map
+    have the same look.
+  - **The map** (the legend's first part): three groups headed *Who*, *Token class*, *Model tier*, a row each per
+    series (swatch, label, dollars, percent of the window; tabular figures in columns of a fixed width) and, once, the
+    overhead's row (hatch swatch, "Not in messages"). **Every series is listed, a part of $0 faint**, so that the
+    column keeps its rows while a window is dragged. Hovering a segment or a row is one shared state (held by the card):
+    the segment gets a 1.5 px frame and the row's label is underlined; nothing dims. The overhead frames its tail in all
+    three rows.
+  - What is counted is summed from the timeline's calls in one pure function (`sumRange`: the three partitions of a
+    range add up to the same total; a call is in when its time is, as in the plot's slots). **Overhead** (what the
+    harness reported that no message explains) is in no partition: it is a hatched tail at the end of every row, so that
+    the rows stay equal; the whole session's is the tree's. For a window it is apportioned by how much of each reported
+    stretch (`Branch.overhead`, which has its time span) lies in the window (`overheadIn`). The line under the plot that reads a
   turn or a piece of work shows the chips by who. The timeline keeps for each call its model and
   tier, and for each row its **model runs** (consecutive calls on one model, `{ t0, t1, model, tier }`)
   and its main model, for drawing the weight of a line by model;

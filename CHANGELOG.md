@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The session page's Spend card shows the spend as three horizontal bars (by who, by token class, by model tier) whose total length grows with the session's cost, with the selected window drawn inside the session's outline; the legend is a column on the right.
+
 ## 0.7.2 — 2026-11-10
 
 - Auto-upgrade is now opt-in: it means trusting every future release without looking at it. `merlin serve` still checks every 4 hours and tells you about a new release, in `merlin.log` and as a quiet "X available" link in the top bar; `merlin upgrade` installs it.

@@ -3,13 +3,38 @@
 //
 // A range is summed from the calls of the timeline, the same calls the plot draws its spend from, so
 // the widget and the plot agree. Overhead (what the harness reported that no message explains) is in no
-// call and so in no partition: it is added to each ring as an arc of its own (`segmentsOf`).
+// call and so in no partition: it is added to each bar as a tail of its own (`segmentsOf`).
 
 import { modelLabel } from '../../lib/models'
 import type { Tier } from '../../lib/tiers'
 import { CLASS_SERIES, type ClassKey, KIND_SERIES, type KindKey, type SeriesDef, TIER_SERIES } from './model'
 import { type TierSpend, type Timeline, tierSpend } from './timeline'
 import type { Overhead } from './tree'
+
+/** The share of the track a session of $1 or less takes: a tiny bar, since nobody cares. */
+export const LENGTH_MIN = 0.05
+/** The share at $100, where the logarithmic stretch ends and the saturation begins. */
+export const LENGTH_AT_100 = 0.8
+
+/**
+ * The share of the track (0 to 1) the bar of a whole session of `usd` dollars takes. Nothing: no bar.
+ * Up to $1 a tiny one (5%). From $1 to $100 linear in log10 of the dollars, 5% to 80% ($10 is 42.5%).
+ * Beyond $100 it saturates toward the whole track, continuous at $100 and with the same slope there
+ * ($1000 is about 97%).
+ */
+export function lengthShare(usd: number): number {
+  if (!(usd > 0)) return 0
+  if (!Number.isFinite(usd)) return 1
+  if (usd <= 1) return LENGTH_MIN
+  const slope = (LENGTH_AT_100 - LENGTH_MIN) / 2
+  const l = Math.log10(usd)
+  if (usd <= 100) return LENGTH_MIN + slope * l
+  const room = 1 - LENGTH_AT_100
+  return LENGTH_AT_100 + room * (1 - Math.exp(-((l - 2) * slope) / room))
+}
+
+/** The partitions the breakdown draws. */
+export type SeriesRowKey = 'kind' | 'class' | 'tier'
 
 /** What a range spent, in the three partitions (each adds up to `usd`). */
 export interface RangeSpend {
@@ -74,14 +99,14 @@ export function overheadIn(
   return usd
 }
 
-/** A part of a ring. */
+/** A part of a bar. */
 export interface Segment {
   key: string
   label: string
-  /** A CSS colour; none for the hatched arc. */
+  /** A CSS colour; none for the hatched tail. */
   color?: string
   usd: number
-  /** The overhead arc. */
+  /** The overhead tail. */
   hatched?: boolean
   /** The models of a model tier. */
   names?: string[]
@@ -89,7 +114,7 @@ export interface Segment {
 
 /**
  * The non-zero parts of one partition in the order of its series, with the overhead (if any) as a hatched
- * arc at the end; with `keepZero`, the zero parts too (for the legend, which lists every series).
+ * tail at the end; with `keepZero`, the zero parts too (for the legend, which lists every series).
  */
 export function segmentsOf(
   series: readonly SeriesDef[],
