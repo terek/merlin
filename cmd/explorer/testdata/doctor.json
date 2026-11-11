@@ -506,7 +506,7 @@
         {
           "capability": "files.linesChanged",
           "state": "parsed",
-          "note": "edit results' details.diff: lines starting with + and -; write is not counted",
+          "note": "edit results' details.diff (lines starting with + and -) plus the content lines of each successful write; an overwritten file's old lines are unknown, so a write's added lines are an upper bound",
           "seen": 0
         },
         {

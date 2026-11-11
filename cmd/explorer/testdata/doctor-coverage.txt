@@ -95,7 +95,7 @@ Coverage  (what each harness package claims, against the sessions indexed; seen 
     turns.abandoned      parsed   0 of 0              a turn whose user message is off the path from the last entry to the root
     tools.calls          parsed   0 of 0              toolCall blocks of assistant messages, counted by name, on every branch
     files.touched        parsed   0 of 0              path argument of the edit and write tools, resolved against the header cwd
-    files.linesChanged   parsed   0 of 0              edit results' details.diff: lines starting with + and -; write is not counted
+    files.linesChanged   parsed   0 of 0              edit results' details.diff (lines starting with + and -) plus the content lines of each successful write; an overwritten file's old lines are unknown, so a write's added lines are an upper bound
     cost.perMessage      parsed   0 of 0              every assistant message with tokens or cost, plus the usage of compaction, branch_summary, usage entries and tool results; usage.cost.total is kept as Recorded, else the price table, else Unpriced. A tool result's or compaction's model is a guess: the nearest assistant message above
     cost.reported        absent   0 of 0              docs/pi-format.md, Tokens and cost (from source): Pi stores a cost on every call and no session or run total; totals are summed on demand, so there is no reported window
     cost.truncated       unknown  0 of 0              aborted and error responses can carry tokens; whether the counts are partial is not known

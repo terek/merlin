@@ -136,7 +136,10 @@ calls over the 820 sessions.
   `excludeFromContext` (89 of 136). These are not calls to a model.
 - **Files touched.** `read`, `edit`, `write` take `path` (relative or absolute, resolved against the
   session's `cwd`); `grep`, `find`, `ls` take an optional `path`. Lines changed come from
-  `edit`'s `details.diff` text. Extension tools use other keys (`filePath` in one, `file` in one);
+  `edit`'s `details.diff` text (added and removed) plus the line count of each successful
+  `write`'s `content` argument (added only: a trailing newline adds no line, empty content is 0).
+  Pi records nothing about the old content of an overwritten file, so a write's added lines are
+  an upper bound and its removals are unknown. Extension tools use other keys (`filePath` in one, `file` in one);
   not worth chasing.
 - 62 calls have a tool name that is not token-shaped (counted as `other`); all 62 results are errors.
 

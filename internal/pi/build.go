@@ -14,7 +14,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 5
+const ParserVersion = 6
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -44,6 +44,7 @@ type callInfo struct {
 	turn   int // turn index; -1 outside every turn
 	name   string
 	cmd    string
+	lines  int64 // content lines of a write
 	at     time.Time
 	result bool
 }
@@ -289,7 +290,7 @@ func (b *builder) assistant(i int, acc *turnAcc, t int, cwd string) (billed bool
 		}
 	}
 	for _, c := range r.calls {
-		info := &callInfo{rec: i, id: c.ID, msgID: id, turn: t, name: c.Name, cmd: c.Command, at: b.start(r)}
+		info := &callInfo{rec: i, id: c.ID, msgID: id, turn: t, name: c.Name, cmd: c.Command, lines: c.Lines, at: b.start(r)}
 		if c.ID != "" {
 			b.calls[c.ID] = info
 		}
@@ -368,6 +369,12 @@ func (b *builder) toolResult(i, t int) {
 	case "edit":
 		b.d.Stats.LinesAdded += r.added
 		b.d.Stats.LinesRemoved += r.removed
+	case "write":
+		// Pi records nothing about an overwritten file's old content: the lines written are
+		// an upper bound on the added, and the removed are unknown.
+		if c != nil && !r.isErr {
+			b.d.Stats.LinesAdded += c.lines
+		}
 	case "bash":
 		if c != nil {
 			b.beadEvents(c, &beads.Result{Output: r.output, Failed: r.isErr}, r.at)

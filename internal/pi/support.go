@@ -24,7 +24,7 @@ func Support() harness.Support {
 
 		"tools.calls":        harness.P("toolCall blocks of assistant messages, counted by name, on every branch"),
 		"files.touched":      harness.P("path argument of the edit and write tools, resolved against the header cwd"),
-		"files.linesChanged": harness.P("edit results' details.diff: lines starting with + and -; write is not counted"),
+		"files.linesChanged": harness.P("edit results' details.diff (lines starting with + and -) plus the content lines of each successful write; an overwritten file's old lines are unknown, so a write's added lines are an upper bound"),
 
 		"cost.perMessage": harness.P("every assistant message with tokens or cost, plus the usage of compaction, " +
 			"branch_summary, usage entries and tool results; usage.cost.total is kept as Recorded, else the price table, " +

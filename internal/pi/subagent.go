@@ -349,6 +349,7 @@ func (b *builder) countAssistant(ai int) {
 func (b *builder) childMessages(ai int, rn *subRun, sub scope, resultAt time.Time) {
 	var first, last time.Time
 	named := false
+	writes := map[string]int64{} // content lines of each write call, by call id
 	for j := range rn.msgs {
 		m := &rn.msgs[j]
 		at := b.start(m)
@@ -376,6 +377,9 @@ func (b *builder) childMessages(ai int, rn *subRun, sub scope, resultAt time.Tim
 				b.d.Agents[ai].FinalText = m.text
 			}
 			for _, c := range m.calls {
+				if c.Name == "write" {
+					writes[c.ID] = c.Lines
+				}
 				a := &b.d.Agents[ai]
 				a.ToolCalls++
 				a.Turns[0].ToolCalls++
@@ -394,6 +398,9 @@ func (b *builder) childMessages(ai int, rn *subRun, sub scope, resultAt time.Tim
 		case "toolResult":
 			b.d.Stats.LinesAdded += m.added
 			b.d.Stats.LinesRemoved += m.removed
+			if m.toolName == "write" && !m.isErr {
+				b.d.Stats.LinesAdded += writes[m.toolCallID]
+			}
 			nsc, fb := b.nested(sub, ai, j), fmt.Sprintf("m%d", j)
 			if m.toolName == "bash" {
 				b.bashResult(nsc, m.toolCallID, fb, at)

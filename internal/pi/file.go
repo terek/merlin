@@ -136,6 +136,7 @@ type callRec struct {
 	Name    string
 	Path    string // arguments.path: read, edit, write, ...
 	Command string // arguments.command: bash
+	Lines   int64  // lines of arguments.content: write
 }
 
 // rec is one entry of the file, reduced to what the digest needs.
@@ -357,9 +358,13 @@ func (p *parsed) message(r *rec, raw json.RawMessage) {
 				var args struct {
 					Path    str `json:"path"`
 					Command str `json:"command"`
+					Content str `json:"content"`
 				}
 				if json.Unmarshal(b.Arguments, &args) == nil {
 					c.Path, c.Command = string(args.Path), string(args.Command)
+					if c.Name == "write" {
+						c.Lines = textLines(string(args.Content))
+					}
 				}
 				r.calls = append(r.calls, c)
 			}
@@ -412,6 +417,19 @@ func content(raw json.RawMessage) (blocks []block, s string, isStr bool) {
 	}
 	_ = json.Unmarshal(raw, &blocks)
 	return blocks, "", false
+}
+
+// textLines counts the lines of a file's content: N lines, and a trailing newline does not add
+// one; empty content is 0.
+func textLines(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	n := int64(strings.Count(s, "\n"))
+	if !strings.HasSuffix(s, "\n") {
+		n++
+	}
+	return n
 }
 
 // diffLines counts the added and removed lines of an edit's diff: Pi writes "+N text",

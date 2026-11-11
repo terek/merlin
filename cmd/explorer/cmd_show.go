@@ -484,23 +484,33 @@ func (p *printer) agents(d *model.SessionDigest) {
 	}
 	// Whose figure an agent's own cost is: Merlin's recomputation from tokens, or the
 	// harness's per-call figure (Pi), or both.
-	var recorded, recomputed int
+	var recorded, billed, recomputed int
 	for _, m := range d.Messages {
 		if m.AgentID == "" || m.Unpriced {
 			continue
 		}
 		if m.Recorded {
 			recorded++
+			if m.Billed {
+				billed++
+			}
 		} else {
 			recomputed++
 		}
 	}
 	source := "attributed from tokens"
-	switch {
-	case recorded > 0 && recomputed > 0:
-		source = fmt.Sprintf("%s's own per-call figure, or recomputed from tokens", harnessTitle(d.Harness))
-	case recorded > 0:
-		source = fmt.Sprintf("%s's own per-call figure", harnessTitle(d.Harness))
+	if recorded > 0 {
+		switch {
+		case billed == recorded:
+			source = "billed by the provider per call"
+		case billed == 0:
+			source = fmt.Sprintf("%s's own per-call figure (its catalog estimate)", harnessTitle(d.Harness))
+		default:
+			source = fmt.Sprintf("billed by the provider per call, or %s's catalog estimate", harnessTitle(d.Harness))
+		}
+		if recomputed > 0 {
+			source += ", or recomputed from tokens"
+		}
 	}
 	if recorded+recomputed == 0 {
 		// No agent billed a message the files show: no claim about whose figure it is.

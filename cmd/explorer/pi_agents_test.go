@@ -11,13 +11,33 @@ import (
 // A Pi session whose figures are the harness's own per-call costs, with one child recorded in
 // the file and one run (bash, pi --no-session) that left no record. Text is invented.
 func TestPiCostWordingAndUnrecordedAgents(t *testing.T) {
+	out, env, e := piAgentsSession(t, false)
+	if !strings.Contains(out, "own cost is Pi's own per-call figure (its catalog estimate))") {
+		t.Errorf("show lacks the catalog wording:\n%s", out)
+	}
+	piAgentsChecks(t, out, env, e)
+}
+
+// The same session, every figure billed by the provider.
+func TestPiAgentsBilledWording(t *testing.T) {
+	out, _, _ := piAgentsSession(t, true)
+	if !strings.Contains(out, "own cost is billed by the provider per call)") || strings.Contains(out, "catalog estimate") {
+		t.Errorf("show lacks the billed wording:\n%s", out)
+	}
+}
+
+func piAgentsSession(t *testing.T, billed bool) (string, []string, *readEnv) {
 	e := newReadEnv(t)
 	pi := t.TempDir()
 	ms := int64(1794132000000)
 	line := func(s string, a ...any) string { return fmt.Sprintf(s, a...) }
+	flag := ""
+	if billed {
+		flag = `,"totalFromProvider":true`
+	}
 	asst := func(model string, cost float64, calls string) string {
-		return line(`{"role":"assistant","provider":"acme","model":%q,"stopReason":"stop","timestamp":%d,"content":[{"type":"text","text":"ok"}%s],"usage":{"input":100,"output":10,"cacheRead":0,"cacheWrite":0,"totalTokens":110,"cost":{"total":%g}}}`,
-			model, ms+1000, calls, cost)
+		return line(`{"role":"assistant","provider":"acme","model":%q,"stopReason":"stop","timestamp":%d,"content":[{"type":"text","text":"ok"}%s],"usage":{"input":100,"output":10,"cacheRead":0,"cacheWrite":0,"totalTokens":110,"cost":{"total":%g%s}}}`,
+			model, ms+1000, calls, cost, flag)
 	}
 	child := asst("z/child", 0.004, "")
 	lines := []string{
@@ -39,6 +59,10 @@ func TestPiCostWordingAndUnrecordedAgents(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("show: %d\n%s\n%s", code, out, errs)
 	}
+	return out, env, e
+}
+
+func piAgentsChecks(t *testing.T, out string, env []string, e *readEnv) {
 	for _, want := range []string{
 		"recorded", "Pi's own per-call figure",
 		"plus 1 agent run with no record of its spend",
