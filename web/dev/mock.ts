@@ -15,6 +15,11 @@ import type {
   Hit,
   MomentsReport,
   Money,
+  Overview,
+  OverviewEvent,
+  OverviewGroup,
+  OverviewLane,
+  OverviewSlot,
   ProjectList,
   ProjectSummary,
   ScanProgress,
@@ -610,6 +615,251 @@ function costTable(u: URL): CostTable {
   }
 }
 
+// ---- /api/overview (experimental) ------------------------------------------------------
+
+const SLOT_MS: Record<OverviewSlot, number> = {
+  '15m': 15 * MIN,
+  '30m': 30 * MIN,
+  '1h': 60 * MIN,
+  '2h': 120 * MIN,
+  '3h': 180 * MIN,
+  '6h': 360 * MIN,
+  '12h': 720 * MIN,
+  '1d': 1440 * MIN,
+}
+
+/** The unix-ms parameter or an RFC 3339 time. */
+function overviewTime(name: string, v: string | null): number | undefined {
+  if (!v) return undefined
+  const t = /^\d+$/.test(v) ? Number(v) : Date.parse(v)
+  if (Number.isNaN(t)) throw new BadRequest(`${name}=${JSON.stringify(v)}: use an RFC 3339 time or Unix milliseconds`)
+  return t
+}
+
+/** A message the overview counts: its time, dollars, main-agent context and owner. */
+interface OvMsg {
+  at: number
+  usd: number
+  /** Prompt tokens of a main-agent message; 0 for an agent's. */
+  ctx: number
+}
+
+interface OvEvent {
+  at: number
+  type: OverviewEvent['type']
+  kind: string
+}
+
+interface OvSession {
+  sess: Sess
+  msgs: OvMsg[]
+  events: OvEvent[]
+}
+
+const overviewCache = new Map<string, OvSession>()
+
+function overviewSession(s: Sess): OvSession {
+  const id = s.summary.key.id
+  const hit = overviewCache.get(id)
+  if (hit) return hit
+  const d = s.detail.digest
+  const lin = s.summary.lineage
+  const own = lin.inheritedTurns > 0 ? (lin.firstOwnTurn < 0 ? Infinity : lin.firstOwnTurn) : 0
+  const msgs: OvMsg[] = []
+  for (const m of messagesOf(d)) {
+    if (m.turn !== undefined && m.turn < own) continue
+    const ctx = m.agentId ? 0 : (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
+    msgs.push({ at: Date.parse(m.at), usd: m.usd, ctx })
+  }
+  const events: OvEvent[] = []
+  for (const a of d.agents ?? []) {
+    if (a.kind === 'compact' || a.kind === 'review' || a.kind === 'approval-review') continue
+    if ((a.spawnTurn ?? 0) < own || !a.startedAt) continue
+    events.push({ at: Date.parse(a.startedAt), type: 'agent', kind: a.kind })
+  }
+  for (const c of d.compactions ?? []) {
+    if (c.turn < own - 1) continue
+    events.push({ at: Date.parse(c.at), type: 'compaction', kind: c.call?.cache ?? 'unknown' })
+  }
+  if (s.parent && s.summary.startedAt)
+    events.push({ at: Date.parse(s.summary.startedAt), type: 'session', kind: s.parent.kind })
+  const out = { sess: s, msgs, events }
+  overviewCache.set(id, out)
+  return out
+}
+
+function overview(u: URL): Overview {
+  const q = u.searchParams
+  const by = q.get('by') === 'project' ? 'dir' : (q.get('by') ?? 'dir')
+  if (by !== 'dir' && by !== 'checkout' && by !== 'repo' && by !== 'remote')
+    throw new BadRequest(`by=${JSON.stringify(by)}: use dir, checkout, repo or remote`)
+  const to0 = overviewTime('to', q.get('to')) ?? Date.now()
+  const from0 = overviewTime('from', q.get('from')) ?? to0 - 7 * 86_400_000
+  if (from0 >= to0) throw new BadRequest('from must be before to')
+  let slot = q.get('slot') as OverviewSlot | null
+  if (!slot)
+    slot = (Object.keys(SLOT_MS) as OverviewSlot[]).find((k) => Math.ceil((to0 - from0) / SLOT_MS[k]) <= 200) ?? '1d'
+  const slotMs = SLOT_MS[slot]
+  if (!slotMs) throw new BadRequest(`slot=${JSON.stringify(slot)}: use 15m, 30m, 1h, 2h, 3h, 6h, 12h or 1d`)
+  // Slots start on local boundaries (a 1d slot at local midnight).
+  const off = -new Date(from0).getTimezoneOffset() * MIN
+  const from = Math.floor((from0 + off) / slotMs) * slotMs - off
+  const to = Math.ceil((to0 + off) / slotMs) * slotMs - off
+  const slots = Math.round((to - from) / slotMs)
+  if (slots > 2000) throw new BadRequest(`${slots} slots: at most 2000`)
+  const at = (t: number) => Math.floor((t - from) / slotMs)
+  const zeros = () => new Array<number>(slots).fill(0)
+  const r2 = (x: number) => Math.round(x * 1e6) / 1e6
+  const wantGroup = q.has('group') ? q.get('group') : undefined
+
+  interface Acc {
+    key: string
+    sessions: OvSession[]
+    usd: number
+    usdSlots: number[]
+    ctxPeak: number[]
+    ctxSum: number[]
+    active: number[]
+    events: Map<string, OverviewEvent>
+    priciest?: { s: Sess; usd: number }
+    last: string
+  }
+  const accs = new Map<string, Acc>()
+  const lanes: OverviewLane[] = []
+
+  function addEvents(into: Map<string, OverviewEvent>, evs: OvEvent[]) {
+    for (const e of evs) {
+      const i = at(e.at)
+      if (i < 0 || i >= slots) continue
+      const k = `${i}/${e.type}/${e.kind}`
+      const cur = into.get(k)
+      if (cur) cur.n++
+      else into.set(k, { slot: i, type: e.type, kind: e.kind, n: 1 })
+    }
+  }
+  const sortEvents = (m: Map<string, OverviewEvent>) =>
+    [...m.values()].sort((a, b) => a.slot - b.slot || a.type.localeCompare(b.type) || a.kind.localeCompare(b.kind))
+
+  for (const s of visible()) {
+    const os = overviewSession(s)
+    const usd = zeros()
+    const ctx = zeros()
+    let total = 0
+    let any = false
+    for (const m of os.msgs) {
+      const i = at(m.at)
+      if (i < 0 || i >= slots) continue
+      any = true
+      usd[i] += m.usd
+      total += m.usd
+      if (m.ctx > ctx[i]) ctx[i] = m.ctx
+    }
+    if (!any) continue
+    const key = costKey(by, s.summary)
+    let a = accs.get(key)
+    if (!a) {
+      a = {
+        key,
+        sessions: [],
+        usd: 0,
+        usdSlots: zeros(),
+        ctxPeak: zeros(),
+        ctxSum: zeros(),
+        active: zeros(),
+        events: new Map(),
+        last: '',
+      }
+      accs.set(key, a)
+    }
+    a.sessions.push(os)
+    a.usd += total
+    if (!a.priciest || total > a.priciest.usd) a.priciest = { s, usd: total }
+    if ((s.summary.lastActivityAt ?? '') > a.last) a.last = s.summary.lastActivityAt ?? ''
+    for (let i = 0; i < slots; i++) {
+      a.usdSlots[i] += usd[i]
+      if (ctx[i] > 0 || usd[i] > 0) a.active[i]++
+      a.ctxSum[i] += ctx[i]
+      if (ctx[i] > a.ctxPeak[i]) a.ctxPeak[i] = ctx[i]
+    }
+    addEvents(a.events, os.events)
+    if (wantGroup !== undefined && wantGroup === key) {
+      const ev = new Map<string, OverviewEvent>()
+      addEvents(ev, os.events)
+      lanes.push({
+        harness: s.summary.key.harness,
+        id: s.summary.key.id,
+        title: s.summary.title,
+        startedAt: s.summary.startedAt,
+        lastActivityAt: s.summary.lastActivityAt,
+        usd: r2(total),
+        usdSlots: usd.map(r2),
+        context: ctx,
+        events: sortEvents(ev),
+      })
+    }
+  }
+
+  const groups: OverviewGroup[] = [...accs.values()]
+    .map((a) => ({
+      key: a.key,
+      name: costLabel(by, a.key),
+      sessions: a.sessions.length,
+      usd: r2(a.usd),
+      lastActivityAt: a.last || undefined,
+      priciest: a.priciest && {
+        harness: a.priciest.s.summary.key.harness,
+        id: a.priciest.s.summary.key.id,
+        title: a.priciest.s.summary.title,
+        usd: r2(a.priciest.usd),
+      },
+      usdSlots: a.usdSlots.map(r2),
+      contextPeak: a.ctxPeak,
+      contextSum: a.ctxSum,
+      active: a.active,
+      events: sortEvents(a.events),
+    }))
+    .sort((x, y) => y.usd - x.usd || (x.key < y.key ? -1 : 1))
+
+  // Scripted runs: each day's line spread over local working hours, the weights from a hash.
+  const scripted = { sessions: 0, usd: 0, usdSlots: zeros() }
+  for (const l of ds.scripted) {
+    const [y, mo, d] = l.day.split('-').map(Number)
+    const day0 = new Date(y, mo - 1, d).getTime()
+    const hours = Array.from({ length: 10 }, (_, h) => day0 + (8 + h) * 60 * MIN)
+    const w = hours.map((_, h) => 1 + ((d * 31 + h * 17 + l.count) % 5))
+    const wsum = w.reduce((x, y2) => x + y2, 0)
+    let counted = false
+    hours.forEach((t, h) => {
+      const i = at(t)
+      if (i < 0 || i >= slots) return
+      const part = (l.totalUSD * w[h]) / wsum
+      scripted.usdSlots[i] += part
+      scripted.usd += part
+      if (!counted) {
+        scripted.sessions += l.count
+        counted = true
+      }
+    })
+  }
+  scripted.usd = r2(scripted.usd)
+  scripted.usdSlots = scripted.usdSlots.map(r2)
+
+  return {
+    from: new Date(from).toISOString(),
+    to: new Date(to).toISOString(),
+    slot,
+    slotMs,
+    slots,
+    by,
+    groups,
+    scripted,
+    lanes:
+      wantGroup === undefined
+        ? undefined
+        : lanes.sort((x, y) => (x.startedAt ?? '').localeCompare(y.startedAt ?? '') || (x.id < y.id ? -1 : 1)),
+  }
+}
+
 // ---- /api/events ----------------------------------------------------------------------
 
 const clients = new Set<ReadableStreamDefaultController<Uint8Array>>()
@@ -765,6 +1015,7 @@ function route(req: Request): Response {
     if (p === '/api/search') return json(200, search(u))
     if (p === '/api/cost') return json(200, costTable(u))
     // A report built by internal/moments from synthetic digests; regenerate it when the registry changes.
+    if (p === '/api/overview') return json(200, overview(u))
     if (p === '/api/moments') return json(200, mockMoments)
     if (p === '/api/events') return events(req)
   } catch (e) {

@@ -10,6 +10,7 @@
 //   ['search', q, filters]                useSearch
 //   ['cost', params]                      useCost
 //   ['moments']                           useMoments
+//   ['overview', params]                  useOverview
 //   ['prices']                            usePrices
 
 import {
@@ -30,6 +31,8 @@ import type {
   GroupDim,
   GroupList,
   MomentsReport,
+  Overview,
+  OverviewParams,
   PriceList,
   ProjectList,
   RepoList,
@@ -55,6 +58,7 @@ export const queryKeys = {
   search: (q: string, filters: SessionFilters) => ['search', q, filters] as const,
   cost: (params: CostParams) => ['cost', params] as const,
   moments: () => ['moments'] as const,
+  overview: (params: OverviewParams) => ['overview', params] as const,
   prices: () => ['prices'] as const,
 }
 
@@ -219,5 +223,16 @@ export function usePrices(): UseQueryResult<PriceList> {
     queryKey: queryKeys.prices(),
     queryFn: ({ signal }) => get<PriceList>('/api/prices', undefined, signal),
     staleTime: Number.POSITIVE_INFINITY,
+  })
+}
+
+/** What every group of sessions spent and carried per slot of a range (experimental; the Overview page). */
+export function useOverview(params: OverviewParams, enabled = true): UseQueryResult<Overview> {
+  const p = clean(params)
+  return useQuery({
+    queryKey: queryKeys.overview(p),
+    queryFn: ({ signal }) => get<Overview>('/api/overview', { ...p }, signal),
+    placeholderData: keepPreviousData,
+    enabled,
   })
 }

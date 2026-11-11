@@ -203,6 +203,10 @@ type GroupList struct {
 	Groups []catalog.Group `json:"groups"`
 }
 
+// Overview is the body of GET /api/overview (experimental): what each group of sessions spent
+// and carried in each slot of a range. See catalog.Overview.
+type Overview catalog.Overview
+
 // BeadList is the body of GET /api/beads: the bead prefixes sessions worked on, the one with
 // the most recently active session first, and the bead families, most recently worked on
 // first (both narrowed to one repository with ?repo=). Databases is how many bead databases

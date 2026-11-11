@@ -1166,3 +1166,63 @@ export interface PriceList {
   /** By the table's exact names. */
   models: Record<string, PriceEntry>
 }
+
+// ---- GET /api/overview (experimental, docs/api.md) -------------------------------------
+
+export type OverviewSlot = '15m' | '30m' | '1h' | '2h' | '3h' | '6h' | '12h' | '1d'
+
+export interface OverviewParams {
+  from?: string
+  to?: string
+  slot?: OverviewSlot
+  by?: GroupDim
+  /** A group key of `by`; adds `lanes`. */
+  group?: string
+}
+
+/** Something that happened in a slot: agents launched, a fork or continuation started, a compaction. */
+export interface OverviewEvent {
+  slot: number
+  type: 'agent' | 'session' | 'compaction'
+  /** agent: subagent, teammate, fork, workflow; session: fork, continuation; compaction: cold, warm, unknown. */
+  kind: string
+  n: number
+}
+
+export interface OverviewGroup {
+  key: string
+  name: string
+  sessions: number
+  usd: number
+  lastActivityAt?: string
+  priciest?: { harness: string; id: string; title?: string; usd: number }
+  usdSlots: number[]
+  contextPeak: number[]
+  contextSum: number[]
+  active: number[]
+  events?: OverviewEvent[]
+}
+
+export interface OverviewLane {
+  harness: string
+  id: string
+  title?: string
+  startedAt?: string
+  lastActivityAt?: string
+  usd: number
+  usdSlots: number[]
+  context: number[]
+  events?: OverviewEvent[]
+}
+
+export interface Overview {
+  from: string
+  to: string
+  slot: OverviewSlot
+  slotMs: number
+  slots: number
+  by: GroupDim
+  groups: OverviewGroup[]
+  scripted: { sessions: number; usd: number; usdSlots: number[] }
+  lanes?: OverviewLane[]
+}

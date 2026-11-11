@@ -3,6 +3,7 @@ import { UiGallery } from './dev/UiGallery'
 import { BeadPage } from './features/beads/BeadPage'
 import { CostPage } from './features/cost/CostPage'
 import { MomentsPage } from './features/moments/MomentsPage'
+import { OverviewPage } from './features/overview/OverviewPage'
 import { SessionsPage } from './features/sessions/SessionsPage'
 import { SessionPage } from './features/spend/SessionPage'
 import { Layout } from './shell/Layout'
@@ -23,6 +24,7 @@ export function App() {
         <Route path="s/:harness/:id" element={<SessionPage />} />
         <Route path="bead/:id" element={<BeadPage />} />
         <Route path="cost" element={<CostPage />} />
+        <Route path="overview" element={<OverviewPage />} />
         <Route path="moments" element={<MomentsPage />} />
         <Route path="dev/ui" element={<UiGallery />} />
         <Route path="dev/spend/:harness/:id" element={<SpendRedirect />} />

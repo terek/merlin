@@ -125,6 +125,9 @@ export function TopBar() {
         <NavLink to="/cost" className={navClass} title="Cost (g c)">
           Cost
         </NavLink>
+        <NavLink to="/overview" className={navClass} title="Overview: where the agents' work went (experimental)">
+          Overview
+        </NavLink>
         <NavLink to="/moments" className={navClass} title="Moments: what your sessions say about how you work">
           Moments
         </NavLink>
