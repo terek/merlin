@@ -87,6 +87,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
+| `/overview` | Overview (experimental, section 10b): every group of sessions over a day, week or month, context above and spend below | `range`, `by`, `sort`, `ctx`, `open` (the opened group) |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -719,6 +720,56 @@ bead's id as bd prints it (`acme-k1.2`); an unknown id shows "No such bead" (the
 - **Links in.** A bead id links here from the Cost page's bead and family rows (a family row's key
   is its root) and from the bead chips in the session header (the id; the title still opens the
   Sessions page filtered to the bead).
+
+## 10b. Overview page (`/overview`, experimental)
+
+Where the agents' work went over a day, a week or a month, in the Session page's language zoomed
+out: time across, a row per group of sessions (a project, by default), **context above each row's
+baseline and spend below it**. A row that carried a lot is tall above its line, a row that spent a
+lot is deep below it, and both are on scales every row shares, so rows compare at a glance. Data
+from `GET /api/overview` ([api.md](api.md)); code in `features/overview/` (epic `merlin-lce`). A separate route while it
+is an experiment: if it works, it becomes the landing page and the Cost page's day chart and
+project table go.
+
+```
+ [1d 7d 30d]  group [Project ▾]  sort [Spend ▾]  context [Sum | Peak]
+                 Mon 3       Tue 4       ┆┆  Wed 5
+ dev/merlin      ▁▃▅▇▆▃      ▂▅▇█▇▅      ┆┆  ▃▆▇▅▂        context above
+ $172 · 12       ━━━●━━━━━━━━━━━━━━━━━━━━┆┆━━━━━━━━━━   activity line, glyphs on it
+ max $96         ▕▕▌▕▌█▌      ▕▌█▌▌▕      ┆┆  ▕▌▕▌         spend below
+ › acme/api      (thinner: it carried and spent less)
+   429 scripted runs · $9.80   ▏▏ ▏▏▏ ▏                   one faint row, spend only
+```
+
+- **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now (slots `15m`, `1h`,
+  `6h`); group by `dir` (Project), `checkout`, `repo`, `remote`; sort by spend (default), sessions,
+  priciest session, last activity; context `sum` (default: what the group carried) or `peak` (its
+  deepest session).
+- **Label column** (fixed width, left): the group's name, its spend in the range as `<Money>`, its
+  session count, and its priciest session's spend ("max $96"). A chevron opens the group.
+- **Plot.** One time axis for every row, with midnight ticks and day labels. Runs of slots in which
+  nothing at all ran (no group, no scripted run) longer than 1 h at `1d`, 4 h at `7d`, 1 day at
+  `30d` are squeezed into a narrow faint **break** labelled with its length, as on the Session page.
+  Per row:
+  - above the baseline, the context per slot as a step area (one token scale for all rows);
+  - below it, the spend per slot as bars in one quiet colour (one dollar scale for all rows);
+  - on it, the **activity line** wherever a session of the group was running (`active > 0`), heavier
+    where several ran at once (1, 2, 3+);
+  - **glyphs**, abstract, only to say it happened: a dot for a forked session and a ring for a
+    continuation (as the Session page's branch nodes), a small `+` over a slot that launched agents
+    (bigger for 4 or more), a short red tick for a cold compaction and amber for a warm one.
+  Each row is as tall as its own peak needs on the shared scales (a minimum keeps a quiet row's
+  line readable), so the big projects are visibly big; the shared scales are labelled once, at the
+  top row.
+- **Hover** fills a readout of fixed height above the plot (nothing under the pointer moves): the
+  slot's time, the group, its spend, sessions running, context sum and peak, and its events in
+  words. Nothing else is printed on the page.
+- **Click** on a slot of a row lists, below the plot, that group's sessions active in the slot
+  (from `lanes`): title as a link to the Session page, its spend in the slot and in the range,
+  last activity. A brushed range on the axis does the same for the range.
+- **Open a group**: its sessions as lanes under it, the same grammar on the same scales, thinner;
+  a lane's label is the session's title and links to its Session page.
+- **Scripted runs**: one faint row at the end, spend only, not openable.
 
 ## 11. As built
 

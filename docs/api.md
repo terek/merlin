@@ -92,6 +92,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/sessions/{harness}/{id}` | `SessionDetail` |
 | `GET /api/search?q=` | `SearchResult` |
 | `GET /api/cost` | `CostTable` |
+| `GET /api/overview` | `Overview` (experimental) |
 | `GET /api/moments` | `moments.Report` (experimental) |
 | `GET /api/events` | `text/event-stream` |
 
@@ -958,6 +959,88 @@ parts. Without `split` nothing changes in the response: no `split` key anywhere.
 `backing.unknown` (omitted when 0) counts the sessions flagged `unknown`. `backing.recorded` (omitted when 0) counts those flagged `recorded`.
 
 (One row shown; the real response has a row per kind.)
+
+## GET /api/overview
+
+Experimental (epic `merlin-lce`, the Overview page in [ui.md](ui.md) §10b). What every group of
+sessions spent and carried in each slot of a time range: the data of a plot with time across, one
+row per group, context above each row's baseline and spend below it.
+
+| Parameter | Meaning |
+|---|---|
+| `from`, `to` | the range, RFC 3339 or Unix milliseconds. Default: `to` = now, `from` = `to` − 7 days. `from` is moved down and `to` up to a slot boundary in the daemon's local time (a `1d` slot starts at local midnight, `6h` at 00, 06, 12, 18) |
+| `slot` | `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d`. Default: the smallest that gives at most 200 slots. A 400 when the range would have more than 2,000 |
+| `by` | `dir` (default; `project` is accepted as the same), `checkout`, `repo` or `remote`: the location keys of `/api/groups`, with the same primary value per session |
+| `group` | a group key of the same `by` (`""` for the sessions with no value, written `group=`). Adds `lanes`: one per session of that group with a message in the range |
+
+Only messages count, and only the messages a session **owns** (a copied message is billed once, as
+everywhere): a slot's dollars are the `usd` of the owned messages whose `at` falls in it, the main
+agent's and every agent's alike. That is the attributed (or recorded) figure; reported windows and
+overhead cannot be cut into slots, so a group's `usd` can differ from its best cost on `/api/cost`.
+Scripted runs (`kind: sdk`) are in no group; they are summed in `scripted`.
+
+**Context.** A message's context is its prompt tokens: `input + cacheRead + cacheWrite5m +
+cacheWrite1h`. A session's context in a slot is the largest context of its **main agent's** owned
+messages there (agents carry their own, smaller contexts and are counted as events). Per group
+and slot, `contextPeak` is the largest session context and `contextSum` the sum over the group's
+sessions: what the group carried in that slot.
+
+**Events** are things that happened, placed in the slot of their time, owned by the session the
+way turns are (an inherited turn's agents and compactions are not counted again): `agent` (agents
+launched, `kind` `subagent`, `teammate`, `fork` or `workflow`; `n` agents of that kind in the
+slot), `session` (a session of the group that is a fork or a continuation of another starts:
+`kind` `fork` or `continuation`), `compaction` (`cold`, `warm` or `unknown` as `kind`, from
+`compaction.call.cache`; Codex's recorded calls by their own rule).
+
+```json
+{
+  "from": "2026-11-04T00:00:00Z",
+  "to": "2026-11-11T00:00:00Z",
+  "slot": "1h",
+  "slotMs": 3600000,
+  "slots": 168,
+  "by": "dir",
+  "groups": [
+    {
+      "key": "/home/dev/merlin",
+      "name": "dev/merlin",
+      "sessions": 12,
+      "usd": 171.4,
+      "lastActivityAt": "2026-11-10T21:29:40Z",
+      "priciest": { "harness": "claude", "id": "394b4c16-…", "title": "long refactor", "usd": 96.2 },
+      "usdSlots": [0, 0, 1.25, 3.5, "…168 numbers"],
+      "contextPeak": [0, 0, 84000, 151000, "…"],
+      "contextSum": [0, 0, 84000, 233000, "…"],
+      "active": [0, 0, 1, 2, "…"],
+      "events": [
+        { "slot": 3, "type": "agent", "kind": "subagent", "n": 4 },
+        { "slot": 3, "type": "compaction", "kind": "cold", "n": 1 },
+        { "slot": 9, "type": "session", "kind": "fork", "n": 1 }
+      ]
+    }
+  ],
+  "scripted": { "sessions": 412, "usd": 9.8, "usdSlots": [0, 0.02, "…"] },
+  "lanes": [
+    {
+      "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
+      "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
+      "usd": 96.2,
+      "usdSlots": ["…"], "context": ["…"], "events": ["…"]
+    }
+  ]
+}
+```
+
+- Arrays are dense, `slots` long, slot `i` covering `[from + i·slotMs, from + (i+1)·slotMs)`.
+  Dollars are float64, tokens int64.
+- `groups` holds every group with a message in the range, ordered by `usd`, largest first, then
+  key; the page re-sorts. `sessions` counts the group's sessions with a message in the range;
+  `active[i]` those with a message in slot `i`. `priciest` is the session with the largest `usd` in
+  the range (its whole cost in the range, not per slot).
+- `lanes` (only with `group`) are ordered by `startedAt`, then id. A lane's `context` is the
+  session's own context per slot; its `events` have the same shape as a group's.
+- Several sessions running one after the other in a slot all count in `active` and `contextSum`;
+  the slot is the resolution of this view.
 
 ## Groupings: GET /api/repos and GET /api/beads
 
