@@ -963,13 +963,14 @@ parts. Without `split` nothing changes in the response: no `split` key anywhere.
 ## GET /api/overview
 
 Experimental (epic `merlin-lce`, the Overview page in [ui.md](ui.md) §10b). What every group of
-sessions spent and carried in each slot of a time range: the data of a plot with time across, one
-row per group, context above each row's baseline and spend below it.
+sessions spent and carried in each slot of a time range, and the work it launched: the data of a
+timeline with one row per group, context above each row's baseline, spend below it, and spines
+for agents and branched sessions.
 
 | Parameter | Meaning |
 |---|---|
 | `from`, `to` | the range, RFC 3339 or Unix milliseconds. Default: `to` = now, `from` = `to` − 7 days. `from` is moved down and `to` up to a slot boundary in the daemon's local time (a `1d` slot starts at local midnight, `6h` at 00, 06, 12, 18) |
-| `slot` | `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d`. Default: the smallest that gives at most 200 slots. A 400 when the range would have more than 2,000 |
+| `slot` | `1m`, `2m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d`. Default: the smallest that gives at most 200 slots. A 400 when the range would have more than 2,000. The page asks for about one slot per pixel of its plot |
 | `by` | `dir` (default; `project` is accepted as the same), `checkout`, `repo` or `remote`: the location keys of `/api/groups`, with the same primary value per session |
 | `group` | a group key of the same `by` (`""` for the sessions with no value, written `group=`). Adds `lanes`: one per session of that group with a message in the range |
 
@@ -980,25 +981,38 @@ overhead cannot be cut into slots, so a group's `usd` can differ from its best c
 Scripted runs (`kind: sdk`) are in no group; they are summed in `scripted`.
 
 **Context.** A message's context is its prompt tokens: `input + cacheRead + cacheWrite5m +
-cacheWrite1h`. A session's context in a slot is the largest context of its **main agent's** owned
-messages there (agents carry their own, smaller contexts and are counted as events). Per group
-and slot, `contextPeak` is the largest session context and `contextSum` the sum over the group's
-sessions: what the group carried in that slot.
+cacheWrite1h`. Only the **main agent's** owned messages count (agents carry their own, smaller
+contexts and are shown as spans). As on the Session page, a call's context is **held** from its
+`at` until the main agent's next call, unless that comes more than 5 minutes later, in which case
+it ends at the call (`HOLD_MS` in `web/src/features/spend/timeline.ts`). A session's context in a
+slot is the largest it held at any moment of the slot. Per group and slot, `contextPeak` is the
+largest session context and `contextSum` the sum over the group's sessions: what the group carried.
+`active[i]` counts the sessions holding context or with an owned message in slot `i`.
 
-**Events** are things that happened, placed in the slot of their time, owned by the session the
-way turns are (an inherited turn's agents and compactions are not counted again): `agent` (agents
-launched, `kind` `subagent`, `teammate`, `fork` or `workflow`; `n` agents of that kind in the
-slot), `session` (a session of the group that is a fork or a continuation of another starts:
-`kind` `fork` or `continuation`), `compaction` (`cold`, `warm` or `unknown` as `kind`, from
-`compaction.call.cache`; Codex's recorded calls by their own rule).
+**Spans** are the work a group's sessions launched, with their lives, for the spines: owned the
+way turns are (an inherited turn's agents are not counted again).
+
+| `kind` | from | `start`, `end` |
+|---|---|---|
+| `subagent`, `teammate`, `fork`, `workflow` | the session's agents of kind `subagent` (`fork` when it inherits context, `teammate` when addressable, else `subagent`) and `workflow`; `compact` and review agents are not spans | the agent's `startedAt` and `endedAt` (its last activity when open) |
+| `session-fork`, `continuation` | a session of the group whose lineage parent link is a fork or a continuation | the session's `startedAt` and `lastActivityAt` |
+
+Agents of one session with the same kind and spawn turn whose lives overlap or come within 10 s
+of each other are one span with `n` agents and the union of their lives. A span is listed when its
+life overlaps the range; `start` and `end` are not clipped. `session` names the session that
+launched it (for a branched session, the branched session itself); `title`, when known, is the
+agent's description or name, or the branched session's title.
+
+**Events** are now only compactions, placed in the slot of their time: `type` `compaction`, `kind`
+`cold`, `warm` or `unknown` from `compaction.call.cache` (Codex's recorded calls by their own rule).
 
 ```json
 {
   "from": "2026-11-04T00:00:00Z",
   "to": "2026-11-11T00:00:00Z",
-  "slot": "1h",
-  "slotMs": 3600000,
-  "slots": 168,
+  "slot": "10m",
+  "slotMs": 600000,
+  "slots": 1008,
   "by": "dir",
   "groups": [
     {
@@ -1008,14 +1022,16 @@ slot), `session` (a session of the group that is a fork or a continuation of ano
       "usd": 171.4,
       "lastActivityAt": "2026-11-10T21:29:40Z",
       "priciest": { "harness": "claude", "id": "394b4c16-…", "title": "long refactor", "usd": 96.2 },
-      "usdSlots": [0, 0, 1.25, 3.5, "…168 numbers"],
+      "usdSlots": [0, 0, 1.25, 3.5, "…1008 numbers"],
       "contextPeak": [0, 0, 84000, 151000, "…"],
       "contextSum": [0, 0, 84000, 233000, "…"],
       "active": [0, 0, 1, 2, "…"],
-      "events": [
-        { "slot": 3, "type": "agent", "kind": "subagent", "n": 4 },
-        { "slot": 3, "type": "compaction", "kind": "cold", "n": 1 },
-        { "slot": 9, "type": "session", "kind": "fork", "n": 1 }
+      "events": [{ "slot": 3, "type": "compaction", "kind": "cold", "n": 1 }],
+      "spans": [
+        { "kind": "subagent", "n": 4, "start": "2026-11-05T10:02:11Z", "end": "2026-11-05T10:09:40Z",
+          "session": { "harness": "claude", "id": "394b4c16-…" }, "title": "Explore" },
+        { "kind": "session-fork", "n": 1, "start": "2026-11-06T09:00:00Z", "end": "2026-11-06T12:30:00Z",
+          "session": { "harness": "claude", "id": "5c1e…" }, "title": "try the other parser" }
       ]
     }
   ],
@@ -1025,7 +1041,7 @@ slot), `session` (a session of the group that is a fork or a continuation of ano
       "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
       "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
       "usd": 96.2,
-      "usdSlots": ["…"], "context": ["…"], "events": ["…"]
+      "usdSlots": ["…"], "context": ["…"], "active": ["…"], "events": ["…"], "spans": ["…"]
     }
   ]
 }
@@ -1034,13 +1050,12 @@ slot), `session` (a session of the group that is a fork or a continuation of ano
 - Arrays are dense, `slots` long, slot `i` covering `[from + i·slotMs, from + (i+1)·slotMs)`.
   Dollars are float64, tokens int64.
 - `groups` holds every group with a message in the range, ordered by `usd`, largest first, then
-  key; the page re-sorts. `sessions` counts the group's sessions with a message in the range;
-  `active[i]` those with a message in slot `i`. `priciest` is the session with the largest `usd` in
-  the range (its whole cost in the range, not per slot).
+  key; the page re-sorts. `sessions` counts the group's sessions with a message in the range.
+  `priciest` is the session with the largest `usd` in the range. `spans` are ordered by `start`,
+  then kind, then session id.
 - `lanes` (only with `group`) are ordered by `startedAt`, then id. A lane's `context` is the
-  session's own context per slot; its `events` have the same shape as a group's.
-- Several sessions running one after the other in a slot all count in `active` and `contextSum`;
-  the slot is the resolution of this view.
+  session's own held context per slot, its `active` 0 or 1; its `events` and `spans` have the same
+  shape as a group's.
 
 ## Groupings: GET /api/repos and GET /api/beads
 
