@@ -123,7 +123,7 @@ func TestOverviewDefaultSlot(t *testing.T) {
 	for _, tc := range []struct {
 		days int
 		slot string
-	}{{1, "15m"}, {2, "15m"}, {3, "30m"}, {7, "1h"}, {30, "6h"}, {90, "12h"}, {300, "1d"}} {
+	}{{1, "10m"}, {2, "15m"}, {3, "30m"}, {7, "1h"}, {30, "6h"}, {90, "12h"}, {300, "1d"}} {
 		o, err := c.Overview(OverviewQuery{From: at(0).AddDate(0, 0, -tc.days), To: at(0)})
 		if err != nil {
 			t.Fatalf("%d days: %v", tc.days, err)
@@ -181,8 +181,8 @@ func TestOverviewEvents(t *testing.T) {
 	zero, one := 0, 1
 	p := syn("claude", "p", "/w", 0, 90, []model.Turn{turn(0, "u0", "go", 0), turn(1, "u1", "more", 20)}, msgSpec{"m1", 0, 1, 0})
 	p.Agents = []model.Agent{
-		{ID: "a1", Kind: model.AgentSubagent, StartedAt: at(1), SpawnTurn: &zero},
-		{ID: "a2", Kind: model.AgentSubagent, StartedAt: at(2), SpawnTurn: &zero},
+		{ID: "a1", Kind: model.AgentSubagent, StartedAt: at(1), EndedAt: at(4), SpawnTurn: &zero},
+		{ID: "a2", Kind: model.AgentSubagent, StartedAt: at(2), EndedAt: at(3), SpawnTurn: &zero},
 		{ID: "a3", Kind: model.AgentSubagent, Addressable: true, StartedAt: at(3), SpawnTurn: &zero},
 		{ID: "a4", Kind: model.AgentSubagent, InheritsContext: true, StartedAt: at(70), SpawnTurn: &zero},
 		{ID: "a5", Kind: model.AgentWorkflow, StartedAt: at(71)},
@@ -217,20 +217,213 @@ func TestOverviewEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Slot 0 is 09:30 to 10:30Z, slot 1 to 11:30Z.
+	// Slot 0 is 09:30 to 10:30Z, slot 1 to 11:30Z. Agents and sessions are spans now.
 	want := []OverviewEvent{
-		{0, "agent", "subagent", 2},  // a1, a2
-		{0, "agent", "teammate", 1},  // a3
 		{0, "compaction", "cold", 2}, // s1 and s4 (p owns s4)
 		{0, "compaction", "unknown", 1},
 		{0, "compaction", "warm", 2}, // s2 and the agent's s5
-		{1, "agent", "fork", 1},      // a4 at 11:10Z
-		{1, "agent", "subagent", 1},  // c1
-		{1, "agent", "workflow", 1},
-		{1, "session", "fork", 1}, // c starts at 11:05Z
 	}
-	if g := group(t, o, "/w"); !reflect.DeepEqual(g.Events, want) {
+	g := group(t, o, "/w")
+	if !reflect.DeepEqual(g.Events, want) {
 		t.Errorf("events:\n got %+v\nwant %+v", g.Events, want)
+	}
+	// Spans: a1, a2 (one turn, overlapping) merge; a3 is a teammate; a4 a fork; a5 a workflow;
+	// c1 a subagent of turn 1; c's copy of a1 is an inherited turn's; c is a fork of p.
+	type sp struct {
+		kind string
+		n    int
+		sess string
+		at   int
+	}
+	var got []sp
+	for _, s := range g.Spans {
+		got = append(got, sp{s.Kind, s.N, s.Session.ID, int(s.Start.Sub(t0) / time.Minute)})
+	}
+	wantSp := []sp{{"subagent", 2, "p", 1}, {"teammate", 1, "p", 3}, {"session-fork", 1, "c", 65},
+		{"subagent", 1, "c", 67}, {"fork", 1, "p", 70}, {"workflow", 1, "p", 71}}
+	if !reflect.DeepEqual(got, wantSp) {
+		t.Errorf("spans:\n got %+v\nwant %+v", got, wantSp)
+	}
+}
+
+func ovAgent(id string, kind model.AgentKind, start, end int, turn *int) model.Agent {
+	a := model.Agent{ID: id, Kind: kind, StartedAt: at(start), SpawnTurn: turn, Description: "d-" + id}
+	if end >= 0 {
+		a.EndedAt = at(end)
+	}
+	return a
+}
+
+func TestOverviewSpanMerging(t *testing.T) {
+	zero, one := 0, 1
+	p := syn("claude", "p", "/w", 0, 60, []model.Turn{turn(0, "u0", "go", 0), turn(1, "u1", "more", 30)}, msgSpec{"m1", 0, 1, 0})
+	p.Agents = []model.Agent{
+		ovAgent("s1", model.AgentSubagent, 1, 5, &zero),
+		ovAgent("s2", model.AgentSubagent, 2, 6, &zero),
+		ovAgent("s3", model.AgentSubagent, 3, 9, &zero),
+		ovAgent("s4", model.AgentSubagent, 8, 10, &zero),  // overlaps s3
+		ovAgent("s5", model.AgentSubagent, 20, 21, &zero), // far later: its own span
+		ovAgent("s6", model.AgentSubagent, 2, 6, &one),    // another turn: its own span
+		ovAgent("t1", model.AgentSubagent, 2, 6, &zero),
+		ovAgent("f1", model.AgentSubagent, 2, 6, &zero),
+		ovAgent("k1", model.AgentCompact, 2, 6, &zero),
+		ovAgent("r1", model.AgentReview, 2, 6, &zero),
+		ovAgent("o1", model.AgentSubagent, 40, -1, &one), // open: ends at its last message
+	}
+	p.Agents[6].Addressable = true
+	p.Agents[7].InheritsContext = true
+	msg(p, "o-1", 44, 0.1, "o1", model.Tokens{})
+	msg(p, "o-2", 42, 0.1, "o1", model.Tokens{})
+	o, err := ovCatalog(p).Overview(ovQuery(time.Hour, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := group(t, o, "/w")
+	type sp struct {
+		kind       string
+		n          int
+		start, end int
+		title      string
+	}
+	min := func(t time.Time) int { return int(t.Sub(t0) / time.Minute) }
+	var got []sp
+	for _, s := range g.Spans {
+		got = append(got, sp{s.Kind, s.N, min(s.Start), min(s.End), s.Title})
+	}
+	want := []sp{
+		{"subagent", 4, 1, 10, "d-s1"}, // s1..s4: s4 starts inside s3's life
+		{"fork", 1, 2, 6, "d-f1"},
+		{"subagent", 1, 2, 6, "d-s6"},
+		{"teammate", 1, 2, 6, "d-t1"},
+		{"subagent", 1, 20, 21, "d-s5"},
+		{"subagent", 1, 40, 44, "d-o1"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("spans:\n got %+v\nwant %+v", got, want)
+	}
+	// Within 10 s counts as one; 11 s does not. A span is not clipped, and is listed when its
+	// life overlaps the range.
+	q := OverviewQuery{From: at(25), To: at(50), Slot: 5 * time.Minute}
+	o, err = ovCatalog(p).Overview(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := group(t, o, "/w"); len(g.Spans) != 1 || g.Spans[0].Title != "d-o1" {
+		t.Errorf("range spans: %+v", g.Spans)
+	}
+	p.Agents = []model.Agent{
+		ovAgent("x1", model.AgentSubagent, 1, 2, &zero),
+		{ID: "x2", Kind: model.AgentSubagent, StartedAt: at(2).Add(10 * time.Second), EndedAt: at(3), SpawnTurn: &zero},
+		{ID: "x3", Kind: model.AgentSubagent, StartedAt: at(3).Add(11 * time.Second), EndedAt: at(4), SpawnTurn: &zero},
+	}
+	o, _ = ovCatalog(p).Overview(ovQuery(time.Hour, 3))
+	if g := group(t, o, "/w"); len(g.Spans) != 2 || g.Spans[0].N != 2 || g.Spans[1].N != 1 {
+		t.Errorf("10 s gap: %+v", g.Spans)
+	}
+}
+
+func TestOverviewContinuationSpanAndLanes(t *testing.T) {
+	p := syn("claude", "p", "/w", 0, 30, []model.Turn{turn(0, "u0", "go", 0)}, msgSpec{"m1", 0, 1, 0})
+	zero := 0
+	p.Agents = []model.Agent{ovAgent("s1", model.AgentSubagent, 1, 3, &zero)}
+	// c copies p's only turn and message, and p does not go on: a continuation.
+	c := syn("claude", "c", "/w", 40, 90, []model.Turn{turn(0, "u0", "go", 0), turn(1, "u9", "go on", 40)}, msgSpec{"m1", 0, 1, 0})
+	msg(c, "c1", 41, 1, "", model.Tokens{Input: 200})
+	cat := ovCatalog(p, c)
+	if info, _ := cat.Session(c.Key()); info.Parent == nil || info.Parent.Kind != LinkContinuation {
+		t.Fatalf("fixture does not make a continuation: %+v", info.Parent)
+	}
+	w := "/w"
+	q := ovQuery(time.Hour, 3)
+	q.Group = &w
+	o, err := cat.Overview(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := group(t, o, "/w")
+	if len(g.Spans) != 2 || g.Spans[1].Kind != "continuation" || g.Spans[1].Session.ID != "c" || g.Spans[1].Title != "session c" ||
+		!g.Spans[1].Start.Equal(at(40)) || !g.Spans[1].End.Equal(at(90)) {
+		t.Errorf("group spans: %+v", g.Spans)
+	}
+	if len(o.Lanes) != 2 {
+		t.Fatalf("lanes %+v", o.Lanes)
+	}
+	lp, lc := o.Lanes[0], o.Lanes[1]
+	if len(lp.Spans) != 1 || lp.Spans[0].Kind != "subagent" || len(lc.Spans) != 1 || lc.Spans[0].Kind != "continuation" {
+		t.Errorf("lane spans: %+v / %+v", lp.Spans, lc.Spans)
+	}
+	// p: one call at 10:00Z (slot 0); c: one call of its own at 10:41Z (slot 1).
+	if want := []int{1, 0, 0}; !reflect.DeepEqual(lp.Active, want) {
+		t.Errorf("p active %v, want %v", lp.Active, want)
+	}
+	if want := []int{0, 1, 0}; !reflect.DeepEqual(lc.Active, want) {
+		t.Errorf("c active %v, want %v", lc.Active, want)
+	}
+}
+
+func TestOverviewHeldContext(t *testing.T) {
+	hold := func(next int) Overview {
+		a := syn("claude", "a", "/w", 0, 60, nil)
+		msg(a, "a1", 0, 1, "", model.Tokens{Input: 5000})
+		msg(a, "a2", next, 1, "", model.Tokens{Input: 100})
+		w := "/w"
+		q := OverviewQuery{From: at(0), To: at(15), Slot: time.Minute, Group: &w}
+		o, err := ovCatalog(a).Overview(q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return o
+	}
+	// 10:00Z is 15:30 local, a 1m boundary. The next call at 10:04 holds 5000 through slot 4,
+	// where the next call's own 100 is smaller.
+	o := hold(4)
+	if want := []int64{5000, 5000, 5000, 5000, 5000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; !reflect.DeepEqual(o.Lanes[0].Context, want) {
+		t.Errorf("next at 10:04: %v", o.Lanes[0].Context)
+	}
+	if want := []int{1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; !reflect.DeepEqual(o.Lanes[0].Active, want) {
+		t.Errorf("active %v", o.Lanes[0].Active)
+	}
+	g := group(t, o, "/w")
+	if g.ContextPeak[2] != 5000 || g.ContextSum[2] != 5000 || g.Active[2] != 1 {
+		t.Errorf("group at slot 2: peak %d sum %d active %d", g.ContextPeak[2], g.ContextSum[2], g.Active[2])
+	}
+	// Exactly 5 minutes still holds; 20 minutes ends at the call.
+	if c := hold(5).Lanes[0].Context; c[5] != 5000 || c[3] != 5000 {
+		t.Errorf("next at 10:05: %v", c)
+	}
+	o = hold(20)
+	if got := o.Lanes[0].Context; got[0] != 5000 || got[1] != 0 || got[4] != 0 {
+		t.Errorf("next at 10:20: %v", got)
+	}
+	// A call before the range holds into it.
+	a := syn("claude", "a", "/w", 0, 60, nil)
+	msg(a, "a1", 0, 1, "", model.Tokens{Input: 7000})
+	msg(a, "a2", 3, 1, "", model.Tokens{Input: 10})
+	o, _ = ovCatalog(a).Overview(OverviewQuery{From: at(2), To: at(6), Slot: time.Minute})
+	if g := group(t, o, "/w"); g.ContextPeak[0] != 7000 || g.ContextPeak[1] != 7000 || g.ContextPeak[2] != 0 || g.Active[0] != 1 {
+		t.Errorf("held into range: peak %v active %v", g.ContextPeak, g.Active)
+	}
+}
+
+func TestOverviewFineSlots(t *testing.T) {
+	c := ovCatalog(syn("claude", "a", "/w", 0, 5, nil, msgSpec{"m1", 0, 1, 0}))
+	for _, tc := range []struct {
+		slot time.Duration
+		name string
+	}{{time.Minute, "1m"}, {2 * time.Minute, "2m"}, {5 * time.Minute, "5m"}, {10 * time.Minute, "10m"}} {
+		// 10:00Z is 15:30 local: a boundary of each; the range 10:01 to 10:31Z moves down.
+		o, err := c.Overview(OverviewQuery{From: at(1), To: at(31), Slot: tc.slot})
+		if err != nil {
+			t.Fatal(err)
+		}
+		l := o.From.In(ovZone)
+		if o.Slot != tc.name || o.SlotMs != tc.slot.Milliseconds() || (l.Hour()*60+l.Minute())%int(tc.slot/time.Minute) != 0 ||
+			o.From.After(at(1)) || o.From.Before(at(1).Add(-tc.slot)) || o.To.Before(at(31)) {
+			t.Errorf("%s: from %s to %s, %d slots", tc.name, o.From, o.To, o.Slots)
+		}
+	}
+	if _, err := c.Overview(OverviewQuery{From: at(0), To: at(60 * 40), Slot: time.Minute}); err == nil {
+		t.Error("1m over 40 hours (2,400 slots) accepted")
 	}
 }
 
@@ -284,7 +477,7 @@ func TestOverviewGroupsOrderAndLanes(t *testing.T) {
 	}
 	l := o.Lanes[0]
 	wantNear(t, "lane usd", l.USD, 2)
-	if len(l.USDSlots) != 2 || len(l.Context) != 2 || l.Events == nil || l.Title == "" || l.StartedAt.IsZero() {
+	if len(l.USDSlots) != 2 || len(l.Context) != 2 || len(l.Active) != 2 || l.Spans == nil || l.Events == nil || l.Title == "" || l.StartedAt.IsZero() {
 		t.Errorf("lane = %+v", l)
 	}
 

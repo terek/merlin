@@ -49,7 +49,7 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if qq.Slot == 0 {
-			a.badParam(w, "slot=%q: use 15m, 30m, 1h, 2h, 3h, 6h, 12h or 1d", s)
+			a.badParam(w, "slot=%q: use 1m, 2m, 5m, 10m, 15m, 30m, 1h, 2h, 3h, 6h, 12h or 1d", s)
 			return
 		}
 	}

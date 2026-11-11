@@ -1169,7 +1169,7 @@ export interface PriceList {
 
 // ---- GET /api/overview (experimental, docs/api.md) -------------------------------------
 
-export type OverviewSlot = '15m' | '30m' | '1h' | '2h' | '3h' | '6h' | '12h' | '1d'
+export type OverviewSlot = '1m' | '2m' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h' | '3h' | '6h' | '12h' | '1d'
 
 export interface OverviewParams {
   from?: string
@@ -1180,13 +1180,25 @@ export interface OverviewParams {
   group?: string
 }
 
-/** Something that happened in a slot: agents launched, a fork or continuation started, a compaction. */
+/** A compaction in a slot (the only events now). */
 export interface OverviewEvent {
   slot: number
-  type: 'agent' | 'session' | 'compaction'
-  /** agent: subagent, teammate, fork, workflow; session: fork, continuation; compaction: cold, warm, unknown. */
+  type: 'compaction'
+  /** cold, warm or unknown. */
   kind: string
   n: number
+}
+
+/** The work a session launched, with its life: a spine. */
+export interface OverviewSpan {
+  kind: 'subagent' | 'teammate' | 'fork' | 'workflow' | 'session-fork' | 'continuation'
+  /** Agents merged into the span (a swarm). */
+  n: number
+  start: string
+  end: string
+  /** The session that launched it (for a branched session, itself). */
+  session: { harness: string; id: string }
+  title?: string
 }
 
 export interface OverviewGroup {
@@ -1201,6 +1213,7 @@ export interface OverviewGroup {
   contextSum: number[]
   active: number[]
   events?: OverviewEvent[]
+  spans?: OverviewSpan[]
 }
 
 export interface OverviewLane {
@@ -1212,7 +1225,9 @@ export interface OverviewLane {
   usd: number
   usdSlots: number[]
   context: number[]
+  active: number[]
   events?: OverviewEvent[]
+  spans?: OverviewSpan[]
 }
 
 export interface Overview {

@@ -20,14 +20,21 @@ export class ApiError extends Error {
 
 export const isApiError = (e: unknown): e is ApiError => e instanceof ApiError
 
-export type ParamValue = string | number | boolean | null | undefined | readonly string[]
+export type ParamValue = string | number | boolean | null | undefined | readonly string[] | typeof EMPTY
 export type Params = Record<string, ParamValue>
 
-/** Builds "?a=1&b=2". Absent, null and empty values are left out; an array repeats the key. */
+/** Sends its key with no value ("?group="), where an empty string leaves the key out. */
+export const EMPTY = Symbol('empty')
+
+/** Builds "?a=1&b=2". Absent, null and empty values are left out (EMPTY sends the key bare); an array repeats the key. */
 export function buildQuery(params?: Params): string {
   if (!params) return ''
   const q = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
+    if (v === EMPTY) {
+      q.set(k, '')
+      continue
+    }
     if (v === undefined || v === null || v === '') continue
     if (typeof v === 'object') {
       for (const item of v) q.append(k, item)

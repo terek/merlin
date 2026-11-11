@@ -22,7 +22,7 @@ import {
   useQuery,
 } from '@tanstack/react-query'
 import { daysBefore, localDay } from '../lib/time'
-import { ApiError, get } from './client'
+import { ApiError, EMPTY, get } from './client'
 import type {
   BeadDetail,
   BeadList,
@@ -228,10 +228,11 @@ export function usePrices(): UseQueryResult<PriceList> {
 
 /** What every group of sessions spent and carried per slot of a range (experimental; the Overview page). */
 export function useOverview(params: OverviewParams, enabled = true): UseQueryResult<Overview> {
-  const p = clean(params)
+  // group "" is a real value (the sessions with none): `clean` would drop it, so it is put back, and sent bare.
+  const p: OverviewParams = { ...clean(params), ...(params.group === '' ? { group: '' } : {}) }
   return useQuery({
     queryKey: queryKeys.overview(p),
-    queryFn: ({ signal }) => get<Overview>('/api/overview', { ...p }, signal),
+    queryFn: ({ signal }) => get<Overview>('/api/overview', { ...p, group: p.group === '' ? EMPTY : p.group }, signal),
     placeholderData: keepPreviousData,
     enabled,
   })

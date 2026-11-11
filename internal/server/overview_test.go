@@ -87,10 +87,19 @@ func TestOverviewRoute(t *testing.T) {
 	if main.ContextSum[165] != 1500 || main.ContextPeak[165] != 1000 || main.ContextPeak[166] != 4000 {
 		t.Errorf("context: sum %d peak %d / %d", main.ContextSum[165], main.ContextPeak[165], main.ContextPeak[166])
 	}
-	if want := []catalog.OverviewEvent{{Slot: 165, Type: "agent", Kind: "subagent", N: 1}, {Slot: 165, Type: "compaction", Kind: "cold", N: 1},
-		{Slot: 165, Type: "session", Kind: "fork", N: 1}}; !reflect.DeepEqual(main.Events, want) {
+	if want := []catalog.OverviewEvent{{Slot: 165, Type: "compaction", Kind: "cold", N: 1}}; !reflect.DeepEqual(main.Events, want) {
 		t.Errorf("events %+v, want %+v", main.Events, want)
 	}
+	// The agent (a zero-length span: no end, no messages) and the fork b.
+	t1 := testNow.Add(-3 * time.Hour)
+	wantSpans := []catalog.OverviewSpan{
+		{Kind: "subagent", N: 1, Start: t1.Add(time.Minute), End: t1.Add(time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "a"}},
+		{Kind: "session-fork", N: 1, Start: t1.Add(10 * time.Minute), End: t1.Add(70 * time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "b"}, Title: "title b"},
+	}
+	if !reflect.DeepEqual(main.Spans, wantSpans) {
+		t.Errorf("spans %+v, want %+v", main.Spans, wantSpans)
+	}
+	// a's m1 (09:00) is not held: the next call is 70 minutes later.
 	if o.Scripted.Sessions != 1 || !near(o.Scripted.USD, 0.5) || len(o.Scripted.USDSlots) != 168 {
 		t.Errorf("scripted %+v", o.Scripted)
 	}
@@ -166,7 +175,7 @@ func TestOverviewRouteLanes(t *testing.T) {
 func TestOverviewRouteErrors(t *testing.T) {
 	r := ovRig(t)
 	for _, q := range []string{
-		"?slot=7m", "?slot=1w", "?by=session", "?by=prefix",
+		"?slot=7m", "?slot=3m", "?slot=1w", "?by=session", "?by=prefix",
 		"?from=yesterday", "?to=x", "?from=2027-01-02T00:00:00Z&to=2027-01-01T00:00:00Z",
 		"?slot=15m&from=2026-01-01T00:00:00Z&to=2026-12-01T00:00:00Z", // 32,000 slots
 		"?from=2019-01-01T00:00:00Z&to=2027-01-01T00:00:00Z",          // 2,922 days, even with 1d

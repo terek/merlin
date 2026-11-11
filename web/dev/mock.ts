@@ -20,6 +20,7 @@ import type {
   OverviewGroup,
   OverviewLane,
   OverviewSlot,
+  OverviewSpan,
   ProjectList,
   ProjectSummary,
   ScanProgress,
@@ -30,6 +31,8 @@ import type {
   TreeList,
   TreeSummary,
 } from '../src/api/types'
+import { heldContext } from '../src/features/overview/model'
+import { agentRole } from '../src/lib/agent'
 import { buildDataset, type Dataset, makeRng, messagesOf, order, PRICE, type Sess } from './gen'
 import {
   assignPlaces,
@@ -618,6 +621,10 @@ function costTable(u: URL): CostTable {
 // ---- /api/overview (experimental) ------------------------------------------------------
 
 const SLOT_MS: Record<OverviewSlot, number> = {
+  '1m': MIN,
+  '2m': 2 * MIN,
+  '5m': 5 * MIN,
+  '10m': 10 * MIN,
   '15m': 15 * MIN,
   '30m': 30 * MIN,
   '1h': 60 * MIN,
@@ -636,27 +643,61 @@ function overviewTime(name: string, v: string | null): number | undefined {
   return t
 }
 
-/** A message the overview counts: its time, dollars, main-agent context and owner. */
+/** A message the overview counts: its time, dollars and (main agent only) prompt tokens. */
 interface OvMsg {
   at: number
   usd: number
-  /** Prompt tokens of a main-agent message; 0 for an agent's. */
   ctx: number
 }
 
-interface OvEvent {
+interface OvCompaction {
   at: number
-  type: OverviewEvent['type']
   kind: string
 }
 
 interface OvSession {
   sess: Sess
   msgs: OvMsg[]
-  events: OvEvent[]
+  compactions: OvCompaction[]
+  spans: { kind: OverviewSpan['kind']; n: number; start: number; end: number; title?: string }[]
 }
 
 const overviewCache = new Map<string, OvSession>()
+
+/** The agents of a session as spans: same kind and spawn turn, overlapping or within 10 s, are one. */
+function agentSpans(d: Sess['detail']['digest'], own: number): OvSession['spans'] {
+  const list: { kind: OverviewSpan['kind']; turn: number; start: number; end: number; title?: string }[] = []
+  for (const a of d.agents ?? []) {
+    if (!a.startedAt || (a.spawnTurn ?? 0) < own) continue
+    const role = agentRole(a)
+    const kind = role === 'addressable' ? 'teammate' : role
+    if (kind !== 'subagent' && kind !== 'teammate' && kind !== 'fork' && kind !== 'workflow') continue
+    const start = Date.parse(a.startedAt)
+    list.push({
+      kind,
+      turn: a.spawnTurn ?? 0,
+      start,
+      end: a.endedAt ? Date.parse(a.endedAt) : start,
+      title: a.description || a.name,
+    })
+  }
+  list.sort((x, y) => x.start - y.start)
+  const out: OvSession['spans'] = []
+  const open = new Map<string, number>()
+  for (const a of list) {
+    const k = `${a.kind}/${a.turn}`
+    const i = open.get(k)
+    const cur = i === undefined ? undefined : out[i]
+    if (cur && a.start <= cur.end + 10_000) {
+      cur.n++
+      cur.end = Math.max(cur.end, a.end)
+    } else {
+      open.set(k, out.length)
+      out.push({ kind: a.kind, n: 1, start: a.start, end: a.end, title: a.title })
+    }
+  }
+  return out
+}
 
 function overviewSession(s: Sess): OvSession {
   const id = s.summary.key.id
@@ -671,19 +712,23 @@ function overviewSession(s: Sess): OvSession {
     const ctx = m.agentId ? 0 : (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
     msgs.push({ at: Date.parse(m.at), usd: m.usd, ctx })
   }
-  const events: OvEvent[] = []
-  for (const a of d.agents ?? []) {
-    if (a.kind === 'compact' || a.kind === 'review' || a.kind === 'approval-review') continue
-    if ((a.spawnTurn ?? 0) < own || !a.startedAt) continue
-    events.push({ at: Date.parse(a.startedAt), type: 'agent', kind: a.kind })
-  }
+  msgs.sort((a, b) => a.at - b.at)
+  const compactions: OvCompaction[] = []
   for (const c of d.compactions ?? []) {
     if (c.turn < own - 1) continue
-    events.push({ at: Date.parse(c.at), type: 'compaction', kind: c.call?.cache ?? 'unknown' })
+    compactions.push({ at: Date.parse(c.at), kind: c.call?.cache ?? 'unknown' })
   }
-  if (s.parent && s.summary.startedAt)
-    events.push({ at: Date.parse(s.summary.startedAt), type: 'session', kind: s.parent.kind })
-  const out = { sess: s, msgs, events }
+  const spans = agentSpans(d, own)
+  if (s.parent && s.summary.startedAt) {
+    spans.push({
+      kind: s.parent.kind === 'fork' ? 'session-fork' : 'continuation',
+      n: 1,
+      start: Date.parse(s.summary.startedAt),
+      end: Date.parse(s.summary.lastActivityAt ?? s.summary.startedAt),
+      title: s.summary.title,
+    })
+  }
+  const out = { sess: s, msgs, compactions, spans }
   overviewCache.set(id, out)
   return out
 }
@@ -700,7 +745,8 @@ function overview(u: URL): Overview {
   if (!slot)
     slot = (Object.keys(SLOT_MS) as OverviewSlot[]).find((k) => Math.ceil((to0 - from0) / SLOT_MS[k]) <= 200) ?? '1d'
   const slotMs = SLOT_MS[slot]
-  if (!slotMs) throw new BadRequest(`slot=${JSON.stringify(slot)}: use 15m, 30m, 1h, 2h, 3h, 6h, 12h or 1d`)
+  if (!slotMs)
+    throw new BadRequest(`slot=${JSON.stringify(slot)}: use 1m, 2m, 5m, 10m, 15m, 30m, 1h, 2h, 3h, 6h, 12h or 1d`)
   // Slots start on local boundaries (a 1d slot at local midnight).
   const off = -new Date(from0).getTimezoneOffset() * MIN
   const from = Math.floor((from0 + off) / slotMs) * slotMs - off
@@ -714,36 +760,61 @@ function overview(u: URL): Overview {
 
   interface Acc {
     key: string
-    sessions: OvSession[]
+    sessions: number
     usd: number
     usdSlots: number[]
     ctxPeak: number[]
     ctxSum: number[]
     active: number[]
     events: Map<string, OverviewEvent>
+    spans: OverviewSpan[]
     priciest?: { s: Sess; usd: number }
     last: string
   }
   const accs = new Map<string, Acc>()
   const lanes: OverviewLane[] = []
 
-  function addEvents(into: Map<string, OverviewEvent>, evs: OvEvent[]) {
-    for (const e of evs) {
-      const i = at(e.at)
+  const eventsOf = (os: OvSession): OverviewEvent[] => {
+    const m = new Map<string, OverviewEvent>()
+    for (const c of os.compactions) {
+      const i = at(c.at)
       if (i < 0 || i >= slots) continue
-      const k = `${i}/${e.type}/${e.kind}`
-      const cur = into.get(k)
+      const k = `${i}/${c.kind}`
+      const cur = m.get(k)
       if (cur) cur.n++
-      else into.set(k, { slot: i, type: e.type, kind: e.kind, n: 1 })
+      else m.set(k, { slot: i, type: 'compaction', kind: c.kind, n: 1 })
     }
+    return [...m.values()].sort((a, b) => a.slot - b.slot || a.kind.localeCompare(b.kind))
   }
-  const sortEvents = (m: Map<string, OverviewEvent>) =>
-    [...m.values()].sort((a, b) => a.slot - b.slot || a.type.localeCompare(b.type) || a.kind.localeCompare(b.kind))
+  const spansOf = (os: OvSession): OverviewSpan[] =>
+    os.spans
+      .filter((p) => p.end >= from && p.start < to)
+      .map((p) => ({
+        kind: p.kind,
+        n: p.n,
+        start: new Date(p.start).toISOString(),
+        end: new Date(p.end).toISOString(),
+        session: { harness: os.sess.summary.key.harness, id: os.sess.summary.key.id },
+        title: p.title,
+      }))
+  const bySpan = (a: OverviewSpan, b: OverviewSpan) =>
+    a.start < b.start
+      ? -1
+      : a.start > b.start
+        ? 1
+        : a.kind < b.kind
+          ? -1
+          : a.kind > b.kind
+            ? 1
+            : a.session.id < b.session.id
+              ? -1
+              : 1
 
   for (const s of visible()) {
     const os = overviewSession(s)
     const usd = zeros()
     const ctx = zeros()
+    const active = zeros()
     let total = 0
     let any = false
     for (const m of os.msgs) {
@@ -752,39 +823,57 @@ function overview(u: URL): Overview {
       any = true
       usd[i] += m.usd
       total += m.usd
-      if (m.ctx > ctx[i]) ctx[i] = m.ctx
+      active[i] = 1
     }
     if (!any) continue
+    // The main agent's context, held from a call until the next (unless the pause is long).
+    const held = heldContext(
+      os.msgs.filter((m) => m.ctx > 0).map((m) => ({ at: m.at, ctx: m.ctx })),
+      from,
+      slotMs,
+      slots,
+    )
+    held.forEach((v, i) => {
+      ctx[i] = v
+      if (v > 0) active[i] = 1
+    })
     const key = costKey(by, s.summary)
     let a = accs.get(key)
     if (!a) {
       a = {
         key,
-        sessions: [],
+        sessions: 0,
         usd: 0,
         usdSlots: zeros(),
         ctxPeak: zeros(),
         ctxSum: zeros(),
         active: zeros(),
         events: new Map(),
+        spans: [],
         last: '',
       }
       accs.set(key, a)
     }
-    a.sessions.push(os)
+    a.sessions++
     a.usd += total
     if (!a.priciest || total > a.priciest.usd) a.priciest = { s, usd: total }
     if ((s.summary.lastActivityAt ?? '') > a.last) a.last = s.summary.lastActivityAt ?? ''
     for (let i = 0; i < slots; i++) {
       a.usdSlots[i] += usd[i]
-      if (ctx[i] > 0 || usd[i] > 0) a.active[i]++
+      a.active[i] += active[i]
       a.ctxSum[i] += ctx[i]
       if (ctx[i] > a.ctxPeak[i]) a.ctxPeak[i] = ctx[i]
     }
-    addEvents(a.events, os.events)
+    const evs = eventsOf(os)
+    for (const e of evs) {
+      const k = `${e.slot}/${e.kind}`
+      const cur = a.events.get(k)
+      if (cur) cur.n += e.n
+      else a.events.set(k, { ...e })
+    }
+    const spans = spansOf(os)
+    a.spans.push(...spans)
     if (wantGroup !== undefined && wantGroup === key) {
-      const ev = new Map<string, OverviewEvent>()
-      addEvents(ev, os.events)
       lanes.push({
         harness: s.summary.key.harness,
         id: s.summary.key.id,
@@ -794,7 +883,9 @@ function overview(u: URL): Overview {
         usd: r2(total),
         usdSlots: usd.map(r2),
         context: ctx,
-        events: sortEvents(ev),
+        active,
+        events: evs,
+        spans: spans.sort(bySpan),
       })
     }
   }
@@ -803,7 +894,7 @@ function overview(u: URL): Overview {
     .map((a) => ({
       key: a.key,
       name: costLabel(by, a.key),
-      sessions: a.sessions.length,
+      sessions: a.sessions,
       usd: r2(a.usd),
       lastActivityAt: a.last || undefined,
       priciest: a.priciest && {
@@ -816,7 +907,8 @@ function overview(u: URL): Overview {
       contextPeak: a.ctxPeak,
       contextSum: a.ctxSum,
       active: a.active,
-      events: sortEvents(a.events),
+      events: [...a.events.values()].sort((x, y) => x.slot - y.slot || x.kind.localeCompare(y.kind)),
+      spans: a.spans.sort(bySpan),
     }))
     .sort((x, y) => y.usd - x.usd || (x.key < y.key ? -1 : 1))
 

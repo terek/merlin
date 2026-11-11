@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { ApiError, buildQuery, get } from './client'
+import { ApiError, buildQuery, EMPTY, get } from './client'
 
 describe('buildQuery', () => {
+  test('EMPTY sends the key with no value; an empty string still leaves it out', () => {
+    expect(buildQuery({ group: EMPTY, x: '' })).toBe('?group=')
+  })
+
   test('skips absent values, repeats arrays, escapes', () => {
     expect(buildQuery()).toBe('')
     expect(buildQuery({ a: undefined, b: null, c: '' })).toBe('')
