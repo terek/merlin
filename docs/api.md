@@ -1055,6 +1055,10 @@ when known, is the agent's description or name, or the branched session's title.
       "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
       "group": "/home/dev/merlin",
       "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
+      "name": "the big one",
+      "recap": { "at": "2026-11-10T21:00:00Z", "text": "Moved the parser to …", "truncated": false },
+      "firstPrompt": { "turn": 0, "at": "2026-11-05T04:41:37Z", "text": "Refactor the …", "truncated": false },
+      "lastPrompt": { "turn": 21, "at": "2026-11-10T21:20:00Z", "text": "ship it", "truncated": false },
       "usd": 96.2, "turns": 22, "agents": 14,
       "slot0": 2,
       "usdSlots": [1.25, 3.5, "…"], "context": [84000, 151000, "…"], "idle": [0, 0, 151000, "…"],
@@ -1079,6 +1083,13 @@ when known, is the agent's description or name, or the branched session's title.
   length, start at `slot0`, the first slot where any of them is non-zero, and end at the last such
   slot; element `k` is slot `slot0 + k`. Outside them everything is 0. `spans` has the same shape
   as a group's.
+- A lane also carries, for the row's text, previews built as on `/api/sessions` (`PromptPreview`
+  and `RecapPreview`, shortened the same way, `truncated` says when), each omitted when there is
+  none: `name`, the session's user-given name (`/rename`, as `SessionSummary.name`); `recap`, its
+  latest recap; `firstPrompt`, the first human turn with a prompt text, which for a session that
+  inherited turns (a fork) is its first *own* such turn if it has one, else the first inherited
+  one; `lastPrompt`, the last thing a person typed, picked as on `/api/sessions`. A title is
+  `title` as before.
 
 ## Groupings: GET /api/repos and GET /api/beads
 

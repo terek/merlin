@@ -40,6 +40,15 @@ func ovRig(t *testing.T) *rig {
 	// b shares m1 with a (a copy: billed once) and has a message of its own.
 	b := add("b", "/main", model.KindInteractive, t1.Add(10*time.Minute), m("m1", t1, 1, 1000), m("m3", t1.Add(20*time.Minute), 4, 500))
 	b.Lineage.ForkedFrom = &model.ForkRef{SessionID: "a", MessageUUID: "u-a"}
+	// Text for the lane previews: a is named and recapped; b inherits a's turn 0 and has an
+	// own turn 1; c and s have none.
+	a.Name = "my a"
+	a.Turns[0].UserText = "open the a thing"
+	a.Recaps = []model.Recap{{At: t1.Add(5 * time.Minute), Text: "old recap"}, {At: t1.Add(50 * time.Minute), Text: "latest recap of a"}}
+	b.Turns = []model.Turn{
+		{Index: 0, UUID: "u-a", Origin: model.OriginHuman, StartedAt: t1, UserText: "inherited ask"},
+		{Index: 1, UUID: "u-b2", Origin: model.OriginHuman, StartedAt: t1.Add(15 * time.Minute), UserText: "own ask"},
+	}
 	c := add("c", "/other", model.KindInteractive, t1, m("c1", t1, 8, 100))
 	s := add("s", "/main", model.KindSDK, t1, m("s1", t1, 0.5, 0))
 	cat := catalog.New()
@@ -113,6 +122,61 @@ func TestOverviewRoute(t *testing.T) {
 	}
 	if main.Priciest.ID != "b" {
 		t.Errorf("priciest %+v", main.Priciest)
+	}
+}
+
+func TestOverviewRoutePreviews(t *testing.T) {
+	r := ovRig(t)
+	o, _ := r.overview("")
+	lanes := map[string]OverviewLane{}
+	for _, l := range o.Lanes {
+		lanes[l.ID] = l
+	}
+	a, b, c := lanes["a"], lanes["b"], lanes["c"]
+	if a.Name != "my a" || a.Recap == nil || a.Recap.Text != "latest recap of a" || a.Recap.Truncated {
+		t.Errorf("a name %q recap %+v", a.Name, a.Recap)
+	}
+	if a.FirstPrompt == nil || a.FirstPrompt.Text != "open the a thing" || a.FirstPrompt.Turn != 0 ||
+		a.LastPrompt == nil || a.LastPrompt.Text != "open the a thing" {
+		t.Errorf("a prompts %+v %+v", a.FirstPrompt, a.LastPrompt)
+	}
+	// The fork prefers its first own human turn; the last prompt is the latest.
+	if b.FirstPrompt == nil || b.FirstPrompt.Text != "own ask" || b.FirstPrompt.Turn != 1 ||
+		b.LastPrompt == nil || b.LastPrompt.Text != "own ask" {
+		t.Errorf("b prompts %+v %+v", b.FirstPrompt, b.LastPrompt)
+	}
+	if b.Name != "" || b.Recap != nil {
+		t.Errorf("b name %q recap %+v", b.Name, b.Recap)
+	}
+	// With no own human turn with text, the first inherited one is used.
+	d := &model.SessionDigest{Turns: []model.Turn{
+		{Index: 0, Origin: model.OriginHuman, UserText: "  "},
+		{Index: 1, Origin: model.OriginHuman, UserText: "inherited"},
+		{Index: 2, Origin: model.OriginHuman, UserText: "  "},
+	}}
+	if p := firstPrompt(d, []int{1}); p == nil || p.Text != "inherited" || p.Turn != 1 {
+		t.Errorf("only inherited: %+v", p)
+	}
+	// Absent: no name, recap or prompt text, and the keys are not on the wire.
+	if c.Name != "" || c.Recap != nil || c.FirstPrompt != nil || c.LastPrompt != nil {
+		t.Errorf("c: %+v", c)
+	}
+	resp, err := http.Get(r.srv.URL + "/api/overview?group=%2Fother")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var keys struct {
+		Lanes []map[string]json.RawMessage `json:"lanes"`
+	}
+	if err := json.Unmarshal(raw, &keys); err != nil || len(keys.Lanes) != 1 {
+		t.Fatalf("wire: %v %d", err, len(keys.Lanes))
+	}
+	for _, k := range []string{"name", "recap", "firstPrompt", "lastPrompt"} {
+		if _, has := keys.Lanes[0][k]; has {
+			t.Errorf("key %q on a lane without it", k)
+		}
 	}
 }
 

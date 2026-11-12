@@ -2,7 +2,8 @@
 // the shared token scale, sorting, the spine lane of a row and what the pointer is near.
 // OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
 
-import type { OverviewGroup, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
+import type { GroupDim, OverviewGroup, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
+import { formatMoney } from '../../lib/format'
 import { HOLD_MS } from '../spend/timeline'
 
 const MIN = 60_000
@@ -227,38 +228,77 @@ export function tokenScale(groups: OverviewGroup[], mode: CtxMode): { maxTok: nu
   return { maxTok, pxPerTok: maxTok > 0 ? CTX_MAX / maxTok : 0 }
 }
 
-// ---- sorting -----------------------------------------------------------------------------
+// ---- modes, sorting and the rows ---------------------------------------------------------
 
-export type SortKey = 'spend' | 'sessions' | 'priciest' | 'recent'
+/** Group by: a dimension, or `none` for a flat table of sessions. */
+export type By = GroupDim | 'none'
+export const BYS: readonly By[] = ['none', 'dir', 'checkout', 'repo', 'remote']
+/** What a grouped table shows: every session under its group row, or the group rows alone. */
+export type Show = 'sessions' | 'groups'
+export const SHOWS: readonly Show[] = ['sessions', 'groups']
 
-export function sortGroups(groups: OverviewGroup[], by: SortKey): OverviewGroup[] {
-  const val = (g: OverviewGroup): number | string =>
-    by === 'spend'
-      ? g.usd
-      : by === 'sessions'
-        ? g.sessions
-        : by === 'priciest'
-          ? (g.priciest?.usd ?? 0)
-          : (g.lastActivityAt ?? '')
-  return [...groups].sort((a, b) => {
-    const x = val(a)
-    const y = val(b)
-    if (x !== y) return x < y ? 1 : -1
-    return a.usd !== b.usd ? b.usd - a.usd : a.key < b.key ? -1 : a.key > b.key ? 1 : 0
-  })
+/** The column a table is sorted by. */
+export type SortKey = 'session' | 'turns' | 'agents' | 'spend' | 'last'
+export const SORT_KEYS: readonly SortKey[] = ['session', 'turns', 'agents', 'spend', 'last']
+export interface Sort {
+  key: SortKey
+  desc: boolean
+}
+export const DEFAULT_SORT: Sort = { key: 'spend', desc: true }
+
+const oneOf = <T extends string>(v: string | null, allowed: readonly T[], def: T): T =>
+  allowed.includes(v as T) ? (v as T) : def
+
+export const parseBy = (v: string | null): By => oneOf(v, BYS, 'dir')
+export const parseShow = (v: string | null): Show => oneOf(v, SHOWS, 'sessions')
+
+/** `sort=<column>` (default spend) and `dir=asc` (default descending). */
+export function parseSort(sort: string | null, dir: string | null): Sort {
+  return { key: oneOf(sort, SORT_KEYS, DEFAULT_SORT.key), desc: dir !== 'asc' }
 }
 
-/** Sessions inside a group: by last activity for sort=recent, otherwise by spend; ties by id. */
-export function sortLanes(lanes: OverviewLane[], by: SortKey): OverviewLane[] {
-  return [...lanes].sort((a, b) => {
-    if (by === 'recent') {
-      const x = a.lastActivityAt ?? ''
-      const y = b.lastActivityAt ?? ''
-      if (x !== y) return x < y ? 1 : -1
-    }
-    if (a.usd !== b.usd) return b.usd - a.usd
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-  })
+/** The URL params of a sort; undefined where the default holds. */
+export function formatSort(s: Sort): { sort?: string; dir?: string } {
+  return { sort: s.key === DEFAULT_SORT.key ? undefined : s.key, dir: s.desc ? undefined : 'asc' }
+}
+
+/** A click on a column header: the same column flips its direction, another starts descending. */
+export const nextSort = (cur: Sort, key: SortKey): Sort =>
+  cur.key === key ? { key, desc: !cur.desc } : { key, desc: true }
+
+/** The dimension the API is asked for: a flat table still needs the project of each session. */
+export const apiBy = (by: By): GroupDim => (by === 'none' ? 'dir' : by)
+
+const cmp = <T extends number | string>(a: T, b: T): number => (a < b ? -1 : a > b ? 1 : 0)
+
+/** Groups by the sort's column on their aggregates (session: the count); ties by spend, then key. */
+export function sortGroups(groups: OverviewGroup[], s: Sort): OverviewGroup[] {
+  const val = (g: OverviewGroup): number | string =>
+    s.key === 'session'
+      ? g.sessions
+      : s.key === 'turns'
+        ? g.turns
+        : s.key === 'agents'
+          ? g.agents
+          : s.key === 'spend'
+            ? g.usd
+            : (g.lastActivityAt ?? '')
+  return [...groups].sort((a, b) => (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.key, b.key))
+}
+
+/** Sessions by the sort's column (session: start time); ties by spend, then id. */
+export function sortLanes(lanes: OverviewLane[], s: Sort): OverviewLane[] {
+  const val = (l: OverviewLane): number | string =>
+    s.key === 'session'
+      ? (l.startedAt ?? '')
+      : s.key === 'turns'
+        ? l.turns
+        : s.key === 'agents'
+          ? l.agents
+          : s.key === 'spend'
+            ? l.usd
+            : (l.lastActivityAt ?? '')
+  return [...lanes].sort((a, b) => (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.id, b.id))
 }
 
 /** The lanes of each group, by the lane's group key. */
@@ -272,13 +312,58 @@ export function lanesByGroup(lanes: OverviewLane[]): Map<string, OverviewLane[]>
   return out
 }
 
-/** Sessions an open group shows before "k more". */
-export const SHOWN = 5
+export type Row =
+  | { kind: 'group'; key: string; g: OverviewGroup }
+  | { kind: 'session'; key: string; l: OverviewLane /** Under a group row. */; nested: boolean; groupName: string }
 
-/** The first `SHOWN` sessions of a sorted list, or all; `more` is how many are left out. */
-export function visibleLanes<T>(sorted: T[], all: boolean, limit = SHOWN): { shown: T[]; more: number } {
-  if (all || sorted.length <= limit) return { shown: sorted, more: 0 }
-  return { shown: sorted.slice(0, limit), more: sorted.length - limit }
+/**
+ * The table's rows. `none`: every session, flat, with its group's name for the first column. Grouped with
+ * `sessions`: each group row, then all its sessions; with `groups`: the group rows alone. The sort orders
+ * the groups and, by the same column, the sessions inside each.
+ */
+export function buildRows(
+  o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
+  by: By,
+  show: Show,
+  sort: Sort,
+): Row[] {
+  const name = new Map(o.groups.map((g) => [g.key, g.name]))
+  const lane = (l: OverviewLane, nested: boolean): Row => ({
+    kind: 'session',
+    key: `l:${l.group}\u0000${l.harness}/${l.id}`,
+    l,
+    nested,
+    groupName: name.get(l.group) ?? l.group,
+  })
+  if (by === 'none') return sortLanes(o.lanes, sort).map((l) => lane(l, false))
+  const rows: Row[] = []
+  const lanes = lanesByGroup(o.lanes)
+  for (const g of sortGroups(o.groups, sort)) {
+    rows.push({ kind: 'group', key: `g:${g.key}`, g })
+    if (show === 'sessions') for (const l of sortLanes(lanes.get(g.key) ?? [], sort)) rows.push(lane(l, true))
+  }
+  return rows
+}
+
+// ---- row text ----------------------------------------------------------------------------
+
+/** The session's short name: the user's own, else the title, else the id's first 8 characters. */
+export const laneHead = (l: { name?: string; title?: string; id: string }): string =>
+  l.name || l.title || l.id.slice(0, 8)
+
+/** What follows the head: the latest recap, else the first prompt, else the last prompt, else nothing. */
+export const laneDescription = (l: OverviewLane): string =>
+  l.recap?.text || l.firstPrompt?.text || l.lastPrompt?.text || ''
+
+/** Whitespace folded to single spaces. */
+export const oneLine = (t: string): string => t.replace(/\s+/g, ' ').trim()
+
+/** The group row's description: "18 sessions · priciest: <head> $96". `head` resolves the priciest's lane. */
+export function groupDescription(g: OverviewGroup, head?: string): string {
+  const n = `${g.sessions} ${g.sessions === 1 ? 'session' : 'sessions'}`
+  if (!g.priciest) return n
+  const h = head || g.priciest.title || g.priciest.id.slice(0, 8)
+  return `${n} · priciest: ${oneLine(h)} ${formatMoney(g.priciest.usd)}`
 }
 
 // ---- row marks ---------------------------------------------------------------------------
@@ -459,22 +544,6 @@ export function spawnsNear(spans: OverviewSpan[] | undefined, axis: Axis, x: num
 /** "3 sub-agents, 1 fork". */
 export function describeSpawns(k: SpawnsNear): string {
   return k.kinds.map(({ kind, n }) => `${n} ${SPAN_LABEL[kind][n === 1 ? 0 : 1]}`).join(', ')
-}
-
-// ---- URL state: closed groups, groups shown whole ----------------------------------------
-
-/** Group keys in the URL as a comma-separated list of escaped keys; the empty key is `-`. */
-export function parseKeys(v: string | null): string[] {
-  if (!v) return []
-  return v.split(',').map((k) => (k === '-' ? '' : decodeURIComponent(k)))
-}
-
-export function formatKeys(keys: string[]): string {
-  return keys.map((k) => (k === '' ? '-' : k === '-' ? '%2D' : encodeURIComponent(k))).join(',')
-}
-
-export function toggleKey(keys: string[], key: string): string[] {
-  return keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

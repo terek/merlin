@@ -87,7 +87,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
-| `/overview` | Overview (experimental, section 10b): a table of sessions grouped by project over a day, week or month, each row with a small graph of its context and the agents it launched | `range`, `by`, `sort`, `ctx`, `closed` (collapsed groups), `all` (groups showing every session) |
+| `/overview` | Overview (experimental, section 10b): one table of sessions, flat or grouped by project, over a day, week or month, each row with a text line and a small graph of its context and the agents it launched | `range`, `by` (`none`, `dir`, `checkout`, `repo`, `remote`), `show` (`sessions`, `groups`), `sort`, `dir=asc`, `ctx` |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -734,36 +734,53 @@ Round 3 (2026-11-12, Zsolt's feedback on round 2): no spend ticks, no compaction
 at a quarter of its height and without an outline, the pauses as a pale tint; one spine lane with a
 thin vertical per spawned agent; and the space this frees used for a table.
 
+Round 4 (same day, feedback on round 3): the whole page is one table in a fixed-height container, with
+the toolbar and the sortable column headers on top and the date axis at the bottom, both fixed; rows say
+what the session is, not only its title; and the grouping becomes a mode of the whole table, not a state
+of each group. The graphics are round 3's, unchanged.
+
 ```
- [1d 7d 30d]  group [Project v]  sort [Spend v]  context [Sum | Peak]
- hover readout (fixed height)
-             | SESSION  context: 15 px = 419k tokens   TURNS  AGENTS    SPEND    LAST
-             |              Mon 3        Tue 4        Wed 5        Thu 6        (axis, sticky)
- v merlin    | All 12 sessions                           84      31  $171.40   2h ago
- $171 . 12   | ..-=#=-..    ..=#=#=..                                     group graph
-             |    \_,_  \_      \__,_                                      one spine lane
-             | long refactor                             22      14   $96.20   2h ago
-             | ..-=#=-..                                                   session graph
-             | 7 more >
- > acme/api  | All 3 sessions                             9       0    $4.20   3d ago
-             | 429 scripted runs                                   $9.80   (faint, text only)
+ [1d 7d 30d]  group [None|Project|Checkout|Repo|Remote]  show [Sessions|Groups]  context [Sum|Peak]  (sticky)
+ PROJECT      SESSION                                    TURNS  AGENTS    SPEND v   LAST     (sticky)
+ merlin       long refactor  Working on the retry lo...     22      14   $96.20    2h        (scrolls)
+              ..-=#=-..    ..=#=#=..   row graph, one spine lane
+ api          fix date handling  Can you help me with...      9       0    $4.20    3d
+              Fri 6        Sat 7        Sun 8        Mon 9      (date axis, sticky)
+              Total  100 sessions                    708   1,139   $353
+              hover readout (fixed height)
 ```
 
-- **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; group by `dir`
-  (Project), `checkout`, `repo`, `remote`; sort by spend (default), sessions, priciest session, last
-  activity (orders the groups); context `peak` (default: the deepest session's, a scale that session rows can fill) or `sum`
-  (what the group carried; the group's sum then sets the shared scale and session rows get small).
-- **Table.** A narrow left gutter holds the group: chevron, name, muted totals (`$171 . 12`),
-  top-aligned on its first row, a thin separator above each group. Columns: Session (title; the group's
-  first row reads "All n sessions"), Turns, Agents, Spend (`<Money>`), Last (compact: `5 min`, `15 h`,
-  `yesterday`, `9 Nov`; fixed width); numbers right-aligned, tabular. All counts are in the range. The group row is the aggregate and its graph
-  uses the group arrays; the session rows under it use their lanes. The session title links to the
-  Session page. Sessions inside a group are ordered by spend (by last activity for sort = last
-  activity). The header is sticky and carries the time axis and one muted note for the token scale.
-- **Open and closed.** Groups are open by default: the first 5 sessions and a "k more" line that shows
-  them all (and "fewer" to go back). The URL holds what differs from the default: `closed` is a
-  comma-separated list of collapsed group keys, `all` of those that show every session (escaped keys,
-  the empty key is `-`). A collapsed group still shows its group row and graph.
+- **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; **group** `None`,
+  `Project` (default), `Checkout`, `Repo`, `Remote` (`by`); **show** `Sessions` (default) or `Groups`
+  (`show`; only when group is not None); context `peak` (default: the deepest session's, a scale session rows
+  can fill) or `sum` (what the group carried; the group's sum then sets the shared scale and session rows get
+  small), shown with a group only (a flat table always uses peak). A muted note gives the token scale.
+- **Three modes**, global; there is no collapsing of single groups:
+  1. **None**: flat, one row per session of the range, ordered by the sort. The first column (140 px,
+     muted) holds the session's project (or the group dimension's value); the API is asked for `dir`.
+  2. **Group + Sessions**: a group row (tinted) with the group's aggregate graph, then all its sessions
+     under it, their text indented 16 px (their graphs stay on the shared axis).
+  3. **Group + Groups**: the group rows alone, each with the graph of the union of its sessions.
+  In the grouped modes the first column is not drawn: the group's name leads its row.
+- **Container.** The page below the top bar is a table container as tall as the viewport (the page itself
+  does not scroll) with three parts. **Top, fixed**: toolbar and column headers. **Middle, scrolls**: the
+  rows (and the scripted-runs line). **Bottom, fixed**: the date axis, a totals line (sessions, turns,
+  agents, spend of the range's groups) and the hover readout (fixed height). The scrollbar of the middle
+  takes width from the rows only, so the header and the footer give up as much as it measures (padding
+  right) and the columns and the axis stay exactly above and below the graph cells.
+- **Sorting is the column headers.** A click sorts by that column (descending first); a click on the
+  active column flips the direction; an arrow marks it. Columns: first (project; not sortable), **Session**
+  (sessions by start time, groups by number of sessions), **Turns**, **Agents**, **Spend** (default,
+  descending), **Last** (last activity). In the grouped modes the sort orders the groups by their
+  aggregate and the sessions inside each group by the same column; ties by spend, then id. URL: `sort`
+  (`session`, `turns`, `agents`, `spend`, `last`; absent = spend) and `dir=asc` (absent = descending).
+- **Row text**, one line, an ellipsis where it ends, the whole text in the `title`. A session: its **bold
+  head** (its own name from /rename, else its title, else the first 8 characters of its id; a link to the
+  Session page) and in muted text the latest recap, else the first prompt, else the last prompt. A
+  group: the bold name and "18 sessions . priciest: <head of the priciest session> $96". Numbers
+  right-aligned, tabular: Turns, Agents, Spend (`<Money>`), Last (compact: `5 min`, `15 h`, `yesterday`,
+  `9 Nov`; fixed width). All counts are in the range.
+- The session title links to the Session page. Group rows use the group arrays, session rows their lanes.
 - **Time axis: linear.** Wall-clock time maps linearly to x over the whole range; nights and empty
   days take their real width. Midnight ticks and day labels; at `1d`, hour ticks. Every graph uses the
   same axis; the graph cell spans the data columns.
@@ -790,7 +807,7 @@ thin vertical per spawned agent; and the space this frees used for a table.
     vertical and the `BranchNode` (dot for a fork, ring for a continuation) at its start. A spawn from before the range has no vertical and its run
     starts at the left edge.
   - no spend lines, compaction marks, `x n` labels or sub-lanes.
-- **Hover** fills a readout of fixed height above the table (nothing under the pointer moves): the time
+- **Hover** fills a readout of fixed height at the foot of the table (nothing under the pointer moves): the time
   under the pointer, the row, the slot's spend, sessions running, context (sum and peak for a group),
   idle context. Over the spine lane it names the spawns within a few pixels of the pointer (counts by
   kind, a few titles). There is no click or drag list: the table is the list.

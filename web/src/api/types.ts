@@ -89,6 +89,9 @@ export interface LastPrompt {
   truncated: boolean
 }
 
+/** A preview of a human prompt (the Overview's first and last prompt of a session). */
+export type PromptPreview = LastPrompt
+
 /** A pull request the session created or linked; `at` is its first link. */
 export interface PRLink {
   at?: string
@@ -1215,6 +1218,13 @@ export interface OverviewLane {
   harness: string
   id: string
   title?: string
+  /** The user's own name for the session (/rename). */
+  name?: string
+  /** The latest recap. */
+  recap?: RecapPreview
+  /** The first human turn's prompt (the session's opening ask). */
+  firstPrompt?: PromptPreview
+  lastPrompt?: PromptPreview
   /** The group key of the session ('' for none). */
   group: string
   startedAt?: string

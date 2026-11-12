@@ -204,8 +204,22 @@ type GroupList struct {
 }
 
 // Overview is the body of GET /api/overview (experimental): what each group of sessions spent
-// and carried in each slot of a range. See catalog.Overview.
-type Overview catalog.Overview
+// and carried in each slot of a range. See catalog.Overview; its lanes carry the session's
+// name and previews besides.
+type Overview struct {
+	catalog.Overview
+	Lanes []OverviewLane `json:"lanes"`
+}
+
+// OverviewLane is a catalog lane with what the table shows beside the graph: the session's
+// user-given name and its latest recap, first prompt and last prompt, built as on /api/sessions.
+type OverviewLane struct {
+	catalog.OverviewLane
+	Name        string         `json:"name,omitempty"`
+	Recap       *RecapPreview  `json:"recap,omitempty"`
+	FirstPrompt *PromptPreview `json:"firstPrompt,omitempty"`
+	LastPrompt  *PromptPreview `json:"lastPrompt,omitempty"`
+}
 
 // BeadList is the body of GET /api/beads: the bead prefixes sessions worked on, the one with
 // the most recently active session first, and the bead families, most recently worked on

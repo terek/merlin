@@ -758,6 +758,48 @@ function overviewSession(s: Sess): OvSession {
   return out
 }
 
+const OV_TOPICS = [
+  'the retry logic in the sync client',
+  'flaky tests in the billing module',
+  'a migration for the new accounts table',
+  'the slow dashboard query',
+  'error handling around the upload path',
+  'the release checklist',
+  'a rename of the config loader',
+  'pagination on the activity feed',
+  'the cache invalidation bug',
+  'dark mode contrast in the settings page',
+]
+const OV_NAMES = ['billing-fix', 'sync retries', 'migration', 'perf pass', 'release prep', 'feed paging']
+
+/** Synthetic overview text from the id: most sessions a recap or a first prompt, some only a last prompt. */
+function overviewText(id: string): Pick<OverviewLane, 'name' | 'recap' | 'firstPrompt' | 'lastPrompt'> {
+  const h = [...id].reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) >>> 0, 11)
+  const topic = OV_TOPICS[h % OV_TOPICS.length]
+  const at = new Date(ds.now - (h % 5000) * MIN).toISOString()
+  const prompt = (text: string, turn: number) => ({ turn, at, text, truncated: false })
+  const out: ReturnType<typeof overviewText> = {}
+  if (h % 7 === 0) out.name = OV_NAMES[h % OV_NAMES.length]
+  const kind = h % 10
+  if (kind < 4) {
+    out.recap = {
+      at,
+      text: `Working on ${topic}. The failing case is reproduced and the fix is in place; what is left is a test for the edge case and a look at the callers.`,
+      truncated: false,
+    }
+    out.firstPrompt = prompt(`Please look at ${topic}`, 0)
+  } else if (kind < 8) {
+    out.firstPrompt = prompt(
+      `Can you help me with ${topic}? Start by reading the code around it and tell me what you find before changing anything.`,
+      0,
+    )
+    out.lastPrompt = prompt('ok, go ahead', 5)
+  } else {
+    out.lastPrompt = prompt(`now also update the docs for ${topic}`, 3)
+  }
+  return out
+}
+
 function overview(u: URL): Overview {
   const q = u.searchParams
   const by = q.get('by') === 'project' ? 'dir' : (q.get('by') ?? 'dir')
@@ -903,6 +945,7 @@ function overview(u: URL): Overview {
       harness: sid.harness,
       id: sid.id,
       title: s.summary.title,
+      ...overviewText(sid.id),
       group: key,
       startedAt: new Date(os.msgs[0].at).toISOString(),
       lastActivityAt: lastIso,

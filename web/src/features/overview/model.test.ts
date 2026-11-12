@@ -2,21 +2,32 @@ import { describe, expect, test } from 'bun:test'
 import type { OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
 import {
   activityRuns,
+  apiBy,
   axisTicks,
+  buildRows,
   CTX_MAX,
   chooseSlot,
   describeSpawns,
   fitLabels,
-  formatKeys,
+  formatSort,
+  groupDescription,
   heldContext,
   laneAt,
+  laneDescription,
+  laneHead,
   lanesByGroup,
   lastLabel,
   MERGE_GAP,
   MIN_SPINE,
   makeAxis,
   midnights,
-  parseKeys,
+  nextSort,
+  parseBy,
+  parseShow,
+  parseSort,
+  type Row,
+  type Sort,
+  type SortKey,
   slotAt,
   slotX,
   sortGroups,
@@ -24,9 +35,7 @@ import {
   spawnsNear,
   spineLanes,
   stepAreaPath,
-  toggleKey,
   tokenScale,
-  visibleLanes,
   xOf,
 } from './model'
 
@@ -234,50 +243,180 @@ describe('sorting', () => {
     key: 'a',
     usd: 10,
     sessions: 5,
-    priciest: { harness: 'claude', id: 'x', usd: 2 },
+    turns: 3,
+    agents: 9,
     lastActivityAt: '2026-11-01T00:00:00Z',
   })
-  const b = group({
-    key: 'b',
-    usd: 5,
-    sessions: 9,
-    priciest: { harness: 'claude', id: 'y', usd: 4 },
-    lastActivityAt: '2026-11-03T00:00:00Z',
-  })
-  const c = group({ key: 'c', usd: 5, sessions: 1, lastActivityAt: '2026-11-02T00:00:00Z' })
+  const b = group({ key: 'b', usd: 5, sessions: 9, turns: 8, agents: 1, lastActivityAt: '2026-11-03T00:00:00Z' })
+  const c = group({ key: 'c', usd: 5, sessions: 1, turns: 8, agents: 4, lastActivityAt: '2026-11-02T00:00:00Z' })
+  const keys = (gs: OverviewGroup[]) => gs.map((g) => g.key)
+  const desc = (key: SortKey): Sort => ({ key, desc: true })
+  const asc = (key: SortKey): Sort => ({ key, desc: false })
 
-  test('groups by each key, with spend then key as the tiebreak', () => {
-    expect(sortGroups([c, b, a], 'spend').map((g) => g.key)).toEqual(['a', 'b', 'c'])
-    expect(sortGroups([a, b, c], 'sessions').map((g) => g.key)).toEqual(['b', 'a', 'c'])
-    expect(sortGroups([a, b, c], 'priciest').map((g) => g.key)).toEqual(['b', 'a', 'c'])
-    expect(sortGroups([a, b, c], 'recent').map((g) => g.key)).toEqual(['b', 'c', 'a'])
+  test('groups by each column and direction; ties by spend, then key', () => {
+    expect(keys(sortGroups([c, b, a], desc('spend')))).toEqual(['a', 'b', 'c'])
+    expect(keys(sortGroups([a, b, c], asc('spend')))).toEqual(['b', 'c', 'a'])
+    expect(keys(sortGroups([a, b, c], desc('session')))).toEqual(['b', 'a', 'c'])
+    expect(keys(sortGroups([a, b, c], asc('session')))).toEqual(['c', 'a', 'b'])
+    expect(keys(sortGroups([a, b, c], desc('turns')))).toEqual(['b', 'c', 'a'])
+    expect(keys(sortGroups([a, b, c], asc('turns')))).toEqual(['a', 'b', 'c'])
+    expect(keys(sortGroups([a, b, c], desc('agents')))).toEqual(['a', 'c', 'b'])
+    expect(keys(sortGroups([a, b, c], desc('last')))).toEqual(['b', 'c', 'a'])
+    expect(keys(sortGroups([a, b, c], asc('last')))).toEqual(['a', 'c', 'b'])
   })
 
   test('does not change its input', () => {
     const input = [c, a]
-    sortGroups(input, 'spend')
+    sortGroups(input, desc('spend'))
     expect(input.map((g) => g.key)).toEqual(['c', 'a'])
   })
 
-  const l1 = lane({ id: '1', usd: 5, lastActivityAt: '2026-11-01T00:00:00Z' })
-  const l2 = lane({ id: '2', usd: 9, lastActivityAt: '2026-11-02T00:00:00Z' })
-  const l3 = lane({ id: '3', usd: 9, lastActivityAt: '2026-11-03T00:00:00Z' })
+  const l1 = lane({
+    id: '1',
+    usd: 5,
+    turns: 2,
+    agents: 0,
+    startedAt: '2026-11-02T00:00:00Z',
+    lastActivityAt: '2026-11-01T00:00:00Z',
+  })
+  const l2 = lane({
+    id: '2',
+    usd: 9,
+    turns: 7,
+    agents: 3,
+    startedAt: '2026-11-03T00:00:00Z',
+    lastActivityAt: '2026-11-02T00:00:00Z',
+  })
+  const l3 = lane({
+    id: '3',
+    usd: 9,
+    turns: 7,
+    agents: 1,
+    startedAt: '2026-11-01T00:00:00Z',
+    lastActivityAt: '2026-11-03T00:00:00Z',
+  })
+  const ids = (ls: OverviewLane[]) => ls.map((l) => l.id)
 
-  test('sessions by spend (id breaks a tie), or by last activity for sort=recent', () => {
-    expect(sortLanes([l1, l3, l2], 'spend').map((l) => l.id)).toEqual(['2', '3', '1'])
-    expect(sortLanes([l1, l2, l3], 'sessions').map((l) => l.id)).toEqual(['2', '3', '1'])
-    expect(sortLanes([l1, l2, l3], 'priciest').map((l) => l.id)).toEqual(['2', '3', '1'])
-    expect(sortLanes([l1, l2, l3], 'recent').map((l) => l.id)).toEqual(['3', '2', '1'])
+  test('sessions by each column and direction; ties by spend, then id', () => {
+    expect(ids(sortLanes([l1, l3, l2], desc('spend')))).toEqual(['2', '3', '1'])
+    expect(ids(sortLanes([l1, l3, l2], asc('spend')))).toEqual(['1', '2', '3'])
+    expect(ids(sortLanes([l1, l2, l3], desc('turns')))).toEqual(['2', '3', '1'])
+    expect(ids(sortLanes([l1, l2, l3], asc('turns')))).toEqual(['1', '2', '3'])
+    expect(ids(sortLanes([l1, l2, l3], desc('agents')))).toEqual(['2', '3', '1'])
+    expect(ids(sortLanes([l1, l2, l3], asc('agents')))).toEqual(['1', '3', '2'])
+    expect(ids(sortLanes([l1, l2, l3], desc('session')))).toEqual(['2', '1', '3'])
+    expect(ids(sortLanes([l1, l2, l3], asc('session')))).toEqual(['3', '1', '2'])
+    expect(ids(sortLanes([l1, l2, l3], desc('last')))).toEqual(['3', '2', '1'])
+    expect(ids(sortLanes([l1, l2, l3], asc('last')))).toEqual(['1', '2', '3'])
   })
 
-  test('lanes by group; the first five are shown, the rest counted', () => {
+  test('lanes by group', () => {
     const m = lanesByGroup([lane({ id: 'a', group: 'x' }), lane({ id: 'b', group: '' }), lane({ id: 'c', group: 'x' })])
     expect(m.get('x')?.map((l) => l.id)).toEqual(['a', 'c'])
     expect(m.get('')?.map((l) => l.id)).toEqual(['b'])
-    const seven = [1, 2, 3, 4, 5, 6, 7]
-    expect(visibleLanes(seven, false)).toEqual({ shown: [1, 2, 3, 4, 5], more: 2 })
-    expect(visibleLanes(seven, true)).toEqual({ shown: seven, more: 0 })
-    expect(visibleLanes([1, 2, 3], false)).toEqual({ shown: [1, 2, 3], more: 0 })
+  })
+})
+
+describe('rows by mode', () => {
+  const gx = group({ key: 'x', name: 'proj-x', usd: 6, sessions: 2 })
+  const gy = group({ key: 'y', name: 'proj-y', usd: 9, sessions: 1 })
+  const lanes = [
+    lane({ id: 'a', group: 'x', usd: 1 }),
+    lane({ id: 'b', group: 'x', usd: 5 }),
+    lane({ id: 'c', group: 'y', usd: 9 }),
+  ]
+  const o = { groups: [gx, gy], lanes }
+  const spend: Sort = { key: 'spend', desc: true }
+  const tag = (r: Row) => (r.kind === 'group' ? `g:${r.g.key}` : r.l.id)
+
+  test('none: every session flat, by the sort, with its project name', () => {
+    const rows = buildRows(o, 'none', 'sessions', spend)
+    expect(rows.map(tag)).toEqual(['c', 'b', 'a'])
+    expect(rows.map((r) => (r.kind === 'session' ? r.groupName : ''))).toEqual(['proj-y', 'proj-x', 'proj-x'])
+    expect(rows.every((r) => r.kind === 'session' && !r.nested)).toBe(true)
+    // `show` does not matter without groups
+    expect(buildRows(o, 'none', 'groups', spend).map(tag)).toEqual(['c', 'b', 'a'])
+  })
+
+  test('grouped, sessions: each group row then all its sessions, both by the sort', () => {
+    expect(buildRows(o, 'dir', 'sessions', spend).map(tag)).toEqual(['g:y', 'c', 'g:x', 'b', 'a'])
+    expect(buildRows(o, 'dir', 'sessions', { key: 'spend', desc: false }).map(tag)).toEqual([
+      'g:x',
+      'a',
+      'b',
+      'g:y',
+      'c',
+    ])
+    expect(
+      buildRows(o, 'dir', 'sessions', spend)
+        .filter((r) => r.kind === 'session')
+        .every((r) => r.kind === 'session' && r.nested),
+    ).toBe(true)
+  })
+
+  test('grouped, groups: the group rows alone', () => {
+    expect(buildRows(o, 'repo', 'groups', spend).map(tag)).toEqual(['g:y', 'g:x'])
+    expect(buildRows(o, 'repo', 'groups', { key: 'session', desc: true }).map(tag)).toEqual(['g:x', 'g:y'])
+  })
+})
+
+describe('row text', () => {
+  test('the head: name, else title, else the first 8 characters of the id', () => {
+    expect(laneHead({ id: 'abcdef123456', name: 'mine', title: 't' })).toBe('mine')
+    expect(laneHead({ id: 'abcdef123456', title: 't' })).toBe('t')
+    expect(laneHead({ id: 'abcdef123456' })).toBe('abcdef12')
+    expect(laneHead({ id: 'abcdef123456', name: '', title: '' })).toBe('abcdef12')
+  })
+
+  test('the description: recap, else first prompt, else last prompt', () => {
+    const p = (text: string) => ({ turn: 1, at: '2026-11-01T00:00:00Z', text, truncated: false })
+    const recap = { at: '2026-11-01T00:00:00Z', text: 'recap', truncated: false }
+    expect(laneDescription(lane({ id: 'a', recap, firstPrompt: p('first'), lastPrompt: p('last') }))).toBe('recap')
+    expect(laneDescription(lane({ id: 'a', firstPrompt: p('first'), lastPrompt: p('last') }))).toBe('first')
+    expect(laneDescription(lane({ id: 'a', lastPrompt: p('last') }))).toBe('last')
+    expect(laneDescription(lane({ id: 'a' }))).toBe('')
+  })
+
+  test('the group description names the priciest session', () => {
+    const g = group({ key: 'k', sessions: 18, priciest: { harness: 'claude', id: 'abcdef123456', usd: 96.2 } })
+    expect(groupDescription(g, 'big refactor')).toBe('18 sessions · priciest: big refactor $96.20')
+    expect(groupDescription(g)).toBe('18 sessions · priciest: abcdef12 $96.20')
+    expect(groupDescription(group({ key: 'k', sessions: 1 }))).toBe('1 session')
+  })
+})
+
+describe('URL state', () => {
+  test('by and show, defaults for anything else', () => {
+    expect(parseBy('none')).toBe('none')
+    expect(parseBy('repo')).toBe('repo')
+    expect(parseBy('project')).toBe('dir')
+    expect(parseBy(null)).toBe('dir')
+    expect(parseShow('groups')).toBe('groups')
+    expect(parseShow('x')).toBe('sessions')
+    expect(parseShow(null)).toBe('sessions')
+  })
+
+  test('sort and dir', () => {
+    expect(parseSort(null, null)).toEqual({ key: 'spend', desc: true })
+    expect(parseSort('turns', null)).toEqual({ key: 'turns', desc: true })
+    expect(parseSort('last', 'asc')).toEqual({ key: 'last', desc: false })
+    expect(parseSort('bogus', 'asc')).toEqual({ key: 'spend', desc: false })
+    expect(formatSort({ key: 'spend', desc: true })).toEqual({ sort: undefined, dir: undefined })
+    expect(formatSort({ key: 'agents', desc: false })).toEqual({ sort: 'agents', dir: 'asc' })
+    const s: Sort = { key: 'session', desc: false }
+    const f = formatSort(s)
+    expect(parseSort(f.sort ?? null, f.dir ?? null)).toEqual(s)
+  })
+
+  test('a header click flips the active column, another starts descending', () => {
+    expect(nextSort({ key: 'spend', desc: true }, 'spend')).toEqual({ key: 'spend', desc: false })
+    expect(nextSort({ key: 'spend', desc: false }, 'spend')).toEqual({ key: 'spend', desc: true })
+    expect(nextSort({ key: 'spend', desc: false }, 'turns')).toEqual({ key: 'turns', desc: true })
+  })
+
+  test('the API is asked for projects when the table is flat', () => {
+    expect(apiBy('none')).toBe('dir')
+    expect(apiBy('repo')).toBe('repo')
   })
 })
 
@@ -412,20 +551,6 @@ describe('spawnsNear', () => {
   test('nothing near', () => {
     expect(spawnsNear([at(3000, 'fork')], axis, 10)).toBeNull()
     expect(spawnsNear(undefined, axis, 10)).toBeNull()
-  })
-})
-
-describe('group keys in the URL', () => {
-  test('round trip, including the empty key and commas', () => {
-    const keys = ['/home/dev/a,b', '', '-', '/x y']
-    expect(parseKeys(formatKeys(keys))).toEqual(keys)
-    expect(parseKeys(null)).toEqual([])
-    expect(parseKeys('')).toEqual([])
-  })
-
-  test('toggle', () => {
-    expect(toggleKey(['a'], 'b')).toEqual(['a', 'b'])
-    expect(toggleKey(['a', 'b'], 'a')).toEqual(['b'])
   })
 })
 
