@@ -783,7 +783,8 @@ of each group. The graphics are round 3's, unchanged.
 - The session title links to the Session page. Group rows use the group arrays, session rows their lanes.
 - **Time axis: linear.** Wall-clock time maps linearly to x over the whole range; nights and empty
   days take their real width. Midnight ticks and day labels; at `1d`, hour ticks. Every graph uses the
-  same axis; the graph cell spans the data columns.
+  same axis; the graph cell spans the data columns. In a row, the day lines are drawn only inside the
+  lifetime of its session (a group row: of any of its sessions), not where nothing was alive.
 - **Resolution.** The page asks for the slot that gives about one slot per pixel of the cell's width
   (`1m` to `1h`). **One SVG per row**, all of the same width. Because every session of the range comes
   in one response (`lanes`), a group opens without another request.
@@ -804,13 +805,13 @@ of each group. The graphics are round 3's, unchanged.
     sessions) the lives `[start, max(end, start + 10 px)]` are
     merged into runs when they overlap or lie under 4 px apart; a run is the mirrored J: the elbow at
     its first spawn and the horizontal at full strength along the run. Kinds share the lane's depth,
-    drawn in that order, later on top. A forked or continued session is not a run: it is a
-    vertical in the main colour at full strength (`RUN_W`) from the baseline down to the lane at its
-    start, with no elbow and no horizontal. A spawn from before the range has no vertical and its run
+    drawn in that order, later on top. A forked or continued session is not a run and not on the lane: its own row
+    gets a vertical in the main colour at full strength (`RUN_W`) from the top of the row down to the
+    baseline at its start (it came from another session), with no elbow and no horizontal. A spawn from before the range has no vertical and its run
     starts at the left edge.
   - no spend lines, compaction marks, `x n` labels or sub-lanes.
 - **Group rows** draw only the group's total: `contextSum` as the context area and `idleSum` as the pale
-  idle area under it, with the day lines. No baseline, session line, spine lane, ticks or nodes: it is the
+  idle area under it, with the day lines inside its sessions' lifetimes. No baseline, session line, spine lane, ticks or nodes: it is the
   buzz over time, and the row is correspondingly short.
 - **Session rows** draw the faint baseline only over the session's lifetime (its start to its last
   activity, clipped to the range), not the whole width; the thicker session line, the context, the idle

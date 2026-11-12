@@ -32,6 +32,7 @@ import {
   laneDescription,
   laneHead,
   laneScale,
+  lanesByGroup,
   lastLabel,
   lifeSpan,
   makeAxis,
@@ -98,6 +99,8 @@ interface RowData {
   active: number[]
   /** The slot of index 0 of the arrays (a lane's are trimmed). */
   offset: number
+  /** The sessions whose lifetimes the row covers: day lines are drawn only inside them. */
+  lives: OverviewLane[]
   spans: OverviewSpan[]
   /** A session row: its lifetime is drawn as the faint baseline, and the line, spine and nodes on it. */
   lane?: OverviewLane
@@ -111,8 +114,9 @@ interface Shared {
 }
 
 /** A group row shows only its total context, held and idle: no session line, spawns or baseline. */
-const groupData = (g: OverviewGroup): RowData => ({
+const groupData = (g: OverviewGroup, lanes: OverviewLane[]): RowData => ({
   key: `g:${g.key}`,
+  lives: lanes,
   ctx: g.contextSum,
   idle: g.idleSum,
   active: [],
@@ -122,6 +126,7 @@ const groupData = (g: OverviewGroup): RowData => ({
 
 const laneData = (l: OverviewLane): RowData => ({
   key: `l:${l.group}\u0000${l.harness}/${l.id}`,
+  lives: [l],
   ctx: l.context,
   idle: l.idle,
   active: l.active,
@@ -138,7 +143,7 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
   const base = PAD_TOP + 15
   const spines = useMemo(() => spineLanes(data.spans, axis), [data.spans, axis])
   const laneY = base + LANE_DEPTH
-  const height = base + (spines.length > 0 ? LANE_DEPTH + 3 : 3)
+  const height = base + (spines.some((k) => !isBranch(k.kind)) ? LANE_DEPTH + 3 : 3)
   const ctxPath = useMemo(
     () => stepAreaPath(data.ctx, axis, base, pxPerTok, data.offset),
     [data.ctx, data.offset, axis, base, pxPerTok],
@@ -148,7 +153,13 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
     [data.idle, data.offset, axis, base, pxPerTok],
   )
   const runs = useMemo(() => activityRuns(data.active, data.offset), [data.active, data.offset])
-  const midnights = useMemo(() => midnightXs(axis), [axis])
+  const midnights = useMemo(() => {
+    const spans = data.lives.flatMap((l) => {
+      const s = lifeSpan(l.startedAt, l.lastActivityAt, axis)
+      return s ? [s] : []
+    })
+    return midnightXs(axis).filter((x) => spans.some((s) => x >= s[0] && x <= s[1]))
+  }, [axis, data.lives])
   const life = useMemo(
     () => (data.lane ? lifeSpan(data.lane.startedAt, data.lane.lastActivityAt, axis) : null),
     [data.lane, axis],
@@ -178,7 +189,7 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
         const color = spanColor(ks.kind)
         return (
           <g key={ks.kind}>
-            {ks.ticks.length > 0 && (
+            {ks.ticks.length > 0 && !isBranch(ks.kind) && (
               <path
                 d={ks.ticks.map((x) => `M${x},${base}V${laneY}`).join('')}
                 stroke={color}
@@ -215,7 +226,7 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
             })}
             {isBranch(ks.kind) && ks.ticks.length > 0 && (
               <path
-                d={ks.ticks.map((x) => `M${x},${base}V${laneY}`).join('')}
+                d={ks.ticks.map((x) => `M${x},1V${base}`).join('')}
                 stroke={color}
                 strokeWidth={RUN_W}
                 strokeLinecap="round"
@@ -357,6 +368,7 @@ function SessionRow({
 
 function GroupRow({
   g,
+  lanes,
   priciestHead,
   gutter,
   tint,
@@ -364,6 +376,7 @@ function GroupRow({
 }: {
   g: OverviewGroup
   priciestHead?: string
+  lanes: OverviewLane[]
   gutter: number
   tint: boolean
   shared: Shared
@@ -380,7 +393,7 @@ function GroupRow({
         usd={g.usd}
         last={g.lastActivityAt}
       />
-      <RowGraph data={groupData(g)} shared={shared} />
+      <RowGraph data={groupData(g, lanes)} shared={shared} />
     </Frame>
   )
 }
@@ -695,6 +708,7 @@ function Table({
     [o.from, o.to, o.slotMs, plotW],
   )
   const shared: Shared = { axis, groupPx: scales.groups.pxPerTok, lanePx: scales.lanes.pxPerTok }
+  const byGroup = useMemo(() => lanesByGroup(o.lanes), [o.lanes])
   const priciest = useMemo(() => {
     const m = new Map(o.lanes.map((l) => [`${l.harness}/${l.id}`, laneHead(l)]))
     return (g: OverviewGroup) => (g.priciest ? m.get(`${g.priciest.harness}/${g.priciest.id}`) : undefined)
@@ -710,6 +724,7 @@ function Table({
               <GroupRow
                 key={r.key}
                 g={r.g}
+                lanes={byGroup.get(r.g.key) ?? []}
                 priciestHead={priciest(r.g)}
                 gutter={gutter}
                 tint={show === 'sessions'}
