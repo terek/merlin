@@ -87,7 +87,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
-| `/overview` | Overview (experimental, section 10b): one table of sessions, flat or grouped by project, over a day, week or month, each row with a text line and a small graph of its context and the agents it launched | `range`, `by` (`none`, `dir`, `checkout`, `repo`, `remote`), `show` (`sessions`, `groups`), `sort`, `dir=asc`, `ctx` |
+| `/overview` | Overview (experimental, section 10b): one table of sessions, flat or grouped by project, over a day, week or month, each row with a text line and a small graph of its context and the agents it launched | `range`, `by` (`none`, `dir`, `checkout`, `repo`, `remote`), `show` (`sessions`, `groups`), `sort`, `dir=asc` |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -740,21 +740,20 @@ what the session is, not only its title; and the grouping becomes a mode of the 
 of each group. The graphics are round 3's, unchanged.
 
 ```
- [1d 7d 30d]  group [None|Project|Checkout|Repo|Remote]  show [Sessions|Groups]  context [Sum|Peak]  (sticky)
+ [1d 7d 30d]  group [None|Project|Checkout|Repo|Remote]  show [Sessions|Groups]       context: groups 15 px = 419k . sessions 15 px = 190k  (sticky)
  PROJECT      SESSION                                    TURNS  AGENTS    SPEND v   LAST     (sticky)
  merlin       long refactor  Working on the retry lo...     22      14   $96.20    2h        (scrolls)
               ..-=#=-..    ..=#=#=..   row graph, one spine lane
  api          fix date handling  Can you help me with...      9       0    $4.20    3d
               Fri 6        Sat 7        Sun 8        Mon 9      (date axis, sticky)
               Total  100 sessions                    708   1,139   $353
-              hover readout (fixed height)
 ```
 
 - **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; **group** `None`,
   `Project` (default), `Checkout`, `Repo`, `Remote` (`by`); **show** `Sessions` (default) or `Groups`
-  (`show`; only when group is not None); context `peak` (default: the deepest session's, a scale session rows
-  can fill) or `sum` (what the group carried; the group's sum then sets the shared scale and session rows get
-  small), shown with a group only (a flat table always uses peak). A muted note gives the token scale.
+  (`show`; only when group is not None). There is no context toggle. A muted note at the right gives the token
+  scales of the kinds of row on screen: "context: groups 15 px = X . sessions 15 px = Y" (only the one that
+  applies in a flat table or with groups alone).
 - **Three modes**, global; there is no collapsing of single groups:
   1. **None**: flat, one row per session of the range, ordered by the sort. The first column (140 px,
      muted) holds the session's project (or the group dimension's value); the API is asked for `dir`.
@@ -765,10 +764,11 @@ of each group. The graphics are round 3's, unchanged.
 - **Container.** The page below the top bar is a table container as tall as the viewport (the page itself
   does not scroll) with three parts. **Top, fixed**: toolbar and column headers. **Middle, scrolls**: the
   rows (and the scripted-runs line). **Bottom, fixed**: the date axis, a totals line (sessions, turns,
-  agents, spend of the range's groups) and the hover readout (fixed height). The scrollbar of the middle
+  agents, spend of the range's groups). The scrollbar of the middle
   takes width from the rows only, so the header and the footer give up as much as it measures (padding
   right) and the columns and the axis stay exactly above and below the graph cells.
-- **Sorting is the column headers.** A click sorts by that column (descending first); a click on the
+- **Sorting is the column headers.** Every sortable header reserves a fixed slot for the arrow (invisible
+  when the column is not the sorted one), so no label moves when the sort changes. A click sorts by that column (descending first); a click on the
   active column flips the direction; an arrow marks it. Columns: first (project; not sortable), **Session**
   (sessions by start time, groups by number of sessions), **Turns**, **Agents**, **Spend** (default,
   descending), **Last** (last activity). In the grouped modes the sort orders the groups by their
@@ -788,14 +788,15 @@ of each group. The graphics are round 3's, unchanged.
   (`1m` to `1h`). **One SVG per row**, all of the same width. Because every session of the range comes
   in one response (`lanes`), a group opens without another request.
 - **Row graph**, drawn with the spend graph's constants (`COLOR`, `CTX_FILL`, `ELBOW_R`,
-  `WORKFLOW_DASH`, `elbowPath`, `BranchNode` from `features/spend/TimeView.tsx`):
+  `WORKFLOW_DASH`, `elbowPath` from `features/spend/TimeView.tsx`):
   - **context**: a step area above the baseline, at most 15 px high, filled in the main colour
-    (`CTX_FILL`) with no outline, on one token scale for every row (groups and sessions);
+    (`CTX_FILL`) with no outline, on a token scale of its own kind: the group rows share one (total context, so large), the session
+    rows share another (so a session is not a sliver next to its group);
   - **idle**: where a session is open but paused (the context held through a pause of 5 minutes to an
     hour, the API's `idle`), the same step area in a severely tinted fill (`IDLE_FILL`, 0.2), drawn
     under the context, so a working stretch reads as one shape, saturated where calls happened and
     pale while the user read or typed;
-  - the **session line** on the baseline where a session ran (`active > 0`), 1 px, 2 px with two at
+  - the **session line** (session rows) on the baseline where a session ran (`active > 0`), 1 px, 2 px with two at
     once, 3.5 px with three or more;
   - **one spine lane**, 7 px under the baseline (omitted when the row launched nothing). Every agent
     gets a thin vertical (0.75 px) from the baseline to the lane at its start, so a burst of spawns
@@ -803,14 +804,19 @@ of each group. The graphics are round 3's, unchanged.
     sessions) the lives `[start, max(end, start + 10 px)]` are
     merged into runs when they overlap or lie under 4 px apart; a run is the mirrored J: the elbow at
     its first spawn and the horizontal at full strength along the run. Kinds share the lane's depth,
-    drawn in that order, later on top. A forked or continued session is not a run: only its
-    vertical and the `BranchNode` (dot for a fork, ring for a continuation) at its start. A spawn from before the range has no vertical and its run
+    drawn in that order, later on top. A forked or continued session is not a run: it is a
+    vertical in the main colour at full strength (`RUN_W`) from the baseline down to the lane at its
+    start, with no elbow and no horizontal. A spawn from before the range has no vertical and its run
     starts at the left edge.
   - no spend lines, compaction marks, `x n` labels or sub-lanes.
-- **Hover** fills a readout of fixed height at the foot of the table (nothing under the pointer moves): the time
-  under the pointer, the row, the slot's spend, sessions running, context (sum and peak for a group),
-  idle context. Over the spine lane it names the spawns within a few pixels of the pointer (counts by
-  kind, a few titles). There is no click or drag list: the table is the list.
+- **Group rows** draw only the group's total: `contextSum` as the context area and `idleSum` as the pale
+  idle area under it, with the day lines. No baseline, session line, spine lane, ticks or nodes: it is the
+  buzz over time, and the row is correspondingly short.
+- **Session rows** draw the faint baseline only over the session's lifetime (its start to its last
+  activity, clipped to the range), not the whole width; the thicker session line, the context, the idle
+  area, the spine lane and the branch nodes are as above.
+- **No hover.** The graphs are illustration: no pointer handling, no readout (they are `aria-hidden`
+  with `pointer-events: none`); the row's text and numbers are the content, and the head link still works.
 - **Scripted runs**: one faint text row at the end ("429 scripted runs", spend), no graph.
 
 ## 11. As built

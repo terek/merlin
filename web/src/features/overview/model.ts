@@ -83,12 +83,6 @@ export const timeAt = (axis: Axis, x: number): number => axis.fromMs + x / axis.
 /** Left edge of slot i. */
 export const slotX = (axis: Axis, i: number): number => i * axis.slotW
 
-/** The slot under pixel x, or -1 outside the plot. */
-export function slotAt(axis: Axis, px: number): number {
-  if (!(px >= 0) || px >= axis.width || axis.slots <= 0) return -1
-  return Math.min(axis.slots - 1, Math.floor(px / axis.slotW))
-}
-
 export interface Tick {
   x: number
   label: string
@@ -203,29 +197,47 @@ export function heldContext(
 
 // ---- lanes: trimmed arrays ---------------------------------------------------------------
 
-/** The value of slot `i` in a lane's trimmed array (0 outside it). */
-export const laneAt = (arr: number[], slot0: number, i: number): number => arr[i - slot0] ?? 0
-
-// ---- the token scale ---------------------------------------------------------------------
-
-export type CtxMode = 'sum' | 'peak'
+// ---- the token scales --------------------------------------------------------------------
 
 /** The context area's greatest height, in px. */
 export const CTX_MAX = 15
 
-export const contextOf = (g: OverviewGroup, mode: CtxMode): number[] => (mode === 'sum' ? g.contextSum : g.contextPeak)
-export const idleOf = (g: OverviewGroup, mode: CtxMode): number[] => (mode === 'sum' ? g.idleSum : g.idlePeak)
+export interface TokenScale {
+  maxTok: number
+  pxPerTok: number
+}
 
 const peakOf = (a: number[]): number => a.reduce((m, v) => (v > m ? v : m), 0)
 
+const scaleOf = (maxTok: number): TokenScale => ({ maxTok, pxPerTok: maxTok > 0 ? CTX_MAX / maxTok : 0 })
+
+/** The scale of the group rows: their largest total context (or idle context) reaches `CTX_MAX` px. */
+export function groupScale(groups: OverviewGroup[]): TokenScale {
+  let max = 0
+  for (const g of groups) max = Math.max(max, peakOf(g.contextSum), peakOf(g.idleSum))
+  return scaleOf(max)
+}
+
+/** The scale of the session rows, their own: the largest context (or idle context) of any session. */
+export function laneScale(lanes: OverviewLane[]): TokenScale {
+  let max = 0
+  for (const l of lanes) max = Math.max(max, peakOf(l.context), peakOf(l.idle))
+  return scaleOf(max)
+}
+
 /**
- * One token scale for every row, groups and sessions alike: the largest context (or idle context) of any
- * group in the mode reaches `CTX_MAX` px. A session never exceeds its group's, so the groups are enough.
+ * Where a session lived on the plot: from its start to its last activity, clipped to the axis, as x
+ * positions; null when it lived wholly outside the range or has no times.
  */
-export function tokenScale(groups: OverviewGroup[], mode: CtxMode): { maxTok: number; pxPerTok: number } {
-  let maxTok = 0
-  for (const g of groups) maxTok = Math.max(maxTok, peakOf(contextOf(g, mode)), peakOf(idleOf(g, mode)))
-  return { maxTok, pxPerTok: maxTok > 0 ? CTX_MAX / maxTok : 0 }
+export function lifeSpan(
+  startedAt: string | undefined,
+  lastAt: string | undefined,
+  axis: Axis,
+): [number, number] | null {
+  const a = startedAt ? Date.parse(startedAt) : Number.NaN
+  const b = lastAt ? Date.parse(lastAt) : a
+  if (Number.isNaN(a) || Number.isNaN(b) || b < axis.fromMs || a > axis.toMs) return null
+  return [Math.max(0, xOf(axis, a)), Math.min(axis.width, xOf(axis, b))]
 }
 
 // ---- modes, sorting and the rows ---------------------------------------------------------
@@ -442,16 +454,6 @@ export const KIND_ORDER: Kind[] = ['subagent', 'teammate', 'fork', 'workflow', '
 
 export const isBranch = (k: Kind): boolean => k === 'session-fork' || k === 'continuation'
 
-/** The words for a span's kind, singular and plural. */
-export const SPAN_LABEL: Record<Kind, [string, string]> = {
-  subagent: ['sub-agent', 'sub-agents'],
-  teammate: ['teammate', 'teammates'],
-  fork: ['fork', 'forks'],
-  workflow: ['workflow', 'workflows'],
-  'session-fork': ['forked session', 'forked sessions'],
-  continuation: ['continued session', 'continued sessions'],
-}
-
 export interface SpineRun {
   x0: number
   x1: number
@@ -519,48 +521,7 @@ export function spineLanes(spans: OverviewSpan[] | undefined, axis: Axis): KindS
   return out
 }
 
-export interface SpawnsNear {
-  total: number
-  /** Counts by kind, in draw order. */
-  kinds: { kind: Kind; n: number }[]
-  /** Titles of the first few, by start. */
-  titles: string[]
-}
-
-/** The spawns whose start is within `tol` px of `x`; null when none. */
-export function spawnsNear(spans: OverviewSpan[] | undefined, axis: Axis, x: number, tol = 4): SpawnsNear | null {
-  const hits = (spans ?? [])
-    .map((s) => ({ s, t: Date.parse(s.start) }))
-    .filter(({ t }) => Math.abs(xOf(axis, t) - x) <= tol)
-    .sort((a, b) => a.t - b.t)
-  if (hits.length === 0) return null
-  const kinds = KIND_ORDER.map((kind) => ({ kind, n: hits.filter((h) => h.s.kind === kind).length })).filter(
-    (k) => k.n > 0,
-  )
-  const titles = hits.map((h) => h.s.title ?? '').filter((t) => t !== '')
-  return { total: hits.length, kinds, titles: titles.slice(0, 3) }
-}
-
-/** "3 sub-agents, 1 fork". */
-export function describeSpawns(k: SpawnsNear): string {
-  return k.kinds.map(({ kind, n }) => `${n} ${SPAN_LABEL[kind][n === 1 ? 0 : 1]}`).join(', ')
-}
-
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const hm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-
-/** "Tue 4 Nov 14:00-15:00" for slot i; a day slot is just the date. */
-export function slotLabel(fromMs: number, slotMs: number, first: number, last = first): string {
-  const a = new Date(fromMs + first * slotMs)
-  const b = new Date(fromMs + (last + 1) * slotMs)
-  const day = `${DAYS[a.getDay()]} ${a.getDate()} ${MONTHS[a.getMonth()]}`
-  if (slotMs >= DAY && last === first) return day
-  const sameDay = a.toDateString() === new Date(b.getTime() - 1).toDateString()
-  const end = sameDay
-    ? hm(b)
-    : `${DAYS[new Date(b.getTime() - 1).getDay()]} ${new Date(b.getTime() - 1).getDate()} ${hm(b)}`
-  return `${day} ${hm(a)}–${end}`
-}
 
 /** Drops the labels that would run into the previous one or past the right edge of the plot (greedy, left to right). */
 export function fitLabels(ticks: Tick[], width: number, charW = 6.2, gap = 6): Tick[] {

@@ -7,16 +7,17 @@ import {
   buildRows,
   CTX_MAX,
   chooseSlot,
-  describeSpawns,
   fitLabels,
   formatSort,
   groupDescription,
+  groupScale,
   heldContext,
-  laneAt,
   laneDescription,
   laneHead,
+  laneScale,
   lanesByGroup,
   lastLabel,
+  lifeSpan,
   MERGE_GAP,
   MIN_SPINE,
   makeAxis,
@@ -28,14 +29,11 @@ import {
   type Row,
   type Sort,
   type SortKey,
-  slotAt,
   slotX,
   sortGroups,
   sortLanes,
-  spawnsNear,
   spineLanes,
   stepAreaPath,
-  tokenScale,
   xOf,
 } from './model'
 
@@ -104,14 +102,6 @@ describe('axis', () => {
     expect(xOf(axis, T0 + 3.5 * DAY)).toBe(504)
     expect(xOf(axis, T0 + 7 * DAY)).toBe(1008)
     expect(slotX(axis, 144)).toBe(144)
-  })
-
-  test('slotAt maps pixels to slots and nothing outside the plot', () => {
-    expect(slotAt(axis, 0)).toBe(0)
-    expect(slotAt(axis, 143.9)).toBe(143)
-    expect(slotAt(axis, 1007.5)).toBe(1007)
-    expect(slotAt(axis, -1)).toBe(-1)
-    expect(slotAt(axis, 1008)).toBe(-1)
   })
 
   test('midnights and day ticks sit one day apart, however empty the days', () => {
@@ -205,14 +195,6 @@ describe('heldContext', () => {
 })
 
 describe('lane arrays are trimmed', () => {
-  test('laneAt indexes from slot0 and is zero outside', () => {
-    const arr = [4, 5, 6]
-    expect(laneAt(arr, 10, 10)).toBe(4)
-    expect(laneAt(arr, 10, 12)).toBe(6)
-    expect(laneAt(arr, 10, 9)).toBe(0)
-    expect(laneAt(arr, 10, 13)).toBe(0)
-  })
-
   test("the paths and runs start at the lane's first slot", () => {
     const axis = makeAxis(T0, T0 + 8 * HOUR, HOUR, 80)
     expect(stepAreaPath([5, 5], axis, 50, 2, 3)).toBe('M30,50V40H50V50Z')
@@ -223,18 +205,39 @@ describe('lane arrays are trimmed', () => {
   })
 })
 
-describe('tokenScale', () => {
-  test('the largest context or idle context of any group reaches the limit', () => {
+describe('token scales', () => {
+  test('the group rows share one scale of total context, idle included', () => {
     const a = group({ key: 'a', contextSum: [100, 400, 0, 0], idleSum: [0, 0, 800, 0], contextPeak: [50, 200, 0, 0] })
     const b = group({ key: 'b', contextSum: [0, 40, 0, 0] })
-    const s = tokenScale([a, b], 'sum')
+    const s = groupScale([a, b])
     expect(s.maxTok).toBe(800)
     expect(s.pxPerTok).toBeCloseTo(CTX_MAX / 800, 9)
-    expect(tokenScale([a, b], 'peak').maxTok).toBe(200)
+  })
+
+  test('the session rows have their own', () => {
+    const s = laneScale([lane({ id: 'a', context: [10, 90] }), lane({ id: 'b', context: [5], idle: [300] })])
+    expect(s.maxTok).toBe(300)
+    expect(s.pxPerTok).toBeCloseTo(CTX_MAX / 300, 9)
   })
 
   test('nothing carried, no scale', () => {
-    expect(tokenScale([group({ key: 'a' })], 'sum')).toEqual({ maxTok: 0, pxPerTok: 0 })
+    expect(groupScale([group({ key: 'a' })])).toEqual({ maxTok: 0, pxPerTok: 0 })
+    expect(laneScale([])).toEqual({ maxTok: 0, pxPerTok: 0 })
+  })
+})
+
+describe('lifeSpan', () => {
+  const axis = makeAxis(T0, T0 + 10 * HOUR, HOUR, 100)
+  const iso = (h: number) => new Date(T0 + h * HOUR).toISOString()
+  test('from start to last activity, clipped to the range', () => {
+    expect(lifeSpan(iso(2), iso(5), axis)).toEqual([20, 50])
+    expect(lifeSpan(iso(-3), iso(4), axis)).toEqual([0, 40])
+    expect(lifeSpan(iso(8), iso(30), axis)).toEqual([80, 100])
+  })
+  test('nothing when wholly outside or without times', () => {
+    expect(lifeSpan(iso(-5), iso(-1), axis)).toBeNull()
+    expect(lifeSpan(iso(11), iso(12), axis)).toBeNull()
+    expect(lifeSpan(undefined, undefined, axis)).toBeNull()
   })
 })
 
@@ -516,41 +519,6 @@ describe('spineLanes', () => {
 
   test('no spans, no lane', () => {
     expect(spineLanes(undefined, axis)).toEqual([])
-  })
-})
-
-describe('spawnsNear', () => {
-  const axis = makeAxis(T0, T0 + 7 * DAY, 10 * MIN, 1008)
-  const at = (min: number, kind: OverviewSpan['kind'], title?: string): OverviewSpan => ({
-    kind,
-    start: new Date(T0 + min * MIN).toISOString(),
-    end: new Date(T0 + (min + 5) * MIN).toISOString(),
-    session: { harness: 'claude', id: 's' },
-    title,
-  })
-
-  test('counts the spawns within a few pixels, by kind, with a few titles', () => {
-    const spans = [
-      at(1440, 'subagent', 'a'),
-      at(1441, 'subagent', 'b'),
-      at(1445, 'fork'),
-      at(1450, 'subagent', 'c'),
-      at(1452, 'subagent', 'd'),
-      at(3000, 'subagent', 'far'),
-    ]
-    const hit = spawnsNear(spans, axis, 144.2, 4)
-    expect(hit?.total).toBe(5)
-    expect(hit?.kinds).toEqual([
-      { kind: 'subagent', n: 4 },
-      { kind: 'fork', n: 1 },
-    ])
-    expect(hit?.titles).toEqual(['a', 'b', 'c'])
-    expect(describeSpawns(hit as NonNullable<typeof hit>)).toBe('4 sub-agents, 1 fork')
-  })
-
-  test('nothing near', () => {
-    expect(spawnsNear([at(3000, 'fork')], axis, 10)).toBeNull()
-    expect(spawnsNear(undefined, axis, 10)).toBeNull()
   })
 })
 

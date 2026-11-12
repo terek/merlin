@@ -1,11 +1,11 @@
 // The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day,
 // a week or a month, as one table in a fixed-height container: the toolbar and the sortable column headers
-// stay on top, the rows scroll, the date axis and the hover readout stay at the bottom. Every row has its
+// stay on top, the rows scroll, the date axis and the totals stay at the bottom. Every row has its
 // text line (head, description, turns, agents, spend, last activity) and under it a merged cell with the
 // row's graph on one shared linear time axis.
 
 import { ArrowDown, ArrowUp } from 'lucide-react'
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useOverview } from '../../api/queries'
 import type { Overview, OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
@@ -13,7 +13,7 @@ import { cn } from '../../lib/cn'
 import { formatTokens, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { Money, QueryBoundary, SegmentedControl, Skeleton } from '../../ui'
-import { BranchNode, COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
+import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
   type Axis,
@@ -22,20 +22,18 @@ import {
   axisTicks,
   type By,
   buildRows,
-  type CtxMode,
   chooseSlot,
-  contextOf,
-  describeSpawns,
   fitLabels,
   formatSort,
   groupDescription,
-  idleOf,
+  groupScale,
   isBranch,
   LANE_DEPTH,
-  laneAt,
   laneDescription,
   laneHead,
+  laneScale,
   lastLabel,
+  lifeSpan,
   makeAxis,
   midnightXs,
   nextSort,
@@ -49,14 +47,9 @@ import {
   type Show,
   type Sort,
   type SortKey,
-  type SpawnsNear,
-  slotAt,
-  slotLabel,
   slotX,
-  spawnsNear,
   spineLanes,
   stepAreaPath,
-  tokenScale,
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
 
@@ -106,34 +99,25 @@ interface RowData {
   /** The slot of index 0 of the arrays (a lane's are trimmed). */
   offset: number
   spans: OverviewSpan[]
-  group?: OverviewGroup
+  /** A session row: its lifetime is drawn as the faint baseline, and the line, spine and nodes on it. */
   lane?: OverviewLane
 }
 
-interface Hover {
-  row: string
-  slot: number
-  spawns?: SpawnsNear
-  group?: OverviewGroup
-  lane?: OverviewLane
-}
-
+/** The axis and the two token scales: one for the group rows (total context), one for the session rows. */
 interface Shared {
   axis: Axis
-  pxPerTok: number
-  mode: CtxMode
-  hover: Hover | null
-  setHover: (h: Hover | null) => void
+  groupPx: number
+  lanePx: number
 }
 
-const groupData = (g: OverviewGroup, mode: CtxMode): RowData => ({
+/** A group row shows only its total context, held and idle: no session line, spawns or baseline. */
+const groupData = (g: OverviewGroup): RowData => ({
   key: `g:${g.key}`,
-  ctx: contextOf(g, mode),
-  idle: idleOf(g, mode),
-  active: g.active,
+  ctx: g.contextSum,
+  idle: g.idleSum,
+  active: [],
   offset: 0,
-  spans: g.spans,
-  group: g,
+  spans: [],
 })
 
 const laneData = (l: OverviewLane): RowData => ({
@@ -149,8 +133,8 @@ const laneData = (l: OverviewLane): RowData => ({
 // ---- the graph of one row ----------------------------------------------------------------
 
 function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
-  const { axis, pxPerTok, hover, setHover } = shared
-  const last = useRef('')
+  const { axis } = shared
+  const pxPerTok = data.lane ? shared.lanePx : shared.groupPx
   const base = PAD_TOP + 15
   const spines = useMemo(() => spineLanes(data.spans, axis), [data.spans, axis])
   const laneY = base + LANE_DEPTH
@@ -165,54 +149,20 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
   )
   const runs = useMemo(() => activityRuns(data.active, data.offset), [data.active, data.offset])
   const midnights = useMemo(() => midnightXs(axis), [axis])
-  const mine = hover?.row === data.key ? hover.slot : -1
-
-  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - r.left
-    const y = e.clientY - r.top
-    const slot = slotAt(axis, x)
-    if (slot < 0) {
-      last.current = ''
-      setHover(null)
-      return
-    }
-    const near = spines.length > 0 && y > base + 2 ? spawnsNear(data.spans, axis, x) : null
-    const k = `${data.key}|${slot}|${near ? `${near.total}:${near.titles[0] ?? ''}` : ''}`
-    if (k === last.current) return
-    last.current = k
-    setHover({ row: data.key, slot, spawns: near ?? undefined, group: data.group, lane: data.lane })
-  }
+  const life = useMemo(
+    () => (data.lane ? lifeSpan(data.lane.startedAt, data.lane.lastActivityAt, axis) : null),
+    [data.lane, axis],
+  )
 
   return (
-    <svg
-      width={axis.width}
-      height={height}
-      className="block cursor-crosshair select-none"
-      role="img"
-      aria-label="Context and spawned agents over time"
-      onPointerMove={onMove}
-      onPointerLeave={() => {
-        last.current = ''
-        setHover(null)
-      }}
-    >
+    // biome-ignore lint/a11y/noSvgWithoutTitle: decoration; the row's text is the content
+    <svg width={axis.width} height={height} className="pointer-events-none block select-none" aria-hidden>
       {midnights.map((x) => (
         <line key={x} x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={1} opacity={0.6} />
       ))}
-      {mine >= 0 && (
-        <rect
-          x={slotX(axis, mine)}
-          y={0}
-          width={Math.max(1.5, axis.slotW)}
-          height={height}
-          fill="var(--text)"
-          opacity={0.1}
-        />
-      )}
       <path d={idlePath} fill={COLOR.main} fillOpacity={IDLE_FILL} />
       <path d={ctxPath} fill={COLOR.main} fillOpacity={CTX_FILL} />
-      <line x1={0} x2={axis.width} y1={base} y2={base} stroke="var(--line)" strokeWidth={1} />
+      {life && <line x1={life[0]} x2={life[1]} y1={base} y2={base} stroke="var(--line)" strokeWidth={1} />}
       {runs.map((r) => (
         <line
           key={r.from}
@@ -263,10 +213,15 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
                 </g>
               )
             })}
-            {isBranch(ks.kind) &&
-              ks.ticks.map((x) => (
-                <BranchNode key={x} x={x} y={base} color={color} ring={ks.kind === 'continuation'} />
-              ))}
+            {isBranch(ks.kind) && ks.ticks.length > 0 && (
+              <path
+                d={ks.ticks.map((x) => `M${x},${base}V${laneY}`).join('')}
+                stroke={color}
+                strokeWidth={RUN_W}
+                strokeLinecap="round"
+                fill="none"
+              />
+            )}
           </g>
         )
       })}
@@ -425,7 +380,7 @@ function GroupRow({
         usd={g.usd}
         last={g.lastActivityAt}
       />
-      <RowGraph data={groupData(g, shared.mode)} shared={shared} />
+      <RowGraph data={groupData(g)} shared={shared} />
     </Frame>
   )
 }
@@ -475,8 +430,9 @@ function Th({
       )}
       style={w === undefined ? undefined : { width: w }}
     >
+      {w !== undefined && <Arrow size={11} aria-hidden className={cn('shrink-0', !on && 'invisible')} />}
       {label}
-      {on && <Arrow size={11} aria-hidden />}
+      {w === undefined && <Arrow size={11} aria-hidden className={cn('shrink-0', !on && 'invisible')} />}
     </button>
   )
 }
@@ -518,7 +474,7 @@ function Header({
   )
 }
 
-// ---- the sticky footer: date axis, totals, hover readout ---------------------------------
+// ---- the sticky footer: date axis and totals ---------------------------------
 
 function AxisRow({ axis, gutter, padRight }: { axis: Axis; gutter: number; padRight: number }) {
   const ticks = fitLabels(axisTicks(axis), axis.width)
@@ -568,63 +524,6 @@ function Totals({ o, gutter, padRight }: { o: Overview; gutter: number; padRight
   )
 }
 
-function Readout({ o, hover }: { o: Overview; hover: Hover | null }) {
-  const fromMs = Date.parse(o.from)
-  let body: ReactNode = (
-    <span className="text-faint">
-      Hover a graph for its numbers; under a row, each thin line is an agent the session launched, a bar the run of
-      them.
-    </span>
-  )
-  if (hover && hover.slot >= 0 && hover.slot < o.slots) {
-    const i = hover.slot
-    const when = slotLabel(fromMs, o.slotMs, i)
-    const { group: g, lane, spawns } = hover
-    const name = lane ? laneHead(lane) : `All ${plural(g?.sessions ?? 0, 'session')} of ${g?.name || 'no value'}`
-    if (spawns) {
-      body = (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="shrink-0 text-fg">{describeSpawns(spawns)}</span>
-            <span className="min-w-0 truncate text-muted">{spawns.titles.join(' · ')}</span>
-          </div>
-          <div className="truncate text-muted">
-            launched near {when}, in {name}
-          </div>
-        </>
-      )
-    } else if (g || lane) {
-      const usd = lane ? laneAt(lane.usdSlots, lane.slot0, i) : (g?.usdSlots[i] ?? 0)
-      const ctx = lane ? laneAt(lane.context, lane.slot0, i) : (g?.contextSum[i] ?? 0)
-      const peak = g?.contextPeak[i] ?? 0
-      const idle = lane ? laneAt(lane.idle, lane.slot0, i) : (g?.idleSum[i] ?? 0)
-      const running = lane ? laneAt(lane.active, lane.slot0, i) : (g?.active[i] ?? 0)
-      body = (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="min-w-0 truncate text-fg">{name}</span>
-            <span className="shrink-0 text-muted">{when}</span>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-3 text-muted">
-            <span>
-              <Money usd={usd} /> in the slot
-            </span>
-            <span>{lane ? (running > 0 ? 'running' : 'not running') : `${plural(running, 'session')} running`}</span>
-            <span>
-              context {formatTokens(ctx)}
-              {g && ctx !== peak ? ` summed, ${formatTokens(peak)} peak` : ''}
-            </span>
-            {idle > 0 && <span>{formatTokens(idle)} idle</span>}
-          </div>
-        </>
-      )
-    }
-  }
-  return (
-    <div className="h-11 shrink-0 overflow-hidden border-line border-t px-3 py-1 text-sec leading-snug">{body}</div>
-  )
-}
-
 // ---- the page ----------------------------------------------------------------------------
 
 export function OverviewPage() {
@@ -634,7 +533,6 @@ export function OverviewPage() {
   const by = parseBy(sp.get('by'))
   const show = parseShow(sp.get('show'))
   const sort = useMemo(() => parseSort(sp.get('sort'), sp.get('dir')), [sp])
-  const mode = oneOf<CtxMode>(sp.get('ctx'), ['sum', 'peak'], 'peak')
   const flat = by === 'none'
 
   const set = (changes: Record<string, string | undefined>) => {
@@ -664,12 +562,18 @@ export function OverviewPage() {
     by: apiBy(by),
   })
 
-  const [hover, setHover] = useState<Hover | null>(null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: a new grain, range or mode makes the old hover meaningless
-  useEffect(() => setHover(null), [slot, range, by, show])
-
-  const ctxMode: CtxMode = flat ? 'peak' : mode
-  const maxTok = query.data ? tokenScale(query.data.groups, ctxMode).maxTok : 0
+  // Group rows (total context) and session rows have a token scale each; the note names those on screen.
+  const scales = useMemo(
+    () => ({
+      groups: query.data ? groupScale(query.data.groups) : { maxTok: 0, pxPerTok: 0 },
+      lanes: query.data ? laneScale(query.data.lanes) : { maxTok: 0, pxPerTok: 0 },
+    }),
+    [query.data],
+  )
+  const notes = [
+    !flat && scales.groups.maxTok > 0 && `groups 15 px = ${formatTokens(scales.groups.maxTok)}`,
+    (flat || show === 'sessions') && scales.lanes.maxTok > 0 && `sessions 15 px = ${formatTokens(scales.lanes.maxTok)}`,
+  ].filter(Boolean)
 
   return (
     <div className="mx-auto flex h-[calc(100vh-44px)] w-full max-w-[2000px] flex-col px-4 py-3">
@@ -705,41 +609,25 @@ export function OverviewPage() {
             />
           </div>
           {!flat && (
-            <>
-              <div className="flex items-center gap-1.5 text-muted text-sec">
-                show
-                <SegmentedControl<Show>
-                  label="Show"
-                  value={show}
-                  options={[
-                    { value: 'sessions', label: 'Sessions', title: 'Every group with all its sessions under it' },
-                    {
-                      value: 'groups',
-                      label: 'Groups',
-                      title: 'The groups alone, each with the graph of all its sessions',
-                    },
-                  ]}
-                  onChange={(v) => set({ show: v === 'sessions' ? undefined : v })}
-                />
-              </div>
-              <div className="flex items-center gap-1.5 text-muted text-sec">
-                context
-                <SegmentedControl<CtxMode>
-                  label="Context"
-                  value={mode}
-                  options={[
-                    { value: 'sum', label: 'Sum', title: "What the group carried: the sum of its sessions' contexts" },
-                    { value: 'peak', label: 'Peak', title: "Its deepest session's context" },
-                  ]}
-                  onChange={(v) => set({ ctx: v === 'peak' ? undefined : v })}
-                />
-              </div>
-            </>
+            <div className="flex items-center gap-1.5 text-muted text-sec">
+              show
+              <SegmentedControl<Show>
+                label="Show"
+                value={show}
+                options={[
+                  { value: 'sessions', label: 'Sessions', title: 'Every group with all its sessions under it' },
+                  {
+                    value: 'groups',
+                    label: 'Groups',
+                    title: 'The groups alone, each with the graph of all its sessions',
+                  },
+                ]}
+                onChange={(v) => set({ show: v === 'sessions' ? undefined : v })}
+              />
+            </div>
           )}
-          {maxTok > 0 && (
-            <span className="ml-auto truncate text-faint text-meta">
-              context: 15 px = {formatTokens(maxTok)} tokens
-            </span>
+          {notes.length > 0 && (
+            <span className="ml-auto truncate text-faint text-meta">context: {notes.join(' · ')} tokens</span>
           )}
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
@@ -755,9 +643,7 @@ export function OverviewPage() {
                 by={by}
                 show={show}
                 sort={sort}
-                mode={ctxMode}
-                hover={hover}
-                setHover={setHover}
+                scales={scales}
                 onSort={(k) => set(formatSort(nextSort(sort, k)))}
               />
             )}
@@ -773,18 +659,14 @@ function Table({
   by,
   show,
   sort,
-  mode,
-  hover,
-  setHover,
+  scales,
   onSort,
 }: {
   o: Overview
   by: By
   show: Show
   sort: Sort
-  mode: CtxMode
-  hover: Hover | null
-  setHover: (h: Hover | null) => void
+  scales: { groups: { pxPerTok: number }; lanes: { pxPerTok: number } }
   onSort: (k: SortKey) => void
 }) {
   const gutter = by === 'none' ? GUTTER_W : 0
@@ -812,15 +694,14 @@ function Table({
     () => makeAxis(Date.parse(o.from), Date.parse(o.to), o.slotMs, plotW),
     [o.from, o.to, o.slotMs, plotW],
   )
-  const { pxPerTok } = useMemo(() => tokenScale(o.groups, mode), [o.groups, mode])
-  const shared: Shared = { axis, pxPerTok, mode, hover, setHover }
+  const shared: Shared = { axis, groupPx: scales.groups.pxPerTok, lanePx: scales.lanes.pxPerTok }
   const priciest = useMemo(() => {
     const m = new Map(o.lanes.map((l) => [`${l.harness}/${l.id}`, laneHead(l)]))
     return (g: OverviewGroup) => (g.priciest ? m.get(`${g.priciest.harness}/${g.priciest.id}`) : undefined)
   }, [o.lanes])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" onPointerLeave={() => setHover(null)}>
+    <div className="flex min-h-0 flex-1 flex-col">
       <Header gutter={gutter} byLabel={BY_LABEL[by]} sort={sort} onSort={onSort} padRight={padRight} />
       <div ref={scrollRef} id="overview-rows" className="min-h-0 flex-1 overflow-y-auto">
         <div ref={innerRef}>
@@ -851,7 +732,6 @@ function Table({
       <div className="shrink-0 bg-surface">
         <AxisRow axis={axis} gutter={gutter} padRight={padRight} />
         <Totals o={o} gutter={gutter} padRight={padRight} />
-        <Readout o={o} hover={hover} />
       </div>
     </div>
   )
