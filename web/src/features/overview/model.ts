@@ -1,8 +1,8 @@
-// The Overview page's pure logic: the linear time axis, the slot a plot asks for, the shared scales,
-// held context, the packing of spines into sub-lanes, sorting and which sessions a click lists.
+// The Overview page's pure logic: the linear time axis, the slot a plot asks for, held and idle context,
+// the shared token scale, sorting, the spine lane of a row and what the pointer is near.
 // OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
 
-import type { Overview, OverviewGroup, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
+import type { OverviewGroup, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
 import { HOLD_MS } from '../spend/timeline'
 
 const MIN = 60_000
@@ -10,8 +10,6 @@ const HOUR = 3_600_000
 const DAY = 24 * HOUR
 
 export type Range = '1d' | '7d' | '30d'
-export type SortKey = 'spend' | 'sessions' | 'priciest' | 'recent'
-export type CtxMode = 'sum' | 'peak'
 
 export const RANGES: Record<Range, { ms: number }> = {
   '1d': { ms: DAY },
@@ -157,7 +155,7 @@ export function axisTicks(axis: Axis, minGap = 54): Tick[] {
 /** Midnight x positions, for the faint day lines (not thinned). */
 export const midnightXs = (axis: Axis): number[] => midnights(axis.fromMs, axis.toMs).map((t) => xOf(axis, t))
 
-// ---- held context ------------------------------------------------------------------------
+// ---- held and idle context ---------------------------------------------------------------
 
 export interface HeldCall {
   at: number
@@ -165,10 +163,15 @@ export interface HeldCall {
   ctx: number
 }
 
+/** A pause up to this long after a call is "idle": the call's context is still held, but nothing runs. */
+export const IDLE_MAX_MS = HOUR
+
 /**
  * A session's context per slot as the Session page holds it: a call's context lasts until the next call,
- * unless that comes more than `holdMs` later, when it ends at the call. A slot gets the largest context it
- * held at any moment. `calls` are the main agent's, in any order.
+ * unless that comes more than `holdMs` later, when it ends at the call (`context`). When the next call comes
+ * after `holdMs` but within `idleMs`, the context is held as `idle` from the call to the next call; a longer
+ * pause and the time after the last call hold nothing. A slot gets the largest value it held at any moment;
+ * `idle` is 0 in a slot where `context` is not. `calls` are the main agent's, in any order.
  */
 export function heldContext(
   calls: HeldCall[],
@@ -176,76 +179,57 @@ export function heldContext(
   slotMs: number,
   slots: number,
   holdMs = HOLD_MS,
-): number[] {
-  const out = new Array<number>(slots).fill(0)
+  idleMs = IDLE_MAX_MS,
+): { context: number[]; idle: number[] } {
+  const context = new Array<number>(slots).fill(0)
+  const idle = new Array<number>(slots).fill(0)
   const sorted = [...calls].sort((a, b) => a.at - b.at)
+  const fill = (out: number[], from: number, to: number, v: number) => {
+    const a = Math.max(0, Math.floor((from - fromMs) / slotMs))
+    // the end is exclusive: a hold up to the very start of a slot does not reach into it
+    const b = Math.min(slots - 1, to > from ? Math.ceil((to - fromMs) / slotMs) - 1 : a)
+    for (let i = a; i <= b; i++) if (v > out[i]) out[i] = v
+  }
   sorted.forEach((c, k) => {
     const next = sorted[k + 1]
-    const end = next && next.at - c.at <= holdMs ? next.at : c.at
-    const a = Math.max(0, Math.floor((c.at - fromMs) / slotMs))
-    // the end is exclusive: a call held up to the very start of a slot does not reach into it
-    const b = Math.min(slots - 1, end > c.at ? Math.ceil((end - fromMs) / slotMs) - 1 : a)
-    for (let i = a; i <= b; i++) if (c.ctx > out[i]) out[i] = c.ctx
+    const gap = next ? next.at - c.at : Infinity
+    fill(context, c.at, gap <= holdMs ? (next as HeldCall).at : c.at, c.ctx)
+    if (gap > holdMs && gap <= idleMs) fill(idle, c.at, (next as HeldCall).at, c.ctx)
   })
-  return out
+  for (let i = 0; i < slots; i++) if (context[i] > 0) idle[i] = 0
+  return { context, idle }
 }
 
-// ---- scales and heights ------------------------------------------------------------------
+// ---- lanes: trimmed arrays ---------------------------------------------------------------
 
-export interface Scales {
-  /** px per token and px per dollar, the same for every row. */
-  pxPerTok: number
-  pxPerUsd: number
-  maxTok: number
-  maxUsd: number
-}
+/** The value of slot `i` in a lane's trimmed array (0 outside it). */
+export const laneAt = (arr: number[], slot0: number, i: number): number => arr[i - slot0] ?? 0
 
-export interface Heights {
-  up: number
-  down: number
-}
+// ---- the token scale ---------------------------------------------------------------------
 
-export const MAX_UP = 60
-export const MAX_DOWN = 36
-export const MIN_SIDE = 5
+export type CtxMode = 'sum' | 'peak'
+
+/** The context area's greatest height, in px. */
+export const CTX_MAX = 15
 
 export const contextOf = (g: OverviewGroup, mode: CtxMode): number[] => (mode === 'sum' ? g.contextSum : g.contextPeak)
+export const idleOf = (g: OverviewGroup, mode: CtxMode): number[] => (mode === 'sum' ? g.idleSum : g.idlePeak)
 
 const peakOf = (a: number[]): number => a.reduce((m, v) => (v > m ? v : m), 0)
 
-/** One token scale and one dollar scale for all the rows: the largest value anywhere reaches the limit. */
-export function scalesFor(groups: OverviewGroup[], mode: CtxMode, scripted?: number[]): Scales {
+/**
+ * One token scale for every row, groups and sessions alike: the largest context (or idle context) of any
+ * group in the mode reaches `CTX_MAX` px. A session never exceeds its group's, so the groups are enough.
+ */
+export function tokenScale(groups: OverviewGroup[], mode: CtxMode): { maxTok: number; pxPerTok: number } {
   let maxTok = 0
-  let maxUsd = peakOf(scripted ?? [])
-  for (const g of groups) {
-    maxTok = Math.max(maxTok, peakOf(contextOf(g, mode)))
-    maxUsd = Math.max(maxUsd, peakOf(g.usdSlots))
-  }
-  return { maxTok, maxUsd, pxPerTok: maxTok > 0 ? MAX_UP / maxTok : 0, pxPerUsd: maxUsd > 0 ? MAX_DOWN / maxUsd : 0 }
-}
-
-/** A row is as tall as its own peaks need on the shared scales; a minimum keeps a quiet row readable. */
-export function rowHeights(ctx: number[], usd: number[], s: Scales, minSide = MIN_SIDE): Heights {
-  return {
-    up: Math.max(minSide, Math.round(peakOf(ctx) * s.pxPerTok)),
-    down: Math.max(minSide, Math.round(peakOf(usd) * s.pxPerUsd)),
-  }
-}
-
-/** Pixel height of the sub-lane block under a row's spend, for `lanes` sub-lanes. */
-export const LANE_H = 7
-export const LANES_GAP = 5
-export const laneBlock = (lanes: number): number => (lanes > 0 ? LANES_GAP + lanes * LANE_H : 0)
-
-/** The largest 1, 2 or 5 times a power of ten not above v (0 for v <= 0). */
-export function niceFloor(v: number): number {
-  if (!(v > 0)) return 0
-  const p = 10 ** Math.floor(Math.log10(v))
-  const m = v / p
-  return (m >= 5 ? 5 : m >= 2 ? 2 : 1) * p
+  for (const g of groups) maxTok = Math.max(maxTok, peakOf(contextOf(g, mode)), peakOf(idleOf(g, mode)))
+  return { maxTok, pxPerTok: maxTok > 0 ? CTX_MAX / maxTok : 0 }
 }
 
 // ---- sorting -----------------------------------------------------------------------------
+
+export type SortKey = 'spend' | 'sessions' | 'priciest' | 'recent'
 
 export function sortGroups(groups: OverviewGroup[], by: SortKey): OverviewGroup[] {
   const val = (g: OverviewGroup): number | string =>
@@ -264,6 +248,39 @@ export function sortGroups(groups: OverviewGroup[], by: SortKey): OverviewGroup[
   })
 }
 
+/** Sessions inside a group: by last activity for sort=recent, otherwise by spend; ties by id. */
+export function sortLanes(lanes: OverviewLane[], by: SortKey): OverviewLane[] {
+  return [...lanes].sort((a, b) => {
+    if (by === 'recent') {
+      const x = a.lastActivityAt ?? ''
+      const y = b.lastActivityAt ?? ''
+      if (x !== y) return x < y ? 1 : -1
+    }
+    if (a.usd !== b.usd) return b.usd - a.usd
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+}
+
+/** The lanes of each group, by the lane's group key. */
+export function lanesByGroup(lanes: OverviewLane[]): Map<string, OverviewLane[]> {
+  const out = new Map<string, OverviewLane[]>()
+  for (const l of lanes) {
+    const list = out.get(l.group)
+    if (list) list.push(l)
+    else out.set(l.group, [l])
+  }
+  return out
+}
+
+/** Sessions an open group shows before "k more". */
+export const SHOWN = 5
+
+/** The first `SHOWN` sessions of a sorted list, or all; `more` is how many are left out. */
+export function visibleLanes<T>(sorted: T[], all: boolean, limit = SHOWN): { shown: T[]; more: number } {
+  if (all || sorted.length <= limit) return { shown: sorted, more: 0 }
+  return { shown: sorted.slice(0, limit), more: sorted.length - limit }
+}
+
 // ---- row marks ---------------------------------------------------------------------------
 
 export interface ActivityRun {
@@ -273,15 +290,15 @@ export interface ActivityRun {
   weight: 1 | 2 | 3
 }
 
-/** Contiguous slots with the same activity weight, for the session line on the baseline. */
-export function activityRuns(active: number[]): ActivityRun[] {
+/** Contiguous slots with the same activity weight, for the session line; `offset` is the slot of index 0. */
+export function activityRuns(active: number[], offset = 0): ActivityRun[] {
   const out: ActivityRun[] = []
   for (let i = 0; i < active.length; i++) {
     if (!(active[i] > 0)) continue
     const w = Math.min(3, active[i]) as 1 | 2 | 3
     const last = out[out.length - 1]
-    if (last && last.to === i && last.weight === w) last.to = i + 1
-    else out.push({ from: i, to: i + 1, weight: w })
+    if (last && last.to === offset + i && last.weight === w) last.to = offset + i + 1
+    else out.push({ from: offset + i, to: offset + i + 1, weight: w })
   }
   return out
 }
@@ -292,17 +309,11 @@ export const ACTIVE_W: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3.5 }
 const r1 = (v: number) => Math.round(v * 10) / 10
 
 /**
- * The context as a step area: `area` is one closed shape per run of slots above zero (standing on `base`,
- * growing upward at `scale` px per unit), `line` its outline without the baseline.
+ * A step area: one closed shape per run of slots above zero, standing on `base`, growing upward at `scale`
+ * px per unit. `offset` is the slot of index 0 (a lane's arrays are trimmed).
  */
-export function stepAreaPath(
-  values: number[],
-  axis: Axis,
-  base: number,
-  scale: number,
-): { area: string; line: string } {
+export function stepAreaPath(values: number[], axis: Axis, base: number, scale: number, offset = 0): string {
   let area = ''
-  let line = ''
   const n = values.length
   let i = 0
   while (i < n) {
@@ -312,8 +323,7 @@ export function stepAreaPath(
     }
     let j = i
     while (j < n && values[j] > 0) j++
-    const x0 = r1(slotX(axis, i))
-    let d = `M${x0},${r1(base)}`
+    let d = `M${r1(slotX(axis, offset + i))},${r1(base)}`
     let prev = base
     let k = i
     while (k < j) {
@@ -321,167 +331,149 @@ export function stepAreaPath(
       while (m < j && values[m] === values[k]) m++
       const y = r1(base - values[k] * scale)
       if (y !== prev) d += `V${y}`
-      d += `H${r1(slotX(axis, m))}`
+      d += `H${r1(slotX(axis, offset + m))}`
       prev = y
       k = m
     }
-    line += `${d}V${r1(base)}`
     area += `${d}V${r1(base)}Z`
     i = j
   }
-  return { area, line }
+  return area
 }
 
-// ---- spines ------------------------------------------------------------------------------
+// ---- the spine lane ----------------------------------------------------------------------
 
-/** A spine is at least this long from its vertical (the 6 px elbow and 10 px along), so the shape reads at any zoom. */
-export const MIN_SPINE = 16
-/** The most sub-lanes a row grows; more spines share the last one. */
-export const MAX_SUBLANES = 8
-/** Room kept between two spines of a sub-lane, in px. */
-export const SPINE_GAP = 3
-/** Width reserved for the "x4" label after a spine. */
-export const labelWidth = (n: number): number => 7 + 5 * String(n).length
+/** A spawn's life is drawn at least this long (px), so that the shape reads at any zoom. */
+export const MIN_SPINE = 10
+/** Lives of one kind closer than this (px) are one run. */
+export const MERGE_GAP = 4
+/** The lane's depth below the baseline. */
+export const LANE_DEPTH = 7
 
-export interface SpineItem {
-  span: OverviewSpan
+type Kind = OverviewSpan['kind']
+
+/** Draw order: later kinds draw on top. */
+export const KIND_ORDER: Kind[] = ['subagent', 'teammate', 'fork', 'workflow', 'session-fork', 'continuation']
+
+export const isBranch = (k: Kind): boolean => k === 'session-fork' || k === 'continuation'
+
+/** The words for a span's kind, singular and plural. */
+export const SPAN_LABEL: Record<Kind, [string, string]> = {
+  subagent: ['sub-agent', 'sub-agents'],
+  teammate: ['teammate', 'teammates'],
+  fork: ['fork', 'forks'],
+  workflow: ['workflow', 'workflows'],
+  'session-fork': ['forked session', 'forked sessions'],
+  continuation: ['continued session', 'continued sessions'],
+}
+
+export interface SpineRun {
   x0: number
   x1: number
-  lane: number
-  /** The span began before the range: no vertical, no elbow. */
+  /** Spawns merged into the run. */
+  n: number
+  /** The first spawn began before the range: no elbow, the run starts at the left edge. */
   clipped: boolean
 }
 
+export interface KindSpine {
+  kind: Kind
+  /** Verticals of the spawns that do not start a run (the run's elbow is its first spawn's), x in px. */
+  ticks: number[]
+  runs: SpineRun[]
+}
+
 /**
- * Greedy interval packing: each [x0, x1] goes to the first lane whose last end is `gap` px left of x0.
- * Returns the lane of each input, in input order.
+ * The spine lane of a row at the axis's scale: per kind (in draw order), every spawn's vertical, and the
+ * lives `[start, max(end, start + MIN_SPINE px)]` merged into runs while they overlap or lie under
+ * `MERGE_GAP` px apart. Branched sessions (fork, continuation) have ticks only, no runs.
  */
-export function packIntervals(boxes: { x0: number; x1: number }[], gap = SPINE_GAP, maxLanes = Infinity): number[] {
-  const order = boxes.map((_, i) => i).sort((a, b) => boxes[a].x0 - boxes[b].x0 || boxes[b].x1 - boxes[a].x1 || a - b)
-  const ends: number[] = []
-  const lane = new Array<number>(boxes.length).fill(0)
-  for (const i of order) {
-    let k = ends.findIndex((e) => e + gap <= boxes[i].x0)
-    if (k < 0) k = ends.length < maxLanes ? ends.length : ends.indexOf(Math.min(...ends))
-    ends[k] = Math.max(ends[k] ?? -Infinity, boxes[i].x1)
-    lane[i] = k
-  }
-  return lane
-}
-
-/** The spines of a row: pixel extents (with the minimum length and the label's room) packed into sub-lanes. */
-export function layoutSpans(spans: OverviewSpan[] | undefined, axis: Axis): { items: SpineItem[]; lanes: number } {
-  const raw = (spans ?? []).map((span) => {
-    const s = Date.parse(span.start)
-    const clipped = s < axis.fromMs
-    const x0 = Math.max(0, xOf(axis, s))
-    const x1 = Math.min(axis.width, Math.max(xOf(axis, Date.parse(span.end)), x0 + MIN_SPINE))
-    return { span, x0, x1, clipped }
-  })
-  const lane = packIntervals(
-    raw.map((r) => ({ x0: r.x0, x1: r.x1 + (r.span.n > 1 ? labelWidth(r.span.n) : 0) })),
-    SPINE_GAP,
-    MAX_SUBLANES,
-  )
-  const items = raw.map((r, i) => ({ ...r, lane: lane[i] }))
-  return { items, lanes: items.reduce((m, it) => Math.max(m, it.lane + 1), 0) }
-}
-
-/** The words for a span's kind. */
-export const SPAN_LABEL: Record<OverviewSpan['kind'], string> = {
-  subagent: 'sub-agent',
-  teammate: 'teammate',
-  fork: 'fork',
-  workflow: 'workflow',
-  'session-fork': 'forked session',
-  continuation: 'continued session',
-}
-
-/** Compactions of a row folded into one record per slot. */
-export interface CompactMarks {
-  cold: number
-  warm: number
-  other: number
-}
-
-export function compactionsBySlot(events: Overview['groups'][number]['events']): Map<number, CompactMarks> {
-  const out = new Map<number, CompactMarks>()
-  for (const e of events ?? []) {
-    if (e.type !== 'compaction') continue
-    const m = out.get(e.slot) ?? { cold: 0, warm: 0, other: 0 }
-    if (e.kind === 'cold') m.cold += e.n
-    else if (e.kind === 'warm') m.warm += e.n
-    else m.other += e.n
-    out.set(e.slot, m)
+export function spineLanes(spans: OverviewSpan[] | undefined, axis: Axis): KindSpine[] {
+  const out: KindSpine[] = []
+  for (const kind of KIND_ORDER) {
+    const lives = (spans ?? [])
+      .filter((s) => s.kind === kind)
+      .map((s) => {
+        const start = Date.parse(s.start)
+        const clipped = start < axis.fromMs
+        const x0 = Math.max(0, xOf(axis, start))
+        const x1 = Math.min(axis.width, Math.max(xOf(axis, Date.parse(s.end)), x0 + MIN_SPINE))
+        return { x0, x1, clipped }
+      })
+      .filter((l) => l.x0 < axis.width && l.x1 >= 0)
+      .sort((a, b) => a.x0 - b.x0 || b.x1 - a.x1)
+    if (lives.length === 0) continue
+    if (isBranch(kind)) {
+      // a branched session is its own row: only where it began, a vertical (and the page's node)
+      const xs = [...new Set(lives.filter((l) => !l.clipped).map((l) => r1(l.x0)))]
+      if (xs.length > 0) out.push({ kind, ticks: xs, runs: [] })
+      continue
+    }
+    const runs: SpineRun[] = []
+    const starts: { x: number; run: number }[] = []
+    for (const l of lives) {
+      const cur = runs[runs.length - 1]
+      if (cur && l.x0 <= cur.x1 + MERGE_GAP) {
+        cur.x1 = Math.max(cur.x1, l.x1)
+        cur.n++
+      } else runs.push({ x0: l.x0, x1: l.x1, n: 1, clipped: l.clipped })
+      if (!l.clipped) starts.push({ x: l.x0, run: runs.length - 1 })
+    }
+    // one tick per half pixel; the first spawn of a run is its elbow
+    const ticks: number[] = []
+    const seen = new Set<number>()
+    for (const r of runs) if (!r.clipped) seen.add(Math.round(r.x0 * 2))
+    for (const s of starts) {
+      const k = Math.round(s.x * 2)
+      if (seen.has(k)) continue
+      seen.add(k)
+      ticks.push(r1(s.x))
+    }
+    out.push({ kind, ticks, runs })
   }
   return out
 }
 
-/** A slot's compactions in words ("2 cold compactions"); '' when none. */
-export function describeCompactions(m: CompactMarks | undefined): string {
-  if (!m) return ''
-  const out: string[] = []
-  if (m.cold) out.push(`${m.cold > 1 ? `${m.cold} ` : ''}cold compaction${m.cold > 1 ? 's' : ''}`)
-  if (m.warm) out.push(`${m.warm > 1 ? `${m.warm} ` : ''}warm compaction${m.warm > 1 ? 's' : ''}`)
-  if (m.other) out.push(`${m.other > 1 ? `${m.other} ` : ''}compaction${m.other > 1 ? 's' : ''}`)
-  return out.join(', ')
+export interface SpawnsNear {
+  total: number
+  /** Counts by kind, in draw order. */
+  kinds: { kind: Kind; n: number }[]
+  /** Titles of the first few, by start. */
+  titles: string[]
 }
 
-// ---- clicking a slot ---------------------------------------------------------------------
-
-export interface SlotRange {
-  from: number
-  /** Inclusive. */
-  to: number
+/** The spawns whose start is within `tol` px of `x`; null when none. */
+export function spawnsNear(spans: OverviewSpan[] | undefined, axis: Axis, x: number, tol = 4): SpawnsNear | null {
+  const hits = (spans ?? [])
+    .map((s) => ({ s, t: Date.parse(s.start) }))
+    .filter(({ t }) => Math.abs(xOf(axis, t) - x) <= tol)
+    .sort((a, b) => a.t - b.t)
+  if (hits.length === 0) return null
+  const kinds = KIND_ORDER.map((kind) => ({ kind, n: hits.filter((h) => h.s.kind === kind).length })).filter(
+    (k) => k.n > 0,
+  )
+  const titles = hits.map((h) => h.s.title ?? '').filter((t) => t !== '')
+  return { total: hits.length, kinds, titles: titles.slice(0, 3) }
 }
 
-/** The slots between two clicks (in either order), clamped to the plot. */
-export function slotRange(a: number, b: number, slots: number): SlotRange {
-  const lo = Math.max(0, Math.min(a, b))
-  const hi = Math.min(slots - 1, Math.max(a, b))
-  return { from: lo, to: hi }
+/** "3 sub-agents, 1 fork". */
+export function describeSpawns(k: SpawnsNear): string {
+  return k.kinds.map(({ kind, n }) => `${n} ${SPAN_LABEL[kind][n === 1 ? 0 : 1]}`).join(', ')
 }
 
-export interface LaneHit {
-  lane: OverviewLane
-  /** Spend within the range. */
-  usdIn: number
-  /** The session's last activity, from the lane. */
-  last?: string
-}
+// ---- URL state: closed groups, groups shown whole ----------------------------------------
 
-/** The lanes with something in the slot range (spend or context), the priciest in the range first. */
-export function lanesIn(lanes: OverviewLane[], r: SlotRange): LaneHit[] {
-  const out: LaneHit[] = []
-  for (const lane of lanes) {
-    let usdIn = 0
-    let live = false
-    for (let i = r.from; i <= r.to; i++) {
-      usdIn += lane.usdSlots[i] ?? 0
-      if ((lane.usdSlots[i] ?? 0) > 0 || (lane.context[i] ?? 0) > 0) live = true
-    }
-    if (live) out.push({ lane, usdIn, last: lane.lastActivityAt })
-  }
-  return out.sort((a, b) => b.usdIn - a.usdIn || (a.lane.id < b.lane.id ? -1 : 1))
-}
-
-/** "Tue 4 Nov 14:00-15:00" for the time range from t0 to t1. */
-export const rangeLabel = (t0: number, t1: number): string => slotLabel(t0, t1 - t0, 0, 0)
-
-/** Time of the start of slot i. */
-export const slotStart = (fromMs: number, slotMs: number, i: number): number => fromMs + i * slotMs
-
-/** Opened groups live in the URL as a comma-separated list of escaped keys; the empty key is `-`. */
-export function parseOpen(v: string | null): string[] {
+/** Group keys in the URL as a comma-separated list of escaped keys; the empty key is `-`. */
+export function parseKeys(v: string | null): string[] {
   if (!v) return []
   return v.split(',').map((k) => (k === '-' ? '' : decodeURIComponent(k)))
 }
 
-export function formatOpen(keys: string[]): string {
+export function formatKeys(keys: string[]): string {
   return keys.map((k) => (k === '' ? '-' : k === '-' ? '%2D' : encodeURIComponent(k))).join(',')
 }
 
-export function toggleOpen(keys: string[], key: string): string[] {
+export function toggleKey(keys: string[], key: string): string[] {
   return keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]
 }
 
@@ -499,4 +491,31 @@ export function slotLabel(fromMs: number, slotMs: number, first: number, last = 
     ? hm(b)
     : `${DAYS[new Date(b.getTime() - 1).getDay()]} ${new Date(b.getTime() - 1).getDate()} ${hm(b)}`
   return `${day} ${hm(a)}–${end}`
+}
+
+/** Drops the labels that would run into the previous one or past the right edge of the plot (greedy, left to right). */
+export function fitLabels(ticks: Tick[], width: number, charW = 6.2, gap = 6): Tick[] {
+  let end = -Infinity
+  return ticks.map((t) => {
+    if (!t.labelled) return t
+    const w = t.label.length * charW
+    if (t.x + 3 < end + gap || t.x + 3 + w > width) return { ...t, labelled: false }
+    end = t.x + 3 + w
+    return t
+  })
+}
+
+/** A compact "last activity": "now", "5 min", "15 h", "yesterday", "9 Nov". */
+export function lastLabel(iso: string | undefined, nowMs: number): string {
+  const t = iso ? Date.parse(iso) : Number.NaN
+  if (Number.isNaN(t)) return '–'
+  const d = nowMs - t
+  if (d < MIN) return 'now'
+  if (d < HOUR) return `${Math.floor(d / MIN)} min`
+  const day = (ms: number) => new Date(ms).setHours(0, 0, 0, 0)
+  const days = Math.round((day(nowMs) - day(t)) / DAY)
+  if (days === 0) return `${Math.floor(d / HOUR)} h`
+  if (days === 1) return 'yesterday'
+  const a = new Date(t)
+  return `${a.getDate()} ${MONTHS[a.getMonth()]}`
 }

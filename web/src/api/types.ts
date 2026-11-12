@@ -1176,24 +1176,13 @@ export interface OverviewParams {
   to?: string
   slot?: OverviewSlot
   by?: GroupDim
-  /** A group key of `by`; adds `lanes`. */
+  /** A group key of `by`: only that group's groups and lanes. */
   group?: string
 }
 
-/** A compaction in a slot (the only events now). */
-export interface OverviewEvent {
-  slot: number
-  type: 'compaction'
-  /** cold, warm or unknown. */
-  kind: string
-  n: number
-}
-
-/** The work a session launched, with its life: a spine. */
+/** One agent a session launched (or a branched session), with its life: a spine. */
 export interface OverviewSpan {
   kind: 'subagent' | 'teammate' | 'fork' | 'workflow' | 'session-fork' | 'continuation'
-  /** Agents merged into the span (a swarm). */
-  n: number
   start: string
   end: string
   /** The session that launched it (for a branched session, itself). */
@@ -1201,33 +1190,44 @@ export interface OverviewSpan {
   title?: string
 }
 
+/** A group's arrays are dense: `slots` long. */
 export interface OverviewGroup {
   key: string
   name: string
   sessions: number
+  turns: number
+  agents: number
   usd: number
   lastActivityAt?: string
   priciest?: { harness: string; id: string; title?: string; usd: number }
   usdSlots: number[]
   contextPeak: number[]
   contextSum: number[]
+  /** Context held through a pause of 5 minutes to an hour (largest / summed over sessions). */
+  idlePeak: number[]
+  idleSum: number[]
   active: number[]
-  events?: OverviewEvent[]
-  spans?: OverviewSpan[]
+  spans: OverviewSpan[]
 }
 
+/** A lane's arrays are trimmed: index j is slot `slot0 + j`; outside them everything is zero. */
 export interface OverviewLane {
   harness: string
   id: string
   title?: string
+  /** The group key of the session ('' for none). */
+  group: string
   startedAt?: string
   lastActivityAt?: string
   usd: number
+  turns: number
+  agents: number
+  slot0: number
   usdSlots: number[]
   context: number[]
+  idle: number[]
   active: number[]
-  events?: OverviewEvent[]
-  spans?: OverviewSpan[]
+  spans: OverviewSpan[]
 }
 
 export interface Overview {
@@ -1239,5 +1239,5 @@ export interface Overview {
   by: GroupDim
   groups: OverviewGroup[]
   scripted: { sessions: number; usd: number; usdSlots: number[] }
-  lanes?: OverviewLane[]
+  lanes: OverviewLane[]
 }

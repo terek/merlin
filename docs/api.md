@@ -963,48 +963,59 @@ parts. Without `split` nothing changes in the response: no `split` key anywhere.
 ## GET /api/overview
 
 Experimental (epic `merlin-lce`, the Overview page in [ui.md](ui.md) §10b). What every group of
-sessions spent and carried in each slot of a time range, and the work it launched: the data of a
-timeline with one row per group, context above each row's baseline, spend below it, and spines
-for agents and branched sessions.
+sessions, and every session in it, spent and carried in each slot of a time range, and the work it
+launched: the data of a table with one row per session, each with a small graph of context over
+time, and spines for agents and branched sessions.
 
 | Parameter | Meaning |
 |---|---|
 | `from`, `to` | the range, RFC 3339 or Unix milliseconds. Default: `to` = now, `from` = `to` − 7 days. `from` is moved down and `to` up to a slot boundary in the daemon's local time (a `1d` slot starts at local midnight, `6h` at 00, 06, 12, 18) |
 | `slot` | `1m`, `2m`, `5m`, `10m`, `15m`, `30m`, `1h`, `2h`, `3h`, `6h`, `12h` or `1d`. Default: the smallest that gives at most 200 slots. A 400 when the range would have more than 2,000. The page asks for about one slot per pixel of its plot |
 | `by` | `dir` (default; `project` is accepted as the same), `checkout`, `repo` or `remote`: the location keys of `/api/groups`, with the same primary value per session |
-| `group` | a group key of the same `by` (`""` for the sessions with no value, written `group=`). Adds `lanes`: one per session of that group with a message in the range |
+| `group` | a group key of the same `by` (`""` for the sessions with no value, written `group=`). A filter: only that group, and the lanes of its sessions, are returned |
 
 Only messages count, and only the messages a session **owns** (a copied message is billed once, as
 everywhere): a slot's dollars are the `usd` of the owned messages whose `at` falls in it, the main
 agent's and every agent's alike. That is the attributed (or recorded) figure; reported windows and
 overhead cannot be cut into slots, so a group's `usd` can differ from its best cost on `/api/cost`.
-Scripted runs (`kind: sdk`) are in no group; they are summed in `scripted`.
+Scripted runs (`kind: sdk`) are in no group and have no lane; they are summed in `scripted`.
 
 **Context.** A message's context is its prompt tokens: `input + cacheRead + cacheWrite5m +
 cacheWrite1h`. Only the **main agent's** owned messages count (agents carry their own, smaller
 contexts and are shown as spans). As on the Session page, a call's context is **held** from its
 `at` until the main agent's next call, unless that comes more than 5 minutes later, in which case
-it ends at the call (`HOLD_MS` in `web/src/features/spend/timeline.ts`). A session's context in a
+it ends at the call (`HOLD_MS` in `web/src/features/spend/timeline.ts`). A session's `context` in a
 slot is the largest it held at any moment of the slot. Per group and slot, `contextPeak` is the
 largest session context and `contextSum` the sum over the group's sessions: what the group carried.
-`active[i]` counts the sessions holding context or with an owned message in slot `i`.
+`active[i]` counts the sessions holding context or with an owned message in slot `i` (a lane's is
+0 or 1).
+
+**Idle.** When the main agent's next call comes later than 5 minutes but within 1 hour, the user
+was reading or typing, and the session was still open with that context: the call's context is
+held as *idle* from the call's `at` until the next call. A gap of more than 1 hour, and the time
+after the session's last call, hold nothing. A lane's `idle` in a slot is the largest idle context
+held at any moment of it, **0 in a slot where its `context` is above 0** (context wins). A group's
+`idleSum` is the sum of its lanes' `idle` per slot and `idlePeak` the largest. Idle is not
+`active`.
+
+**Counts.** `turns` is the number of the session's own turns (not those inherited from a parent
+session) that started in the range; `agents` the number of its agent spans (the kinds `subagent`,
+`teammate`, `fork`, `workflow`, not branched sessions) that started in the range: an agent that
+started before the range and runs into it is a span but is not counted. A group's are the sums over
+its sessions.
 
 **Spans** are the work a group's sessions launched, with their lives, for the spines: owned the
-way turns are (an inherited turn's agents are not counted again).
+way turns are (an inherited turn's agents are not counted again). There is one span per agent;
+spans are not merged.
 
 | `kind` | from | `start`, `end` |
 |---|---|---|
 | `subagent`, `teammate`, `fork`, `workflow` | the session's agents of kind `subagent` (`fork` when it inherits context, `teammate` when addressable, else `subagent`) and `workflow`; `compact` and review agents are not spans | the agent's `startedAt` and `endedAt` (its last activity when open) |
 | `session-fork`, `continuation` | a session of the group whose lineage parent link is a fork or a continuation | the session's `startedAt` and `lastActivityAt` |
 
-Agents of one session with the same kind and spawn turn whose lives overlap or come within 10 s
-of each other are one span with `n` agents and the union of their lives. A span is listed when its
-life overlaps the range; `start` and `end` are not clipped. `session` names the session that
-launched it (for a branched session, the branched session itself); `title`, when known, is the
-agent's description or name, or the branched session's title.
-
-**Events** are now only compactions, placed in the slot of their time: `type` `compaction`, `kind`
-`cold`, `warm` or `unknown` from `compaction.call.cache` (Codex's recorded calls by their own rule).
+A span is listed when its life overlaps the range; `start` and `end` are not clipped. `session`
+names the session that launched it (for a branched session, the branched session itself); `title`,
+when known, is the agent's description or name, or the branched session's title.
 
 ```json
 {
@@ -1019,18 +1030,21 @@ agent's description or name, or the branched session's title.
       "key": "/home/dev/merlin",
       "name": "dev/merlin",
       "sessions": 12,
+      "turns": 84,
+      "agents": 31,
       "usd": 171.4,
       "lastActivityAt": "2026-11-10T21:29:40Z",
       "priciest": { "harness": "claude", "id": "394b4c16-…", "title": "long refactor", "usd": 96.2 },
       "usdSlots": [0, 0, 1.25, 3.5, "…1008 numbers"],
       "contextPeak": [0, 0, 84000, 151000, "…"],
       "contextSum": [0, 0, 84000, 233000, "…"],
+      "idleSum": [0, 0, 0, 84000, "…"],
+      "idlePeak": [0, 0, 0, 84000, "…"],
       "active": [0, 0, 1, 2, "…"],
-      "events": [{ "slot": 3, "type": "compaction", "kind": "cold", "n": 1 }],
       "spans": [
-        { "kind": "subagent", "n": 4, "start": "2026-11-05T10:02:11Z", "end": "2026-11-05T10:09:40Z",
+        { "kind": "subagent", "start": "2026-11-05T10:02:11Z", "end": "2026-11-05T10:09:40Z",
           "session": { "harness": "claude", "id": "394b4c16-…" }, "title": "Explore" },
-        { "kind": "session-fork", "n": 1, "start": "2026-11-06T09:00:00Z", "end": "2026-11-06T12:30:00Z",
+        { "kind": "session-fork", "start": "2026-11-06T09:00:00Z", "end": "2026-11-06T12:30:00Z",
           "session": { "harness": "claude", "id": "5c1e…" }, "title": "try the other parser" }
       ]
     }
@@ -1039,23 +1053,32 @@ agent's description or name, or the branched session's title.
   "lanes": [
     {
       "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
+      "group": "/home/dev/merlin",
       "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
-      "usd": 96.2,
-      "usdSlots": ["…"], "context": ["…"], "active": ["…"], "events": ["…"], "spans": ["…"]
+      "usd": 96.2, "turns": 22, "agents": 14,
+      "slot0": 2,
+      "usdSlots": [1.25, 3.5, "…"], "context": [84000, 151000, "…"], "idle": [0, 0, 151000, "…"],
+      "active": [1, 1, "…"],
+      "spans": ["…"]
     }
   ]
 }
 ```
 
-- Arrays are dense, `slots` long, slot `i` covering `[from + i·slotMs, from + (i+1)·slotMs)`.
+- Group arrays are dense, `slots` long, slot `i` covering `[from + i·slotMs, from + (i+1)·slotMs)`.
   Dollars are float64, tokens int64.
 - `groups` holds every group with a message in the range, ordered by `usd`, largest first, then
   key; the page re-sorts. `sessions` counts the group's sessions with a message in the range.
   `priciest` is the session with the largest `usd` in the range. `spans` are ordered by `start`,
   then kind, then session id.
-- `lanes` (only with `group`) are ordered by `startedAt`, then id. A lane's `context` is the
-  session's own held context per slot, its `active` 0 or 1; its `events` and `spans` have the same
-  shape as a group's.
+- `lanes` is always present (empty when nothing ran): one per non-scripted session with an owned
+  message in the range, whatever `group` says (with `group`, only that group's). They are ordered
+  by the order of their group in `groups`, then `usd` descending, then id. `group` is the session's
+  group key, `""` for no value, and is always written.
+- A lane's arrays (`usdSlots`, `context`, `idle`, `active`) are **trimmed**: they all have the same
+  length, start at `slot0`, the first slot where any of them is non-zero, and end at the last such
+  slot; element `k` is slot `slot0 + k`. Outside them everything is 0. `spans` has the same shape
+  as a group's.
 
 ## Groupings: GET /api/repos and GET /api/beads
 

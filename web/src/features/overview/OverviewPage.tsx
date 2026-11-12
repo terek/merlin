@@ -1,30 +1,19 @@
 // The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day,
-// a week or a month, drawn as the Session page's spend graph zoomed out. One linear time axis; a row
-// per group of sessions with its context above the baseline, its spend below and the work it launched
-// hanging under as spines, on scales every row shares.
+// a week or a month, as a table of sessions grouped by project. Every row has its text line (title, turns,
+// agents, spend, last activity) and under it a merged cell with the row's graph on one shared linear time
+// axis: context as a quiet area, the pauses as a paler one, a line where a session ran, and one spine lane
+// with a thin vertical per agent the session spawned.
 
-import { ChevronDown, ChevronRight, X } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useOverview } from '../../api/queries'
-import type { GroupDim, Overview, OverviewLane, OverviewSpan } from '../../api/types'
+import type { GroupDim, Overview, OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
+import { formatTokens, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
-import { Money, QueryBoundary, RelTime, SegmentedControl, Select, Skeleton } from '../../ui'
-import {
-  BranchNode,
-  COLOR,
-  COMPACT_MARK,
-  CTX_FILL,
-  CTX_LINE,
-  elbowPath,
-  markColor,
-  SPEND_COLOR,
-  SPINE_OPACITY,
-  SPINE_W,
-  WORKFLOW_DASH,
-} from '../spend/TimeView'
+import { Money, QueryBoundary, SegmentedControl, Select, Skeleton } from '../../ui'
+import { BranchNode, COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
   type Axis,
@@ -32,44 +21,52 @@ import {
   axisTicks,
   type CtxMode,
   chooseSlot,
-  compactionsBySlot,
   contextOf,
-  describeCompactions,
-  formatOpen,
-  type Heights,
-  LANE_H,
-  LANES_GAP,
-  laneBlock,
-  lanesIn,
-  layoutSpans,
+  describeSpawns,
+  fitLabels,
+  formatKeys,
+  idleOf,
+  isBranch,
+  LANE_DEPTH,
+  laneAt,
+  lanesByGroup,
+  lastLabel,
   makeAxis,
   midnightXs,
-  niceFloor,
-  parseOpen,
+  parseKeys,
   RANGES,
   type Range,
-  rangeLabel,
-  rowHeights,
-  type Scales,
+  SHOWN,
   type SortKey,
-  SPAN_LABEL,
-  scalesFor,
+  type SpawnsNear,
   slotAt,
   slotLabel,
   slotX,
   sortGroups,
+  sortLanes,
+  spawnsNear,
+  spineLanes,
   stepAreaPath,
-  toggleOpen,
-  xOf,
+  toggleKey,
+  tokenScale,
+  visibleLanes,
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
 
-const LABEL_W = 248
-const PAD = 4
-const MIN_ROW = 34
-const MIN_LANE = 24
+/** The group gutter, the table's columns (px) and the cell padding the graph sits in. */
+const GUTTER_W = 150
+const COLS = { turns: 52, agents: 56, spend: 84, last: 64 }
+const CELL_PAD = 12
 const CARD_BORDER = 2
 const TEN_MIN = 600_000
+
+/** The idle context's fill: the main colour, severely tinted. */
+const IDLE_FILL = 0.2
+/** The thin vertical of a spawn. */
+const TICK_W = 0.75
+const TICK_OPACITY = 0.6
+const RUN_W = 2
+const PAD_TOP = 1
 
 const BY_OPTIONS: { value: GroupDim; label: string }[] = [
   { value: 'dir', label: 'Project' },
@@ -97,97 +94,93 @@ const spanColor = (k: OverviewSpan['kind']): string =>
         ? COLOR.fork
         : COLOR.subagent
 
-const isBranch = (k: OverviewSpan['kind']) => k === 'session-fork' || k === 'continuation'
-
 // ---- the rows' data, one shape for a group and a lane ------------------------------------
 
 interface RowData {
   key: string
   ctx: number[]
-  usd: number[]
+  idle: number[]
   active: number[]
-  events: Overview['groups'][number]['events']
-  spans: OverviewSpan[] | undefined
+  /** The slot of index 0 of the arrays (a lane's are trimmed). */
+  offset: number
+  spans: OverviewSpan[]
+  group?: OverviewGroup
   lane?: OverviewLane
 }
 
 interface Hover {
   row: string
   slot: number
-  span?: OverviewSpan
+  spawns?: SpawnsNear
+  group?: OverviewGroup
   lane?: OverviewLane
-}
-
-interface Selection {
-  /** A group key, or null for the scripted row (not selectable). */
-  key: string
-  name: string
-  /** Time range, the end exclusive. */
-  t0: number
-  t1: number
-  /** A click on a spine: list this session. */
-  session?: { harness: string; id: string }
-  what?: string
 }
 
 interface Shared {
   axis: Axis
-  scales: Scales
+  pxPerTok: number
+  mode: CtxMode
   hover: Hover | null
   setHover: (h: Hover | null) => void
-  selection: Selection | null
-  select: (s: Omit<Selection, 'name'> & { name?: string }) => void
 }
 
-// ---- the plot of one row -----------------------------------------------------------------
+const groupData = (g: OverviewGroup, mode: CtxMode): RowData => ({
+  key: `g:${g.key}`,
+  ctx: contextOf(g, mode),
+  idle: idleOf(g, mode),
+  active: g.active,
+  offset: 0,
+  spans: g.spans,
+  group: g,
+})
 
-function RowPlot({
-  data,
-  groupKey,
-  h,
-  height,
-  layout,
-  shared,
-  faint,
-  scaleLabels,
-}: {
-  data: RowData
-  /** The group a click on this row lists (a lane's is its group's). */
-  groupKey: string
-  h: Heights
-  height: number
-  layout: ReturnType<typeof layoutSpans>
-  shared: Shared
-  faint?: boolean
-  scaleLabels?: boolean
-}) {
-  const { axis, scales, hover, setHover, selection } = shared
-  const anchor = useRef(-1)
-  const base = PAD + h.up
-  const lanesTop = base + h.down + LANES_GAP + LANE_H / 2
-  const marks = useMemo(() => compactionsBySlot(data.events), [data.events])
-  const path = useMemo(() => stepAreaPath(data.ctx, axis, base, scales.pxPerTok), [data.ctx, axis, base, scales])
-  const runs = useMemo(() => activityRuns(data.active), [data.active])
+const laneData = (l: OverviewLane): RowData => ({
+  key: `l:${l.group}\u0000${l.harness}/${l.id}`,
+  ctx: l.context,
+  idle: l.idle,
+  active: l.active,
+  offset: l.slot0,
+  spans: l.spans,
+  lane: l,
+})
+
+// ---- the graph of one row ----------------------------------------------------------------
+
+function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
+  const { axis, pxPerTok, hover, setHover } = shared
+  const last = useRef('')
+  const base = PAD_TOP + 15
+  const spines = useMemo(() => spineLanes(data.spans, axis), [data.spans, axis])
+  const laneY = base + LANE_DEPTH
+  const height = base + (spines.length > 0 ? LANE_DEPTH + 3 : 3)
+  const ctxPath = useMemo(
+    () => stepAreaPath(data.ctx, axis, base, pxPerTok, data.offset),
+    [data.ctx, data.offset, axis, base, pxPerTok],
+  )
+  const idlePath = useMemo(
+    () => stepAreaPath(data.idle, axis, base, pxPerTok, data.offset),
+    [data.idle, data.offset, axis, base, pxPerTok],
+  )
+  const runs = useMemo(() => activityRuns(data.active, data.offset), [data.active, data.offset])
   const midnights = useMemo(() => midnightXs(axis), [axis])
-  const spend = useMemo(() => {
-    let d = ''
-    const y0 = base + 1.5
-    data.usd.forEach((v, i) => {
-      if (!(v > 0)) return
-      const x = Math.round((slotX(axis, i) + axis.slotW / 2) * 10) / 10
-      d += `M${x},${y0}V${Math.round((y0 + Math.max(1, Math.min(h.down, v * scales.pxPerUsd))) * 10) / 10}`
-    })
-    return d
-  }, [data.usd, axis, base, h.down, scales.pxPerUsd])
-  const pointerX = (e: React.PointerEvent) => e.clientX - e.currentTarget.getBoundingClientRect().left
-  const svgX = (e: React.PointerEvent<SVGElement>) =>
-    e.clientX - (e.currentTarget.ownerSVGElement ?? (e.currentTarget as SVGSVGElement)).getBoundingClientRect().left
   const mine = hover?.row === data.key ? hover.slot : -1
-  const sel = selection && selection.key === groupKey && !selection.session ? selection : null
-  const sc = faint ? 0.5 : 1
 
-  const ctxTick = scaleLabels ? niceFloor((h.up / Math.max(scales.pxPerTok, 1e-9)) * 0.92) : 0
-  const usdTick = scaleLabels ? niceFloor((h.down / Math.max(scales.pxPerUsd, 1e-9)) * 0.92) : 0
+  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - r.left
+    const y = e.clientY - r.top
+    const slot = slotAt(axis, x)
+    if (slot < 0) {
+      last.current = ''
+      setHover(null)
+      return
+    }
+    const near = spines.length > 0 && y > base + 2 ? spawnsNear(data.spans, axis, x) : null
+    const k = `${data.key}|${slot}|${near ? `${near.total}:${near.titles[0] ?? ''}` : ''}`
+    if (k === last.current) return
+    last.current = k
+    setHover({ row: data.key, slot, spawns: near ?? undefined, group: data.group, lane: data.lane })
+  }
 
   return (
     <svg
@@ -195,47 +188,16 @@ function RowPlot({
       height={height}
       className="block cursor-crosshair select-none"
       role="img"
-      aria-label={`Spend and context of ${data.key || 'no value'} over time`}
-      onPointerMove={(e) => {
-        const s = slotAt(axis, pointerX(e))
-        if (s < 0) setHover(null)
-        else if (mine !== s || hover?.span) setHover({ row: data.key, slot: s, lane: data.lane })
-      }}
+      aria-label="Context and spawned agents over time"
+      onPointerMove={onMove}
       onPointerLeave={() => {
-        anchor.current = -1
+        last.current = ''
         setHover(null)
-      }}
-      onPointerCancel={() => setHover(null)}
-      onPointerDown={(e) => {
-        anchor.current = slotAt(axis, pointerX(e))
-      }}
-      onPointerUp={(e) => {
-        const s = slotAt(axis, pointerX(e))
-        if (s >= 0 && anchor.current >= 0) {
-          const a = Math.min(anchor.current, s)
-          const b = Math.max(anchor.current, s)
-          shared.select({
-            key: groupKey,
-            t0: axis.fromMs + a * axis.slotMs,
-            t1: axis.fromMs + (b + 1) * axis.slotMs,
-          })
-        }
-        anchor.current = -1
       }}
     >
       {midnights.map((x) => (
         <line key={x} x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={1} opacity={0.6} />
       ))}
-      {sel && (
-        <rect
-          x={xOf(axis, sel.t0)}
-          y={0}
-          width={Math.max(2, xOf(axis, sel.t1) - xOf(axis, sel.t0))}
-          height={height}
-          fill="var(--accent)"
-          opacity={0.16}
-        />
-      )}
       {mine >= 0 && (
         <rect
           x={slotX(axis, mine)}
@@ -246,122 +208,63 @@ function RowPlot({
           opacity={0.1}
         />
       )}
-      <g opacity={sc}>
-        <path d={path.area} fill={COLOR.main} fillOpacity={CTX_FILL} />
-        <path d={path.line} fill="none" stroke={COLOR.main} strokeWidth={CTX_LINE} strokeLinejoin="round" />
-        <path d={spend} fill="none" stroke={SPEND_COLOR} strokeWidth={1} opacity={0.85} />
-      </g>
+      <path d={idlePath} fill={COLOR.main} fillOpacity={IDLE_FILL} />
+      <path d={ctxPath} fill={COLOR.main} fillOpacity={CTX_FILL} />
       <line x1={0} x2={axis.width} y1={base} y2={base} stroke="var(--line)" strokeWidth={1} />
-      <g opacity={sc}>
-        {runs.map((r) => (
-          <line
-            key={r.from}
-            x1={slotX(axis, r.from)}
-            x2={slotX(axis, r.to)}
-            y1={base}
-            y2={base}
-            stroke={COLOR.main}
-            strokeWidth={ACTIVE_W[r.weight]}
-          />
-        ))}
-      </g>
-      {ctxTick > 0 && ctxTick * scales.pxPerTok >= 14 && (
-        <ScaleLine y={base - ctxTick * scales.pxPerTok} text={`${formatTokens(ctxTick)} tokens`} />
-      )}
-      {usdTick > 0 && usdTick * scales.pxPerUsd >= 12 && (
-        <ScaleLine y={base + 1.5 + usdTick * scales.pxPerUsd} text={`${formatMoney(usdTick)} per slot`} />
-      )}
-      {[...marks.entries()].map(([i, m]) => {
-        const cx = slotX(axis, i) + axis.slotW / 2
-        const cold = m.cold > 0
-        const mark = cold ? COMPACT_MARK.cold : COMPACT_MARK.warm
-        const c = data.ctx[i] ?? 0
-        const y0 = c > 0 ? Math.max(2, base - c * scales.pxPerTok - 4) : base - 8
+      {runs.map((r) => (
+        <line
+          key={r.from}
+          x1={slotX(axis, r.from)}
+          x2={slotX(axis, r.to)}
+          y1={base}
+          y2={base}
+          stroke={COLOR.main}
+          strokeWidth={ACTIVE_W[r.weight]}
+        />
+      ))}
+      {spines.map((ks) => {
+        const color = spanColor(ks.kind)
         return (
-          <line
-            key={i}
-            x1={cx}
-            x2={cx}
-            y1={y0}
-            y2={base}
-            stroke={markColor(cold ? { cache: 'cold' } : m.warm ? { cache: 'warm' } : undefined)}
-            strokeWidth={mark.width}
-            strokeDasharray={mark.dash}
-            opacity={sc}
-            pointerEvents="none"
-          />
-        )
-      })}
-      {layout.items.map((it, k) => {
-        const kind = it.span.kind
-        const color = spanColor(kind)
-        const y = lanesTop + it.lane * LANE_H
-        const on = hover?.span === it.span
-        const r = Math.min(6, Math.abs(y - base))
-        const x1 = Math.max(it.x1, it.x0 + 16)
-        const sel2 = selection?.session?.id === it.span.session.id && selection.what === kind
-        return (
-          <g
-            // biome-ignore lint/suspicious/noArrayIndexKey: spans are positional
-            key={k}
-            opacity={sc}
-            className="cursor-pointer"
-            onPointerMove={(e) => {
-              e.stopPropagation()
-              if (hover?.span !== it.span)
-                setHover({ row: data.key, slot: slotAt(axis, svgX(e)), span: it.span, lane: data.lane })
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-            onClick={() =>
-              shared.select({
-                key: groupKey,
-                t0: axis.fromMs,
-                t1: axis.toMs,
-                session: it.span.session,
-                what: kind,
-              })
-            }
-          >
-            <rect x={it.x0 - 3} y={y - LANE_H / 2} width={x1 - it.x0 + 6} height={LANE_H} fill="transparent" />
-            {!it.clipped && (
+          <g key={ks.kind}>
+            {ks.ticks.length > 0 && (
               <path
-                d={elbowPath(it.x0, base, y)}
-                fill="none"
+                d={ks.ticks.map((x) => `M${x},${base}V${laneY}`).join('')}
                 stroke={color}
-                strokeWidth={SPINE_W}
-                strokeLinecap="round"
-                opacity={on || sel2 ? 1 : SPINE_OPACITY}
-                pointerEvents="none"
+                strokeWidth={TICK_W}
+                opacity={TICK_OPACITY}
+                fill="none"
               />
             )}
-            <line
-              x1={it.clipped ? 0 : it.x0 + r}
-              x2={x1}
-              y1={y}
-              y2={y}
-              stroke={color}
-              strokeWidth={on || sel2 ? 2.5 : 2}
-              strokeDasharray={kind === 'workflow' ? WORKFLOW_DASH : undefined}
-              pointerEvents="none"
-            />
-            {!it.clipped && (kind === 'fork' || isBranch(kind)) && (
-              <BranchNode x={it.x0} y={base} color={color} ring={kind === 'continuation'} />
-            )}
-            {it.span.n > 1 && x1 + 24 <= axis.width && (
-              <text
-                x={x1 + 3}
-                y={y + 3}
-                fontSize={9}
-                fill="var(--muted)"
-                stroke="var(--surface)"
-                strokeWidth={2.5}
-                paintOrder="stroke"
-                pointerEvents="none"
-              >
-                {`×${it.span.n}`}
-              </text>
-            )}
+            {ks.runs.map((r) => {
+              const rad = Math.min(6, LANE_DEPTH)
+              return (
+                <g key={r.x0}>
+                  {!r.clipped && (
+                    <path
+                      d={elbowPath(r.x0, base, laneY)}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={RUN_W - 0.5}
+                      strokeLinecap="round"
+                      opacity={0.85}
+                    />
+                  )}
+                  <line
+                    x1={r.clipped ? 0 : r.x0 + rad}
+                    x2={r.x1}
+                    y1={laneY}
+                    y2={laneY}
+                    stroke={color}
+                    strokeWidth={RUN_W}
+                    strokeDasharray={ks.kind === 'workflow' ? WORKFLOW_DASH : undefined}
+                  />
+                </g>
+              )
+            })}
+            {isBranch(ks.kind) &&
+              ks.ticks.map((x) => (
+                <BranchNode key={x} x={x} y={base} color={color} ring={ks.kind === 'continuation'} />
+              ))}
           </g>
         )
       })}
@@ -369,270 +272,214 @@ function RowPlot({
   )
 }
 
-const axisPad = 14
+// ---- table rows --------------------------------------------------------------------------
 
-function ScaleLine({ y, text }: { y: number; text: string }) {
+function Num({ w, children, className }: { w: number; children: ReactNode; className?: string }) {
   return (
-    <g pointerEvents="none">
-      <line x1={0} x2={axisPad} y1={y} y2={y} stroke="var(--faint)" strokeWidth={1} strokeDasharray="2 2" />
-      <text
-        x={axisPad + 3}
-        y={y + 3}
-        fontSize={9}
-        fill="var(--faint)"
-        stroke="var(--surface)"
-        strokeWidth={2.5}
-        paintOrder="stroke"
-      >
-        {text}
-      </text>
-    </g>
+    <span className={cn('shrink-0 text-right tabular-nums', className)} style={{ width: w }}>
+      {children}
+    </span>
   )
 }
 
-// ---- rows --------------------------------------------------------------------------------
-
-const groupData = (g: Overview['groups'][number], mode: CtxMode): RowData => ({
-  key: g.key,
-  ctx: contextOf(g, mode),
-  usd: g.usdSlots,
-  active: g.active,
-  events: g.events,
-  spans: g.spans,
-})
-
-const laneData = (groupKey: string, l: OverviewLane): RowData => ({
-  key: `${groupKey}\u0000${l.harness}/${l.id}`,
-  ctx: l.context,
-  usd: l.usdSlots,
-  active: l.active,
-  events: l.events,
-  spans: l.spans,
-  lane: l,
-})
-
-function RowShell({ label, plot, className }: { label: ReactNode; plot: ReactNode; className?: string }) {
+/** The text line of a row: title and the four columns. */
+function TextLine({
+  title,
+  turns,
+  agents,
+  usd,
+  last,
+  className,
+}: {
+  title: ReactNode
+  turns?: number
+  agents?: number
+  usd?: number
+  last?: string
+  className?: string
+}) {
+  const now = useNow()
+  const count = (n: number | undefined) =>
+    n === undefined ? '' : n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US')
   return (
-    <div className={cn('flex border-line border-b', className)}>
-      <div className="shrink-0 overflow-hidden px-3 py-1" style={{ width: LABEL_W }}>
-        {label}
-      </div>
-      <div className="min-w-0 flex-1">{plot}</div>
+    <div className={cn('flex items-baseline gap-2 pt-1 text-sec', className)}>
+      <div className="min-w-0 flex-1 truncate">{title}</div>
+      <Num w={COLS.turns}>{count(turns)}</Num>
+      <Num w={COLS.agents}>{count(agents)}</Num>
+      <Num w={COLS.spend}>{usd !== undefined && <Money usd={usd} />}</Num>
+      <Num w={COLS.last} className="whitespace-nowrap text-muted">
+        {last !== undefined && (
+          <time dateTime={last} title={last}>
+            {lastLabel(last, now.getTime())}
+          </time>
+        )}
+      </Num>
     </div>
   )
 }
 
-/** A row: its height is its own peaks on the shared scales plus the sub-lanes its spines need. */
-function PlotRow({
-  data,
-  groupKey,
-  shared,
-  label,
-  className,
-  minHeight,
-  minSide,
-  faint,
-  noContext,
-  scaleLabels,
-}: {
-  data: RowData
-  groupKey: string
-  shared: Shared
-  label: ReactNode
-  className?: string
-  minHeight: number
-  minSide?: number
-  faint?: boolean
-  noContext?: boolean
-  scaleLabels?: boolean
-}) {
-  const layout = useMemo(() => layoutSpans(data.spans, shared.axis), [data.spans, shared.axis])
-  const h = rowHeights(noContext ? [] : data.ctx, data.usd, shared.scales, minSide)
-  const hh: Heights = noContext ? { up: 0, down: h.down } : h
-  const height = Math.max(minHeight, hh.up + hh.down + 2 * PAD + laneBlock(layout.lanes))
+function SessionRow({ l, shared }: { l: OverviewLane; shared: Shared }) {
   return (
-    <RowShell
-      className={className}
-      label={label}
-      plot={
-        <RowPlot
-          data={data}
-          groupKey={groupKey}
-          h={hh}
-          height={height}
-          layout={layout}
-          shared={shared}
-          faint={faint}
-          scaleLabels={scaleLabels}
-        />
-      }
-    />
+    <div className="border-line border-t border-dashed first:border-t-0">
+      <TextLine
+        title={
+          <Link
+            to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
+            className="text-fg hover:underline"
+            title={l.title || l.id}
+          >
+            {l.title || l.id.slice(0, 8)}
+          </Link>
+        }
+        turns={l.turns}
+        agents={l.agents}
+        usd={l.usd}
+        last={l.lastActivityAt}
+      />
+      <RowGraph data={laneData(l)} shared={shared} />
+    </div>
   )
 }
 
-function GroupRow({
+function GroupBlock({
   g,
-  mode,
-  shared,
-  open,
+  lanes,
+  closed,
+  all,
   onToggle,
-  first,
+  onAll,
+  shared,
 }: {
-  g: Overview['groups'][number]
-  mode: CtxMode
-  shared: Shared
-  open: boolean
+  g: OverviewGroup
+  lanes: OverviewLane[]
+  closed: boolean
+  all: boolean
   onToggle: () => void
-  first: boolean
+  onAll: () => void
+  shared: Shared
 }) {
+  const { shown, more } = visibleLanes(lanes, all)
   return (
-    <PlotRow
-      data={groupData(g, mode)}
-      groupKey={g.key}
-      shared={shared}
-      minHeight={MIN_ROW}
-      scaleLabels={first}
-      label={
+    <div className="flex border-line border-t">
+      <div className="shrink-0 py-1.5 pr-1 pl-2" style={{ width: GUTTER_W }}>
         <button
           type="button"
           onClick={onToggle}
-          aria-expanded={open}
+          aria-expanded={!closed}
           className="flex w-full min-w-0 items-start gap-1 text-left"
           title={g.key || 'no value'}
         >
-          {open ? (
-            <ChevronDown size={14} className="mt-0.5 shrink-0 text-muted" />
-          ) : (
+          {closed ? (
             <ChevronRight size={14} className="mt-0.5 shrink-0 text-muted" />
+          ) : (
+            <ChevronDown size={14} className="mt-0.5 shrink-0 text-muted" />
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-body text-fg">{g.name || 'no value'}</span>
+            <span className="block truncate font-medium text-body text-fg">{g.name || 'no value'}</span>
             <span className="flex items-baseline gap-1 whitespace-nowrap text-meta text-muted">
-              <Money usd={g.usd} />
+              <Money usd={g.usd} dim />
               <span>·</span>
-              <span>{plural(g.sessions, 'session')}</span>
-              {g.priciest && (
-                <>
-                  <span>·</span>
-                  <span>max</span>
-                  <Money usd={g.priciest.usd} dim />
-                </>
-              )}
+              <span>{g.sessions}</span>
             </span>
           </span>
         </button>
-      }
-    />
-  )
-}
-
-function Lanes({
-  groupKey,
-  base,
-  shared,
-}: {
-  groupKey: string
-  base: Parameters<typeof useOverview>[0]
-  shared: Shared
-}) {
-  const q = useOverview({ ...base, group: groupKey })
-  const lanes = q.data?.lanes
-  // a refetch after a change of slot keeps the old lanes until the new ones come: skip them meanwhile
-  if (!lanes || q.data?.slotMs !== shared.axis.slotMs)
-    return (
-      <RowShell
-        label={<Skeleton className="ml-5 h-3 w-32" />}
-        plot={<div style={{ height: MIN_LANE }} />}
-        className="bg-surface-2/40"
-      />
-    )
-  return (
-    <>
-      {lanes.map((l) => (
-        <PlotRow
-          key={`${l.harness}/${l.id}`}
-          data={laneData(groupKey, l)}
-          groupKey={groupKey}
-          shared={shared}
-          className="bg-surface-2/40"
-          minHeight={MIN_LANE}
-          minSide={3}
-          label={
-            <div className="flex min-w-0 items-baseline gap-2 pl-5">
-              <Link
-                to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
-                className="min-w-0 flex-1 truncate text-sec"
-                title={l.title || l.id}
-              >
-                {l.title || l.id.slice(0, 8)}
-              </Link>
-              <Money usd={l.usd} dim className="text-meta" />
-            </div>
-          }
-        />
-      ))}
-      {lanes.length === 0 && (
-        <RowShell label={<span className="pl-5 text-meta text-faint">no sessions</span>} plot={null} />
-      )}
-    </>
-  )
-}
-
-/** Scripted runs are not groups: no click lists them. */
-const noSelect = (s: Shared): Shared => ({ ...s, select: () => {}, selection: null })
-
-function ScriptedRow({ o, shared }: { o: Overview; shared: Shared }) {
-  const data: RowData = { key: '\u0000scripted', ctx: [], usd: o.scripted.usdSlots, active: [], events: [], spans: [] }
-  return (
-    <PlotRow
-      data={data}
-      groupKey=""
-      shared={noSelect(shared)}
-      className="border-b-0"
-      minHeight={MIN_LANE}
-      minSide={3}
-      faint
-      noContext
-      label={
-        <div className="flex min-w-0 items-baseline gap-1 pl-5 text-meta text-faint">
-          <span className="truncate">{plural(o.scripted.sessions, 'scripted run')}</span>
-          <span>·</span>
-          <Money usd={o.scripted.usd} dim />
+      </div>
+      <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
+        <div>
+          <TextLine
+            className="font-medium"
+            title={`All ${plural(g.sessions, 'session')}`}
+            turns={g.turns}
+            agents={g.agents}
+            usd={g.usd}
+            last={g.lastActivityAt}
+          />
+          <RowGraph data={groupData(g, shared.mode)} shared={shared} />
         </div>
-      }
-    />
+        {!closed && (
+          <div className="mt-0.5 border-line border-t">
+            {shown.map((l) => (
+              <SessionRow key={`${l.harness}/${l.id}`} l={l} shared={shared} />
+            ))}
+            {(more > 0 || (all && lanes.length > SHOWN)) && (
+              <button
+                type="button"
+                onClick={onAll}
+                className="py-1 text-left text-meta text-muted hover:text-fg"
+                aria-label={more > 0 ? `Show ${more} more sessions` : 'Show fewer sessions'}
+              >
+                {more > 0 ? `${more} more ›` : '‹ fewer'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
-// ---- the axis ----------------------------------------------------------------------------
-
-function AxisRow({ axis }: { axis: Axis }) {
-  const ticks = axisTicks(axis)
+function ScriptedRow({ o }: { o: Overview }) {
   return (
-    <div className="flex border-line border-b">
-      <div className="shrink-0" style={{ width: LABEL_W }} />
-      <div className="min-w-0 flex-1">
-        <svg width={axis.width} height={22} className="block" role="img" aria-label="Time axis">
-          {ticks.map((t) => {
-            const right = t.x > axis.width - 52
-            return (
-              <g key={t.x}>
-                <line x1={t.x} x2={t.x} y1={t.day ? 4 : t.labelled ? 14 : 17} y2={22} stroke="var(--line)" />
-                {t.labelled && (
-                  <text
-                    x={t.x + (right ? -3 : 3)}
-                    y={13}
-                    fontSize={11}
-                    textAnchor={right ? 'end' : 'start'}
-                    fill={t.day ? 'var(--muted)' : 'var(--faint)'}
-                  >
-                    {t.label}
-                  </text>
-                )}
-              </g>
-            )
-          })}
-        </svg>
+    <div className="flex border-line border-t">
+      <div style={{ width: GUTTER_W }} className="shrink-0" />
+      <div className="min-w-0 flex-1 pb-1 text-faint" style={{ paddingInline: CELL_PAD }}>
+        <TextLine
+          title={`${plural(o.scripted.sessions, 'scripted run')}`}
+          usd={o.scripted.usd}
+          className="[&_*]:text-faint"
+        />
+      </div>
+    </div>
+  )
+}
+
+// ---- the header: columns and time axis ---------------------------------------------------
+
+function Header({ axis, maxTok }: { axis: Axis; maxTok: number }) {
+  const ticks = fitLabels(axisTicks(axis), axis.width)
+  const th = 'shrink-0 text-right text-meta uppercase tracking-wide text-faint'
+  return (
+    <div className="sticky top-0 z-10 border-line border-b bg-surface">
+      <div className="flex">
+        <div className="shrink-0" style={{ width: GUTTER_W }} />
+        <div className="min-w-0 flex-1" style={{ paddingInline: CELL_PAD }}>
+          <div className="flex items-baseline gap-2 pt-1.5">
+            <div className="flex min-w-0 flex-1 items-baseline gap-3 text-meta uppercase tracking-wide text-faint">
+              <span>Session</span>
+              {maxTok > 0 && (
+                <span className="truncate normal-case tracking-normal">
+                  context: 15 px = {formatTokens(maxTok)} tokens
+                </span>
+              )}
+            </div>
+            <span className={th} style={{ width: COLS.turns }}>
+              Turns
+            </span>
+            <span className={th} style={{ width: COLS.agents }}>
+              Agents
+            </span>
+            <span className={th} style={{ width: COLS.spend }}>
+              Spend
+            </span>
+            <span className={th} style={{ width: COLS.last }}>
+              Last
+            </span>
+          </div>
+          <svg width={axis.width} height={20} className="block" role="img" aria-label="Time axis">
+            {ticks.map((t) => {
+              return (
+                <g key={t.x}>
+                  <line x1={t.x} x2={t.x} y1={t.day ? 3 : t.labelled ? 11 : 14} y2={20} stroke="var(--line)" />
+                  {t.labelled && (
+                    <text x={t.x + 3} y={12} fontSize={11} fill={t.day ? 'var(--muted)' : 'var(--faint)'}>
+                      {t.label}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+          </svg>
+        </div>
       </div>
     </div>
   )
@@ -640,175 +487,61 @@ function AxisRow({ axis }: { axis: Axis }) {
 
 // ---- hover readout -----------------------------------------------------------------------
 
-const clock = (t: number) =>
-  new Date(t).toLocaleString([], {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-
 function Readout({ o, hover }: { o: Overview; hover: Hover | null }) {
   const fromMs = Date.parse(o.from)
   let body: ReactNode = (
     <span className="text-faint">
-      Hover a slot for its numbers, a spine for its work; click to list the sessions, drag across a row for a range.
+      Hover a graph for its numbers; under a row, each thin line is an agent the session launched, a bar the run of
+      them.
     </span>
   )
   if (hover && hover.slot >= 0 && hover.slot < o.slots) {
-    const when = slotLabel(fromMs, o.slotMs, hover.slot)
-    const lane = hover.lane
-    const g = lane ? undefined : o.groups.find((x) => x.key === hover.row)
     const i = hover.slot
-    const sp = hover.span
-    const words = describeCompactions(compactionsBySlot((lane ?? g)?.events).get(i))
-    if (sp) {
-      const t0 = Date.parse(sp.start)
-      const t1 = Date.parse(sp.end)
+    const when = slotLabel(fromMs, o.slotMs, i)
+    const { group: g, lane, spawns } = hover
+    const name = lane
+      ? lane.title || lane.id.slice(0, 8)
+      : `All ${plural(g?.sessions ?? 0, 'session')} of ${g?.name || 'no value'}`
+    if (spawns) {
       body = (
         <>
           <div className="flex items-baseline gap-2">
-            <span className="shrink-0 text-fg">
-              {SPAN_LABEL[sp.kind]}
-              {sp.n > 1 ? ` ×${sp.n}` : ''}
-            </span>
-            <span className="min-w-0 truncate text-muted">{sp.title || sp.session.id.slice(0, 8)}</span>
+            <span className="shrink-0 text-fg">{describeSpawns(spawns)}</span>
+            <span className="min-w-0 truncate text-muted">{spawns.titles.join(' · ')}</span>
           </div>
-          <div className="text-muted">
-            started {clock(t0)}, {formatDuration(t1 - t0)} long
+          <div className="truncate text-muted">
+            launched near {when}, in {name}
           </div>
         </>
       )
-    } else if (g) {
+    } else if (g || lane) {
+      const usd = lane ? laneAt(lane.usdSlots, lane.slot0, i) : (g?.usdSlots[i] ?? 0)
+      const ctx = lane ? laneAt(lane.context, lane.slot0, i) : (g?.contextSum[i] ?? 0)
+      const peak = g?.contextPeak[i] ?? 0
+      const idle = lane ? laneAt(lane.idle, lane.slot0, i) : (g?.idleSum[i] ?? 0)
+      const running = lane ? laneAt(lane.active, lane.slot0, i) : (g?.active[i] ?? 0)
       body = (
         <>
           <div className="flex items-baseline gap-2">
-            <span className="text-fg">{g.name || 'no value'}</span>
-            <span className="text-muted">{when}</span>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-3 text-muted">
-            <span>
-              <Money usd={g.usdSlots[i] ?? 0} /> in the slot
-            </span>
-            <span>{plural(g.active[i] ?? 0, 'session')} running</span>
-            <span>
-              context {formatTokens(g.contextSum[i] ?? 0)} summed, {formatTokens(g.contextPeak[i] ?? 0)} peak
-            </span>
-            {words && <span className="text-fg">{words}</span>}
-          </div>
-        </>
-      )
-    } else if (lane) {
-      body = (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="truncate text-fg">{lane.title || lane.id}</span>
+            <span className="min-w-0 truncate text-fg">{name}</span>
             <span className="shrink-0 text-muted">{when}</span>
           </div>
           <div className="flex flex-wrap items-baseline gap-x-3 text-muted">
             <span>
-              <Money usd={lane.usdSlots[i] ?? 0} /> in the slot
+              <Money usd={usd} /> in the slot
             </span>
-            <span>context {formatTokens(lane.context[i] ?? 0)}</span>
-            {words && <span className="text-fg">{words}</span>}
-          </div>
-        </>
-      )
-    } else if (hover.row.endsWith('scripted')) {
-      body = (
-        <>
-          <div className="flex items-baseline gap-2">
-            <span className="text-fg">Scripted runs</span>
-            <span className="text-muted">{when}</span>
-          </div>
-          <div className="text-muted">
-            <Money usd={o.scripted.usdSlots[i] ?? 0} /> in the slot
+            <span>{lane ? (running > 0 ? 'running' : 'not running') : `${plural(running, 'session')} running`}</span>
+            <span>
+              context {formatTokens(ctx)}
+              {g && ctx !== peak ? ` summed, ${formatTokens(peak)} peak` : ''}
+            </span>
+            {idle > 0 && <span>{formatTokens(idle)} idle</span>}
           </div>
         </>
       )
     }
   }
   return <div className="h-11 overflow-hidden px-3 py-1 text-sec leading-snug">{body}</div>
-}
-
-// ---- the list under the plot -------------------------------------------------------------
-
-function SlotList({
-  sel,
-  base,
-  onClose,
-}: {
-  sel: Selection
-  base: Parameters<typeof useOverview>[0]
-  onClose: () => void
-}) {
-  const q = useOverview({ ...base, group: sel.key })
-  const o = q.data
-  const hits = useMemo(() => {
-    if (!o?.lanes) return undefined
-    const from = Date.parse(o.from)
-    const r = {
-      from: Math.max(0, Math.floor((sel.t0 - from) / o.slotMs)),
-      to: Math.min(o.slots - 1, Math.ceil((sel.t1 - from) / o.slotMs) - 1),
-    }
-    const all = lanesIn(o.lanes, r)
-    return sel.session
-      ? all.filter((h) => h.lane.harness === sel.session?.harness && h.lane.id === sel.session.id)
-      : all
-  }, [o, sel])
-  return (
-    <section
-      className="sticky bottom-0 z-10 border-line border-t bg-surface shadow-[0_-1px_0_var(--line)]"
-      aria-label="Sessions in the selected range"
-    >
-      <div className="flex items-center gap-2 px-3 py-1.5 text-sec">
-        <span className="font-medium text-fg">{sel.name || 'no value'}</span>
-        <span className="text-muted">
-          {sel.session
-            ? `the session of this ${SPAN_LABEL[sel.what as OverviewSpan['kind']] ?? 'spine'}`
-            : rangeLabel(sel.t0, sel.t1)}
-        </span>
-        {hits && <span className="text-faint">{plural(hits.length, 'session')}</span>}
-        <button
-          type="button"
-          onClick={onClose}
-          className="ml-auto text-muted hover:text-fg"
-          aria-label="Close the list"
-        >
-          <X size={14} />
-        </button>
-      </div>
-      <div className="max-h-56 overflow-auto border-line border-t">
-        {!hits && <div className="px-3 py-2 text-sec text-faint">Loading</div>}
-        {hits?.length === 0 && <div className="px-3 py-2 text-sec text-faint">No session ran here.</div>}
-        {hits?.map(({ lane, usdIn }) => (
-          <div
-            key={`${lane.harness}/${lane.id}`}
-            className="flex items-baseline gap-4 border-line border-b px-3 py-1 text-sec last:border-b-0"
-          >
-            <Link
-              to={`/s/${encodeURIComponent(lane.harness)}/${encodeURIComponent(lane.id)}`}
-              className="min-w-0 flex-1 truncate"
-              title={lane.title || lane.id}
-            >
-              {lane.title || lane.id.slice(0, 8)}
-            </Link>
-            <span className="w-28 text-right text-muted">
-              <Money usd={usdIn} /> here
-            </span>
-            <span className="w-28 text-right text-muted">
-              <Money usd={lane.usd} dim /> in range
-            </span>
-            <span className="w-28 text-right text-muted">
-              <RelTime time={lane.lastActivityAt} />
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
 }
 
 // ---- the page ----------------------------------------------------------------------------
@@ -819,8 +552,10 @@ export function OverviewPage() {
   const range = oneOf<Range>(sp.get('range'), ['1d', '7d', '30d'], '7d')
   const by = oneOf<GroupDim>(sp.get('by'), ['dir', 'checkout', 'repo', 'remote'], 'dir')
   const sort = oneOf<SortKey>(sp.get('sort'), ['spend', 'sessions', 'priciest', 'recent'], 'spend')
-  const mode = oneOf<CtxMode>(sp.get('ctx'), ['sum', 'peak'], 'sum')
-  const open = useMemo(() => parseOpen(sp.get('open')), [sp])
+  const mode = oneOf<CtxMode>(sp.get('ctx'), ['sum', 'peak'], 'peak')
+  // groups are open unless listed in `closed`; `all` lists the groups that show every session
+  const closed = useMemo(() => parseKeys(sp.get('closed')), [sp])
+  const all = useMemo(() => parseKeys(sp.get('all')), [sp])
 
   const set = (changes: Record<string, string | undefined>) => {
     const next = new URLSearchParams(sp)
@@ -835,17 +570,20 @@ export function OverviewPage() {
   // once the width has held still, so a drag of the window does not refetch at every pixel.
   const cardRef = useRef<HTMLDivElement>(null)
   const cardW = useWidth(cardRef)
-  const plotW = Math.max(240, cardW - CARD_BORDER - LABEL_W)
+  const plotW = Math.max(240, cardW - CARD_BORDER - GUTTER_W - 2 * CELL_PAD)
   const slot = chooseSlot(RANGES[range].ms, useDebounced(plotW, 250))
 
   // "Ending now", rounded up so that the query key holds still between refreshes.
   const now = useNow(300_000)
   const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
-  const base = { from: new Date(to - RANGES[range].ms).toISOString(), to: new Date(to).toISOString(), slot, by }
-  const query = useOverview(base)
+  const query = useOverview({
+    from: new Date(to - RANGES[range].ms).toISOString(),
+    to: new Date(to).toISOString(),
+    slot,
+    by,
+  })
 
   const [hover, setHover] = useState<Hover | null>(null)
-  const [selection, setSelection] = useState<Selection | null>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new grain or range makes the old hover meaningless
   useEffect(() => setHover(null), [slot, range, by])
 
@@ -861,10 +599,7 @@ export function OverviewPage() {
             { value: '7d', label: '7d', title: 'The last week' },
             { value: '30d', label: '30d', title: 'The last 30 days' },
           ]}
-          onChange={(v) => {
-            setSelection(null)
-            set({ range: v === '7d' ? undefined : v })
-          }}
+          onChange={(v) => set({ range: v === '7d' ? undefined : v })}
         />
         <div className="flex items-center gap-1.5 text-sec text-muted">
           group
@@ -872,10 +607,7 @@ export function OverviewPage() {
             label="Group by"
             value={by}
             options={BY_OPTIONS}
-            onChange={(v) => {
-              setSelection(null)
-              set({ by: v === 'dir' ? undefined : v, open: undefined })
-            }}
+            onChange={(v) => set({ by: v === 'dir' ? undefined : v, closed: undefined, all: undefined })}
           />
         </div>
         <div className="flex items-center gap-1.5 text-sec text-muted">
@@ -896,7 +628,7 @@ export function OverviewPage() {
               { value: 'sum', label: 'Sum', title: "What the group carried: the sum of its sessions' contexts" },
               { value: 'peak', label: 'Peak', title: "Its deepest session's context" },
             ]}
-            onChange={(v) => set({ ctx: v === 'sum' ? undefined : v })}
+            onChange={(v) => set({ ctx: v === 'peak' ? undefined : v })}
           />
         </div>
       </div>
@@ -910,18 +642,17 @@ export function OverviewPage() {
           skeleton={<Skeleton className="h-64 w-full" />}
         >
           {(o) => (
-            <Plot
+            <Table
               o={o}
               plotW={plotW}
               sort={sort}
               mode={mode}
-              open={open}
+              closed={closed}
+              all={all}
               hover={hover}
               setHover={setHover}
-              selection={selection}
-              setSelection={setSelection}
-              onToggle={(key) => set({ open: formatOpen(toggleOpen(open, key)) })}
-              base={base}
+              onToggle={(key) => set({ closed: formatKeys(toggleKey(closed, key)) })}
+              onAll={(key) => set({ all: formatKeys(toggleKey(all, key)) })}
             />
           )}
         </QueryBoundary>
@@ -930,66 +661,59 @@ export function OverviewPage() {
   )
 }
 
-function Plot({
+function Table({
   o,
   plotW,
   sort,
   mode,
-  open,
+  closed,
+  all,
   hover,
   setHover,
-  selection,
-  setSelection,
   onToggle,
-  base,
+  onAll,
 }: {
   o: Overview
   plotW: number
   sort: SortKey
   mode: CtxMode
-  open: string[]
+  closed: string[]
+  all: string[]
   hover: Hover | null
   setHover: (h: Hover | null) => void
-  selection: Selection | null
-  setSelection: (s: Selection | null) => void
   onToggle: (key: string) => void
-  base: Parameters<typeof useOverview>[0]
+  onAll: (key: string) => void
 }) {
   const axis = useMemo(
     () => makeAxis(Date.parse(o.from), Date.parse(o.to), o.slotMs, plotW),
     [o.from, o.to, o.slotMs, plotW],
   )
-  const scales = useMemo(() => scalesFor(o.groups, mode, o.scripted.usdSlots), [o, mode])
+  const { maxTok, pxPerTok } = useMemo(() => tokenScale(o.groups, mode), [o.groups, mode])
   const groups = useMemo(() => sortGroups(o.groups, sort), [o.groups, sort])
-  const shared: Shared = {
-    axis,
-    scales,
-    hover,
-    setHover,
-    selection,
-    select: (s) => setSelection({ ...s, name: o.groups.find((g) => g.key === s.key)?.name ?? s.key }),
-  }
+  const lanes = useMemo(() => {
+    const m = lanesByGroup(o.lanes)
+    return new Map([...m].map(([k, v]) => [k, sortLanes(v, sort)]))
+  }, [o.lanes, sort])
+  const shared: Shared = { axis, pxPerTok, mode, hover, setHover }
   return (
-    <div className="overflow-hidden rounded-card border border-line bg-surface" onPointerLeave={() => setHover(null)}>
+    <div className="overflow-clip rounded-card border border-line bg-surface" onPointerLeave={() => setHover(null)}>
       <div className="border-line border-b">
         <Readout o={o} hover={hover} />
       </div>
-      <AxisRow axis={axis} />
-      {groups.map((g, i) => (
-        <div key={g.key}>
-          <GroupRow
-            g={g}
-            mode={mode}
-            shared={shared}
-            open={open.includes(g.key)}
-            onToggle={() => onToggle(g.key)}
-            first={i === 0}
-          />
-          {open.includes(g.key) && <Lanes groupKey={g.key} base={base} shared={shared} />}
-        </div>
+      <Header axis={axis} maxTok={maxTok} />
+      {groups.map((g) => (
+        <GroupBlock
+          key={g.key}
+          g={g}
+          lanes={lanes.get(g.key) ?? []}
+          closed={closed.includes(g.key)}
+          all={all.includes(g.key)}
+          onToggle={() => onToggle(g.key)}
+          onAll={() => onAll(g.key)}
+          shared={shared}
+        />
       ))}
-      {o.scripted.usd > 0 && <ScriptedRow o={o} shared={shared} />}
-      {selection && <SlotList sel={selection} base={base} onClose={() => setSelection(null)} />}
+      {o.scripted.usd > 0 && <ScriptedRow o={o} />}
     </div>
   )
 }

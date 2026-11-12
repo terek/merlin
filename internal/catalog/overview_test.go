@@ -177,7 +177,7 @@ func TestOverviewContextPeakAndSum(t *testing.T) {
 	wantNear(t, "usd", g.USD, 5.5)
 }
 
-func TestOverviewEvents(t *testing.T) {
+func TestOverviewSpansTurnsAgents(t *testing.T) {
 	zero, one := 0, 1
 	p := syn("claude", "p", "/w", 0, 90, []model.Turn{turn(0, "u0", "go", 0), turn(1, "u1", "more", 20)}, msgSpec{"m1", 0, 1, 0})
 	p.Agents = []model.Agent{
@@ -217,32 +217,51 @@ func TestOverviewEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Slot 0 is 09:30 to 10:30Z, slot 1 to 11:30Z. Agents and sessions are spans now.
-	want := []OverviewEvent{
-		{0, "compaction", "cold", 2}, // s1 and s4 (p owns s4)
-		{0, "compaction", "unknown", 1},
-		{0, "compaction", "warm", 2}, // s2 and the agent's s5
-	}
 	g := group(t, o, "/w")
-	if !reflect.DeepEqual(g.Events, want) {
-		t.Errorf("events:\n got %+v\nwant %+v", g.Events, want)
-	}
-	// Spans: a1, a2 (one turn, overlapping) merge; a3 is a teammate; a4 a fork; a5 a workflow;
+	// Spans: a1 and a2 are one span each; a3 is a teammate; a4 a fork; a5 a workflow;
 	// c1 a subagent of turn 1; c's copy of a1 is an inherited turn's; c is a fork of p.
 	type sp struct {
 		kind string
-		n    int
 		sess string
 		at   int
 	}
 	var got []sp
 	for _, s := range g.Spans {
-		got = append(got, sp{s.Kind, s.N, s.Session.ID, int(s.Start.Sub(t0) / time.Minute)})
+		got = append(got, sp{s.Kind, s.Session.ID, int(s.Start.Sub(t0) / time.Minute)})
 	}
-	wantSp := []sp{{"subagent", 2, "p", 1}, {"teammate", 1, "p", 3}, {"session-fork", 1, "c", 65},
-		{"subagent", 1, "c", 67}, {"fork", 1, "p", 70}, {"workflow", 1, "p", 71}}
+	wantSp := []sp{{"subagent", "p", 1}, {"subagent", "p", 2}, {"teammate", "p", 3}, {"session-fork", "c", 65},
+		{"subagent", "c", 67}, {"fork", "p", 70}, {"workflow", "p", 71}}
 	if !reflect.DeepEqual(got, wantSp) {
 		t.Errorf("spans:\n got %+v\nwant %+v", got, wantSp)
+	}
+	// p: turns 0 and 1 started in the range, 5 agents (a6 is a compact agent). c: its inherited
+	// turn 0 and a1 are not its own; turn 1 and c1 are. The branch itself is not an agent.
+	if g.Turns != 3 || g.Agents != 6 {
+		t.Errorf("group turns %d agents %d, want 3 and 6", g.Turns, g.Agents)
+	}
+	w := "/w"
+	q := ovQuery(time.Hour, 3)
+	q.Group = &w
+	o, _ = cat.Overview(q)
+	lanes := map[string]OverviewLane{}
+	for _, l := range o.Lanes {
+		lanes[l.ID] = l
+	}
+	if l := lanes["p"]; l.Turns != 2 || l.Agents != 5 || l.Group != "/w" {
+		t.Errorf("lane p: turns %d agents %d group %q", l.Turns, l.Agents, l.Group)
+	}
+	if l := lanes["c"]; l.Turns != 1 || l.Agents != 1 {
+		t.Errorf("lane c: turns %d agents %d", l.Turns, l.Agents)
+	}
+	// A range after the first turn and the first agents: only what started in it counts.
+	q = OverviewQuery{From: at(60), To: at(180), Slot: time.Hour, Group: &w}
+	o, _ = cat.Overview(q)
+	lanes = map[string]OverviewLane{}
+	for _, l := range o.Lanes {
+		lanes[l.ID] = l
+	}
+	if l := lanes["p"]; l.Turns != 0 || l.Agents != 2 {
+		t.Errorf("late range, lane p: turns %d agents %d, want 0 and 2 (a4, a5)", l.Turns, l.Agents)
 	}
 }
 
@@ -254,7 +273,7 @@ func ovAgent(id string, kind model.AgentKind, start, end int, turn *int) model.A
 	return a
 }
 
-func TestOverviewSpanMerging(t *testing.T) {
+func TestOverviewSpanPerAgent(t *testing.T) {
 	zero, one := 0, 1
 	p := syn("claude", "p", "/w", 0, 60, []model.Turn{turn(0, "u0", "go", 0), turn(1, "u1", "more", 30)}, msgSpec{"m1", 0, 1, 0})
 	p.Agents = []model.Agent{
@@ -281,44 +300,42 @@ func TestOverviewSpanMerging(t *testing.T) {
 	g := group(t, o, "/w")
 	type sp struct {
 		kind       string
-		n          int
 		start, end int
 		title      string
 	}
 	min := func(t time.Time) int { return int(t.Sub(t0) / time.Minute) }
 	var got []sp
 	for _, s := range g.Spans {
-		got = append(got, sp{s.Kind, s.N, min(s.Start), min(s.End), s.Title})
+		got = append(got, sp{s.Kind, min(s.Start), min(s.End), s.Title})
 	}
 	want := []sp{
-		{"subagent", 4, 1, 10, "d-s1"}, // s1..s4: s4 starts inside s3's life
-		{"fork", 1, 2, 6, "d-f1"},
-		{"subagent", 1, 2, 6, "d-s6"},
-		{"teammate", 1, 2, 6, "d-t1"},
-		{"subagent", 1, 20, 21, "d-s5"},
-		{"subagent", 1, 40, 44, "d-o1"},
+		{"subagent", 1, 5, "d-s1"}, // one span per agent, however close
+		{"fork", 2, 6, "d-f1"},
+		{"subagent", 2, 6, "d-s2"},
+		{"subagent", 2, 6, "d-s6"},
+		{"teammate", 2, 6, "d-t1"},
+		{"subagent", 3, 9, "d-s3"},
+		{"subagent", 8, 10, "d-s4"},
+		{"subagent", 20, 21, "d-s5"},
+		{"subagent", 40, 44, "d-o1"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("spans:\n got %+v\nwant %+v", got, want)
 	}
-	// Within 10 s counts as one; 11 s does not. A span is not clipped, and is listed when its
-	// life overlaps the range.
+	// A span is not clipped, and is listed when its life overlaps the range; an agent that
+	// started before the range is not counted in the lane's agents.
 	q := OverviewQuery{From: at(25), To: at(50), Slot: 5 * time.Minute}
 	o, err = ovCatalog(p).Overview(q)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g := group(t, o, "/w"); len(g.Spans) != 1 || g.Spans[0].Title != "d-o1" {
-		t.Errorf("range spans: %+v", g.Spans)
+	if g := group(t, o, "/w"); len(g.Spans) != 1 || g.Spans[0].Title != "d-o1" || g.Agents != 1 {
+		t.Errorf("range spans: %+v, agents %d", g.Spans, g.Agents)
 	}
-	p.Agents = []model.Agent{
-		ovAgent("x1", model.AgentSubagent, 1, 2, &zero),
-		{ID: "x2", Kind: model.AgentSubagent, StartedAt: at(2).Add(10 * time.Second), EndedAt: at(3), SpawnTurn: &zero},
-		{ID: "x3", Kind: model.AgentSubagent, StartedAt: at(3).Add(11 * time.Second), EndedAt: at(4), SpawnTurn: &zero},
-	}
-	o, _ = ovCatalog(p).Overview(ovQuery(time.Hour, 3))
-	if g := group(t, o, "/w"); len(g.Spans) != 2 || g.Spans[0].N != 2 || g.Spans[1].N != 1 {
-		t.Errorf("10 s gap: %+v", g.Spans)
+	o, _ = ovCatalog(p).Overview(OverviewQuery{From: at(7), To: at(50), Slot: 5 * time.Minute})
+	// The range starts at 10:05Z: s3 (3 to 9) overlaps it and is listed, but started before it.
+	if g := group(t, o, "/w"); len(g.Spans) != 8 || g.Agents != 3 {
+		t.Errorf("early start: %d spans, %d agents; want 8 and 3", len(g.Spans), g.Agents)
 	}
 }
 
@@ -348,17 +365,24 @@ func TestOverviewContinuationSpanAndLanes(t *testing.T) {
 	if len(o.Lanes) != 2 {
 		t.Fatalf("lanes %+v", o.Lanes)
 	}
-	lp, lc := o.Lanes[0], o.Lanes[1]
+	lc, lp := o.Lanes[0], o.Lanes[1] // equal usd: by id
 	if len(lp.Spans) != 1 || lp.Spans[0].Kind != "subagent" || len(lc.Spans) != 1 || lc.Spans[0].Kind != "continuation" {
 		t.Errorf("lane spans: %+v / %+v", lp.Spans, lc.Spans)
 	}
 	// p: one call at 10:00Z (slot 0); c: one call of its own at 10:41Z (slot 1).
-	if want := []int{1, 0, 0}; !reflect.DeepEqual(lp.Active, want) {
+	if want := []int{1, 0, 0}; !reflect.DeepEqual(dense(lp, lp.Active, 3), want) {
 		t.Errorf("p active %v, want %v", lp.Active, want)
 	}
-	if want := []int{0, 1, 0}; !reflect.DeepEqual(lc.Active, want) {
+	if want := []int{0, 1, 0}; !reflect.DeepEqual(dense(lc, lc.Active, 3), want) {
 		t.Errorf("c active %v, want %v", lc.Active, want)
 	}
+}
+
+// dense puts a lane's trimmed array back at its slot in n slots.
+func dense[T any](l OverviewLane, a []T, n int) []T {
+	out := make([]T, n)
+	copy(out[l.Slot0:], a)
+	return out
 }
 
 func TestOverviewHeldContext(t *testing.T) {
@@ -377,10 +401,10 @@ func TestOverviewHeldContext(t *testing.T) {
 	// 10:00Z is 15:30 local, a 1m boundary. The next call at 10:04 holds 5000 through slot 4,
 	// where the next call's own 100 is smaller.
 	o := hold(4)
-	if want := []int64{5000, 5000, 5000, 5000, 5000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; !reflect.DeepEqual(o.Lanes[0].Context, want) {
-		t.Errorf("next at 10:04: %v", o.Lanes[0].Context)
+	if want := []int64{5000, 5000, 5000, 5000, 5000}; !reflect.DeepEqual(o.Lanes[0].Context, want) || o.Lanes[0].Slot0 != 0 {
+		t.Errorf("next at 10:04: %v from %d", o.Lanes[0].Context, o.Lanes[0].Slot0)
 	}
-	if want := []int{1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; !reflect.DeepEqual(o.Lanes[0].Active, want) {
+	if want := []int{1, 1, 1, 1, 1}; !reflect.DeepEqual(o.Lanes[0].Active, want) {
 		t.Errorf("active %v", o.Lanes[0].Active)
 	}
 	g := group(t, o, "/w")
@@ -388,11 +412,11 @@ func TestOverviewHeldContext(t *testing.T) {
 		t.Errorf("group at slot 2: peak %d sum %d active %d", g.ContextPeak[2], g.ContextSum[2], g.Active[2])
 	}
 	// Exactly 5 minutes still holds; 20 minutes ends at the call.
-	if c := hold(5).Lanes[0].Context; c[5] != 5000 || c[3] != 5000 {
+	if c := hold(5).Lanes[0].Context; len(c) != 6 || c[5] != 5000 || c[3] != 5000 {
 		t.Errorf("next at 10:05: %v", c)
 	}
 	o = hold(20)
-	if got := o.Lanes[0].Context; got[0] != 5000 || got[1] != 0 || got[4] != 0 {
+	if got := dense(o.Lanes[0], o.Lanes[0].Context, 15); got[0] != 5000 || got[1] != 0 || got[4] != 0 {
 		t.Errorf("next at 10:20: %v", got)
 	}
 	// A call before the range holds into it.
@@ -465,19 +489,27 @@ func TestOverviewGroupsOrderAndLanes(t *testing.T) {
 	if want := []string{"/x", "/y", "/w"}; !reflect.DeepEqual(keys, want) { // 5, 5 (by key), 3
 		t.Errorf("groups = %v, want %v", keys, want)
 	}
-	if o.Lanes != nil {
-		t.Errorf("lanes without group: %+v", o.Lanes)
+	// Lanes come without a group parameter: by the order of the groups, then usd, then id.
+	var ids []string
+	for _, l := range o.Lanes {
+		ids = append(ids, l.Group+":"+l.ID)
+	}
+	if want := []string{"/x:d", "/y:e", "/w:b", "/w:a"}; !reflect.DeepEqual(ids, want) {
+		t.Errorf("lanes = %v, want %v", ids, want)
 	}
 
 	w := "/w"
 	q.Group = &w
 	o, _ = cat.Overview(q)
+	if len(o.Groups) != 1 || o.Groups[0].Key != "/w" {
+		t.Errorf("group filter: groups %+v", o.Groups)
+	}
 	if len(o.Lanes) != 2 || o.Lanes[0].ID != "b" || o.Lanes[1].ID != "a" {
-		t.Fatalf("lanes = %+v, want b then a (by startedAt)", o.Lanes)
+		t.Fatalf("lanes = %+v, want b then a (by usd)", o.Lanes)
 	}
 	l := o.Lanes[0]
 	wantNear(t, "lane usd", l.USD, 2)
-	if len(l.USDSlots) != 2 || len(l.Context) != 2 || len(l.Active) != 2 || l.Spans == nil || l.Events == nil || l.Title == "" || l.StartedAt.IsZero() {
+	if len(l.USDSlots) != 1 || len(l.Context) != 1 || len(l.Active) != 1 || len(l.Idle) != 1 || l.Spans == nil || l.Title == "" || l.StartedAt.IsZero() {
 		t.Errorf("lane = %+v", l)
 	}
 
@@ -485,12 +517,154 @@ func TestOverviewGroupsOrderAndLanes(t *testing.T) {
 	none := ""
 	q.By, q.Group = GroupRepo, &none
 	o, _ = cat.Overview(q)
-	if len(o.Groups) != 1 || o.Groups[0].Key != "" || o.Groups[0].Name != "(no repository)" || len(o.Lanes) != 4 {
+	if len(o.Groups) != 1 || o.Groups[0].Key != "" || o.Groups[0].Name != "(no repository)" || len(o.Lanes) != 4 || o.Lanes[0].Group != "" {
 		t.Errorf("by repo: groups %+v, %d lanes", o.Groups, len(o.Lanes))
 	}
 	other := "/nowhere"
 	q.Group = &other
 	if o, _ = cat.Overview(q); len(o.Lanes) != 0 {
 		t.Errorf("lanes of an unknown group: %+v", o.Lanes)
+	}
+}
+
+func TestOverviewIdleContext(t *testing.T) {
+	// Calls at minutes 0 (5000), 10 (200), 130 (300), 140 (400), 145 (50): the gap of 10 minutes
+	// is idle, that of 2 hours holds nothing, 10 minutes is idle again, 5 minutes is context.
+	a := syn("claude", "a", "/w", 0, 150, nil)
+	msg(a, "a1", 0, 1, "", model.Tokens{Input: 5000})
+	msg(a, "a2", 10, 1, "", model.Tokens{Input: 200})
+	msg(a, "a3", 130, 1, "", model.Tokens{Input: 300})
+	msg(a, "a4", 140, 1, "", model.Tokens{Input: 400})
+	msg(a, "a5", 145, 1, "", model.Tokens{Input: 50})
+	b := syn("claude", "b", "/w", 0, 150, nil)
+	msg(b, "b1", 0, 1, "", model.Tokens{Input: 70})
+	msg(b, "b2", 30, 1, "", model.Tokens{Input: 1})
+	w := "/w"
+	o, err := ovCatalog(a, b).Overview(OverviewQuery{From: at(0), To: at(150), Slot: 5 * time.Minute, Group: &w})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Slots != 30 {
+		t.Fatalf("%d slots", o.Slots)
+	}
+	var la, lb OverviewLane
+	for _, l := range o.Lanes {
+		if l.ID == "a" {
+			la = l
+		} else {
+			lb = l
+		}
+	}
+	idle, ctx := dense(la, la.Idle, 30), dense(la, la.Context, 30)
+	// 5000 is held as idle from 10:00 to 10:10 (slots 0 to 2). Slot 0 has it as context (the
+	// call itself) and slot 2 has the next call's 200: only slot 1 shows idle.
+	for i, want := range []int64{0, 5000, 0} {
+		if idle[i] != want {
+			t.Errorf("idle[%d] = %d, want %d (idle %v)", i, idle[i], want, idle)
+		}
+	}
+	if ctx[0] != 5000 || ctx[1] != 0 {
+		t.Errorf("context %v", ctx[:4])
+	}
+	// Slot 2 holds the next call's 200 as context at 10:10 (at the call itself): no idle there.
+	if ctx[2] != 200 || idle[2] != 0 {
+		t.Errorf("slot 2: context %d idle %d", ctx[2], idle[2])
+	}
+	// The 200 held from 10:10 and the call at 12:10 are two hours apart: nothing in between.
+	for i := 3; i < 26; i++ {
+		if idle[i] != 0 {
+			t.Errorf("idle[%d] = %d after a 2 h gap", i, idle[i])
+		}
+	}
+	// 12:10 to 12:20: 300 idle in slots 26..28 except where context is held: slot 26 (the call),
+	// and slot 28 (12:20, the next call's own context 400).
+	if idle[27] != 300 || ctx[26] != 300 || idle[26] != 0 || ctx[28] != 400 || idle[28] != 0 {
+		t.Errorf("12:10-12:20: idle %v context %v", idle[26:30], ctx[26:30])
+	}
+	// The last call holds no idle; 400 then 50 five minutes apart is context (slots 28, 29).
+	if idle[29] != 0 || ctx[29] != 400 {
+		t.Errorf("end: idle %d ctx %d", idle[29], ctx[29])
+	}
+	g := group(t, o, "/w")
+	for i := range 30 {
+		bi := int64(0)
+		if i >= lb.Slot0 && i-lb.Slot0 < len(lb.Idle) {
+			bi = lb.Idle[i-lb.Slot0]
+		}
+		if g.IdleSum[i] != idle[i]+bi || g.IdlePeak[i] != max(idle[i], bi) {
+			t.Errorf("group idle at %d: sum %d peak %d, lanes %d and %d", i, g.IdleSum[i], g.IdlePeak[i], idle[i], bi)
+		}
+	}
+	// b: 70 at 10:00, next call 30 minutes later: idle through slots 1..5 (70) and slot 6
+	// is the call's own context.
+	if bi := dense(lb, lb.Idle, 30); bi[1] != 70 || bi[5] != 70 || bi[0] != 0 || bi[6] != 0 {
+		t.Errorf("b idle %v", bi[:8])
+	}
+	if g.IdleSum[1] != 5000+70 || g.IdlePeak[1] != 5000 {
+		t.Errorf("group slot 1: sum %d peak %d", g.IdleSum[1], g.IdlePeak[1])
+	}
+}
+
+func TestOverviewLaneTrimming(t *testing.T) {
+	a := syn("claude", "a", "/w", 0, 200, nil)
+	msg(a, "a1", 62, 1, "", model.Tokens{Input: 900}) // slot 2 of 1h slots from 09:30Z... see below
+	msg(a, "a2", 70, 1, "", model.Tokens{Input: 100})
+	w := "/w"
+	o, err := ovCatalog(a).Overview(OverviewQuery{From: ovFrom, To: ovFrom.Add(8 * time.Hour), Slot: time.Hour, Group: &w})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := o.Lanes[0]
+	// 09:30Z + 2 h = 11:30Z: the call at 11:02Z is slot 1, the other at 11:10Z too; the
+	// 5-minute-plus gap is 8 minutes: idle from 11:02 to 11:10, all inside slot 1.
+	if l.Slot0 != 1 || len(l.USDSlots) != 1 || len(l.Context) != 1 || len(l.Idle) != 1 || len(l.Active) != 1 {
+		t.Fatalf("lane: slot0 %d, lens %d %d %d %d", l.Slot0, len(l.USDSlots), len(l.Context), len(l.Idle), len(l.Active))
+	}
+	if l.Context[0] != 900 || l.Idle[0] != 0 || !near(l.USDSlots[0], 2) {
+		t.Errorf("lane: %+v", l)
+	}
+	g := group(t, o, "/w")
+	if len(g.USDSlots) != 8 || len(g.IdleSum) != 8 || len(g.IdlePeak) != 8 || len(g.ContextPeak) != 8 || len(g.Active) != 8 {
+		t.Errorf("group arrays are not dense")
+	}
+	// Idle that runs into later slots extends the lane's arrays.
+	b := syn("claude", "b", "/w", 0, 200, nil)
+	msg(b, "b1", 5, 1, "", model.Tokens{Input: 900})
+	msg(b, "b2", 125, 1, "", model.Tokens{Input: 100}) // 2 h later: nothing held
+	msg(b, "b3", 160, 1, "", model.Tokens{Input: 100}) // 35 min after b2: idle
+	o, _ = ovCatalog(b).Overview(OverviewQuery{From: ovFrom, To: ovFrom.Add(8 * time.Hour), Slot: time.Hour, Group: &w})
+	l = o.Lanes[0]
+	// b1 10:05Z slot 0; b2 12:05Z slot 2; b3 12:40Z slot 3. Idle 100 from b2 to b3: slot 2 has
+	// context 100 (the call), slot 3 context 100 (the call): idle never shows.
+	if l.Slot0 != 0 || len(l.Context) != 4 {
+		t.Errorf("b: slot0 %d, %d slots", l.Slot0, len(l.Context))
+	}
+}
+
+func TestOverviewLanesWithoutGroupAndFilter(t *testing.T) {
+	a := syn("claude", "a", "/w", 0, 30, nil, msgSpec{"a1", 0, 1, 0})
+	b := syn("claude", "b", "/x", 0, 30, nil, msgSpec{"b1", 0, 3, 0})
+	old := syn("claude", "old", "/w", -600, -590, nil, msgSpec{"o1", -600, 9, 0})
+	s := syn("claude", "s", "/w", 0, 5, nil, msgSpec{"s1", 0, 7, 0})
+	s.Kind = model.KindSDK
+	cat := ovCatalog(a, b, old, s)
+	o, err := cat.Overview(ovQuery(time.Hour, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.Lanes) != 2 || o.Lanes[0].ID != "b" || o.Lanes[0].Group != "/x" || o.Lanes[1].ID != "a" || o.Lanes[1].Group != "/w" {
+		t.Errorf("lanes %+v", o.Lanes)
+	}
+	w := "/w"
+	q := ovQuery(time.Hour, 2)
+	q.Group = &w
+	o, _ = cat.Overview(q)
+	if len(o.Groups) != 1 || len(o.Lanes) != 1 || o.Lanes[0].ID != "a" {
+		t.Errorf("filter: groups %d lanes %+v", len(o.Groups), o.Lanes)
+	}
+	// No lanes is an empty list, not null.
+	o, _ = cat.Overview(OverviewQuery{From: at(5000), To: at(5060), Slot: time.Hour})
+	if o.Lanes == nil || len(o.Lanes) != 0 {
+		t.Errorf("empty lanes: %#v", o.Lanes)
 	}
 }

@@ -24,7 +24,7 @@ func ovRig(t *testing.T) *rig {
 	add := func(id, dir string, kind model.SessionKind, start time.Time, msgs ...model.Message) *model.SessionDigest {
 		d := &model.SessionDigest{SchemaVersion: model.SchemaVersion, Harness: "claude", ID: id, ProjectKey: "k" + dir, Project: dir,
 			Cwd: dir, Kind: kind, Title: "title " + id, StartedAt: start, LastActivityAt: start.Add(time.Hour),
-			Turns: []model.Turn{{Index: 0, UUID: "u-" + id, Origin: model.OriginHuman}}, Messages: msgs}
+			Turns: []model.Turn{{Index: 0, UUID: "u-" + id, Origin: model.OriginHuman, StartedAt: start}}, Messages: msgs}
 		for i := range d.Messages {
 			d.Messages[i].Turn = &zero
 			d.Messages[i].Model = "sonnet"
@@ -87,24 +87,29 @@ func TestOverviewRoute(t *testing.T) {
 	if main.ContextSum[165] != 1500 || main.ContextPeak[165] != 1000 || main.ContextPeak[166] != 4000 {
 		t.Errorf("context: sum %d peak %d / %d", main.ContextSum[165], main.ContextPeak[165], main.ContextPeak[166])
 	}
-	if want := []catalog.OverviewEvent{{Slot: 165, Type: "compaction", Kind: "cold", N: 1}}; !reflect.DeepEqual(main.Events, want) {
-		t.Errorf("events %+v, want %+v", main.Events, want)
+	// a's m1 (09:00) is followed by m2 70 minutes later: idle until then, but slot 165 holds
+	// m1 as context and slot 166 has m2's.
+	if len(main.IdleSum) != 168 || len(main.IdlePeak) != 168 || main.IdleSum[165] != 0 || main.IdleSum[166] != 0 {
+		t.Errorf("idle: %v", main.IdleSum[160:])
+	}
+	if main.Turns != 2 || main.Agents != 1 {
+		t.Errorf("main: turns %d agents %d", main.Turns, main.Agents)
 	}
 	// The agent (a zero-length span: no end, no messages) and the fork b.
 	t1 := testNow.Add(-3 * time.Hour)
 	wantSpans := []catalog.OverviewSpan{
-		{Kind: "subagent", N: 1, Start: t1.Add(time.Minute), End: t1.Add(time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "a"}},
-		{Kind: "session-fork", N: 1, Start: t1.Add(10 * time.Minute), End: t1.Add(70 * time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "b"}, Title: "title b"},
+		{Kind: "subagent", Start: t1.Add(time.Minute), End: t1.Add(time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "a"}},
+		{Kind: "session-fork", Start: t1.Add(10 * time.Minute), End: t1.Add(70 * time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "b"}, Title: "title b"},
 	}
 	if !reflect.DeepEqual(main.Spans, wantSpans) {
 		t.Errorf("spans %+v, want %+v", main.Spans, wantSpans)
 	}
-	// a's m1 (09:00) is not held: the next call is 70 minutes later.
 	if o.Scripted.Sessions != 1 || !near(o.Scripted.USD, 0.5) || len(o.Scripted.USDSlots) != 168 {
 		t.Errorf("scripted %+v", o.Scripted)
 	}
-	if o.Lanes != nil {
-		t.Errorf("lanes without group: %+v", o.Lanes)
+	// Lanes come without group: /other first (the group order), then /main by usd: b, a.
+	if len(o.Lanes) != 3 || o.Lanes[0].ID != "c" || o.Lanes[1].ID != "b" || o.Lanes[2].ID != "a" || o.Lanes[1].Group != "/main" {
+		t.Errorf("lanes: %+v", o.Lanes)
 	}
 	if main.Priciest.ID != "b" {
 		t.Errorf("priciest %+v", main.Priciest)
@@ -137,38 +142,72 @@ func TestOverviewRouteParameters(t *testing.T) {
 func TestOverviewRouteLanes(t *testing.T) {
 	r := ovRig(t)
 	o, _ := r.overview("?group=%2Fmain")
-	if len(o.Lanes) != 2 || o.Lanes[0].ID != "a" || o.Lanes[1].ID != "b" || len(o.Lanes[0].Context) != 168 {
+	if len(o.Groups) != 1 || o.Groups[0].Key != "/main" {
+		t.Errorf("groups with group=: %+v", o.Groups)
+	}
+	if len(o.Lanes) != 2 || o.Lanes[0].ID != "b" || o.Lanes[1].ID != "a" {
 		t.Fatalf("lanes %+v", o.Lanes)
 	}
-	if !near(o.Lanes[0].USD, 3) || !near(o.Lanes[1].USD, 4) {
-		t.Errorf("lane usd %v %v", o.Lanes[0].USD, o.Lanes[1].USD)
+	b, a := o.Lanes[0], o.Lanes[1]
+	if !near(b.USD, 4) || !near(a.USD, 3) || b.Group != "/main" {
+		t.Errorf("lane usd %v %v, group %q", b.USD, a.USD, b.Group)
 	}
-	// group= is the group with no value; absent means no lanes.
+	// a: m1 at 09:00Z (slot 165) and m2 at 10:10Z (slot 166): trimmed to those two. b: m3 at
+	// 09:20Z (slot 165) only.
+	if a.Slot0 != 165 || len(a.Context) != 2 || len(a.USDSlots) != 2 || len(a.Idle) != 2 || len(a.Active) != 2 || a.Context[0] != 1000 || a.Context[1] != 4000 {
+		t.Errorf("lane a: slot0 %d, %v %v", a.Slot0, a.Context, a.Idle)
+	}
+	if b.Slot0 != 165 || len(b.Context) != 1 || a.Turns != 1 || a.Agents != 1 || b.Agents != 0 {
+		t.Errorf("lane b: slot0 %d, %d slots; turns a %d, agents a %d b %d", b.Slot0, len(b.Context), a.Turns, a.Agents, b.Agents)
+	}
+	// group= is the group with no value.
 	o, _ = r.overview("?by=repo&group=")
 	if len(o.Lanes) != 3 {
 		t.Errorf("group= lanes: %d, want 3", len(o.Lanes))
 	}
-	if o, _ = r.overview("?by=repo"); o.Lanes != nil {
-		t.Errorf("no group, lanes: %+v", o.Lanes)
+	if o, _ = r.overview("?by=repo"); len(o.Lanes) != 3 {
+		t.Errorf("no group, lanes: %d, want 3", len(o.Lanes))
 	}
-	// The wire form: no lanes key without group.
-	resp, err := http.Get(r.srv.URL + "/api/overview")
+	// The wire form: lanes is always there, and group even when empty.
+	resp, err := http.Get(r.srv.URL + "/api/overview?by=repo")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	var keys map[string]json.RawMessage
+	var keys struct {
+		Lanes []map[string]json.RawMessage `json:"lanes"`
+	}
 	if err := json.Unmarshal(raw, &keys); err != nil {
 		t.Fatal(err)
 	}
-	if _, has := keys["lanes"]; has {
-		t.Error("lanes key present without group")
+	if len(keys.Lanes) != 3 {
+		t.Fatalf("lanes on the wire: %d", len(keys.Lanes))
 	}
-	for _, k := range []string{"from", "to", "slot", "slotMs", "slots", "by", "groups", "scripted"} {
-		if _, has := keys[k]; !has {
+	for _, k := range []string{"group", "turns", "agents", "slot0", "usdSlots", "context", "idle", "active", "spans"} {
+		if _, has := keys.Lanes[0][k]; !has {
+			t.Errorf("lane key %q missing", k)
+		}
+	}
+	if string(keys.Lanes[0]["group"]) != `""` {
+		t.Errorf("lane group = %s", keys.Lanes[0]["group"])
+	}
+	var top map[string]json.RawMessage
+	json.Unmarshal(raw, &top)
+	for _, k := range []string{"from", "to", "slot", "slotMs", "slots", "by", "groups", "scripted", "lanes"} {
+		if _, has := top[k]; !has {
 			t.Errorf("key %q missing", k)
 		}
+	}
+	var groups []map[string]json.RawMessage
+	json.Unmarshal(top["groups"], &groups)
+	for _, k := range []string{"turns", "agents", "idleSum", "idlePeak"} {
+		if _, has := groups[0][k]; !has {
+			t.Errorf("group key %q missing", k)
+		}
+	}
+	if _, has := groups[0]["events"]; has {
+		t.Error("group still has events")
 	}
 }
 

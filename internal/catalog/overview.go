@@ -11,7 +11,7 @@ import (
 )
 
 // The Overview rollup (docs/api.md, GET /api/overview): per group of sessions and per slot of a
-// time range, what was spent and how much context was carried, with the events that happened.
+// time range, what was spent and how much context was carried, and the work that was launched.
 // It reads owned messages only, so a copied message counts once, as everywhere.
 
 // Overview limits.
@@ -22,8 +22,10 @@ const (
 	// OverviewHold is how long a main-agent call's context is held at most: until the next
 	// call if that comes within it (HOLD_MS in web/src/features/spend/timeline.ts).
 	OverviewHold = 5 * time.Minute
-	// overviewSpanGap: agents of one kind and spawn turn whose lives come within it are one span.
-	overviewSpanGap = 10 * time.Second
+	// overviewIdleMax is how long a main-agent call's context is held as idle (the user is
+	// reading or typing) when the next call comes later than OverviewHold: until that call if it
+	// comes within it, else not at all.
+	overviewIdleMax = time.Hour
 )
 
 // OverviewSlots are the slot lengths a query may name, shortest first.
@@ -52,7 +54,8 @@ func (e *OverviewError) Error() string { return e.Msg }
 // OverviewQuery is the question Overview answers. From and To are required and From must be
 // before To; both are moved outward to slot boundaries in the catalog's location. Slot 0 picks
 // the default. By is one of GroupDir, GroupCheckout, GroupRepo, GroupRemote ("" is GroupDir).
-// Group, when not nil, adds the lanes of that group key ("" is the group with no value).
+// Group, when not nil, restricts the groups and lanes to that group key ("" is the group with
+// no value).
 type OverviewQuery struct {
 	From, To time.Time
 	Slot     time.Duration
@@ -60,8 +63,8 @@ type OverviewQuery struct {
 	Group    *string
 }
 
-// Overview is the answer: dense per-slot arrays, Slots long, slot i covering
-// [From + i·SlotMs, From + (i+1)·SlotMs).
+// Overview is the answer: dense per-slot arrays of groups, Slots long, slot i covering
+// [From + i·SlotMs, From + (i+1)·SlotMs). A lane's arrays are trimmed (see OverviewLane).
 type Overview struct {
 	From     time.Time        `json:"from"`
 	To       time.Time        `json:"to"`
@@ -71,7 +74,7 @@ type Overview struct {
 	By       GroupBy          `json:"by"`
 	Groups   []OverviewGroup  `json:"groups"`
 	Scripted OverviewScripted `json:"scripted"`
-	Lanes    []OverviewLane   `json:"lanes,omitempty"`
+	Lanes    []OverviewLane   `json:"lanes"`
 }
 
 // OverviewGroup is one value of the location key with a message in the range.
@@ -79,14 +82,17 @@ type OverviewGroup struct {
 	Key            string          `json:"key"`
 	Name           string          `json:"name"`
 	Sessions       int             `json:"sessions"`
+	Turns          int             `json:"turns"`
+	Agents         int             `json:"agents"`
 	USD            float64         `json:"usd"`
 	LastActivityAt time.Time       `json:"lastActivityAt,omitzero"`
 	Priciest       OverviewSession `json:"priciest"`
 	USDSlots       []float64       `json:"usdSlots"`
 	ContextPeak    []int64         `json:"contextPeak"`
 	ContextSum     []int64         `json:"contextSum"`
+	IdleSum        []int64         `json:"idleSum"`
+	IdlePeak       []int64         `json:"idlePeak"`
 	Active         []int           `json:"active"`
-	Events         []OverviewEvent `json:"events"`
 	Spans          []OverviewSpan  `json:"spans"`
 }
 
@@ -105,38 +111,32 @@ type OverviewScripted struct {
 	USDSlots []float64 `json:"usdSlots"`
 }
 
-// OverviewLane is one session of the queried group.
+// OverviewLane is one session with an owned message in the range. Its arrays start at Slot0,
+// the first slot where any of them is non-zero, and end at the last such slot; Turns counts the
+// session's own turns that started in the range, Agents the agent spans that started in it.
 type OverviewLane struct {
-	Harness        string          `json:"harness"`
-	ID             string          `json:"id"`
-	Title          string          `json:"title,omitempty"`
-	StartedAt      time.Time       `json:"startedAt,omitzero"`
-	LastActivityAt time.Time       `json:"lastActivityAt,omitzero"`
-	USD            float64         `json:"usd"`
-	USDSlots       []float64       `json:"usdSlots"`
-	Context        []int64         `json:"context"`
-	Active         []int           `json:"active"`
-	Events         []OverviewEvent `json:"events"`
-	Spans          []OverviewSpan  `json:"spans"`
+	Harness        string         `json:"harness"`
+	ID             string         `json:"id"`
+	Title          string         `json:"title,omitempty"`
+	Group          string         `json:"group"`
+	StartedAt      time.Time      `json:"startedAt,omitzero"`
+	LastActivityAt time.Time      `json:"lastActivityAt,omitzero"`
+	USD            float64        `json:"usd"`
+	Turns          int            `json:"turns"`
+	Agents         int            `json:"agents"`
+	Slot0          int            `json:"slot0"`
+	USDSlots       []float64      `json:"usdSlots"`
+	Context        []int64        `json:"context"`
+	Idle           []int64        `json:"idle"`
+	Active         []int          `json:"active"`
+	Spans          []OverviewSpan `json:"spans"`
 }
 
-// OverviewEvent says that N compactions of a kind (cold, warm or unknown) happened in a slot.
-type OverviewEvent struct {
-	Slot int    `json:"slot"`
-	Type string `json:"type"`
-	Kind string `json:"kind"`
-	N    int    `json:"n"`
-}
-
-// OverviewEventCompaction is the only event type.
-const OverviewEventCompaction = "compaction"
-
-// OverviewSpan is work a session launched, with its life: N agents of Kind (subagent,
-// teammate, fork or workflow) of one spawn turn, or one branched session (session-fork or
-// continuation). Start and End are not clipped to the range.
+// OverviewSpan is work a session launched, with its life: one agent of Kind (subagent,
+// teammate, fork or workflow), or one branched session (session-fork or continuation). Start
+// and End are not clipped to the range.
 type OverviewSpan struct {
 	Kind    string     `json:"kind"`
-	N       int        `json:"n"`
 	Start   time.Time  `json:"start"`
 	End     time.Time  `json:"end"`
 	Session SessionRef `json:"session"`
@@ -163,41 +163,18 @@ func overviewRange(from, to time.Time, slot time.Duration, loc *time.Location) (
 	return start.UTC(), max(n, 1)
 }
 
-type evKey struct {
-	slot      int
-	typ, kind string
-}
-
-type evCount map[evKey]int
-
-// list orders events by slot, then type, then kind; never nil.
-func (e evCount) list() []OverviewEvent {
-	out := make([]OverviewEvent, 0, len(e))
-	for k, n := range e {
-		out = append(out, OverviewEvent{Slot: k.slot, Type: k.typ, Kind: k.kind, N: n})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		if a.Slot != b.Slot {
-			return a.Slot < b.Slot
-		}
-		if a.Type != b.Type {
-			return a.Type < b.Type
-		}
-		return a.Kind < b.Kind
-	})
-	return out
-}
-
 // ovSess is what one session did in the range.
 type ovSess struct {
 	s      *sess
 	usd    []float64
 	ctx    []int64
-	seen   []bool // a message of its own in the slot
-	held   []bool // context held in the slot (ctx > 0 from a call before it, or inside it)
+	seen   []bool  // a message of its own in the slot
+	held   []bool  // context held in the slot (ctx > 0 from a call before it, or inside it)
+	idle   []int64 // largest idle context held in the slot, 0 where ctx > 0
 	total  float64
-	events evCount
+	turns  int
+	agents int
+	key    string // its group key
 	spans  []OverviewSpan
 }
 
@@ -245,10 +222,9 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		Groups: []OverviewGroup{}, Scripted: OverviewScripted{USDSlots: make([]float64, n)}}
 
 	type groupAcc struct {
-		g      OverviewGroup
-		events evCount
-		spans  []OverviewSpan
-		best   *ovSess
+		g     OverviewGroup
+		spans []OverviewSpan
+		best  *ovSess
 	}
 	groups := map[string]*groupAcc{}
 	var lanes []*ovSess
@@ -264,7 +240,7 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 				continue
 			}
 			if o.usd == nil {
-				o.usd, o.ctx, o.seen, o.held = make([]float64, n), make([]int64, n), make([]bool, n), make([]bool, n)
+				o.usd, o.ctx, o.seen, o.held, o.idle = make([]float64, n), make([]int64, n), make([]bool, n), make([]bool, n), make([]int64, n)
 			}
 			o.seen[i] = true
 			o.usd[i] += m.USD
@@ -282,8 +258,21 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			continue
 		}
 		o.holdContext(main, from, slot)
-		o.events = v.overviewEvents(s, slotOf)
 		o.spans = overviewSpans(s, from, to)
+		inherited := make(map[int]bool, len(s.info.InheritedTurns))
+		for _, i := range s.info.InheritedTurns {
+			inherited[i] = true
+		}
+		for _, t := range s.d.Turns {
+			if !inherited[t.Index] && slotOf(t.StartedAt) >= 0 {
+				o.turns++
+			}
+		}
+		for _, sp := range o.spans {
+			if sp.Kind != "session-fork" && sp.Kind != "continuation" && slotOf(sp.Start) >= 0 {
+				o.agents++
+			}
+		}
 
 		sf := &fv.ses[s.idx]
 		var key string
@@ -297,39 +286,42 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		case GroupRemote:
 			key = sf.remote
 		}
+		o.key = key
+		if q.Group != nil && *q.Group != key {
+			continue
+		}
 		a := groups[key]
 		if a == nil {
-			a = &groupAcc{events: evCount{}, g: OverviewGroup{Key: key, Name: fv.group(by, key).Name,
-				USDSlots: make([]float64, n), ContextPeak: make([]int64, n), ContextSum: make([]int64, n), Active: make([]int, n)}}
+			a = &groupAcc{g: OverviewGroup{Key: key, Name: fv.group(by, key).Name,
+				USDSlots: make([]float64, n), ContextPeak: make([]int64, n), ContextSum: make([]int64, n),
+				IdleSum: make([]int64, n), IdlePeak: make([]int64, n), Active: make([]int, n)}}
 			groups[key] = a
 		}
 		g := &a.g
 		g.Sessions++
+		g.Turns += o.turns
+		g.Agents += o.agents
 		g.USD += o.total
 		g.LastActivityAt = later(g.LastActivityAt, s.d.LastActivityAt)
 		for i := range o.usd {
 			g.USDSlots[i] += o.usd[i]
 			g.ContextPeak[i] = max(g.ContextPeak[i], o.ctx[i])
 			g.ContextSum[i] += o.ctx[i]
+			g.IdleSum[i] += o.idle[i]
+			g.IdlePeak[i] = max(g.IdlePeak[i], o.idle[i])
 			if o.seen[i] || o.held[i] {
 				g.Active[i]++
 			}
-		}
-		for k, c := range o.events {
-			a.events[k] += c
 		}
 		a.spans = append(a.spans, o.spans...)
 		if a.best == nil || o.total > a.best.total {
 			a.best = o
 		}
-		if q.Group != nil && *q.Group == key {
-			lanes = append(lanes, o)
-		}
+		lanes = append(lanes, o)
 	}
 
 	for _, a := range groups {
 		g := a.g
-		g.Events = a.events.list()
 		g.Spans = sortedSpans(a.spans)
 		b := a.best.s
 		g.Priciest = OverviewSession{Harness: b.key.Harness, ID: b.key.ID, Title: b.info.Title, USD: a.best.total}
@@ -343,16 +335,24 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		return a.Key < b.Key
 	})
 
+	order := make(map[string]int, len(out.Groups))
+	for i, g := range out.Groups {
+		order[g.Key] = i
+	}
 	sort.SliceStable(lanes, func(i, j int) bool {
-		a, b := lanes[i].s, lanes[j].s
-		if c := cmpTime(a.d.StartedAt, b.d.StartedAt); c != 0 {
-			return c < 0
+		a, b := lanes[i], lanes[j]
+		if oa, ob := order[a.key], order[b.key]; oa != ob {
+			return oa < ob
 		}
-		if a.key.ID != b.key.ID {
-			return a.key.ID < b.key.ID
+		if a.total != b.total {
+			return a.total > b.total
 		}
-		return a.key.Harness < b.key.Harness
+		if a.s.key.ID != b.s.key.ID {
+			return a.s.key.ID < b.s.key.ID
+		}
+		return a.s.key.Harness < b.s.key.Harness
 	})
+	out.Lanes = []OverviewLane{}
 	for _, o := range lanes {
 		d := o.s.d
 		active := make([]int, n)
@@ -361,16 +361,29 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 				active[i] = 1
 			}
 		}
-		out.Lanes = append(out.Lanes, OverviewLane{Harness: o.s.key.Harness, ID: o.s.key.ID, Title: o.s.info.Title,
-			StartedAt: d.StartedAt.UTC(), LastActivityAt: d.LastActivityAt.UTC(), USD: o.total,
-			USDSlots: o.usd, Context: o.ctx, Active: active, Events: o.events.list(), Spans: sortedSpans(o.spans)})
+		lo, hi := n, -1
+		for i := range n {
+			if o.usd[i] != 0 || o.ctx[i] != 0 || o.idle[i] != 0 || active[i] != 0 {
+				lo = min(lo, i)
+				hi = i
+			}
+		}
+		if hi < 0 {
+			lo, hi = 0, -1
+		}
+		out.Lanes = append(out.Lanes, OverviewLane{Harness: o.s.key.Harness, ID: o.s.key.ID, Title: o.s.info.Title, Group: o.key,
+			StartedAt: d.StartedAt.UTC(), LastActivityAt: d.LastActivityAt.UTC(), USD: o.total, Turns: o.turns, Agents: o.agents,
+			Slot0: lo, USDSlots: o.usd[lo : hi+1], Context: o.ctx[lo : hi+1], Idle: o.idle[lo : hi+1], Active: active[lo : hi+1],
+			Spans: sortedSpans(o.spans)})
 	}
 	return out, nil
 }
 
 // holdContext fills ctx and held from the session's main-agent owned messages: a call's
 // prompt tokens are held from its time until the next call if that is within OverviewHold,
-// else only at the call itself. A slot's value is the largest context held at any moment of it,
+// else only at the call itself. If the next call comes later than that but within
+// overviewIdleMax, the context is also held as idle from the call until the next call (idle,
+// zeroed afterwards where ctx > 0). A slot's value is the largest context held at any moment of it,
 // so a held value spans every slot from the call to the next call, inclusive. Messages before
 // the range count, for the context they still hold at its start.
 func (o *ovSess) holdContext(main []*model.Message, from time.Time, slot time.Duration) {
@@ -395,53 +408,24 @@ func (o *ovSess) holdContext(main []*model.Message, from time.Time, slot time.Du
 			o.ctx[i] = max(o.ctx[i], c)
 			o.held[i] = true
 		}
-	}
-}
-
-// overviewEvents counts the compactions of a session the way its turns are owned: the
-// compactions of agents of inherited turns, and compactions another session owns, are left out.
-func (v *view) overviewEvents(s *sess, slotOf func(time.Time) int) evCount {
-	ev := evCount{}
-	add := func(t time.Time, typ, kind string) {
-		if i := slotOf(t); i >= 0 {
-			ev[evKey{i, typ, kind}]++
-		}
-	}
-	inherited := make(map[int]bool, len(s.info.InheritedTurns))
-	for _, i := range s.info.InheritedTurns {
-		inherited[i] = true
-	}
-	compaction := func(cp *model.Compaction) {
-		kind := "unknown"
-		if cp.Call != nil && (cp.Call.Cache == model.CacheCold || cp.Call.Cache == model.CacheWarm) {
-			kind = string(cp.Call.Cache)
-		}
-		add(cp.At, OverviewEventCompaction, kind)
-	}
-	for k := range s.d.Compactions {
-		cp := &s.d.Compactions[k]
-		if key := compactionKey(s.key.Harness, cp); key != "" {
-			if o, shared := v.compOwner[key]; shared && int(o) != s.idx {
-				continue
+		if k+1 < len(main) {
+			if gap := main[k+1].At.Sub(m.At); gap > OverviewHold && gap <= overviewIdleMax {
+				for i := max(slotOf(m.At), 0); i <= min(slotOf(main[k+1].At), n-1); i++ {
+					o.idle[i] = max(o.idle[i], c)
+				}
 			}
 		}
-		compaction(cp)
 	}
-	for k := range s.d.Agents {
-		a := &s.d.Agents[k]
-		if a.SpawnTurn != nil && inherited[*a.SpawnTurn] {
-			continue
-		}
-		for j := range a.Compactions {
-			compaction(&a.Compactions[j])
+	for i := range o.idle {
+		if o.ctx[i] > 0 {
+			o.idle[i] = 0
 		}
 	}
-	return ev
 }
 
 // overviewSpans lists the spans of one session whose life overlaps [from, to): its agents
 // (subagent, fork, teammate, workflow; not compact or review agents, nor those of inherited
-// turns), merged per kind and spawn turn, and the session itself when it is a fork or a
+// turns), one span each, and the session itself when it is a fork or a
 // continuation of another.
 func overviewSpans(s *sess, from, to time.Time) []OverviewSpan {
 	ref := SessionRef{Harness: s.key.Harness, ID: s.key.ID}
@@ -511,28 +495,10 @@ func overviewSpans(s *sess, from, to time.Time) []OverviewSpan {
 		}
 		return ls[i].a.ID < ls[j].a.ID
 	})
-	type grp struct {
-		kind string
-		turn int // -1: none
-	}
-	open := map[grp]*OverviewSpan{}
 	var spans []*OverviewSpan
 	for _, l := range ls {
-		g := grp{l.kind, -1}
-		if l.a.SpawnTurn != nil {
-			g.turn = *l.a.SpawnTurn
-		}
-		if sp := open[g]; sp != nil && !l.start.After(sp.End.Add(overviewSpanGap)) {
-			sp.N++
-			if l.end.After(sp.End) {
-				sp.End = l.end
-			}
-			continue
-		}
 		title := cmp.Or(l.a.Description, l.a.Name, l.a.AgentType)
-		sp := &OverviewSpan{Kind: l.kind, N: 1, Start: l.start.UTC(), End: l.end.UTC(), Session: ref, Title: title}
-		open[g] = sp
-		spans = append(spans, sp)
+		spans = append(spans, &OverviewSpan{Kind: l.kind, Start: l.start.UTC(), End: l.end.UTC(), Session: ref, Title: title})
 	}
 	var out []OverviewSpan
 	for _, sp := range spans {
@@ -546,7 +512,7 @@ func overviewSpans(s *sess, from, to time.Time) []OverviewSpan {
 		if p.Kind == LinkFork {
 			kind = "session-fork"
 		}
-		sp := OverviewSpan{Kind: kind, N: 1, Start: start.UTC(), End: time.Unix(0, end).UTC(), Session: ref, Title: s.info.Title}
+		sp := OverviewSpan{Kind: kind, Start: start.UTC(), End: time.Unix(0, end).UTC(), Session: ref, Title: s.info.Title}
 		if sp.Start.Before(to) && (sp.End.After(from) || sp.Start.Equal(sp.End) && !sp.Start.Before(from)) {
 			out = append(out, sp)
 		}

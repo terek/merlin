@@ -87,7 +87,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
-| `/overview` | Overview (experimental, section 10b): every group of sessions over a day, week or month, context above and spend below | `range`, `by`, `sort`, `ctx`, `open` (the opened group) |
+| `/overview` | Overview (experimental, section 10b): a table of sessions grouped by project over a day, week or month, each row with a small graph of its context and the agents it launched | `range`, `by`, `sort`, `ctx`, `closed` (collapsed groups), `all` (groups showing every session) |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -723,78 +723,78 @@ bead's id as bd prints it (`acme-k1.2`); an unknown id shows "No such bead" (the
 
 ## 10b. Overview page (`/overview`, experimental)
 
-Where the agents' work went over a day, a week or a month, drawn as the Session page's spend graph
-zoomed out: a **timeline**, one row per group of sessions (a project, by default), **context above
-each row's baseline and spend below it**, and the work the sessions launched hanging under it as
-the graph's spines. A row that carried a lot is tall above its line, a row that spent a lot is deep
-below it, and both are on scales every row shares, so rows compare at a glance. Data from
+Where the agents' work went over a day, a week or a month: a **table of sessions**, like the Sessions
+page, grouped by project (or checkout, repository, remote). Every row has a text line with columns and,
+under it, a **merged cell** with the row's graph on one shared linear time axis. Data from
 `GET /api/overview` ([api.md](api.md)); code in `features/overview/` (epic `merlin-lce`). A separate
 route while it is an experiment: if it works, it becomes the landing page and the Cost page's day
 chart and project table go.
 
-Revised 2026-11-11 after the first look (Zsolt): the axis is linear time, nights and empty days
-included; the detail is the Session page's; agents and forks use the Session page's spines.
+Round 3 (2026-11-12, Zsolt's feedback on round 2): no spend ticks, no compaction marks, no `x2`; context
+at a quarter of its height and without an outline, the pauses as a pale tint; one spine lane with a
+thin vertical per spawned agent; and the space this frees used for a table.
 
 ```
- [1d 7d 30d]  group [Project ▾]  sort [Spend ▾]  context [Sum | Peak]
-                 Mon 3         Tue 4         Wed 5         Thu 6
- dev/merlin      ▁▃▅▇▆▃                ▂▅▇█▇▅                 context above (held, step area)
- $172 · 12       ━━━━━━━━━━            ━━━━━━━━━━             session line where sessions ran
- max $96         ||| ||||              |||| |||               spend below, one line per slot
-                  ╰──── Explore ×4       ●╰────── fork         spines: agents, forks, continuations
- › acme/api      (thinner: it carried and spent less)
-   429 scripted runs · $9.80   ▏▏ ▏▏▏ ▏                        one faint row, spend only
+ [1d 7d 30d]  group [Project v]  sort [Spend v]  context [Sum | Peak]
+ hover readout (fixed height)
+             | SESSION  context: 15 px = 419k tokens   TURNS  AGENTS    SPEND    LAST
+             |              Mon 3        Tue 4        Wed 5        Thu 6        (axis, sticky)
+ v merlin    | All 12 sessions                           84      31  $171.40   2h ago
+ $171 . 12   | ..-=#=-..    ..=#=#=..                                     group graph
+             |    \_,_  \_      \__,_                                      one spine lane
+             | long refactor                             22      14   $96.20   2h ago
+             | ..-=#=-..                                                   session graph
+             | 7 more >
+ > acme/api  | All 3 sessions                             9       0    $4.20   3d ago
+             | 429 scripted runs                                   $9.80   (faint, text only)
 ```
 
 - **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; group by `dir`
   (Project), `checkout`, `repo`, `remote`; sort by spend (default), sessions, priciest session, last
-  activity; context `sum` (default: what the group carried) or `peak` (its deepest session).
-- **Label column** (fixed width, left, HTML): the group's name, its spend in the range as
-  `<Money>`, its session count, and its priciest session's spend ("max $96"). A chevron opens the
-  group.
-- **Time axis: linear.** Wall-clock time maps linearly to x over the whole range: nights, weekends
-  and empty days take their real width. There are no breaks. Midnight ticks and day labels; at
-  `1d`, hour ticks. Every row uses the same axis.
-- **Resolution: the Session page's.** The page asks for the slot that gives about one slot per
-  pixel of plot width (`1m` to `1h`, see the API), so the drawing has the spend graph's grain, not
-  a bar chart's. **One SVG per row** (label column outside it), all of the same width.
-- Per row, drawn with the spend graph's own constants and helpers, imported from
-  `features/spend/TimeView.tsx` (`COLOR`, `CTX_FILL`, `CTX_LINE`, `SPEND_COLOR`, `COMPACT_MARK`,
-  `markColor`, `ELBOW_R`, `SPINE_OPACITY`, `SPINE_W`, `elbowPath`, `BranchNode`, `NODE_R`), so the
-  two pages look like one language and a change there changes both:
-  - above the baseline, the **context** as a step area in the main colour (`CTX_FILL`, outline
-    `CTX_LINE`), one token scale for all rows. Context is held between calls as on the Session page
-    (a call's context lasts until the next call, unless the pause is longer than 5 minutes), so a
-    working session is a continuous area, not a comb;
-  - below it, the **spend** per slot as 1 px lines in `SPEND_COLOR`, one dollar scale for all rows;
-  - on it, the **session line** in the main colour wherever a session of the group was running
-    (`active > 0`), 1 px, 2 px with two at once, 3.5 px with three or more;
-  - **compactions** as the spend graph marks them: a vertical from the context down to the
-    baseline, `markColor` (red cold, amber warm, grey unknown), `COMPACT_MARK` widths and dashes;
-  - under the spend, the **spines** of the work the group's sessions launched (`spans` from the
-    API), packed into thin sub-lanes so that overlapping ones do not collide: each is the spend
-    graph's spine, a vertical from the row's baseline at the launch down to its sub-lane, the
-    rounded elbow (`elbowPath`), and a horizontal along the sub-lane over its life, in its kind's
-    colour (`COLOR`: sub-agent, teammate, fork, workflow dashed). The horizontal is at least 10 px
-    long so the shape reads at any zoom, and longer when the life is. A span of several agents
-    (`n > 1`, a swarm) is one spine labelled `×n` where there is room. A **forked or continued
-    session** is the main colour's spine with `BranchNode` at its start: a dot for a fork, a ring
-    for a continuation. Vertical parts are faint (`SPINE_OPACITY`), horizontals at full strength,
-    as on the Session page;
-  Each row is as tall as its own peak needs on the shared scales plus its sub-lanes (a minimum keeps
-  a quiet row's line readable), so the big projects are visibly big; the shared scales are labelled
-  once, at the top row.
-- **Hover** fills a readout of fixed height above the plot (nothing under the pointer moves): the
-  time under the pointer, the group, the slot's spend, sessions running, context sum and peak; over
-  a spine, what it stands for (kind, `n`, its session's title, start and length). When the pointer
-  leaves the plot the readout goes back to its hint. Nothing else is printed on the page.
-- **Click** on a row lists, below the plot, that group's sessions active at that time (from
-  `lanes`): title as a link to the Session page, its spend in the slot and in the range, last
-  activity. A dragged range on a row does the same for the range. A click on a spine lists its
-  session.
-- **Open a group**: its sessions as lanes under it, the same grammar on the same scales, each its
-  own SVG; a lane's label is the session's title and links to its Session page.
-- **Scripted runs**: one faint row at the end, spend only, not openable.
+  activity (orders the groups); context `peak` (default: the deepest session's, a scale that session rows can fill) or `sum`
+  (what the group carried; the group's sum then sets the shared scale and session rows get small).
+- **Table.** A narrow left gutter holds the group: chevron, name, muted totals (`$171 . 12`),
+  top-aligned on its first row, a thin separator above each group. Columns: Session (title; the group's
+  first row reads "All n sessions"), Turns, Agents, Spend (`<Money>`), Last (compact: `5 min`, `15 h`,
+  `yesterday`, `9 Nov`; fixed width); numbers right-aligned, tabular. All counts are in the range. The group row is the aggregate and its graph
+  uses the group arrays; the session rows under it use their lanes. The session title links to the
+  Session page. Sessions inside a group are ordered by spend (by last activity for sort = last
+  activity). The header is sticky and carries the time axis and one muted note for the token scale.
+- **Open and closed.** Groups are open by default: the first 5 sessions and a "k more" line that shows
+  them all (and "fewer" to go back). The URL holds what differs from the default: `closed` is a
+  comma-separated list of collapsed group keys, `all` of those that show every session (escaped keys,
+  the empty key is `-`). A collapsed group still shows its group row and graph.
+- **Time axis: linear.** Wall-clock time maps linearly to x over the whole range; nights and empty
+  days take their real width. Midnight ticks and day labels; at `1d`, hour ticks. Every graph uses the
+  same axis; the graph cell spans the data columns.
+- **Resolution.** The page asks for the slot that gives about one slot per pixel of the cell's width
+  (`1m` to `1h`). **One SVG per row**, all of the same width. Because every session of the range comes
+  in one response (`lanes`), a group opens without another request.
+- **Row graph**, drawn with the spend graph's constants (`COLOR`, `CTX_FILL`, `ELBOW_R`,
+  `WORKFLOW_DASH`, `elbowPath`, `BranchNode` from `features/spend/TimeView.tsx`):
+  - **context**: a step area above the baseline, at most 15 px high, filled in the main colour
+    (`CTX_FILL`) with no outline, on one token scale for every row (groups and sessions);
+  - **idle**: where a session is open but paused (the context held through a pause of 5 minutes to an
+    hour, the API's `idle`), the same step area in a severely tinted fill (`IDLE_FILL`, 0.2), drawn
+    under the context, so a working stretch reads as one shape, saturated where calls happened and
+    pale while the user read or typed;
+  - the **session line** on the baseline where a session ran (`active > 0`), 1 px, 2 px with two at
+    once, 3.5 px with three or more;
+  - **one spine lane**, 7 px under the baseline (omitted when the row launched nothing). Every agent
+    gets a thin vertical (0.75 px) from the baseline to the lane at its start, so a burst of spawns
+    reads as a comb. Per kind (sub-agent, teammate, fork, workflow dashed; then forked and continued
+    sessions) the lives `[start, max(end, start + 10 px)]` are
+    merged into runs when they overlap or lie under 4 px apart; a run is the mirrored J: the elbow at
+    its first spawn and the horizontal at full strength along the run. Kinds share the lane's depth,
+    drawn in that order, later on top. A forked or continued session is not a run: only its
+    vertical and the `BranchNode` (dot for a fork, ring for a continuation) at its start. A spawn from before the range has no vertical and its run
+    starts at the left edge.
+  - no spend lines, compaction marks, `x n` labels or sub-lanes.
+- **Hover** fills a readout of fixed height above the table (nothing under the pointer moves): the time
+  under the pointer, the row, the slot's spend, sessions running, context (sum and peak for a group),
+  idle context. Over the spine lane it names the spawns within a few pixels of the pointer (counts by
+  kind, a few titles). There is no click or drag list: the table is the list.
+- **Scripted runs**: one faint text row at the end ("429 scripted runs", spend), no graph.
 
 ## 11. As built
 

@@ -16,7 +16,6 @@ import type {
   MomentsReport,
   Money,
   Overview,
-  OverviewEvent,
   OverviewGroup,
   OverviewLane,
   OverviewSlot,
@@ -32,7 +31,6 @@ import type {
   TreeSummary,
 } from '../src/api/types'
 import { heldContext } from '../src/features/overview/model'
-import { agentRole } from '../src/lib/agent'
 import { buildDataset, type Dataset, makeRng, messagesOf, order, PRICE, type Sess } from './gen'
 import {
   assignPlaces,
@@ -650,85 +648,112 @@ interface OvMsg {
   ctx: number
 }
 
-interface OvCompaction {
-  at: number
-  kind: string
+/** One generated agent of a session. */
+interface OvAgent {
+  kind: OverviewSpan['kind']
+  start: number
+  end: number
+  title: string
 }
 
+/** A session as the overview sees it: calls (main agent has ctx > 0), turn starts and agents. */
 interface OvSession {
   sess: Sess
   msgs: OvMsg[]
-  compactions: OvCompaction[]
-  spans: { kind: OverviewSpan['kind']; n: number; start: number; end: number; title?: string }[]
+  turns: number[]
+  agents: OvAgent[]
+  /** A fork or continued session: its own life is a span. */
+  branch?: OvAgent
 }
 
 const overviewCache = new Map<string, OvSession>()
 
-/** The agents of a session as spans: same kind and spawn turn, overlapping or within 10 s, are one. */
-function agentSpans(d: Sess['detail']['digest'], own: number): OvSession['spans'] {
-  const list: { kind: OverviewSpan['kind']; turn: number; start: number; end: number; title?: string }[] = []
-  for (const a of d.agents ?? []) {
-    if (!a.startedAt || (a.spawnTurn ?? 0) < own) continue
-    const role = agentRole(a)
-    const kind = role === 'addressable' ? 'teammate' : role
-    if (kind !== 'subagent' && kind !== 'teammate' && kind !== 'fork' && kind !== 'workflow') continue
-    const start = Date.parse(a.startedAt)
-    list.push({
-      kind,
-      turn: a.spawnTurn ?? 0,
-      start,
-      end: a.endedAt ? Date.parse(a.endedAt) : start,
-      title: a.description || a.name,
-    })
-  }
-  list.sort((x, y) => x.start - y.start)
-  const out: OvSession['spans'] = []
-  const open = new Map<string, number>()
-  for (const a of list) {
-    const k = `${a.kind}/${a.turn}`
-    const i = open.get(k)
-    const cur = i === undefined ? undefined : out[i]
-    if (cur && a.start <= cur.end + 10_000) {
-      cur.n++
-      cur.end = Math.max(cur.end, a.end)
-    } else {
-      open.set(k, out.length)
-      out.push({ kind: a.kind, n: 1, start: a.start, end: a.end, title: a.title })
-    }
-  }
-  return out
+const AGENT_TITLES = [
+  'Explore the codebase',
+  'Review the diff',
+  'Run the test suite',
+  'Find call sites',
+  'Check the docs',
+  'Summarise the logs',
+  'Write the migration',
+  'Audit dependencies',
+]
+
+const localHour = (t: number) => new Date(t).getHours()
+
+/** The next 9 o'clock at or after t, plus a little. */
+function nextMorning(t: number, r: ReturnType<typeof makeRng>): number {
+  const d = new Date(t)
+  d.setHours(9, r.int(0, 40), 0, 0)
+  if (d.getTime() < t) d.setDate(d.getDate() + 1)
+  return d.getTime()
 }
 
+/**
+ * The synthetic life of a session, from its id: turns of a few model calls a minute apart, then a pause (mostly
+ * 6 to 40 minutes, now and then an hour or three), bursts of agents after some turns, a compaction when the
+ * context is full. The merlin project does not run at night.
+ */
 function overviewSession(s: Sess): OvSession {
   const id = s.summary.key.id
   const hit = overviewCache.get(id)
   if (hit) return hit
-  const d = s.detail.digest
-  const lin = s.summary.lineage
-  const own = lin.inheritedTurns > 0 ? (lin.firstOwnTurn < 0 ? Infinity : lin.firstOwnTurn) : 0
-  const msgs: OvMsg[] = []
-  for (const m of messagesOf(d)) {
-    if (m.turn !== undefined && m.turn < own) continue
-    const ctx = m.agentId ? 0 : (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
-    msgs.push({ at: Date.parse(m.at), usd: m.usd, ctx })
+  const r = makeRng([...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7))
+  const noNights = /merlin/.test(`${s.summary.cwd ?? ''} ${s.summary.project}`)
+  const out: OvSession = { sess: s, msgs: [], turns: [], agents: [] }
+  let t = s.summary.startedAt ? Date.parse(s.summary.startedAt) : 0
+  if (!t) {
+    overviewCache.set(id, out)
+    return out
   }
-  msgs.sort((a, b) => a.at - b.at)
-  const compactions: OvCompaction[] = []
-  for (const c of d.compactions ?? []) {
-    if (c.turn < own - 1) continue
-    compactions.push({ at: Date.parse(c.at), kind: c.call?.cache ?? 'unknown' })
+  if (noNights && localHour(t) < 9) t = nextMorning(t, r)
+  const first = t
+  const total = s.summary.cost.bestUSD
+  const nTurns = Math.max(2, Math.min(45, Math.round(s.summary.turns / 3) + r.int(0, 4)))
+  const weights: number[] = []
+  let ctx = r.int(12_000, 40_000)
+  for (let k = 0; k < nTurns; k++) {
+    out.turns.push(t)
+    const calls = r.int(2, 12)
+    for (let c = 0; c < calls; c++) {
+      t += r.int(12, 70) * 1000
+      ctx += r.int(800, 7000)
+      if (ctx > 190_000) ctx = r.int(30_000, 50_000)
+      const w = 0.3 + r.next() * (ctx / 100_000)
+      weights.push(w)
+      out.msgs.push({ at: t, usd: w, ctx })
+    }
+    if (r.chance(0.3)) {
+      const burst = r.chance(0.4)
+      const n = burst ? r.int(5, 15) : r.int(1, 3)
+      const kind: OverviewSpan['kind'] = r.pick(['subagent', 'subagent', 'subagent', 'teammate', 'fork', 'workflow'])
+      for (let a = 0; a < n; a++) {
+        const st = t + r.int(0, burst ? 100_000 : 40_000)
+        const len = kind === 'workflow' ? r.int(5, 40) * MIN : r.int(1, 14) * MIN
+        out.agents.push({ kind, start: st, end: st + len, title: `${r.pick(AGENT_TITLES)} ${a + 1}` })
+        weights.push(0.5)
+        out.msgs.push({ at: st + len, usd: 0.5, ctx: 0 })
+      }
+    }
+    // the pause before the next turn
+    const p = r.next()
+    t += p < 0.2 ? r.int(1, 4) * MIN : p < 0.88 ? r.int(6, 40) * MIN : r.int(70, 240) * MIN
+    if (noNights && (localHour(t) < 9 || localHour(t) >= 23)) t = nextMorning(t, r)
+    if (t > ds.now) break
   }
-  const spans = agentSpans(d, own)
-  if (s.parent && s.summary.startedAt) {
-    spans.push({
+  const sum = weights.reduce((a, b) => a + b, 0) || 1
+  out.msgs.forEach((m) => {
+    m.usd = (m.usd / sum) * total
+  })
+  out.msgs.sort((a, b) => a.at - b.at)
+  if (s.parent && out.msgs.length > 0) {
+    out.branch = {
       kind: s.parent.kind === 'fork' ? 'session-fork' : 'continuation',
-      n: 1,
-      start: Date.parse(s.summary.startedAt),
-      end: Date.parse(s.summary.lastActivityAt ?? s.summary.startedAt),
-      title: s.summary.title,
-    })
+      start: first,
+      end: out.msgs[out.msgs.length - 1].at,
+      title: s.summary.title ?? '',
+    }
   }
-  const out = { sess: s, msgs, compactions, spans }
   overviewCache.set(id, out)
   return out
 }
@@ -757,63 +782,26 @@ function overview(u: URL): Overview {
   const zeros = () => new Array<number>(slots).fill(0)
   const r2 = (x: number) => Math.round(x * 1e6) / 1e6
   const wantGroup = q.has('group') ? q.get('group') : undefined
+  const inRange = (t: number) => t >= from && t < to
 
   interface Acc {
-    key: string
-    sessions: number
-    usd: number
-    usdSlots: number[]
+    group: OverviewGroup
     ctxPeak: number[]
     ctxSum: number[]
-    active: number[]
-    events: Map<string, OverviewEvent>
-    spans: OverviewSpan[]
+    idlePeak: number[]
+    idleSum: number[]
     priciest?: { s: Sess; usd: number }
-    last: string
   }
   const accs = new Map<string, Acc>()
   const lanes: OverviewLane[] = []
-
-  const eventsOf = (os: OvSession): OverviewEvent[] => {
-    const m = new Map<string, OverviewEvent>()
-    for (const c of os.compactions) {
-      const i = at(c.at)
-      if (i < 0 || i >= slots) continue
-      const k = `${i}/${c.kind}`
-      const cur = m.get(k)
-      if (cur) cur.n++
-      else m.set(k, { slot: i, type: 'compaction', kind: c.kind, n: 1 })
-    }
-    return [...m.values()].sort((a, b) => a.slot - b.slot || a.kind.localeCompare(b.kind))
-  }
-  const spansOf = (os: OvSession): OverviewSpan[] =>
-    os.spans
-      .filter((p) => p.end >= from && p.start < to)
-      .map((p) => ({
-        kind: p.kind,
-        n: p.n,
-        start: new Date(p.start).toISOString(),
-        end: new Date(p.end).toISOString(),
-        session: { harness: os.sess.summary.key.harness, id: os.sess.summary.key.id },
-        title: p.title,
-      }))
   const bySpan = (a: OverviewSpan, b: OverviewSpan) =>
-    a.start < b.start
-      ? -1
-      : a.start > b.start
-        ? 1
-        : a.kind < b.kind
-          ? -1
-          : a.kind > b.kind
-            ? 1
-            : a.session.id < b.session.id
-              ? -1
-              : 1
+    a.start < b.start ? -1 : a.start > b.start ? 1 : a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0
 
   for (const s of visible()) {
     const os = overviewSession(s)
+    const key = costKey(by, s.summary)
+    if (wantGroup !== undefined && wantGroup !== key) continue
     const usd = zeros()
-    const ctx = zeros()
     const active = zeros()
     let total = 0
     let any = false
@@ -826,91 +814,135 @@ function overview(u: URL): Overview {
       active[i] = 1
     }
     if (!any) continue
-    // The main agent's context, held from a call until the next (unless the pause is long).
-    const held = heldContext(
+    const { context, idle } = heldContext(
       os.msgs.filter((m) => m.ctx > 0).map((m) => ({ at: m.at, ctx: m.ctx })),
       from,
       slotMs,
       slots,
     )
-    held.forEach((v, i) => {
-      ctx[i] = v
+    context.forEach((v, i) => {
       if (v > 0) active[i] = 1
     })
-    const key = costKey(by, s.summary)
+    const sid = { harness: s.summary.key.harness, id: s.summary.key.id }
+    const agents = os.agents.filter((a) => a.end >= from && a.start < to)
+    const spans: OverviewSpan[] = agents.map((a) => ({
+      kind: a.kind,
+      start: new Date(a.start).toISOString(),
+      end: new Date(a.end).toISOString(),
+      session: sid,
+      title: a.title,
+    }))
+    const b = os.branch
+    if (b && b.end >= from && b.start < to)
+      spans.push({
+        kind: b.kind,
+        start: new Date(b.start).toISOString(),
+        end: new Date(b.end).toISOString(),
+        session: sid,
+        title: b.title,
+      })
+    spans.sort(bySpan)
+    const turns = os.turns.filter(inRange).length
+    const nAgents = agents.filter((a) => inRange(a.start)).length
+    const lastMsg = os.msgs[os.msgs.length - 1].at
+
     let a = accs.get(key)
     if (!a) {
       a = {
-        key,
-        sessions: 0,
-        usd: 0,
-        usdSlots: zeros(),
+        group: {
+          key,
+          name: costLabel(by, key),
+          sessions: 0,
+          turns: 0,
+          agents: 0,
+          usd: 0,
+          usdSlots: zeros(),
+          contextPeak: [],
+          contextSum: [],
+          idlePeak: [],
+          idleSum: [],
+          active: zeros(),
+          spans: [],
+        },
         ctxPeak: zeros(),
         ctxSum: zeros(),
-        active: zeros(),
-        events: new Map(),
-        spans: [],
-        last: '',
+        idlePeak: zeros(),
+        idleSum: zeros(),
       }
       accs.set(key, a)
     }
-    a.sessions++
-    a.usd += total
+    const g = a.group
+    g.sessions++
+    g.turns += turns
+    g.agents += nAgents
+    g.usd += total
     if (!a.priciest || total > a.priciest.usd) a.priciest = { s, usd: total }
-    if ((s.summary.lastActivityAt ?? '') > a.last) a.last = s.summary.lastActivityAt ?? ''
+    const lastIso = new Date(lastMsg).toISOString()
+    if (lastIso > (g.lastActivityAt ?? '')) g.lastActivityAt = lastIso
     for (let i = 0; i < slots; i++) {
-      a.usdSlots[i] += usd[i]
-      a.active[i] += active[i]
-      a.ctxSum[i] += ctx[i]
-      if (ctx[i] > a.ctxPeak[i]) a.ctxPeak[i] = ctx[i]
+      g.usdSlots[i] += usd[i]
+      g.active[i] += active[i]
+      a.ctxSum[i] += context[i]
+      a.idleSum[i] += idle[i]
+      if (context[i] > a.ctxPeak[i]) a.ctxPeak[i] = context[i]
+      if (idle[i] > a.idlePeak[i]) a.idlePeak[i] = idle[i]
     }
-    const evs = eventsOf(os)
-    for (const e of evs) {
-      const k = `${e.slot}/${e.kind}`
-      const cur = a.events.get(k)
-      if (cur) cur.n += e.n
-      else a.events.set(k, { ...e })
+    g.spans.push(...spans)
+
+    // the lane's arrays from its first to its last non-empty slot
+    let lo = slots
+    let hi = -1
+    for (let i = 0; i < slots; i++) {
+      if (usd[i] > 0 || context[i] > 0 || idle[i] > 0 || active[i] > 0) {
+        if (lo === slots) lo = i
+        hi = i
+      }
     }
-    const spans = spansOf(os)
-    a.spans.push(...spans)
-    if (wantGroup !== undefined && wantGroup === key) {
-      lanes.push({
-        harness: s.summary.key.harness,
-        id: s.summary.key.id,
-        title: s.summary.title,
-        startedAt: s.summary.startedAt,
-        lastActivityAt: s.summary.lastActivityAt,
-        usd: r2(total),
-        usdSlots: usd.map(r2),
-        context: ctx,
-        active,
-        events: evs,
-        spans: spans.sort(bySpan),
-      })
-    }
+    const cut = (x: number[]) => x.slice(lo, hi + 1)
+    lanes.push({
+      harness: sid.harness,
+      id: sid.id,
+      title: s.summary.title,
+      group: key,
+      startedAt: new Date(os.msgs[0].at).toISOString(),
+      lastActivityAt: lastIso,
+      usd: r2(total),
+      turns,
+      agents: nAgents,
+      slot0: lo,
+      usdSlots: cut(usd).map(r2),
+      context: cut(context),
+      idle: cut(idle),
+      active: cut(active),
+      spans,
+    })
   }
 
   const groups: OverviewGroup[] = [...accs.values()]
     .map((a) => ({
-      key: a.key,
-      name: costLabel(by, a.key),
-      sessions: a.sessions,
-      usd: r2(a.usd),
-      lastActivityAt: a.last || undefined,
+      ...a.group,
+      usd: r2(a.group.usd),
       priciest: a.priciest && {
         harness: a.priciest.s.summary.key.harness,
         id: a.priciest.s.summary.key.id,
         title: a.priciest.s.summary.title,
         usd: r2(a.priciest.usd),
       },
-      usdSlots: a.usdSlots.map(r2),
+      usdSlots: a.group.usdSlots.map(r2),
       contextPeak: a.ctxPeak,
       contextSum: a.ctxSum,
-      active: a.active,
-      events: [...a.events.values()].sort((x, y) => x.slot - y.slot || x.kind.localeCompare(y.kind)),
-      spans: a.spans.sort(bySpan),
+      idlePeak: a.idlePeak,
+      idleSum: a.idleSum,
+      spans: a.group.spans.sort(bySpan),
     }))
     .sort((x, y) => y.usd - x.usd || (x.key < y.key ? -1 : 1))
+  const order = new Map(groups.map((g, i) => [g.key, i]))
+  lanes.sort(
+    (x, y) =>
+      (order.get(x.group) ?? 0) - (order.get(y.group) ?? 0) ||
+      y.usd - x.usd ||
+      (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
+  )
 
   // Scripted runs: each day's line spread over local working hours, the weights from a hash.
   const scripted = { sessions: 0, usd: 0, usdSlots: zeros() }
@@ -945,10 +977,7 @@ function overview(u: URL): Overview {
     by,
     groups,
     scripted,
-    lanes:
-      wantGroup === undefined
-        ? undefined
-        : lanes.sort((x, y) => (x.startedAt ?? '').localeCompare(y.startedAt ?? '') || (x.id < y.id ? -1 : 1)),
+    lanes,
   }
 }
 
