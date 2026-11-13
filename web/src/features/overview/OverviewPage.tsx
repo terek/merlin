@@ -1468,7 +1468,17 @@ export function OverviewPage() {
             { value: '30d', label: '30d', title: 'The last 30 days' },
             {
               value: 'custom',
-              label: shown ? customLabel(shown, now) : 'Custom',
+              // a fixed width while the locator is open or a range is shown, so the label changing
+              // length under a drag ("Feb 9 → 8d", "Feb 19 → 18d") does not shift the strip beside it
+              label: (() => {
+                const text = shown ? customLabel(shown, now) : 'Custom'
+                if (!shown && !locOpen) return text
+                return (
+                  <span className={cn('inline-block text-center', text.includes(',') ? 'min-w-[20ch]' : 'min-w-[14ch]')}>
+                    {text}
+                  </span>
+                )
+              })(),
               title: 'Pick any range of days on the whole history',
             },
           ]}
