@@ -1474,7 +1474,9 @@ export function OverviewPage() {
                 const text = shown ? customLabel(shown, now) : 'Custom'
                 if (!shown && !locOpen) return text
                 return (
-                  <span className={cn('inline-block text-center', text.includes(',') ? 'min-w-[20ch]' : 'min-w-[14ch]')}>
+                  <span
+                    className={cn('inline-block text-center', text.includes(',') ? 'min-w-[20ch]' : 'min-w-[14ch]')}
+                  >
                     {text}
                   </span>
                 )
