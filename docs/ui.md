@@ -735,22 +735,38 @@ the aggregate of a place is the summary once it is selected: one level up in the
 The table only ever lists sessions.
 
 ```
- Overview [1d 7d 30d]               ( Search sessions...  / ) [in ~/work x]                   (sticky)
- ORGANISE BY [Folder v] [<]| SESSION                                   |   TURNS   AGENTS   SPEND  (sticky)
- v ~             95  $342  | START [..-=#=-..] END  (LENGTH over it)   |  ^ FOLDER ^
- v acme          21  $73   |-------------------------------------------|----------------------------------
-   > api          5  $33   | bold head  muted description...           |   *     22     14   $96.20 (scrolls)
- v work/merlin   22  $48   | ..-=#=-..    ..=#=#=..  graph, this column |  ~/work/merlin/web
+ [1d 7d 30d Custom]            ( Search sessions...  / ) [in ~/work x]                   (sticky)
+ ORGANISE BY [Folder v] [<]| SESSION                         FOLDER ↕ |   TURNS   AGENTS   SPEND  (sticky)
+   ~             95  $342  | START [..-=#=-..] END  (LENGTH over it)   |
+   acme          21  $73   |-------------------------------------------|----------------------------------
+   > api          5  $33   | bold head  muted description...  ~/acme/web|   *     22     14   $96.20 (scrolls)
+ v work/merlin   22  $48   | ..-=#=-..    ..=#=#=..  graph, this column |
    web            9  $20   |-------------------------------------------|----------------------------------
                            | ..==##=..  the scope's summed context      | 102 sessions  708  1,139  $353 (sticky)
                            | Sat 7     Sun 8     Mon 9  ... axis       | 913 scripted runs · $5.36
 ```
 
-- **URL**: `range` (`1d`, `7d` default, `30d`, ending now), `by` (the sidebar's key: `dir` default,
-  `checkout`, `repo`, `remote`), `in` (the selection), `q` (the search), `sort` and `dir`. Nothing else; an old
-  link's `show` is ignored.
-- **Toolbar**: the title, the range, and centred in the space that is left the **search box** with, when a place
-  is selected, a removable chip `in ~/work x` (the display path; x clears).
+- **URL**: `range` (`1d`, `7d` default, `30d`, ending now) or a custom range `from` and `to` (local days,
+  `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
+  them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`), `in` (the selection), `q` (the
+  search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
+- **Toolbar**: no title; the **range control** first on the left, and centred in the space that is left the
+  **search box** with, when a place is selected, a removable chip `in ~/work x` (the display path; x clears).
+- **Range control**: `1d | 7d | 30d | Custom`. Custom shows its range once one is set: `May 20 → 10d` (the
+  first day, then the length in days; `May 20 → 1d` for one day; `May 20, 2025 → 10d` when the year is not the
+  current one), also while the locator is closed. A custom range asks the API for local midnight of `from` to
+  the next local midnight after `to`, capped at now; the empty state reads "Nothing ran between May 20 and May
+  29." (`on May 20` for one day). The presets cover the days up to today.
+- **Locator.** A click on Custom opens the locator: it grows (150 ms) from the range control to the toolbar's
+  right edge over the search box and the `in` chip, with a `x` at the very right; Escape and `x` close it, the
+  range stays. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
+  as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
+  thin bars, a light month axis under it (day numbers too when a day is 16 px wide), the shading outside the
+  **brush** and its two handles. Drag on the strip to draw a range, drag the brush to move it, drag its edges
+  to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day. The
+  brush snaps to whole days, one at least. It starts on the current range (the preset's days when no custom
+  range is set). The Custom label follows the drag live; the page applies the range (`from`, `to`) only when
+  the drag ends, so a drag does not refetch.
 - **Search.** Typing is local and `q` follows after 200 ms (back and forward move the box); `/` focuses it and
   Esc clears, then blurs. A session matches when the term (trimmed, case-insensitive substring) is in its head
   (name, title, id) or its description texts (recap, first and last prompt), or, for a term of two characters
@@ -767,30 +783,42 @@ The table only ever lists sessions.
 - **Row** (one per session in scope). Session column: the text line on top, the graph under it. The text is
   the session's **bold head** (its own name from /rename, else its title, else the first 8 characters of its
   id; a link to the Session page) and in muted text the latest recap, else the first prompt, else the last
-  prompt; one line, an ellipsis where it ends, the whole text and the value of the active timeline sort (start,
-  last activity or running time) in the `title`. Structured block: the harness mark, Turns, Agents and Spend
-  (right-aligned, tabular, `<Money>`; all counts in the range) on the upper line and under them the **folder
-  line**, the session's `dir` as a display path (`~/work/merlin/web`; `(none)`, faint, without one), the real
-  path in its `title`. When it is too long its start is cut and the end stays (`…/merlin/web`, at a `/` where
-  possible): `fitTail` measures with the cell's own font on a canvas.
+  prompt; one line, an ellipsis where it ends (it gives way first), the whole text and the value of the active
+  timeline sort (start, last activity or running time) in the `title`. At the very right of that line stands
+  the **folder**: the session's `dir` as a display path (`~/work/merlin/web`; `(none)`, faint, without one),
+  muted `text-meta`, at most 40 % of the line and at least 96 px. When it is too long its start is cut and the
+  end stays (`…/merlin/web`, at a `/` where possible): `fitTail` measures with the cell's own font on a canvas,
+  and the full text sizes the cell, so it grows back when there is room. Its `title` is the real path. A click
+  on the folder **copies the resume command** (`resumeCommand(dir, id, harness.resume)`, as the Session page's
+  resume box; `copyText` from `ui/controls.tsx`): the title is "Copy: <command>", the text reads "Copied" for
+  1.2 s, the session does not open. A harness with no resume template leaves the folder plain text.
+  Structured block: one line, centred vertically in the two-line row: the harness mark, Turns, Agents and
+  Spend (right-aligned, tabular, `<Money>`; all counts in the range).
+- **Click on the graph.** The graph is a link: a click opens the Session page at the stretch under the pointer
+  (`/s/:harness/:id?from=<ISO>&to=<ISO>`): the local day, or in a range of two days or less the hour (`bandAt`),
+  cut to the session's own activity in it (`clipToActivity`; a stretch where it did nothing opens as it is).
+  The pointer is a pointer and the title reads "Open this session at Mon, May 18". Cmd, ctrl or shift and the
+  middle button open a new tab. The head and the rest of the text line open the session whole.
 - **Harness mark**: the shared `HarnessIcon` (`ui/harness.tsx`, 14 px), the product's real logo with its path
   data inline: Claude and OpenAI from Simple Icons (CC0), Pi from pi.dev; the marks are the products'
   trademarks, used to name them. Claude's is filled with `--harness-claude`, Codex's with the body colour, Pi's
   keeps its own colours; any other harness gets its first letter in a circle.
-- **Header, two lines.** Left: line 1 `SESSION`, centred; line 2 **`TimelineSort`**, a pictogram of a session
-  in the row graph's own vocabulary and constants (context rising and falling in steps, a pale idle stretch, the
-  session line, the spine lane with a few spawns, a faint axis), up to 340 × 42 px, shrinking to a narrower
-  cell, aria-hidden. Three sort buttons sit on it: **START** before the drawn session's left end (`sort=start`),
-  **END** after its right end (`sort=last`, last activity) and **LENGTH** over the middle, knocked out of the
-  drawing (`sort=active`: the slots with a call running times the slot, from the lane's `active`); all three
-  start descending. Right: line 1 the harness spacer and **Turns**, **Agents**, **Spend**; line 2 **FOLDER**.
-  Every sortable header is centred in its cell with an arrow slot of the same width (12 px) on both sides; the
+- **Header, two lines of 28 px.** Left: line 1 `SESSION`, centred, and at its right end, over the folders,
+  the small sort control **FOLDER ↕** (`sort=key`; the arrow shows the direction when it is the sort); line 2
+  **`TimelineSort`**, a pictogram of a session in the row graph's own vocabulary and constants (context rising
+  and falling in steps, a pale idle stretch, the thin grey baseline with the session line on it in the
+  lightest weight), as high as a text line, up to 340 px wide, shrinking to a narrower cell, aria-hidden; its
+  baseline is the text baseline of the START and END labels. Three sort buttons sit on it: **START** before
+  the drawn session's left end (`sort=start`), **END** after its right end (`sort=last`, last activity) and
+  **LENGTH** over the middle, knocked out of the drawing (`sort=active`: the slots with a call running times
+  the slot, from the lane's `active`); all three start descending. Right: one line, centred in the two,
+  the harness spacer and **Turns**, **Agents**, **Spend**. Every other sortable header is centred in its cell with an arrow slot of the same width (12 px) on both sides; the
   arrow draws in the left one, so a label does not move when it becomes the sort. A tiny rule (1 px,
   `border-line`, 55 % of the height) stands between adjacent header cells.
 - **Sorting.** A click sorts by that column in its own first direction; a click on the active column flips
-  it. `sort` is `start`, `last`, `active`, `turns`, `agents`, `spend` or `key` (absent: spend; an old `session`
-  reads as `start`); `dir` is `asc` / `desc` (absent: the column's own start, descending, but ascending for
-  `key`). Ties by spend, then id. **FOLDER** (`sort=key`) orders the sessions by their folder line in the
+  it. `sort` is `start`, `last`, `active`, `turns`, `agents`, `spend` or `key` (absent: `last`, the last
+  activity, newest first; an old `session` reads as `start`); `dir` is `asc` / `desc` (absent: the column's own
+  start, descending, but ascending for `key`). Ties by spend, then id. **FOLDER** (`sort=key`) orders the sessions by their folder line in the
   sidebar's order: segment by segment, case-insensitive (`comparePlace`), so `~/work/merlin` sits right after
   `~/work` and before `~/work/yimple`; no folder last whichever way.
 - **Summary** (the footer, sticky). Session column: the scope's **aggregate graph**, the lanes' trimmed
@@ -845,14 +873,15 @@ The table only ever lists sessions.
     missing). When there are none, there is no All and no (none): the selection is cleared by a click on the
     selected node or the chip's x.
   - **Headings**: the top-level lines (All when it exists, else the top places) are section headings,
-    semibold with a chevron, like an editor's workspace roots; their children start flush under them, and each
-    level below that indents 12 px with a faint guide line through its parent's chevron. A chevron for a node
+    semibold, always open and with no chevron, like an editor's workspace roots (still clickable to select);
+    their children start flush under them, and each level below that indents 12 px with a faint guide line
+    through its parent's chevron. What was stored as open or closed for a top-level line does not count. A chevron for a node
     with children; `Folder` / `FolderOpen`, `FolderGit2` for a place in repo, worktree or remote mode, `Globe` for
     a host. The label truncates; `title` is the display path.
   - **The selection is the scope.** A click on a line's label selects it: the table and the summary take only
     the sessions whose place sits **at or under** its path, matched segment-wise on the real path (`underPath`;
     so `~/work` does not take `~/workshop`); `(none)` takes the sessions with no value. A click on the selected
-    line, on All or on the chip's x clears it; the chevron only opens or closes. The selected line has the
+    line, on All or on the chip's x clears it; a chevron only opens or closes. The selected line has the
     accent style; All has it when nothing is selected. The selection applies after the search. Nothing under it:
     "Nothing under ~/work in this range." with a "Clear the selection" link.
   - **URL** `in` = the selected node's real path prefix (`-` for (none)). Selecting adds a history entry.

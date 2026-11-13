@@ -7,15 +7,28 @@ import {
   ancestorIds,
   axisTicks,
   bandAt,
+  bandLabel,
+  bandTimes,
   blockWidth,
+  brushRange,
   buildPlaceTree,
   CTX_MAX,
   chooseSlot,
+  clipToActivity,
   comparePlace,
+  customDays,
+  customLabel,
+  customPhrase,
+  customWindow,
+  dailySpend,
+  dayIndexAt,
   displayPath,
+  drawBrush,
+  firstSpendDay,
   fitLabels,
   fitTail,
   folderText,
+  formatCustom,
   formatSort,
   heldContext,
   inferHome,
@@ -31,24 +44,33 @@ import {
   makeAxis,
   markedNode,
   midnights,
+  moveBrush,
   NONE_SEL,
   nextSort,
   nodeForPath,
   type PlaceItem,
   type PlaceNode,
   parseBy,
+  parseCustom,
+  parseDay,
   parseIn,
   parseSort,
   placeItems,
   placeOf,
+  presetRange,
+  rangeBrush,
+  resizeBrush,
   type Sort,
   type SortKey,
   searchLanes,
   selectLanes,
+  sessionStretchUrl,
   slotX,
   sortLanes,
   spineLanes,
   stepAreaPath,
+  stripOf,
+  stripTicks,
   sumLanes,
   tokenScale,
   totalsOf,
@@ -361,17 +383,21 @@ describe('URL state', () => {
   })
 
   test('sort and dir', () => {
-    expect(parseSort(null, null)).toEqual({ key: 'spend', desc: true })
+    // the default is the last activity, newest first
+    expect(parseSort(null, null)).toEqual({ key: 'last', desc: true })
+    expect(parseSort('spend', null)).toEqual({ key: 'spend', desc: true })
     expect(parseSort('turns', null)).toEqual({ key: 'turns', desc: true })
     expect(parseSort('last', 'asc')).toEqual({ key: 'last', desc: false })
-    expect(parseSort('bogus', 'asc')).toEqual({ key: 'spend', desc: false })
+    expect(parseSort('bogus', 'asc')).toEqual({ key: 'last', desc: false })
     // the timeline sorts start newest / most recent / longest first; an old link's `session` is `start`
     expect(parseSort('active', null)).toEqual({ key: 'active', desc: true })
     expect(parseSort('start', 'asc')).toEqual({ key: 'start', desc: false })
     expect(parseSort('session', null)).toEqual({ key: 'start', desc: true })
     expect(parseSort('session', 'asc')).toEqual({ key: 'start', desc: false })
     expect(formatSort({ key: 'start', desc: true })).toEqual({ sort: 'start', dir: undefined })
-    expect(formatSort({ key: 'spend', desc: true })).toEqual({ sort: undefined, dir: undefined })
+    expect(formatSort({ key: 'last', desc: true })).toEqual({ sort: undefined, dir: undefined })
+    expect(formatSort({ key: 'last', desc: false })).toEqual({ sort: undefined, dir: 'asc' })
+    expect(formatSort({ key: 'spend', desc: true })).toEqual({ sort: 'spend', dir: undefined })
     expect(formatSort({ key: 'agents', desc: false })).toEqual({ sort: 'agents', dir: 'asc' })
     const s: Sort = { key: 'start', desc: false }
     const f = formatSort(s)
@@ -864,5 +890,189 @@ describe('the selection', () => {
     expect(displayPath('/Users/ab/work', '/Users/a')).toBe('/Users/ab/work')
     expect(displayPath('github.com/acme', undefined)).toBe('github.com/acme')
     expect(displayPath('-', '/Users/a')).toBe('(none)')
+  })
+})
+
+describe('the custom range', () => {
+  const now = new Date(2026, 10, 13, 15, 30)
+  const local = (y: number, m: number, d: number, h = 0) => new Date(y, m - 1, d, h).getTime()
+
+  test('parse and format', () => {
+    expect(parseDay('2026-05-20')).toBe('2026-05-20')
+    expect(parseDay('2026-02-30')).toBeNull()
+    expect(parseDay('5/20')).toBeNull()
+    expect(parseDay(null)).toBeNull()
+    expect(parseCustom('2026-05-20', '2026-05-29')).toEqual({ from: '2026-05-20', to: '2026-05-29' })
+    expect(parseCustom('2026-05-20', '2026-05-20')).toEqual({ from: '2026-05-20', to: '2026-05-20' })
+    // both days, in order
+    expect(parseCustom('2026-05-29', '2026-05-20')).toBeNull()
+    expect(parseCustom('2026-05-20', null)).toBeNull()
+    expect(parseCustom('x', '2026-05-20')).toBeNull()
+    expect(formatCustom({ from: '2026-05-20', to: '2026-05-29' })).toEqual({ from: '2026-05-20', to: '2026-05-29' })
+    expect(formatCustom(null)).toEqual({ from: undefined, to: undefined })
+  })
+
+  test('the label and the empty phrase', () => {
+    expect(customDays({ from: '2026-05-20', to: '2026-05-29' })).toBe(10)
+    expect(customLabel({ from: '2026-05-20', to: '2026-05-29' }, now)).toBe('May 20 → 10d')
+    expect(customLabel({ from: '2026-05-20', to: '2026-05-20' }, now)).toBe('May 20 → 1d')
+    // the year when it is not this one; days count across a month and a year
+    expect(customLabel({ from: '2025-12-30', to: '2026-01-02' }, now)).toBe('Dec 30, 2025 → 4d')
+    expect(customPhrase({ from: '2026-05-20', to: '2026-05-29' }, now)).toBe('between May 20 and May 29')
+    expect(customPhrase({ from: '2026-05-20', to: '2026-05-20' }, now)).toBe('on May 20')
+  })
+
+  test('the query window: local midnights, capped at now', () => {
+    const nowMs = now.getTime()
+    expect(customWindow({ from: '2026-05-20', to: '2026-05-29' }, nowMs)).toEqual({
+      fromMs: local(2026, 5, 20),
+      toMs: local(2026, 5, 30),
+    })
+    // today is cut at now
+    expect(customWindow({ from: '2026-11-10', to: '2026-11-13' }, nowMs)).toEqual({
+      fromMs: local(2026, 11, 10),
+      toMs: nowMs,
+    })
+    // a day that has not begun still has a window
+    const w = customWindow({ from: '2026-11-20', to: '2026-11-20' }, nowMs)
+    expect(w.toMs).toBeGreaterThan(w.fromMs)
+  })
+
+  test('the presets as ranges', () => {
+    expect(presetRange('1d', now)).toEqual({ from: '2026-11-13', to: '2026-11-13' })
+    expect(presetRange('7d', now)).toEqual({ from: '2026-11-07', to: '2026-11-13' })
+    expect(presetRange('30d', now)).toEqual({ from: '2026-10-15', to: '2026-11-13' })
+  })
+})
+
+describe('the locator', () => {
+  const now = new Date(2026, 10, 13, 15, 30)
+  const strip = stripOf('2026-10-01', now, null)
+
+  test('the strip spans the first day with spend to today, grown to hold the range', () => {
+    expect(strip.first).toBe(new Date(2026, 9, 1).getTime())
+    expect(strip.days).toBe(44)
+    expect(stripOf(undefined, now, null).days).toBe(1)
+    expect(stripOf('2026-10-01', now, { from: '2026-09-28', to: '2026-10-02' }).days).toBe(47)
+    expect(stripOf('2026-10-01', now, { from: '2026-11-10', to: '2026-11-20' }).days).toBe(51)
+  })
+
+  test('a brush is whole days of the strip', () => {
+    expect(rangeBrush(strip, { from: '2026-10-05', to: '2026-10-09' })).toEqual({ lo: 4, hi: 8 })
+    expect(brushRange(strip, { lo: 4, hi: 8 })).toEqual({ from: '2026-10-05', to: '2026-10-09' })
+    // outside the strip it is clipped
+    expect(rangeBrush(strip, { from: '2026-01-01', to: '2027-01-01' })).toEqual({ lo: 0, hi: 43 })
+    // across a DST change a day is still a day
+    const long = stripOf('2026-03-20', new Date(2026, 3, 5), null)
+    expect(brushRange(long, { lo: 0, hi: 16 })).toEqual({ from: '2026-03-20', to: '2026-04-05' })
+  })
+
+  test('the day under x', () => {
+    expect(dayIndexAt(strip, 440, 0)).toBe(0)
+    expect(dayIndexAt(strip, 440, 19.9)).toBe(1)
+    expect(dayIndexAt(strip, 440, 439.9)).toBe(43)
+    expect(dayIndexAt(strip, 440, -5)).toBe(0)
+    expect(dayIndexAt(strip, 440, 900)).toBe(43)
+  })
+
+  test('drawing, moving and resizing snap to days, one at least', () => {
+    expect(drawBrush(9, 3)).toEqual({ lo: 3, hi: 9 })
+    expect(drawBrush(5, 5)).toEqual({ lo: 5, hi: 5 })
+    expect(moveBrush({ lo: 10, hi: 14 }, 12, 15, 44)).toEqual({ lo: 13, hi: 17 })
+    // kept inside the strip, its length kept
+    expect(moveBrush({ lo: 10, hi: 14 }, 12, 50, 44)).toEqual({ lo: 39, hi: 43 })
+    expect(moveBrush({ lo: 10, hi: 14 }, 12, -30, 44)).toEqual({ lo: 0, hi: 4 })
+    expect(resizeBrush({ lo: 10, hi: 14 }, 'lo', 6)).toEqual({ lo: 6, hi: 14 })
+    expect(resizeBrush({ lo: 10, hi: 14 }, 'hi', 20)).toEqual({ lo: 10, hi: 20 })
+    // the edges do not cross
+    expect(resizeBrush({ lo: 10, hi: 14 }, 'lo', 30)).toEqual({ lo: 14, hi: 14 })
+    expect(resizeBrush({ lo: 10, hi: 14 }, 'hi', 2)).toEqual({ lo: 10, hi: 10 })
+  })
+
+  test('daily spend on the strip', () => {
+    const rows = [
+      { key: '2026-10-01', totalUSD: 2 },
+      { key: '2026-10-03', totalUSD: 1.5 },
+      { key: '2026-09-01', totalUSD: 9 },
+      { key: 'junk', totalUSD: 9 },
+    ]
+    const d = dailySpend(rows, strip)
+    expect(d).toHaveLength(44)
+    expect(d[0]).toBe(2)
+    expect(d[2]).toBe(1.5)
+    expect(d.reduce((a, b) => a + b, 0)).toBe(3.5)
+    expect(
+      firstSpendDay([
+        { key: '2026-10-03', totalUSD: 1 },
+        { key: '2026-10-01', totalUSD: 0 },
+        { key: '2026-10-02', totalUSD: 2 },
+      ]),
+    ).toBe('2026-10-02')
+    expect(firstSpendDay([])).toBeUndefined()
+  })
+
+  test('the axis labels the months and keeps its labels apart', () => {
+    const t = stripTicks(strip, 440)
+    expect(t.map((x) => x.label)).toEqual(['Oct', 'Nov'])
+    expect(t[0].x).toBe(0)
+    expect(t[1].x).toBeCloseTo(31 * (440 / 44), 5)
+    // a wide strip also numbers its days
+    const wide = stripTicks(strip, 1000)
+    expect(wide.some((x) => x.label === '5')).toBe(true)
+    for (let i = 1; i < wide.length; i++) expect(wide[i].x).toBeGreaterThan(wide[i - 1].x)
+    // January carries the year
+    expect(stripTicks(stripOf('2026-12-20', new Date(2027, 0, 10), null), 500).map((x) => x.label)).toContain(
+      'Jan 2027',
+    )
+  })
+})
+
+describe('a click on a row graph', () => {
+  const t0 = new Date(2026, 10, 7).getTime()
+  const axis = makeAxis(t0, t0 + 7 * DAY, HOUR, 700)
+  const at = (day: number, hour = 12) => (day * DAY + hour * HOUR) * axis.pxPerMs
+  const l = lane({
+    id: 'abc 1',
+    harness: 'claude',
+    // active in the slots of day 2, 10:00 to 12:00 (slot0 counts from the axis start)
+    slot0: 2 * 24 + 10,
+    active: [1, 1, 0, 0],
+    context: [5, 6, 6, 0],
+  })
+
+  test('the stretch is the local day, or the hour in a range of two days or less', () => {
+    expect(bandTimes(axis, at(2))).toEqual({
+      fromMs: new Date(2026, 10, 9).getTime(),
+      toMs: new Date(2026, 10, 10).getTime(),
+    })
+    expect(bandTimes(axis, -1)).toBeNull()
+    const hourly = makeAxis(t0, t0 + DAY, MIN, 960)
+    expect(bandTimes(hourly, 13.5 * 40)).toEqual({ fromMs: t0 + 13 * HOUR, toMs: t0 + 14 * HOUR })
+    expect(bandLabel(axis, at(2))).toBe('Mon, Nov 9')
+    expect(bandLabel(hourly, 13.5 * 40)).toBe('Nov 7, 13:00')
+  })
+
+  test("the window is cut to the session's activity in the stretch", () => {
+    const [a, b] = clipToActivity(l, axis, new Date(2026, 10, 9).getTime(), new Date(2026, 10, 10).getTime())
+    expect(a).toBe(new Date(2026, 10, 9, 10).getTime())
+    expect(b).toBe(new Date(2026, 10, 9, 13).getTime())
+    // a day where it did nothing: the day itself
+    const day = [new Date(2026, 10, 11).getTime(), new Date(2026, 10, 12).getTime()] as const
+    expect(clipToActivity(l, axis, ...day)).toEqual([...day])
+  })
+
+  test('the URL', () => {
+    const url = sessionStretchUrl(l, axis, at(2))
+    const [path, query] = url.split('?')
+    expect(path).toBe('/s/claude/abc%201')
+    const q = new URLSearchParams(query)
+    expect(q.get('from')).toBe(new Date(2026, 10, 9, 10).toISOString())
+    expect(q.get('to')).toBe(new Date(2026, 10, 9, 13).toISOString())
+    // a day it did nothing on still opens that day
+    const idle = new URLSearchParams(sessionStretchUrl(l, axis, at(5)).split('?')[1])
+    expect(idle.get('from')).toBe(new Date(2026, 10, 12).toISOString())
+    expect(idle.get('to')).toBe(new Date(2026, 10, 13).toISOString())
+    // outside the plot: the session whole
+    expect(sessionStretchUrl(l, axis, -5)).toBe('/s/claude/abc%201')
   })
 })

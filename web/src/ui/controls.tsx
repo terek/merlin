@@ -73,6 +73,26 @@ export function IconButton({
   )
 }
 
+/** Copies a string to the clipboard; where that is denied, through a hidden textarea. */
+export async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+    } catch {
+      // nothing more to try
+    }
+    ta.remove()
+  }
+}
+
 /** Copies a string to the clipboard and shows a check for a second. With children, it is a text button. */
 export function CopyButton({
   text,
@@ -89,23 +109,7 @@ export function CopyButton({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // clipboard denied: fall back to a hidden textarea
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.select()
-      try {
-        document.execCommand('copy')
-      } catch {
-        // nothing more to try
-      }
-      ta.remove()
-    }
+    await copyText(text)
     setDone(true)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => setDone(false), 1000)

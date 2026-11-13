@@ -3,7 +3,9 @@
 // a row and what the pointer is near. OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
 
 import type { GroupDim, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
+import { sessionPath } from '../../lib/paths'
 import { homeOf } from '../../lib/places'
+import { dayStart, daysBefore, localDay } from '../../lib/time'
 import { HOLD_MS } from '../spend/timeline'
 
 const MIN = 60_000
@@ -276,7 +278,7 @@ export interface Sort {
   key: SortKey
   desc: boolean
 }
-export const DEFAULT_SORT: Sort = { key: 'spend', desc: true }
+export const DEFAULT_SORT: Sort = { key: 'last', desc: true }
 
 const oneOf = <T extends string>(v: string | null, allowed: readonly T[], def: T): T =>
   allowed.includes(v as T) ? (v as T) : def
@@ -287,7 +289,7 @@ export const parseBy = (v: string | null): By => oneOf(v, BYS, 'dir')
 /** The direction a column starts in: the figures and times descending, the key (a path) ascending, A to Z. */
 export const startsDesc = (key: SortKey): boolean => key !== 'key'
 
-/** `sort=<column>` (default spend) and `dir=asc` / `dir=desc` (absent: the column's own start, see `startsDesc`). */
+/** `sort=<column>` (default last activity) and `dir=asc` / `dir=desc` (absent: the column's own start, see `startsDesc`). */
 export function parseSort(sort: string | null, dir: string | null): Sort {
   // an old link's `session` is the start time
   const key = oneOf(sort === 'session' ? 'start' : sort, SORT_KEYS, DEFAULT_SORT.key)
@@ -862,4 +864,223 @@ export function markedNode(nodes: readonly PlaceNode[], key: string, closed: Rea
     return null
   }
   return walk(nodes, null)
+}
+
+// ---- the custom range and its locator ------------------------------------------------------
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** The days of a custom range: local days, `YYYY-MM-DD`, both inclusive. */
+export interface CustomRange {
+  from: string
+  to: string
+}
+
+/** The local calendar day `n` days after the local midnight `ms`, as a local midnight (DST-proof). */
+export const addDays = (ms: number, n: number): number => {
+  const d = new Date(ms)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n).getTime()
+}
+
+/** The whole local days from the midnight `a` to the midnight `b`. */
+export const daysBetween = (a: number, b: number): number => Math.round((b - a) / DAY)
+
+/** A real calendar day written `YYYY-MM-DD`, else null. */
+export function parseDay(v: string | null): string | null {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
+  return localDay(dayStart(v)) === v ? v : null
+}
+
+/** `from` and `to` of the URL: a custom range when both are real days and `from` is not after `to`. */
+export function parseCustom(from: string | null, to: string | null): CustomRange | null {
+  const a = parseDay(from)
+  const b = parseDay(to)
+  return a && b && a <= b ? { from: a, to: b } : null
+}
+
+/** The URL params of a custom range, and of none (the presets drop them). */
+export const formatCustom = (r: CustomRange | null): { from?: string; to?: string } =>
+  r ? { from: r.from, to: r.to } : { from: undefined, to: undefined }
+
+/** The days a range covers. */
+export const customDays = (r: CustomRange): number =>
+  daysBetween(dayStart(r.from).getTime(), dayStart(r.to).getTime()) + 1
+
+/** `May 20` (with the year when it is not `now`'s: `May 20, 2025`). */
+export function dayText(day: string, now: Date): string {
+  const d = dayStart(day)
+  const y = d.getFullYear() === now.getFullYear() ? '' : `, ${d.getFullYear()}`
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}${y}`
+}
+
+/** The Custom control's label: `May 20 → 10d` (start day, then the length in days). */
+export const customLabel = (r: CustomRange, now: Date): string => `${dayText(r.from, now)} → ${customDays(r)}d`
+
+/** "between May 20 and May 29", "on May 20": for the empty state. */
+export const customPhrase = (r: CustomRange, now: Date): string =>
+  r.from === r.to ? `on ${dayText(r.from, now)}` : `between ${dayText(r.from, now)} and ${dayText(r.to, now)}`
+
+/**
+ * What a custom range asks the API for: from local midnight of its first day to the next local midnight after
+ * its last, capped at `nowMs`.
+ */
+export function customWindow(r: CustomRange, nowMs: number): { fromMs: number; toMs: number } {
+  const fromMs = dayStart(r.from).getTime()
+  const toMs = Math.min(addDays(dayStart(r.to).getTime(), 1), nowMs)
+  return { fromMs, toMs: Math.max(toMs, fromMs + MIN) }
+}
+
+/** The days a preset covers, ending today: `1d` is today, `7d` today and the six days before. */
+export function presetRange(range: Range, today: Date): CustomRange {
+  const n = Math.round(RANGES[range].ms / DAY)
+  return { from: localDay(daysBefore(today, n - 1)), to: localDay(today) }
+}
+
+/** The locator's strip: whole local days, `first` being the local midnight of the first. */
+export interface Strip {
+  first: number
+  days: number
+}
+
+/** The strip: from the first day with spend (or the range's, if earlier) to today (or the range's last day, if later). */
+export function stripOf(firstSpendDay: string | undefined, today: Date, r: CustomRange | null): Strip {
+  const t = dayStart(localDay(today)).getTime()
+  const times = [firstSpendDay ? dayStart(firstSpendDay).getTime() : t, t]
+  if (r) times.push(dayStart(r.from).getTime(), dayStart(r.to).getTime())
+  const first = Math.min(...times)
+  return { first, days: daysBetween(first, Math.max(...times)) + 1 }
+}
+
+/** The days a brush covers, as indices into the strip, both inclusive. */
+export interface Brush {
+  lo: number
+  hi: number
+}
+
+const clampTo = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v))
+
+/** The index of the day under x (px from the strip's left edge) on a strip drawn `width` px wide. */
+export const dayIndexAt = (s: Strip, width: number, x: number): number =>
+  clampTo(Math.floor((x / Math.max(1, width)) * s.days), 0, s.days - 1)
+
+/** The brush's range: its days as local days. */
+export function brushRange(s: Strip, b: Brush): CustomRange {
+  const day = (i: number) => localDay(new Date(addDays(s.first, i)))
+  return { from: day(b.lo), to: day(b.hi) }
+}
+
+/** The range as a brush on the strip (clipped to it). */
+export function rangeBrush(s: Strip, r: CustomRange): Brush {
+  const at = (day: string) => clampTo(daysBetween(s.first, dayStart(day).getTime()), 0, s.days - 1)
+  return { lo: at(r.from), hi: at(r.to) }
+}
+
+/** A brush drawn from one day to another (either way round); a day at least. */
+export const drawBrush = (a: number, b: number): Brush => ({ lo: Math.min(a, b), hi: Math.max(a, b) })
+
+/** The brush moved by the days the pointer went from `grab` to `to`, its length kept, inside the strip. */
+export function moveBrush(b: Brush, grab: number, to: number, days: number): Brush {
+  const shift = clampTo(to - grab, -b.lo, days - 1 - b.hi)
+  return { lo: b.lo + shift, hi: b.hi + shift }
+}
+
+/** An edge of the brush dragged to a day; the edges cannot cross (a day at least). */
+export const resizeBrush = (b: Brush, edge: 'lo' | 'hi', day: number): Brush =>
+  edge === 'lo' ? { lo: Math.min(day, b.hi), hi: b.hi } : { lo: b.lo, hi: Math.max(day, b.lo) }
+
+/** What was spent on each day of the strip, from the rows of `GET /api/cost?by=day` (key: the local day). */
+export function dailySpend(rows: readonly { key: string; totalUSD: number }[], s: Strip): number[] {
+  const out = new Array<number>(s.days).fill(0)
+  for (const r of rows) {
+    const day = parseDay(r.key)
+    if (!day) continue
+    const i = daysBetween(s.first, dayStart(day).getTime())
+    if (i >= 0 && i < s.days) out[i] += r.totalUSD
+  }
+  return out
+}
+
+/** The first day of a day-cost table that has spend, if any (rows come in day order). */
+export const firstSpendDay = (rows: readonly { key: string; totalUSD: number }[]): string | undefined =>
+  rows.filter((r) => r.totalUSD > 0 && parseDay(r.key)).sort((a, b) => (a.key < b.key ? -1 : 1))[0]?.key
+
+// ---- a click on a row's graph ---------------------------------------------------------------
+
+/** The stretch under x as times: the day (the hour in a range of two days or less); null outside the plot. */
+export function bandTimes(axis: Axis, x: number): { fromMs: number; toMs: number } | null {
+  const b = bandAt(axis, x)
+  return b ? { fromMs: Math.round(timeAt(axis, b.x0)), toMs: Math.round(timeAt(axis, b.x1)) } : null
+}
+
+/** `Mon, May 18` (`May 18, 14:00` when the stretch is an hour): what a click on the graph opens. */
+export function bandLabel(axis: Axis, x: number): string {
+  const t = bandTimes(axis, x)
+  if (!t) return ''
+  const d = new Date(t.fromMs)
+  const date = `${MONTHS[d.getMonth()]} ${d.getDate()}`
+  if (axis.toMs - axis.fromMs <= 2 * DAY) return `${date}, ${String(d.getHours()).padStart(2, '0')}:00`
+  return `${DAYS[d.getDay()]}, ${date}`
+}
+
+/**
+ * The window `[a, b]` cut to the session's own activity in it (slots with a call running or context held);
+ * the window itself when the session did nothing there.
+ */
+export function clipToActivity(l: OverviewLane, axis: Axis, a: number, b: number): [number, number] {
+  let lo = Number.POSITIVE_INFINITY
+  let hi = Number.NEGATIVE_INFINITY
+  const n = Math.max(l.active.length, l.context.length)
+  for (let k = 0; k < n; k++) {
+    if (!(l.active[k] > 0 || l.context[k] > 0)) continue
+    const s = axis.fromMs + (l.slot0 + k) * axis.slotMs
+    const e = s + axis.slotMs
+    if (e <= a || s >= b) continue
+    lo = Math.min(lo, Math.max(s, a))
+    hi = Math.max(hi, Math.min(e, b))
+  }
+  return lo <= hi ? [lo, hi] : [a, b]
+}
+
+/**
+ * Where a click at x on a session's graph goes: the Session page with the stretch under the pointer as its
+ * window (`from`, `to`), cut to the session's activity in it; the plain session path outside the plot.
+ */
+export function sessionStretchUrl(l: OverviewLane, axis: Axis, x: number): string {
+  const base = sessionPath({ harness: l.harness, id: l.id })
+  const t = bandTimes(axis, x)
+  if (!t) return base
+  const [a, b] = clipToActivity(l, axis, t.fromMs, t.toMs)
+  return `${base}?${new URLSearchParams({ from: new Date(a).toISOString(), to: new Date(b).toISOString() })}`
+}
+
+/** A mark under the locator's strip: its x, label and whether it is a month's first day. */
+export interface StripTick {
+  x: number
+  label: string
+  month: boolean
+}
+
+/**
+ * The light axis under the strip: each month's first day with the month's name (the year at January), and
+ * when a day is 16 px wide or more the day numbers between, at the step that keeps the labels apart. Labels that
+ * would run into the previous one or past the right edge are left out.
+ */
+export function stripTicks(s: Strip, width: number, charW = 6): StripTick[] {
+  const dw = width / s.days
+  const step = dw >= 16 ? 1 : Math.ceil(26 / dw / 7)
+  const out: StripTick[] = []
+  let end = -Infinity
+  for (let i = 0; i < s.days; i++) {
+    const d = new Date(addDays(s.first, i))
+    const first = d.getDate() === 1
+    if (!first && !(dw >= 16 && (d.getDate() - 1) % step === 0)) continue
+    const label = first
+      ? `${MONTHS[d.getMonth()]}${d.getMonth() === 0 ? ` ${d.getFullYear()}` : ''}`
+      : String(d.getDate())
+    const x = i * dw
+    if (x < end + 4 || x + 2 + label.length * charW > width) continue
+    end = x + 2 + label.length * charW
+    out.push({ x, label, month: first })
+  }
+  return out
 }

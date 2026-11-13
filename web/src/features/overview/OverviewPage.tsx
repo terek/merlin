@@ -9,6 +9,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  ArrowUpDown,
   ChevronRight,
   Folder,
   FolderGit2,
@@ -21,14 +22,17 @@ import {
   X,
 } from 'lucide-react'
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { useOverview, useSearch } from '../../api/queries'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useHarness } from '../../api/harnesses'
+import { useCost, useOverview, useSearch } from '../../api/queries'
 import type { Overview, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatDuration, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
+import { resumeCommand, sessionPath } from '../../lib/paths'
 import { useShortcut } from '../../shell/useShortcut'
 import {
+  copyText,
   HarnessIcon,
   IconButton,
   Money,
@@ -38,7 +42,7 @@ import {
   Select,
   Skeleton,
 } from '../../ui'
-import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
+import { COLOR, CTX_FILL, elbowPath, SPEND_COLOR, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
   type Axis,
@@ -47,16 +51,28 @@ import {
   ancestorIds,
   axisTicks,
   type Band,
+  type Brush,
   BYS,
   type By,
   bandAt,
+  bandLabel,
   blockWidth,
+  brushRange,
   buildPlaceTree,
+  type CustomRange,
   chooseSlot,
+  customLabel,
+  customPhrase,
+  customWindow,
+  dailySpend,
+  dayIndexAt,
   displayPath,
+  drawBrush,
+  firstSpendDay,
   fitLabels,
   fitTail,
   folderText,
+  formatCustom,
   formatSort,
   inferHome,
   isBranch,
@@ -70,6 +86,7 @@ import {
   makeAxis,
   markedNode,
   midnightXs,
+  moveBrush,
   NONE_SEL,
   nextSort,
   nodeForPath,
@@ -77,21 +94,28 @@ import {
   type PlaceNode,
   type PlaceTree,
   parseBy,
+  parseCustom,
   parseIn,
   parseSort,
   placeItems,
   placeOf,
+  presetRange,
   RANGES,
   type Range,
+  rangeBrush,
+  resizeBrush,
   type Sort,
   type SortKey,
   searchLanes,
   selectLanes,
   sessionKey,
+  sessionStretchUrl,
   slotX,
   sortLanes,
   spineLanes,
   stepAreaPath,
+  stripOf,
+  stripTicks,
   sumLanes,
   type Totals,
   tokenScale,
@@ -294,27 +318,32 @@ function Num({ w, children }: { w: number; children: ReactNode }) {
 }
 
 /**
- * The text line of a row, in the session column: a bold head and a muted description on one line (cut with
- * an ellipsis, the whole text in the title).
+ * The text line of a row, in the session column: a bold head and a muted description on the left (cut with
+ * an ellipsis, the whole text in the title; it gives way first) and the folder at the very right.
  */
 function SessionText({
   head,
   headText,
   desc,
   note,
+  folder,
 }: {
   head: ReactNode
   headText: string
   desc: string
   /** What the timeline sort orders by, for the title (the row shows no column for it). */
   note: string
+  folder: ReactNode
 }) {
   const text = oneLine(desc)
   const title = text ? `${headText}: ${text}` : headText
   return (
-    <div className="min-w-0 truncate pt-1 text-sec" title={note ? `${title}\n${note}` : title}>
-      {head}
-      {text && <span className="ml-2 text-muted">{text}</span>}
+    <div className="flex items-baseline gap-3 pt-1 text-sec">
+      <div className="min-w-0 flex-[1_1_0%] truncate" title={note ? `${title}\n${note}` : title}>
+        {head}
+        {text && <span className="ml-2 text-muted">{text}</span>}
+      </div>
+      {folder}
     </div>
   )
 }
@@ -328,6 +357,7 @@ function BlockFigures({
   agents,
   usd,
   className,
+  flat,
 }: {
   harness?: string
   /** Text for the harness column instead (the summary's session count); it may run on into Turns' room. */
@@ -337,10 +367,12 @@ function BlockFigures({
   agents: number
   usd: number
   className?: string
+  /** No padding above (the row centres the line itself). */
+  flat?: boolean
 }) {
   const count = (n: number) => (n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US'))
   return (
-    <div className={cn('flex items-baseline pt-1 text-sec', className)} style={{ columnGap: GAP }}>
+    <div className={cn('flex items-baseline text-sec', !flat && 'pt-1', className)} style={{ columnGap: GAP }}>
       {label ? (
         <span
           className="shrink-0 whitespace-nowrap text-meta text-muted"
@@ -365,14 +397,24 @@ function BlockFigures({
 
 let measure: CanvasRenderingContext2D | null | undefined
 
+/** How long the folder reads "Copied" (ms). */
+const COPIED_MS = 1200
+
 /**
- * The folder cell: one muted line under the numbers, the session's folder as a display path. When it does not
- * fit its end stays (`…/work/merlin/web`; `fitTail` measures with the cell's own font); the full path is in the
- * title.
+ * The folder, at the right end of a row's text line: the session's directory as a display path, muted, at
+ * most 40 % of the line and at least 96 px wide. When it does not fit its end stays (`…/work/merlin/web`;
+ * `fitTail` measures with the cell's own font); the full path is in the title. With a resume `command` it is
+ * a button: a click copies the command and the text reads "Copied" for a moment; it does not open the session.
+ * The full text sizes the cell (invisibly), so that it grows back when there is room.
  */
-function KeyCell({ text, title }: { text: string; title: string }) {
-  const ref = useRef<HTMLDivElement>(null)
+function FolderCell({ text, path, command }: { text: string; path: string; command: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const w = useWidth(ref)
   const [shown, setShown] = useState(text)
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measure again when the cell's width changes
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
@@ -383,25 +425,43 @@ function KeyCell({ text, title }: { text: string; title: string }) {
     const ctx = measure
     const room = el.clientWidth - 1
     setShown(fitTail(text, (s) => ctx.measureText(s).width <= room))
-  }, [text])
+  }, [text, w])
+  const copy = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    await copyText(command)
+    setCopied(true)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => setCopied(false), COPIED_MS)
+  }
+  const tone = copied ? 'text-ok' : text === '(none)' ? 'text-faint' : 'text-muted'
   return (
-    <div
-      ref={ref}
-      title={title}
-      className={cn(
-        'min-w-0 flex-1 overflow-hidden whitespace-nowrap pb-1 text-meta',
-        text === '(none)' ? 'text-faint' : 'text-muted',
+    <span ref={ref} className="relative min-w-[96px] max-w-[40%] shrink-0 overflow-hidden whitespace-nowrap text-meta">
+      <span className="invisible block">{text}</span>
+      {command ? (
+        <button
+          type="button"
+          onClick={copy}
+          title={`Copy: ${command}`}
+          className={cn('absolute inset-0 cursor-pointer text-right hover:text-fg', tone)}
+        >
+          {copied ? 'Copied' : shown}
+        </button>
+      ) : (
+        <span title={path} className={cn('absolute inset-0 text-right', tone)}>
+          {shown}
+        </span>
       )}
-    >
-      {shown}
-    </div>
+    </span>
   )
 }
 
 /**
- * A session row, two blocks side by side: the session column (the text line and under it the graph) and,
- * behind a thin rule, the structured block (the figures and under them the folder). The row's hover is CSS, so
- * that moving the pointer does not render it; `data-place` lets the table find the place a hovered row is in.
+ * A session row, two blocks side by side: the session column (the text line with the folder at its right end,
+ * and under it the graph) and, behind a thin rule, the structured block (the figures on one line, centred in
+ * the row). The row's hover is CSS, so that moving the pointer does not render it; `data-place` lets the table
+ * find the place a hovered row is in. A click on the graph opens the session at the day (the hour) under the
+ * pointer; the head and the rest of the text line open it whole.
  */
 const SessionRow = memo(function SessionRow({
   l,
@@ -421,27 +481,53 @@ const SessionRow = memo(function SessionRow({
   pxPerTok: number
 }) {
   const head = laneHead(l)
+  const navigate = useNavigate()
+  const command = resumeCommand(l.dir, l.id, useHarness(l.harness).resume)
+  const urlAt = (e: React.MouseEvent<HTMLAnchorElement>) =>
+    sessionStretchUrl(l, axis, e.clientX - e.currentTarget.getBoundingClientRect().left)
   return (
     <div data-place={place} className={cn('flex border-line border-t first:border-t-0', HOVER)}>
       <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
         <SessionText
           head={
-            <Link
-              to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
-              className="font-semibold text-fg hover:underline"
-            >
+            <Link to={sessionPath(l)} className="font-semibold text-fg hover:underline">
               {head}
             </Link>
           }
           headText={head}
           desc={laneDescription(l)}
           note={note}
+          folder={<FolderCell text={folder} path={l.dir || 'No folder'} command={command} />}
         />
-        <RowGraph data={laneData(l)} axis={axis} pxPerTok={pxPerTok} />
+        <a
+          href={sessionPath(l)}
+          tabIndex={-1}
+          aria-label={`Open ${head} at a day`}
+          className="block cursor-pointer"
+          style={{ width: axis.width }}
+          onMouseMove={(e) => {
+            e.currentTarget.title = `Open this session at ${bandLabel(axis, e.clientX - e.currentTarget.getBoundingClientRect().left)}`
+          }}
+          onClick={(e) => {
+            if (e.button !== 0) return
+            e.preventDefault()
+            if (e.metaKey || e.ctrlKey || e.shiftKey) window.open(urlAt(e), '_blank', 'noopener')
+            else navigate(urlAt(e))
+          }}
+          onAuxClick={(e) => {
+            if (e.button !== 1) return
+            e.preventDefault()
+            window.open(urlAt(e), '_blank', 'noopener')
+          }}
+        >
+          <RowGraph data={laneData(l)} axis={axis} pxPerTok={pxPerTok} />
+        </a>
       </div>
-      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W, paddingInline: CELL_PAD }}>
-        <BlockFigures harness={l.harness} turns={l.turns} agents={l.agents} usd={l.usd} />
-        <KeyCell text={folder} title={l.dir || 'No folder'} />
+      <div
+        className="flex shrink-0 flex-col justify-center border-line border-l"
+        style={{ width: BLOCK_W, paddingInline: CELL_PAD }}
+      >
+        <BlockFigures flat harness={l.harness} turns={l.turns} agents={l.agents} usd={l.usd} />
       </div>
     </div>
   )
@@ -501,12 +587,12 @@ function Th({
       title={title}
       aria-label={`Sort by ${label.toLowerCase()}`}
       className={cn(
-        'relative inline-flex items-center justify-center whitespace-nowrap py-1.5 text-meta uppercase tracking-wide hover:text-fg',
+        'relative inline-flex items-center justify-center whitespace-nowrap text-meta uppercase tracking-wide hover:text-fg',
         w === undefined ? 'min-w-0 flex-1' : 'shrink-0',
         rule && RULE,
         on ? 'text-fg' : 'text-faint',
       )}
-      style={w === undefined ? undefined : { width: w }}
+      style={w === undefined ? { height: LINE_H } : { width: w, height: LINE_H }}
     >
       <ArrowSlot on={on} desc={sort.desc} />
       <span className="min-w-0 truncate">{label}</span>
@@ -515,35 +601,32 @@ function Th({
   )
 }
 
+/** The height of one line of the header (px): the text lines and the pictogram are as high. */
+const LINE_H = 28
 /** The pictogram's design size (px): it shrinks to the header cell when that is narrower. */
 const PICTO_W = 340
-const PICTO_H = 42
-/** Where the drawn session starts and ends, its baseline, the spine lane under it and the faint axis. */
+/** Where the drawn session starts and ends, and its baseline: the text baseline of the START and END labels. */
 const PICTO_X0 = 64
 const PICTO_X1 = 276
-const PICTO_BASE = 22
-const PICTO_LANE = PICTO_BASE + LANE_DEPTH
-const PICTO_AXIS = 38
+const PICTO_BASE = 18
 /** The context in steps (px of height) the session rises and falls through, and where it rests (idle). */
 const PICTO_STEP = 11
 const PICTO_CTX = [3, 5, 4, 8, 6, 10, 13, 9, 7, 0, 0, 0, 0, 0, 0, 8, 12, 9, 4]
 const PICTO_IDLE = [0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 7, 6, 6, 5, 0, 0, 0, 0]
-/** The session line: runs of steps with a weight (the row graph's `ACTIVE_W`). */
-const PICTO_RUNS: [number, number, 1 | 2 | 3][] = [
-  [0, 5, 2],
-  [5, 8, 3],
-  [8, 9, 1],
-  [15, 18, 2],
-  [18, 19, 1],
+/** The session line: runs of steps (drawn in the row graph's lightest weight). */
+const PICTO_RUNS: [number, number][] = [
+  [0, 9],
+  [15, 19],
 ]
 
 /**
  * The Session header's second line, a pictogram of a session (not data), in the row graph's own vocabulary
- * and constants: context rising and falling in steps, a pale idle stretch in the middle, the session line,
- * and under it the spine lane with a few spawns (thin verticals, mirrored-J runs in the kinds' colours), over
- * a faint axis with ticks. Three sort buttons: START just before the session's left end, END just after its
- * right end and LENGTH (time with a call running) in the middle, knocked out of the drawing so that it reads.
- * It is centred in the header cell and shrinks (horizontally) when the cell is narrower than its design.
+ * and constants: context rising and falling in steps, a pale idle stretch in the middle, the thin grey
+ * baseline and on it the session line in its lightest weight; the baseline sits on the text baseline of the
+ * labels. Three sort buttons: START just before the session's left end, END just after its right end and
+ * LENGTH (time with a call running) in the middle, knocked out of the drawing so that it reads. It is as high
+ * as a text line, centred in the header cell, and shrinks (horizontally) when the cell is narrower than its
+ * design.
  */
 function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => void }) {
   const mid = (PICTO_X0 + PICTO_X1) / 2
@@ -561,7 +644,7 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
           'absolute inline-flex items-center whitespace-nowrap bg-surface px-[3px] text-meta uppercase leading-none tracking-wide hover:text-fg',
           on ? 'text-fg' : 'text-faint',
         )}
-        style={{ ...at, top: PICTO_BASE, transform: `translateY(-50%) ${shift}` }}
+        style={{ ...at, top: LINE_H / 2, transform: `translateY(-50%) ${shift}` }}
       >
         <ArrowSlot on={on} desc={sort.desc} />
         {label}
@@ -572,43 +655,23 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
   const axis = makeAxis(0, PICTO_CTX.length * 60_000, 60_000, PICTO_CTX.length * PICTO_STEP)
   const stepX = (i: number) => PICTO_X0 + 2 + i * PICTO_STEP
   const nonScaling = { vectorEffect: 'non-scaling-stroke' } as const
-  // the spine lane: [kind colour, x of the first spawn, end of the run (undefined: a lone tick)]
-  const spawns: [string, number, number | undefined][] = [
-    [COLOR.subagent, PICTO_X0 + 34, PICTO_X0 + 92],
-    [COLOR.subagent, PICTO_X0 + 66, undefined],
-    [COLOR.fork, PICTO_X0 + 118, PICTO_X0 + 146],
-    [COLOR.addressable, PICTO_X0 + 160, PICTO_X0 + 200],
-  ]
   return (
-    <div className="relative mx-auto" style={{ width: `min(100%, ${PICTO_W}px)`, height: PICTO_H }}>
+    <div className="relative mx-auto" style={{ width: `min(100%, ${PICTO_W}px)`, height: LINE_H }}>
       {/* biome-ignore lint/a11y/noSvgWithoutTitle: a pictogram; the buttons are the content */}
       <svg
         width="100%"
-        height={PICTO_H}
-        viewBox={`0 0 ${PICTO_W} ${PICTO_H}`}
+        height={LINE_H}
+        viewBox={`0 0 ${PICTO_W} ${LINE_H}`}
         preserveAspectRatio="none"
         className="pointer-events-none absolute inset-0"
         aria-hidden
       >
-        <line x1={0} x2={PICTO_W} y1={PICTO_AXIS} y2={PICTO_AXIS} stroke="var(--line)" {...nonScaling} />
-        {[18, 92, 166, 240, 314].map((x) => (
-          <line
-            key={x}
-            x1={x}
-            x2={x}
-            y1={PICTO_AXIS - 3}
-            y2={PICTO_AXIS}
-            stroke="var(--faint)"
-            opacity={0.7}
-            {...nonScaling}
-          />
-        ))}
         <g transform={`translate(${PICTO_X0 + 2} 0)`}>
           <path d={stepAreaPath(PICTO_IDLE, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={IDLE_FILL} />
           <path d={stepAreaPath(PICTO_CTX, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={CTX_FILL} />
         </g>
         <line x1={PICTO_X0} x2={PICTO_X1} y1={PICTO_BASE} y2={PICTO_BASE} stroke="var(--line)" {...nonScaling} />
-        {PICTO_RUNS.map(([a, b, w]) => (
+        {PICTO_RUNS.map(([a, b]) => (
           <line
             key={a}
             x1={stepX(a)}
@@ -616,44 +679,10 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
             y1={PICTO_BASE}
             y2={PICTO_BASE}
             stroke={COLOR.main}
-            strokeWidth={ACTIVE_W[w]}
+            strokeWidth={ACTIVE_W[1]}
             {...nonScaling}
           />
         ))}
-        {spawns.map(([color, x, end]) =>
-          end === undefined ? (
-            <path
-              key={x}
-              d={`M${x},${PICTO_BASE}V${PICTO_LANE}`}
-              stroke={color}
-              strokeWidth={TICK_W}
-              opacity={TICK_OPACITY}
-              fill="none"
-              {...nonScaling}
-            />
-          ) : (
-            <g key={x}>
-              <path
-                d={elbowPath(x, PICTO_BASE, PICTO_LANE)}
-                fill="none"
-                stroke={color}
-                strokeWidth={RUN_W - 0.5}
-                strokeLinecap="round"
-                opacity={0.85}
-                {...nonScaling}
-              />
-              <line
-                x1={x + Math.min(6, LANE_DEPTH)}
-                x2={end}
-                y1={PICTO_LANE}
-                y2={PICTO_LANE}
-                stroke={color}
-                strokeWidth={RUN_W}
-                {...nonScaling}
-              />
-            </g>
-          ),
-        )}
       </svg>
       {btn('start', 'Start', 'Sort by when the session started', { right: pct(PICTO_W - PICTO_X0 + 3) }, '')}
       {btn('last', 'End', 'Sort by its last activity', { left: pct(PICTO_X1 + 3) }, '')}
@@ -670,21 +699,38 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
 
 function Header({ sort, onSort, padRight }: { sort: Sort; onSort: (k: SortKey) => void; padRight: number }) {
   const th = { sort, onSort }
+  const folderOn = sort.key === 'key'
+  const FolderArrow = !folderOn ? ArrowUpDown : sort.desc ? ArrowDown : ArrowUp
   return (
     <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
       <div className="flex min-w-0 flex-1 flex-col" style={{ paddingInline: CELL_PAD }}>
-        <div className="py-1.5 text-center text-faint text-meta uppercase tracking-wide">Session</div>
+        <div
+          className="relative flex items-center justify-center text-faint text-meta uppercase tracking-wide"
+          style={{ height: LINE_H }}
+        >
+          Session
+          <button
+            type="button"
+            onClick={() => onSort('key')}
+            title="Sort by folder, in the order of the folder tree"
+            aria-label="Sort by folder"
+            className={cn(
+              'absolute right-0 inline-flex items-center gap-1 whitespace-nowrap hover:text-fg',
+              folderOn ? 'text-fg' : 'text-faint',
+            )}
+          >
+            Folder
+            <FolderArrow size={11} aria-hidden className={cn(!folderOn && 'opacity-70')} />
+          </button>
+        </div>
         <TimelineSort {...th} />
       </div>
-      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W }}>
-        <div className="flex" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
+      <div className="flex shrink-0 items-center border-line border-l" style={{ width: BLOCK_W }}>
+        <div className="flex w-full" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
           <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
           <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
           <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
           <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
-        </div>
-        <div className="flex items-center" style={{ paddingInline: CELL_PAD, minHeight: PICTO_H }}>
-          <Th {...th} col="key" label="Folder" title="Sort by folder, in the order of the folder tree" />
         </div>
       </div>
     </div>
@@ -758,8 +804,12 @@ function Summary({
           ))}
         </svg>
       </div>
-      <div className="shrink-0 border-line border-l" style={{ width: BLOCK_W, paddingInline: CELL_PAD }}>
+      <div
+        className="flex shrink-0 flex-col justify-center border-line border-l"
+        style={{ width: BLOCK_W, paddingInline: CELL_PAD }}
+      >
         <BlockFigures
+          flat
           className="font-medium"
           label={count}
           labelTitle={title}
@@ -893,6 +943,7 @@ function TreeLine({
   onPick,
   node,
 }: {
+  /** 0: a heading, always open: no chevron. */
   level: number
   /** Whether its folder is open; undefined for a line with nothing under it (no chevron). */
   open?: boolean
@@ -917,7 +968,7 @@ function TreeLine({
       style={{ paddingLeft: TREE_GUTTER + indent * TREE_INDENT }}
     >
       <Guides indent={indent} />
-      {open === undefined ? (
+      {level === 0 ? null : open === undefined ? (
         <span className="size-4 shrink-0" aria-hidden />
       ) : (
         <button
@@ -937,7 +988,12 @@ function TreeLine({
         onClick={onPick}
         aria-current={selected ? 'true' : undefined}
         title={title}
-        className={cn(ITEM, 'pl-0.5', level === 0 && 'font-semibold', muted && !selected && 'text-muted')}
+        className={cn(
+          ITEM,
+          level === 0 ? 'pl-1' : 'pl-0.5',
+          level === 0 && 'font-semibold',
+          muted && !selected && 'text-muted',
+        )}
       >
         <Icon size={14} aria-hidden className="shrink-0 text-muted" />
         <span className="min-w-0 flex-1 truncate">{label}</span>
@@ -946,9 +1002,6 @@ function TreeLine({
     </li>
   )
 }
-
-/** The closed-folder id of the All heading (no place has an empty id). */
-const ALL_ID = ''
 
 /**
  * The sidebar: a file explorer of the places under the key it is organised by, and the table's scope. The places
@@ -980,22 +1033,26 @@ function Sidebar({
   onSelect: (path: string | null) => void
 }) {
   const listRef = useRef<HTMLUListElement>(null)
-  const [closed, toggle, openFolders] = useClosed(by)
+  const [stored, toggle, openFolders] = useClosed(by)
+  // the top level (All, else the top places) is always open: what was stored for it does not count
+  const none = tree.none
+  const rooted = !!none
+  const closed = useMemo(
+    () => (rooted ? stored : new Set([...stored].filter((id) => !tree.nodes.some((n) => n.id === id)))),
+    [stored, rooted, tree.nodes],
+  )
   const rows = useMemo(() => visibleRows(tree.nodes, closed), [tree.nodes, closed])
   const selNode = sel === null || sel === NONE_SEL ? null : nodeForPath(tree.nodes, sel)
   const hot = hover === null ? null : markedNode(tree.nodes, hover, closed)
   // with sessions of no value the places hang under an All heading, so that (none) is their sibling; without
   // them the places are the top level and nothing else is added
-  const none = tree.none
-  const rooted = !!none
-  const allOpen = !rooted || !closed.has(ALL_ID)
   // the selection's ancestors are open, once for each selection
   const opened = useRef('')
   // biome-ignore lint/correctness/useExhaustiveDependencies: once for each selection, not at every change of the folders
   useEffect(() => {
     if (!selNode || sel === null || opened.current === `${by}|${sel}`) return
     opened.current = `${by}|${sel}`
-    const shut = [ALL_ID, ...ancestorIds(tree.nodes, sel)].filter((id) => closed.has(id))
+    const shut = ancestorIds(tree.nodes, sel).filter((id) => closed.has(id))
     if (shut.length > 0) openFolders(shut)
   }, [sel, by, selNode, tree.nodes])
   useEffect(() => {
@@ -1049,8 +1106,6 @@ function Sidebar({
           {rooted && (
             <TreeLine
               level={0}
-              open={allOpen}
-              onToggle={() => toggle(ALL_ID)}
               icon={HardDrive}
               label="All"
               title="Every place"
@@ -1061,29 +1116,28 @@ function Sidebar({
               onPick={() => onSelect(null)}
             />
           )}
-          {allOpen &&
-            rows.map(({ node: n, depth }) => {
-              const folder = n.children.length > 0
-              const isOpen = folder && !closed.has(n.id)
-              return (
-                <TreeLine
-                  key={n.id}
-                  node={n.id}
-                  level={depth + lift}
-                  open={folder ? isOpen : undefined}
-                  onToggle={() => toggle(n.id)}
-                  icon={folderIcon(n, by, isOpen)}
-                  label={n.label}
-                  title={n.id}
-                  count={n.count}
-                  usd={n.usd}
-                  selected={selNode?.id === n.id}
-                  hot={hot === n.id}
-                  onPick={() => pick(n.path)}
-                />
-              )
-            })}
-          {none && allOpen && (
+          {rows.map(({ node: n, depth }) => {
+            const folder = n.children.length > 0
+            const isOpen = folder && !closed.has(n.id)
+            return (
+              <TreeLine
+                key={n.id}
+                node={n.id}
+                level={depth + lift}
+                open={folder ? isOpen : undefined}
+                onToggle={() => toggle(n.id)}
+                icon={folderIcon(n, by, isOpen)}
+                label={n.label}
+                title={n.id}
+                count={n.count}
+                usd={n.usd}
+                selected={selNode?.id === n.id}
+                hot={hot === n.id}
+                onPick={() => pick(n.path)}
+              />
+            )
+          })}
+          {none && (
             <TreeLine
               level={1}
               icon={FolderX}
@@ -1103,12 +1157,210 @@ function Sidebar({
   )
 }
 
+// ---- the locator: an arbitrary range on the whole history ---------------------------------
+
+/** The locator's height (px): the day bars over the light axis. */
+const LOC_H = 29
+const LOC_BAR = 15
+/** How close to an edge of the brush (px) the pointer grabs it. */
+const LOC_GRAB = 6
+
+type LocDrag =
+  | { mode: 'move'; grab: number; base: Brush }
+  | { mode: 'lo' | 'hi'; base: Brush }
+  | { mode: 'new'; anchor: number; x: number; moved: boolean; base: Brush }
+
+/**
+ * The strip of the locator, like the Session page's overview: the whole history as whole local days (the
+ * first day with spend to today), the daily spend as thin bars, a light month / day axis, and the brush. Drag
+ * on the strip to draw a range, drag the brush to move it, drag its edges to resize; a click on the strip
+ * brings the brush there. The brush snaps to whole days (one at least). `onLive` follows every move,
+ * `onCommit` the end of a drag (the page applies the range then); the arrow keys move the brush by a day.
+ */
+function Locator({
+  value,
+  now,
+  onLive,
+  onCommit,
+}: {
+  /** The range the brush starts on: the custom range, else the preset's. */
+  value: CustomRange
+  now: Date
+  onLive: (r: CustomRange | null) => void
+  onCommit: (r: CustomRange) => void
+}) {
+  const days = useCost({ by: 'day' })
+  const rows = days.data?.rows
+  const strip = useMemo(() => stripOf(rows ? firstSpendDay(rows) : undefined, now, value), [rows, now, value])
+  const wrap = useRef<HTMLDivElement>(null)
+  const width = useWidth(wrap)
+  const spend = useMemo(() => dailySpend(rows ?? [], strip), [rows, strip])
+  const ticks = useMemo(() => stripTicks(strip, width), [strip, width])
+  const peak = Math.max(1e-9, ...spend)
+  const dw = width / strip.days
+  const [live, setLive] = useState<Brush | null>(null)
+  const drag = useRef<LocDrag | null>(null)
+  const [cursor, setCursor] = useState('crosshair')
+  const brush = live ?? rangeBrush(strip, value)
+  const x0 = brush.lo * dw
+  const x1 = (brush.hi + 1) * dw
+  const grab = Math.min(LOC_GRAB, Math.max(2, (x1 - x0) / 3))
+  const at = (e: React.PointerEvent) => e.clientX - (e.currentTarget as Element).getBoundingClientRect().left
+  const zoneAt = (x: number): 'lo' | 'hi' | 'move' | 'new' =>
+    Math.abs(x - x0) <= grab ? 'lo' : Math.abs(x - x1) <= grab ? 'hi' : x > x0 && x < x1 ? 'move' : 'new'
+  const show = (b: Brush) => {
+    setLive(b)
+    onLive(brushRange(strip, b))
+  }
+  const finish = (b: Brush) => {
+    setLive(null)
+    onLive(null)
+    onCommit(brushRange(strip, b))
+  }
+
+  const onDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.preventDefault()
+    const x = at(e)
+    const z = zoneAt(x)
+    const day = dayIndexAt(strip, width, x)
+    drag.current =
+      z === 'move'
+        ? { mode: 'move', grab: day, base: brush }
+        : z === 'new'
+          ? { mode: 'new', anchor: day, x, moved: false, base: brush }
+          : { mode: z, base: brush }
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      // a synthetic pointer has nothing to capture
+    }
+  }
+  const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const x = at(e)
+    const d = drag.current
+    if (!d) {
+      const z = zoneAt(x)
+      setCursor(z === 'move' ? 'grab' : z === 'new' ? 'crosshair' : 'ew-resize')
+      return
+    }
+    const day = dayIndexAt(strip, width, x)
+    if (d.mode === 'move') show(moveBrush(d.base, d.grab, day, strip.days))
+    else if (d.mode === 'new') {
+      if (Math.abs(x - d.x) > 3) d.moved = true
+      if (d.moved) show(drawBrush(d.anchor, day))
+    } else show(resizeBrush(d.base, d.mode, day))
+  }
+  const onUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    const d = drag.current
+    drag.current = null
+    if (!d) return
+    const day = dayIndexAt(strip, width, at(e))
+    if (d.mode === 'new' && !d.moved) {
+      // a click on the strip brings the brush there, its length kept
+      finish(moveBrush(d.base, Math.floor((d.base.lo + d.base.hi) / 2), day, strip.days))
+    } else if (live) finish(live)
+    else setLive(null)
+  }
+  const onKey = (e: React.KeyboardEvent) => {
+    const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0
+    if (!step) return
+    e.preventDefault()
+    finish(moveBrush(brush, 0, step, strip.days))
+  }
+
+  return (
+    <div
+      ref={wrap}
+      role="slider"
+      tabIndex={0}
+      aria-label="The days the page covers"
+      aria-valuemin={0}
+      aria-valuemax={strip.days - 1}
+      aria-valuenow={brush.lo}
+      onKeyDown={onKey}
+      className="min-w-0 flex-1 rounded-badge"
+    >
+      <svg
+        width={width}
+        height={LOC_H}
+        role="img"
+        aria-label="Spend by day over the whole history"
+        className="block touch-none select-none"
+        style={{ cursor }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+      >
+        <rect x={0} y={0} width={width} height={LOC_BAR + 2} fill="var(--surface-2)" opacity={0.5} rx={3} />
+        {spend.map((v, i) =>
+          v > 0 ? (
+            <rect
+              // biome-ignore lint/suspicious/noArrayIndexKey: days are positions
+              key={i}
+              x={i * dw + dw * 0.15}
+              y={LOC_BAR + 1 - Math.max(1, (v / peak) * LOC_BAR)}
+              width={Math.max(1, dw * 0.7)}
+              height={Math.max(1, (v / peak) * LOC_BAR)}
+              fill={SPEND_COLOR}
+            />
+          ) : null,
+        )}
+        <line x1={0} x2={width} y1={LOC_BAR + 2.5} y2={LOC_BAR + 2.5} stroke="var(--line)" />
+        {ticks.map((t) => (
+          <g key={t.x}>
+            <line x1={t.x} x2={t.x} y1={LOC_BAR + 2.5} y2={LOC_BAR + (t.month ? 6 : 5)} stroke="var(--line)" />
+            <text x={t.x + 2} y={LOC_H - 2} fontSize={10} fill={t.month ? 'var(--muted)' : 'var(--faint)'}>
+              {t.label}
+            </text>
+          </g>
+        ))}
+        <g pointerEvents="none">
+          <rect x={0} y={0} width={x0} height={LOC_BAR + 2} fill="var(--surface)" opacity={0.55} />
+          <rect
+            x={x1}
+            y={0}
+            width={Math.max(0, width - x1)}
+            height={LOC_BAR + 2}
+            fill="var(--surface)"
+            opacity={0.55}
+          />
+          <rect
+            x={x0}
+            y={0.75}
+            width={Math.max(2, x1 - x0)}
+            height={LOC_BAR + 0.5}
+            fill="var(--accent)"
+            fillOpacity={0.08}
+            stroke="var(--accent)"
+            strokeWidth={1.5}
+            rx={2}
+          />
+          {[x0, x1].map((x, i) => (
+            <rect
+              key={i === 0 ? 'lo' : 'hi'}
+              x={x - 2}
+              y={LOC_BAR / 2 - 4}
+              width={4}
+              height={LOC_BAR / 2 + 2}
+              rx={2}
+              fill="var(--accent)"
+            />
+          ))}
+        </g>
+      </svg>
+    </div>
+  )
+}
+
 // ---- the page ----------------------------------------------------------------------------
 
 export function OverviewPage() {
   useDocumentTitle('Overview')
   const [sp, setSp] = useSearchParams()
   const range = oneOf<Range>(sp.get('range'), ['1d', '7d', '30d'], '7d')
+  // a custom range (both days, in order) wins over `range`
+  const custom = parseCustom(sp.get('from'), sp.get('to'))
   const by = parseBy(sp.get('by'))
   const sel = parseIn(sp.get('in'))
   const sort = useMemo(() => parseSort(sp.get('sort'), sp.get('dir')), [sp])
@@ -1131,6 +1383,16 @@ export function OverviewPage() {
     setSp(next)
   }
 
+  // ---- the locator: it opens over the search box; the page applies its range when a drag ends ----
+  const [locOpen, setLocOpen] = useState(false)
+  const [locSeen, setLocSeen] = useState(false)
+  const [live, setLive] = useState<CustomRange | null>(null)
+  const openLocator = (v: boolean) => {
+    setLocOpen(v)
+    if (v) setLocSeen(true)
+  }
+  useShortcut('Escape', () => openLocator(false), { enabled: locOpen })
+
   // ---- search box: typing is local, the URL follows after 200 ms ----
   const [draft, setDraft] = useState(q)
   const debounced = useDebounced(draft, 200)
@@ -1151,6 +1413,12 @@ export function OverviewPage() {
   }, [q])
   const inputRef = useRef<HTMLInputElement>(null)
   useShortcut('/', () => {
+    if (locOpen) {
+      // the search box is hidden under the locator: close it, and focus the box once it is back
+      openLocator(false)
+      setTimeout(() => inputRef.current?.focus(), 170)
+      return
+    }
     inputRef.current?.focus()
     inputRef.current?.select()
   })
@@ -1161,19 +1429,22 @@ export function OverviewPage() {
     [search.data],
   )
 
+  // "Ending now", rounded up so that the query key holds still between refreshes.
+  const now = useNow(300_000)
+  const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
+  const win = custom ? customWindow(custom, to) : { fromMs: to - RANGES[range].ms, toMs: to }
+  const rangeMs = win.toMs - win.fromMs
+
   // The plot's width picks the slot (about one per pixel); the width is followed live, the slot only
   // once the width has held still, so a drag of the window does not refetch at every pixel.
   const rootRef = useRef<HTMLDivElement>(null)
   const pageW = useWidth(rootRef)
   const pagePlotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - SCROLLBAR - BLOCK_W - 2 * CELL_PAD)
-  const slot = chooseSlot(RANGES[range].ms, useDebounced(pagePlotW, 250))
+  const slot = chooseSlot(rangeMs, useDebounced(pagePlotW, 250))
 
-  // "Ending now", rounded up so that the query key holds still between refreshes.
-  const now = useNow(300_000)
-  const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
   const query = useOverview({
-    from: new Date(to - RANGES[range].ms).toISOString(),
-    to: new Date(to).toISOString(),
+    from: new Date(win.fromMs).toISOString(),
+    to: new Date(win.toMs).toISOString(),
     slot,
   })
 
@@ -1188,21 +1459,35 @@ export function OverviewPage() {
     }
   }, [])
 
+  const shown = live ?? custom
+  const grow = 'transition-[flex-grow,min-width] duration-150 motion-reduce:transition-none'
   return (
     <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-line border-b px-3 py-2">
-        <h1 className="mr-1 font-semibold text-title">Overview</h1>
-        <SegmentedControl<Range>
+      <div className="flex min-h-[46px] shrink-0 items-center border-line border-b px-3 py-2">
+        <SegmentedControl<Range | 'custom'>
           label="Range"
-          value={range}
+          value={shown ? 'custom' : range}
           options={[
             { value: '1d', label: '1d', title: 'The last day' },
             { value: '7d', label: '7d', title: 'The last week' },
             { value: '30d', label: '30d', title: 'The last 30 days' },
+            {
+              value: 'custom',
+              label: shown ? customLabel(shown, now) : 'Custom',
+              title: 'Pick any range of days on the whole history',
+            },
           ]}
-          onChange={(v) => set({ range: v === '7d' ? undefined : v })}
+          onChange={(v) => {
+            if (v === 'custom') return openLocator(!locOpen)
+            openLocator(false)
+            set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
+          }}
         />
-        <div className="flex min-w-[220px] flex-1 items-center justify-center gap-2">
+        <div
+          className={cn('flex items-center justify-center gap-2 overflow-hidden', grow, locOpen && 'opacity-0')}
+          style={{ flexGrow: locOpen ? 0 : 1, flexBasis: 0, minWidth: locOpen ? 0 : 220 }}
+          inert={locOpen}
+        >
           <SearchInput
             value={draft}
             onChange={setDraft}
@@ -1230,12 +1515,35 @@ export function OverviewPage() {
             </span>
           )}
         </div>
+        <div
+          className={cn('overflow-hidden', grow)}
+          style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 0, minWidth: 0 }}
+          inert={!locOpen}
+        >
+          <div className="flex items-center gap-2 pl-4">
+            {locSeen && (
+              <Locator
+                value={custom ?? presetRange(range, now)}
+                now={now}
+                onLive={setLive}
+                onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
+              />
+            )}
+            <IconButton label="Close the locator" onClick={() => openLocator(false)}>
+              <X size={15} />
+            </IconButton>
+          </div>
+        </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         <QueryBoundary
           query={query}
           isEmpty={(o) => o.lanes.length === 0 && o.scripted.sessions === 0}
-          empty={<div className="p-6 text-muted">Nothing ran in this range.</div>}
+          empty={
+            <div className="p-6 text-muted">
+              {custom ? `Nothing ran ${customPhrase(custom, now)}.` : 'Nothing ran in this range.'}
+            </div>
+          }
           skeleton={<Skeleton className="m-3 h-64" />}
         >
           {(o) => (
