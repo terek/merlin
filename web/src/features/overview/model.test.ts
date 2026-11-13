@@ -1,19 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import type { OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
 import {
+  activeMs,
+  activeSlots,
   activityRuns,
   ancestorIds,
   axisTicks,
   bandAt,
+  blockWidth,
   buildPlaceTree,
   buildRows,
   CTX_MAX,
   chooseSlot,
   columnAt,
   columnBoxes,
+  comparePlace,
   displayPath,
+  earliestStart,
   filterOverview,
   fitLabels,
+  fitTail,
   formatIn,
   formatSort,
   formatView,
@@ -25,6 +31,7 @@ import {
   type IndexItem,
   inferHome,
   keepSelection,
+  keyText,
   type Layout,
   laneDescription,
   laneHead,
@@ -47,6 +54,7 @@ import {
   parseShow,
   parseSort,
   parseView,
+  placeSegs,
   type Row,
   type Sort,
   type SortKey,
@@ -284,13 +292,40 @@ describe('sorting', () => {
   test('groups by each column and direction; ties by spend, then key', () => {
     expect(keys(sortGroups([c, b, a], desc('spend')))).toEqual(['a', 'b', 'c'])
     expect(keys(sortGroups([a, b, c], asc('spend')))).toEqual(['b', 'c', 'a'])
-    expect(keys(sortGroups([a, b, c], desc('session')))).toEqual(['b', 'a', 'c'])
-    expect(keys(sortGroups([a, b, c], asc('session')))).toEqual(['c', 'a', 'b'])
     expect(keys(sortGroups([a, b, c], desc('turns')))).toEqual(['b', 'c', 'a'])
     expect(keys(sortGroups([a, b, c], asc('turns')))).toEqual(['a', 'b', 'c'])
     expect(keys(sortGroups([a, b, c], desc('agents')))).toEqual(['a', 'c', 'b'])
     expect(keys(sortGroups([a, b, c], desc('last')))).toEqual(['b', 'c', 'a'])
     expect(keys(sortGroups([a, b, c], asc('last')))).toEqual(['a', 'c', 'b'])
+  })
+
+  test('groups by start (the earliest of their sessions) and by running time', () => {
+    const lanes = new Map([
+      [
+        'a',
+        [lane({ id: '1', startedAt: '2026-11-05T00:00:00Z' }), lane({ id: '2', startedAt: '2026-11-02T00:00:00Z' })],
+      ],
+      ['b', [lane({ id: '3', startedAt: '2026-11-04T00:00:00Z' })]],
+      ['c', [lane({ id: '4', startedAt: '2026-11-03T00:00:00Z' })]],
+    ])
+    expect(keys(sortGroups([a, b, c], desc('start'), { lanes }))).toEqual(['b', 'c', 'a'])
+    expect(keys(sortGroups([a, b, c], asc('start'), { lanes }))).toEqual(['a', 'c', 'b'])
+    const run = (key: string, active: number[]) => group({ key, usd: 1, active })
+    const g1 = run('g1', [0, 1, 0, 2, 0])
+    const g2 = run('g2', [1, 1, 1, 0, 0])
+    const g3 = run('g3', [])
+    expect(keys(sortGroups([g3, g1, g2], desc('active')))).toEqual(['g2', 'g1', 'g3'])
+    expect(keys(sortGroups([g1, g2, g3], asc('active')))).toEqual(['g3', 'g1', 'g2'])
+  })
+
+  test('running time: the slots with a call running, times the slot', () => {
+    expect(activeSlots([0, 1, 0, 3, 2])).toBe(3)
+    expect(activeMs([0, 1, 0, 3, 2], 600_000)).toBe(1_800_000)
+    expect(activeMs([], 600_000)).toBe(0)
+    expect(earliestStart([lane({ id: 'x', startedAt: '2026-11-03T00:00:00Z' }), lane({ id: 'y' })])).toBe(
+      '2026-11-03T00:00:00Z',
+    )
+    expect(earliestStart(undefined)).toBe('')
   })
 
   test('does not change its input', () => {
@@ -332,10 +367,14 @@ describe('sorting', () => {
     expect(ids(sortLanes([l1, l2, l3], asc('turns')))).toEqual(['1', '2', '3'])
     expect(ids(sortLanes([l1, l2, l3], desc('agents')))).toEqual(['2', '3', '1'])
     expect(ids(sortLanes([l1, l2, l3], asc('agents')))).toEqual(['1', '3', '2'])
-    expect(ids(sortLanes([l1, l2, l3], desc('session')))).toEqual(['2', '1', '3'])
-    expect(ids(sortLanes([l1, l2, l3], asc('session')))).toEqual(['3', '1', '2'])
+    expect(ids(sortLanes([l1, l2, l3], desc('start')))).toEqual(['2', '1', '3'])
+    expect(ids(sortLanes([l1, l2, l3], asc('start')))).toEqual(['3', '1', '2'])
     expect(ids(sortLanes([l1, l2, l3], desc('last')))).toEqual(['3', '2', '1'])
     expect(ids(sortLanes([l1, l2, l3], asc('last')))).toEqual(['1', '2', '3'])
+    const w = (id: string, active: number[]) => lane({ id, usd: 1, active })
+    const [w1, w2, w3] = [w('1', [1, 0, 1]), w('2', [2, 2, 3]), w('3', [])]
+    expect(ids(sortLanes([w3, w1, w2], desc('active')))).toEqual(['2', '1', '3'])
+    expect(ids(sortLanes([w1, w2, w3], asc('active')))).toEqual(['3', '1', '2'])
   })
 
   test('lanes by group', () => {
@@ -376,7 +415,7 @@ describe('rows by mode', () => {
 
   test('groups: the group rows alone', () => {
     expect(buildRows(o, 'groups', spend).map(tag)).toEqual(['g:y', 'g:x'])
-    expect(buildRows(o, 'groups', { key: 'session', desc: true }).map(tag)).toEqual(['g:x', 'g:y'])
+    expect(buildRows(o, 'groups', { key: 'turns', desc: true }).map(tag)).toEqual(['g:y', 'g:x'])
   })
 })
 
@@ -444,17 +483,132 @@ describe('URL state', () => {
     expect(parseSort('turns', null)).toEqual({ key: 'turns', desc: true })
     expect(parseSort('last', 'asc')).toEqual({ key: 'last', desc: false })
     expect(parseSort('bogus', 'asc')).toEqual({ key: 'spend', desc: false })
+    // the timeline sorts start newest / most recent / longest first; an old link's `session` is `start`
+    expect(parseSort('active', null)).toEqual({ key: 'active', desc: true })
+    expect(parseSort('start', 'asc')).toEqual({ key: 'start', desc: false })
+    expect(parseSort('session', null)).toEqual({ key: 'start', desc: true })
+    expect(parseSort('session', 'asc')).toEqual({ key: 'start', desc: false })
+    expect(formatSort({ key: 'start', desc: true })).toEqual({ sort: 'start', dir: undefined })
     expect(formatSort({ key: 'spend', desc: true })).toEqual({ sort: undefined, dir: undefined })
     expect(formatSort({ key: 'agents', desc: false })).toEqual({ sort: 'agents', dir: 'asc' })
-    const s: Sort = { key: 'session', desc: false }
+    const s: Sort = { key: 'start', desc: false }
     const f = formatSort(s)
     expect(parseSort(f.sort ?? null, f.dir ?? null)).toEqual(s)
   })
 
-  test('a header click flips the active column, another starts descending', () => {
+  test('the key sorts ascending by default; only the other direction is written', () => {
+    expect(parseSort('key', null)).toEqual({ key: 'key', desc: false })
+    expect(parseSort('key', 'desc')).toEqual({ key: 'key', desc: true })
+    expect(formatSort({ key: 'key', desc: false })).toEqual({ sort: 'key', dir: undefined })
+    expect(formatSort({ key: 'key', desc: true })).toEqual({ sort: 'key', dir: 'desc' })
+    for (const desc of [true, false]) {
+      const f = formatSort({ key: 'key', desc })
+      expect(parseSort(f.sort ?? null, f.dir ?? null)).toEqual({ key: 'key', desc })
+    }
+  })
+
+  test('a header click flips the active column, another starts in its own direction', () => {
     expect(nextSort({ key: 'spend', desc: true }, 'spend')).toEqual({ key: 'spend', desc: false })
     expect(nextSort({ key: 'spend', desc: false }, 'spend')).toEqual({ key: 'spend', desc: true })
     expect(nextSort({ key: 'spend', desc: false }, 'turns')).toEqual({ key: 'turns', desc: true })
+    expect(nextSort({ key: 'spend', desc: true }, 'key')).toEqual({ key: 'key', desc: false })
+    expect(nextSort({ key: 'key', desc: false }, 'key')).toEqual({ key: 'key', desc: true })
+  })
+})
+
+describe('the key column', () => {
+  const path = (p: string) => p.split('/')
+
+  test('comparePlace: segment by segment, case-insensitive, a path before the paths under it', () => {
+    const sorted = ['~/work/yimple', '~/work/merlin/web', '~/Work', '~/work/merlin', '~/work/Alpha', '~/play'].map(path)
+    sorted.sort(comparePlace)
+    expect(sorted.map((x) => x.join('/'))).toEqual([
+      '~/play',
+      '~/Work',
+      '~/work/Alpha',
+      '~/work/merlin',
+      '~/work/merlin/web',
+      '~/work/yimple',
+    ])
+    expect(comparePlace(path('~/work/merlin'), path('~/work/merlin'))).toBe(0)
+    // not a string compare: `merlin-x` is a sibling of `merlin`, and `merlin/web` sorts under `merlin`
+    expect(comparePlace(path('~/m/web'), path('~/m-x'))).toBeLessThan(0)
+  })
+
+  test('the tree orders its siblings with the same rule', () => {
+    const item = (key: string): IndexItem => ({ key, name: key, count: 1, usd: 1 })
+    const t = buildPlaceTree([item('/Users/a/work/yimple'), item('/Users/a/work'), item('/Users/a/work/merlin')], 'dir')
+    expect(t.nodes[0].label).toBe('~/work')
+    expect(t.nodes[0].children.map((n) => n.label)).toEqual(['merlin', 'yimple'])
+  })
+
+  const gA = group({ key: '/Users/a/work/yimple', usd: 1 })
+  const gB = group({ key: '/Users/a/work/merlin', usd: 9 })
+  const gC = group({ key: '/Users/a/work', usd: 5 })
+  const gN = group({ key: '', usd: 100 })
+  const lanes = [
+    lane({ id: '1', group: gA.key, usd: 2 }),
+    lane({ id: '2', group: gB.key, usd: 3 }),
+    lane({ id: '3', group: gB.key, usd: 7 }),
+    lane({ id: '4', group: gC.key, usd: 1 }),
+    lane({ id: '5', group: '', usd: 50 }),
+  ]
+  const o = { groups: [gA, gB, gC, gN], lanes }
+  const home = '/Users/a'
+  const placeOf = (k: string) => placeSegs(k, 'dir', home)
+  const tag = (r: Row) => (r.kind === 'group' ? `g:${r.g.key.split('/').pop() || '-'}` : r.l.id)
+  const keyAsc: Sort = { key: 'key', desc: false }
+
+  test('sessions cluster by place in the tree order; (none) last, ties by spend', () => {
+    expect(buildRows(o, 'sessions', keyAsc, { placeOf }).map(tag)).toEqual(['4', '3', '2', '1', '5'])
+    // descending reverses the places, (none) stays last
+    expect(buildRows(o, 'sessions', { key: 'key', desc: true }, { placeOf }).map(tag)).toEqual([
+      '1',
+      '3',
+      '2',
+      '4',
+      '5',
+    ])
+  })
+
+  test('grouped and groups: groups by place, the sessions inside by spend', () => {
+    expect(buildRows(o, 'grouped', keyAsc, { placeOf }).map(tag)).toEqual([
+      'g:work',
+      '4',
+      'g:merlin',
+      '3',
+      '2',
+      'g:yimple',
+      '1',
+      'g:-',
+      '5',
+    ])
+    expect(buildRows(o, 'groups', keyAsc, { placeOf }).map(tag)).toEqual(['g:work', 'g:merlin', 'g:yimple', 'g:-'])
+    expect(buildRows(o, 'groups', { key: 'key', desc: true }, { placeOf }).map(tag)).toEqual([
+      'g:yimple',
+      'g:merlin',
+      'g:work',
+      'g:-',
+    ])
+  })
+
+  test('the place and the text of a key', () => {
+    expect(placeSegs('/Users/a/work/merlin', 'dir', home)).toEqual(['~', 'work', 'merlin'])
+    expect(placeSegs('', 'dir', home)).toBeNull()
+    expect(keyText('/Users/a/work/merlin', 'dir', home)).toBe('~/work/merlin')
+    expect(keyText('/Users/a/work/merlin/.bare', 'repo', home)).toBe('~/work/merlin')
+    expect(keyText('/srv/x/y', 'dir', home)).toBe('/srv/x/y')
+    expect(keyText('github.com/acme/api', 'remote', undefined)).toBe('github.com/acme/api')
+    expect(keyText('', 'dir', home)).toBe('(none)')
+  })
+
+  test('fitTail keeps the end, cuts at a slash, and falls back to the last segment', () => {
+    const w = (n: number) => (s: string) => s.length <= n
+    expect(fitTail('~/work/merlin', w(20))).toBe('~/work/merlin')
+    expect(fitTail('~/work/merlin/web/src', w(17))).toBe('…/merlin/web/src')
+    expect(fitTail('~/work/merlin/web', w(10))).toBe('…/web')
+    expect(fitTail('~/a/very-long-final-segment', w(10))).toBe('…l-segment')
+    expect(fitTail('~/work/merlin', w(0))).toBe('…')
   })
 })
 
@@ -654,30 +808,36 @@ describe('group harnesses', () => {
 })
 
 describe('hover geometry', () => {
-  const L: Layout = { harness: 44, gutter: 0, pad: 12, turns: 52, agents: 56, spend: 84, last: 64, gap: 8 }
+  const L: Layout = { harness: 44, pad: 12, turns: 52, agents: 56, spend: 84, gap: 8 }
+  const BLOCK = 1 + 24 + 44 + 52 + 56 + 84 + 24
 
-  test('columns from the right edge', () => {
+  test('the block takes its width from the right edge, Session what is left', () => {
+    expect(blockWidth(L)).toBe(BLOCK)
     const boxes = columnBoxes(1000, L)
-    expect(boxes.map((b) => b.col)).toEqual(['session', 'harness', 'turns', 'agents', 'spend', 'last'])
+    expect(boxes.map((b) => b.col)).toEqual(['session', 'harness', 'turns', 'agents', 'spend', 'key'])
     expect(columnAt(boxes, 10)).toBe('session')
-    expect(columnAt(boxes, 100)).toBe('session')
-    // the harness column sits just before Turns
-    expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 84 - 8 - 56 - 8 - 52 - 8 - 20)).toBe('harness')
-    expect(columnAt(boxes, 1000 - 12 - 30)).toBe('last')
-    expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 40)).toBe('spend')
-    expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 84 - 8 - 20)).toBe('agents')
-    expect(columnAt(boxes, 999)).toBe('last')
+    expect(columnAt(boxes, 1000 - BLOCK - 1)).toBe('session')
+    expect(columnAt(boxes, 1000 - BLOCK)).toBe('harness')
+    expect(columnAt(boxes, 1000 - 12 - 84 - 8 - 56 - 8 - 52 - 8 - 20)).toBe('harness')
+    expect(columnAt(boxes, 1000 - 12 - 40)).toBe('spend')
+    expect(columnAt(boxes, 1000 - 12 - 84 - 8 - 20)).toBe('agents')
+    expect(columnAt(boxes, 999)).toBe('spend')
     expect(columnAt(boxes, 1000)).toBeNull()
     expect(columnAt(boxes, -1)).toBeNull()
   })
 
-  test('a flat table has the first column too', () => {
-    const boxes = columnBoxes(1000, { ...L, gutter: 140 })
-    expect(columnAt(boxes, 100)).toBe('first')
-    expect(columnAt(boxes, 200)).toBe('session')
-    expect(boxes.map((b) => b.col)).toEqual(['first', 'session', 'harness', 'turns', 'agents', 'spend', 'last'])
-    const total = boxes.reduce((n, b) => n + b.w, 0)
-    expect(total).toBe(1000)
+  test('the boxes tile the row; the key box is the whole block', () => {
+    const boxes = columnBoxes(1000, L)
+    expect(boxes.filter((b) => b.col !== 'key').reduce((n, b) => n + b.w, 0)).toBe(1000)
+    expect(boxes.find((b) => b.col === 'key')).toEqual({ col: 'key', x: 1000 - BLOCK, w: BLOCK })
+  })
+
+  test('on the key line the block is the key column, the session column still Session', () => {
+    const boxes = columnBoxes(1000, L)
+    expect(columnAt(boxes, 900, true)).toBe('key')
+    expect(columnAt(boxes, 1000 - BLOCK, true)).toBe('key')
+    expect(columnAt(boxes, 100, true)).toBe('session')
+    expect(columnAt(boxes, 1000, true)).toBeNull()
   })
 
   test('the day under x, clipped to the plot; the hour in a short range', () => {

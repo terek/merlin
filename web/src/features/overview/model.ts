@@ -254,8 +254,8 @@ export type Show = 'sessions' | 'grouped' | 'groups'
 export const SHOWS: readonly Show[] = ['sessions', 'grouped', 'groups']
 
 /** The column a table is sorted by. */
-export type SortKey = 'session' | 'turns' | 'agents' | 'spend' | 'last'
-export const SORT_KEYS: readonly SortKey[] = ['session', 'turns', 'agents', 'spend', 'last']
+export type SortKey = 'start' | 'last' | 'active' | 'turns' | 'agents' | 'spend' | 'key'
+export const SORT_KEYS: readonly SortKey[] = ['start', 'last', 'active', 'turns', 'agents', 'spend', 'key']
 export interface Sort {
   key: SortKey
   desc: boolean
@@ -282,50 +282,120 @@ export function formatView(by: By, show: Show): { by?: string; show?: string } {
   return { by: by === 'dir' ? undefined : by, show: show === 'grouped' ? undefined : show }
 }
 
-/** `sort=<column>` (default spend) and `dir=asc` (default descending). */
+/** The direction a column starts in: the figures and times descending, the key (a path) ascending, A to Z. */
+export const startsDesc = (key: SortKey): boolean => key !== 'key'
+
+/** `sort=<column>` (default spend) and `dir=asc` / `dir=desc` (absent: the column's own start, see `startsDesc`). */
 export function parseSort(sort: string | null, dir: string | null): Sort {
-  return { key: oneOf(sort, SORT_KEYS, DEFAULT_SORT.key), desc: dir !== 'asc' }
+  // an old link's `session` is the start time
+  const key = oneOf(sort === 'session' ? 'start' : sort, SORT_KEYS, DEFAULT_SORT.key)
+  return { key, desc: dir === 'asc' ? false : dir === 'desc' ? true : startsDesc(key) }
 }
 
 /** The URL params of a sort; undefined where the default holds. */
 export function formatSort(s: Sort): { sort?: string; dir?: string } {
-  return { sort: s.key === DEFAULT_SORT.key ? undefined : s.key, dir: s.desc ? undefined : 'asc' }
+  return {
+    sort: s.key === DEFAULT_SORT.key ? undefined : s.key,
+    dir: s.desc === startsDesc(s.key) ? undefined : s.desc ? 'desc' : 'asc',
+  }
 }
 
-/** A click on a column header: the same column flips its direction, another starts descending. */
+/** A click on a column header: the same column flips its direction, another starts in its own. */
 export const nextSort = (cur: Sort, key: SortKey): Sort =>
-  cur.key === key ? { key, desc: !cur.desc } : { key, desc: true }
+  cur.key === key ? { key, desc: !cur.desc } : { key, desc: startsDesc(key) }
 
 const cmp = <T extends number | string>(a: T, b: T): number => (a < b ? -1 : a > b ? 1 : 0)
 
-/** Groups by the sort's column on their aggregates (session: the count); ties by spend, then key. */
-export function sortGroups(groups: OverviewGroup[], s: Sort): OverviewGroup[] {
-  const val = (g: OverviewGroup): number | string =>
-    s.key === 'session'
-      ? g.sessions
-      : s.key === 'turns'
-        ? g.turns
-        : s.key === 'agents'
-          ? g.agents
-          : s.key === 'spend'
-            ? g.usd
-            : (g.lastActivityAt ?? '')
-  return [...groups].sort((a, b) => (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.key, b.key))
+/**
+ * Where a place sorts: the file explorer's order. Segment by segment, case-insensitive (so `~/work/merlin` sits
+ * right after `~/work` and before `~/work/yimple`); a path comes before the paths under it.
+ */
+export function comparePlace(a: readonly string[], b: readonly string[]): number {
+  const n = Math.min(a.length, b.length)
+  for (let i = 0; i < n; i++) {
+    const c = a[i].toLowerCase().localeCompare(b[i].toLowerCase())
+    if (c) return c
+  }
+  return a.length - b.length
 }
 
-/** Sessions by the sort's column (session: start time); ties by spend, then id. */
-export function sortLanes(lanes: OverviewLane[], s: Sort): OverviewLane[] {
+/** The segments a group's key sorts by (see `placeSegs`); null for the group with no value, which sorts last. */
+export type PlaceOf = (groupKey: string) => string[] | null
+
+const splitKey: PlaceOf = (k) => (k ? splitPath(k) : null)
+
+/** What the sorts need besides the rows themselves. */
+export interface SortOpts {
+  /** The place of a group key, for the key column (default: the key's path segments). */
+  placeOf?: PlaceOf
+  /** The sessions of each group, for a group's start time. */
+  lanes?: Map<string, OverviewLane[]>
+}
+
+/** Slots with at least one call running. */
+export const activeSlots = (active: readonly number[]): number => active.reduce((n, v) => (v > 0 ? n + 1 : n), 0)
+
+/**
+ * Time actually working in the range: the slots with at least one call running, times the slot. A session's
+ * array is trimmed, a group's dense (the union of its sessions' running time); both count the same way.
+ */
+export const activeMs = (active: readonly number[], slotMs: number): number => activeSlots(active) * slotMs
+
+/** The earliest start of some sessions ('' when none has one). */
+export const earliestStart = (lanes: readonly OverviewLane[] | undefined): string =>
+  (lanes ?? []).reduce((m, l) => (l.startedAt && (!m || l.startedAt < m) ? l.startedAt : m), '')
+
+/** The order of the key column: (none) last whichever way, then the place. */
+function byPlace(a: string[] | null, b: string[] | null, desc: boolean): number {
+  if (!a || !b) return a ? -1 : b ? 1 : 0
+  return (desc ? -1 : 1) * comparePlace(a, b)
+}
+
+/**
+ * Groups by the sort's column on their aggregates (start: the earliest start of their sessions; last: the
+ * latest activity; active: the union of their running time; key: the place); ties by spend, then key.
+ */
+export function sortGroups(groups: OverviewGroup[], s: Sort, opts: SortOpts = {}): OverviewGroup[] {
+  const placeOf = opts.placeOf ?? splitKey
+  const val = (g: OverviewGroup): number | string =>
+    s.key === 'start'
+      ? earliestStart(opts.lanes?.get(g.key))
+      : s.key === 'last'
+        ? (g.lastActivityAt ?? '')
+        : s.key === 'active'
+          ? activeSlots(g.active)
+          : s.key === 'turns'
+            ? g.turns
+            : s.key === 'agents'
+              ? g.agents
+              : g.usd
+  return [...groups].sort((a, b) =>
+    s.key === 'key'
+      ? byPlace(placeOf(a.key), placeOf(b.key), s.desc) || cmp(b.usd, a.usd) || cmp(a.key, b.key)
+      : (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.key, b.key),
+  )
+}
+
+/** Sessions by the sort's column (key: their group's place); ties by spend, then id. */
+export function sortLanes(lanes: OverviewLane[], s: Sort, opts: SortOpts = {}): OverviewLane[] {
+  const placeOf = opts.placeOf ?? splitKey
   const val = (l: OverviewLane): number | string =>
-    s.key === 'session'
+    s.key === 'start'
       ? (l.startedAt ?? '')
-      : s.key === 'turns'
-        ? l.turns
-        : s.key === 'agents'
-          ? l.agents
-          : s.key === 'spend'
-            ? l.usd
-            : (l.lastActivityAt ?? '')
-  return [...lanes].sort((a, b) => (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.id, b.id))
+      : s.key === 'last'
+        ? (l.lastActivityAt ?? '')
+        : s.key === 'active'
+          ? activeSlots(l.active)
+          : s.key === 'turns'
+            ? l.turns
+            : s.key === 'agents'
+              ? l.agents
+              : l.usd
+  return [...lanes].sort((a, b) =>
+    s.key === 'key'
+      ? byPlace(placeOf(a.group), placeOf(b.group), s.desc) || cmp(b.usd, a.usd) || cmp(a.id, b.id)
+      : (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.id, b.id),
+  )
 }
 
 /** The lanes of each group, by the lane's group key. */
@@ -346,9 +416,14 @@ export type Row =
 /**
  * The table's rows. `sessions`: every session, flat, with its group's name for the first column. `grouped`:
  * each group row, then all its sessions; `groups`: the group rows alone. The sort orders the groups and, by
- * the same column, the sessions inside each.
+ * the same column, the sessions inside each (by the key they all share, so by spend then).
  */
-export function buildRows(o: { groups: OverviewGroup[]; lanes: OverviewLane[] }, show: Show, sort: Sort): Row[] {
+export function buildRows(
+  o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
+  show: Show,
+  sort: Sort,
+  opts: SortOpts = {},
+): Row[] {
   const name = new Map(o.groups.map((g) => [g.key, g.name]))
   const lane = (l: OverviewLane, nested: boolean): Row => ({
     kind: 'session',
@@ -357,12 +432,13 @@ export function buildRows(o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
     nested,
     groupName: name.get(l.group) ?? l.group,
   })
-  if (show === 'sessions') return sortLanes(o.lanes, sort).map((l) => lane(l, false))
+  if (show === 'sessions') return sortLanes(o.lanes, sort, opts).map((l) => lane(l, false))
   const rows: Row[] = []
   const lanes = lanesByGroup(o.lanes)
-  for (const g of sortGroups(o.groups, sort)) {
+  const inner: Sort = sort.key === 'key' ? DEFAULT_SORT : sort
+  for (const g of sortGroups(o.groups, sort, { ...opts, lanes })) {
     rows.push({ kind: 'group', key: `g:${g.key}`, g })
-    if (show === 'grouped') for (const l of sortLanes(lanes.get(g.key) ?? [], sort)) rows.push(lane(l, true))
+    if (show === 'grouped') for (const l of sortLanes(lanes.get(g.key) ?? [], inner, opts)) rows.push(lane(l, true))
   }
   return rows
 }
@@ -699,8 +775,11 @@ export function groupHarnesses(lanes: readonly { harness: string }[], max = 3): 
 
 // ---- what the pointer is over ------------------------------------------------------------
 
-/** A column of the table the pointer can be over. */
-export type Column = 'harness' | 'first' | SortKey
+/**
+ * A column of the table the pointer can be over: Session (the wide column: text and graph), the structured
+ * block's columns, and `key` (the block's second line: the folder, worktree, repo or remote).
+ */
+export type Column = 'harness' | 'session' | 'turns' | 'agents' | 'spend' | 'key'
 
 export interface ColumnBox {
   col: Column
@@ -711,49 +790,51 @@ export interface ColumnBox {
 
 /** The widths the columns are laid out with (OverviewPage.tsx). */
 export interface Layout {
-  /** The harness column: between Session and Turns. */
+  /** The harness column: the first of the structured block. */
   harness: number
-  gutter: number
+  /** The padding inside the block, left and right (the block's left border is 1 px more). */
   pad: number
   turns: number
   agents: number
   spend: number
-  last: number
-  /** The gap between the text line's columns. */
+  /** The gap between the block's columns. */
   gap: number
 }
 
+/** The width of the structured block: its left rule, the padding and the four columns with their gaps. */
+export const blockWidth = (L: Layout): number => 1 + 2 * L.pad + L.harness + L.turns + L.agents + L.spend + 3 * L.gap
+
 /**
- * The columns' boxes for rows `width` px wide: the first column (flat table), then Session (the rest),
- * the harness column, Turns, Agents, Spend and Last against the right edge. The boxes meet in the middle
- * of the gap between two columns, and the last reaches the right edge.
+ * The columns' boxes for rows `width` px wide: Session takes what the block (at the right edge) leaves; in
+ * the block the harness column, Turns, Agents and Spend. The boxes meet in the middle of the gap
+ * between two columns; the harness box reaches the block's left edge and Spend the right edge. `key`
+ * is the block's whole width and comes last: it is the second line, found with `columnAt`'s `line`.
  */
 export function columnBoxes(width: number, L: Layout): ColumnBox[] {
+  const blockX = width - blockWidth(L)
   const right = width - L.pad
-  const lastX = right - L.last
-  const spendX = lastX - L.gap - L.spend
+  const spendX = right - L.spend
   const agentsX = spendX - L.gap - L.agents
   const turnsX = agentsX - L.gap - L.turns
-  const harnessX = turnsX - L.gap - L.harness
   const half = L.gap / 2
-  const boxes: ColumnBox[] = []
-  if (L.gutter > 0) boxes.push({ col: 'first', x: 0, w: L.gutter })
   const cell = (col: Column, x: number, end: number): ColumnBox => ({ col, x, w: Math.max(0, end - x) })
-  boxes.push(
-    cell('session', L.gutter, harnessX - half),
-    cell('harness', harnessX - half, turnsX - half),
+  return [
+    cell('session', 0, blockX),
+    cell('harness', blockX, turnsX - half),
     cell('turns', turnsX - half, agentsX - half),
     cell('agents', agentsX - half, spendX - half),
-    cell('spend', spendX - half, lastX - half),
-    cell('last', lastX - half, width),
-  )
-  return boxes
+    cell('spend', spendX - half, width),
+    cell('key', blockX, width),
+  ]
 }
 
-/** The column under x (px from the left of the rows), or null outside them. */
-export function columnAt(boxes: ColumnBox[], x: number): Column | null {
-  const b = boxes.find((c) => x >= c.x && x < c.x + c.w)
-  return b ? b.col : null
+/**
+ * The column under x (px from the left of the rows), or null outside them. With `keyLine` (the pointer is
+ * on the block's second line) a point in the block is the `key` column.
+ */
+export function columnAt(boxes: ColumnBox[], x: number, keyLine = false): Column | null {
+  const hit = boxes.find((c) => c.col !== 'key' && x >= c.x && x < c.x + c.w)
+  return hit && keyLine && hit.col !== 'session' ? 'key' : (hit?.col ?? null)
 }
 
 export interface Band {
@@ -876,6 +957,37 @@ function placeSegments(
 }
 
 /**
+ * The segments a group sits at in the tree (`~`, `work`, `merlin`; a remote's host, owner, name); the order the
+ * key column sorts by. Null for the group with no value.
+ */
+export const placeSegs = (key: string, by: By, home: string | undefined): string[] | null =>
+  key ? placeSegments(key, by, home).segs : null
+
+/** The key cell's text: the place as the tree shows it (`~/work/merlin`; a repository without its `.bare`), `(none)` for no value. */
+export const keyText = (key: string, by: By, home: string | undefined): string =>
+  key ? placeSegments(key, by, home).segs.join('/') : '(none)'
+
+/**
+ * `text` cut at the start so that it fits, keeping its end: `…/work/merlin/web`. `fits` says whether a string
+ * fits the cell. The cut falls on a `/` when the tail still has one; a last segment too long for the cell
+ * is cut inside (`…rge-name`).
+ */
+export function fitTail(text: string, fits: (s: string) => boolean): string {
+  if (fits(text)) return text
+  const at = (i: number) => `…${text.slice(i)}`
+  let lo = 1
+  let hi = text.length
+  // the least cut that fits: `fits` only gets truer as more is cut
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (fits(at(mid))) hi = mid
+    else lo = mid + 1
+  }
+  const slash = text.indexOf('/', lo)
+  return slash > 0 && slash < text.length - 1 ? at(slash) : at(lo)
+}
+
+/**
  * The groups of the table laid out as the filesystem the user knows (docs/ui.md section 10b): a repository
  * at its working directory, a remote as host / owner / name, the home as `~`. A folder that is no group and
  * has one child is merged into it (`~/work`, `work/merlin`); children are ordered by name, like Finder.
@@ -931,7 +1043,7 @@ export function buildPlaceTree(items: readonly IndexItem[], by: By, fixed?: { ho
     return node
   }
   const byName = (a: PlaceNode, b: PlaceNode) =>
-    a.label.toLowerCase().localeCompare(b.label.toLowerCase()) || (a.id < b.id ? -1 : 1)
+    comparePlace(a.label.split('/'), b.label.split('/')) || (a.id < b.id ? -1 : 1)
   const sortTree = (ns: PlaceNode[]): PlaceNode[] => {
     for (const n of ns) sortTree(n.children)
     return ns.sort(byName)

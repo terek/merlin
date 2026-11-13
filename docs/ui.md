@@ -752,14 +752,24 @@ Round 8 (2026-11-13): two independent choices, **Organise by** (the key; it owns
 this round says otherwise it supersedes the sections below (the "None" mode, the index shown only for
 Group + Sessions, the click that scrolls, the harness column at the left).
 
+Round 9 (2026-11-13): a row is **two blocks side by side**. The session column (wide, flexible) holds
+the text line and, under it, the graph, so the graph is only as wide as that column; behind a thin vertical
+rule the structured block (fixed width: harness, Turns, Agents, Spend) holds the figures on the upper line
+and, merged across the block on the lower line, the row's **key** (folder, worktree, ...). The **Last**
+column and the muted first column of the flat table are gone (the key lives on the right); the header is two
+lines and the footer one row of the same two blocks; the key is sortable. Where this round says otherwise it
+supersedes the sections below.
+
 ```
  Overview [1d 7d 30d]  show [Sessions|Grouped|Groups]     ( Search sessions...  / ) [in ~/work x]   (sticky)
- ORGANISE BY [Folder v] [<]|FOLDER   SESSION                              (logo)  TURNS  AGENTS  SPEND v  LAST  (sticky)
- All          102  $354 |merlin   long refactor  Working on the retry...   *      22      14   $96.20    2h   (scrolls)
- v ~           95  $342 |         ..-=#=-..    ..=#=#=..   row graph, one spine lane
-    work/merlin 22  $48 |api      fix date handling  Can you help me...  *       9       0    $4.20    3d
- (none)        15   $27 |         Fri 6        Sat 7        Sun 8        Mon 9      (date axis, sticky)
-                        |         Total  100 sessions                            708   1,139   $353
+ ORGANISE BY [Folder v] [<]| SESSION                                     | (logo) TURNS AGENTS  SPEND v  (sticky)
+ All          102  $354    | STARTED | LAST ACTIVE | ACTIVE              | FOLDER ^
+ v ~           95  $342    |-------------------------------------------|---------------------------------
+    work/merlin 22  $48    | bold head  muted description...           |   *     22     14   $96.20      (scrolls)
+ (none)        15   $27    | ..-=#=-..    ..=#=#=..  graph, this column |  ~/work/merlin
+                           |-------------------------------------------|---------------------------------
+                           | Sat 7     Sun 8     Mon 9  ... axis       | TOTAL  708  1,139   $353       (sticky)
+                           |                                           | 102 sessions
 ```
 
 - **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; **show** `Sessions`,
@@ -769,8 +779,8 @@ Group + Sessions, the click that scrolls, the harness column at the left).
   per kind of row, as before; the note is gone). The grouping's labels: **Folder** is the session's
   directory; **Worktree** is a git checkout (a worktree: "git dir" would be the `.git` directory, which for
   a linked worktree sits inside the main repo, so the wrong word); **Repo** ("Repository: worktrees of one
-  clone merge") and **Remote** ("Origin URL: clones of one remote merge"). They name the first column of
-  the Sessions table and are the options of the sidebar's selector.
+  clone merge") and **Remote** ("Origin URL: clones of one remote merge"). They name the key header (the
+  second line of the structured block) and are the options of the sidebar's selector.
 - **Search.** Typing is local and the URL's `q` follows after 200 ms (back and forward move the box);
   `/` focuses it and Esc clears, then blurs. A session matches when the term (trimmed, case-insensitive
   substring) is in its head (name, title, id), its description texts (recap, first and last prompt) or
@@ -785,32 +795,58 @@ Group + Sessions, the click that scrolls, the harness column at the left).
   there is no None) is the key: the API is always asked with it, and it decides what the groups are and
   how the sidebar tree is laid out. **Show** (`show`) is the level of the main table, a scope decision of
   the main window; there is no collapsing of single groups:
-  1. **Sessions**: flat, one row per session of the range, ordered by the sort. The first column (140 px,
-     muted) holds the session's group (the same-names label).
+  1. **Sessions**: flat, one row per session of the range, ordered by the sort; each row's key cell
+     holds its group's place.
   2. **Grouped** (default, `show` absent): a group row (tinted) with the group's aggregate graph, then
      all its sessions under it, their text indented 16 px (their graphs stay on the shared axis).
   3. **Groups** (`show=groups`): the group rows alone, each with the graph of the union of its sessions.
-  In Grouped and Groups the first column is not drawn: the group's name leads its row. Old links:
+  In Grouped the session rows under a group leave their key cell empty: the group row above says it. Old links:
   `by=none` reads as `by=dir`, `show=sessions`; an unknown `show` reads as grouped.
 - **Container, full bleed.** The page fills the area under the top bar edge to edge (no max width, padding,
   card border or page background around it), as tall as the viewport (the page itself does not scroll). The
-  toolbar has a bottom border. Beside the rows sits the index (below); the table has three parts. **Top, fixed**: toolbar and column headers. **Middle, scrolls**: the
-  rows (and the scripted-runs line). **Bottom, fixed**: the date axis, a totals line (sessions, turns,
-  agents, spend of the range's groups). The scrollbar of the middle
-  takes width from the rows only, so the header and the footer give up as much as it measures (padding
-  right) and the columns and the axis stay exactly above and below the graph cells.
+  toolbar has a bottom border. Beside the rows sits the index (below); the table has three parts. **Top, fixed**:
+  toolbar and the two-line column header. **Middle, scrolls**: the rows (and the scripted-runs line).
+  **Bottom, fixed**: one footer row. Every part has the same two blocks: the **session column** (takes the
+  width that is left; the plot is exactly its inner width, 12 px of padding each side) and the **structured
+  block** (357 px: a 1 px rule on its left, 12 px padding, then harness 44, Turns 52, Agents 56, Spend 84, 8 px
+  between). The scrollbar of the middle takes width from the rows only, so the header and the footer give up as
+  much as it measures (padding right) and the columns and the axis stay exactly above and below the rows.
+- **Row.** Session column: the text line on top, the graph under it. Structured block: the figures on the upper
+  line (aligned with the text line) and, under them, the **key cell**: one muted `text-meta` line with the
+  row's place as the index shows it (`~/work/merlin`; a repository without `.bare`; a remote as
+  host/owner/repo; `(none)` faint), the real key in its `title`. A session row has its group's place; a
+  group row its own (its bold head is the short same-names label). When the place is too long its **start**
+  is cut and the end stays (`…/work/merlin/web`, cut at a `/` where possible): `fitTail` in `model.ts` measures
+  with the cell's own font on a canvas (no `direction: rtl`).
+- **Header, two lines across the table.** Left: line 1 `SESSION` (a label); line 2 the timeline sorts
+  **Started** (`sort=start`: the session's start; a group: the earliest start of its sessions),
+  **Last active** (`sort=last`: last activity; a group: the latest of its sessions) and **Active**
+  (`sort=active`: time actually working in the range, the slots with at least one call running times the slot,
+  from the lane's `active` array; a group: the same over its dense array, the union of its sessions' running
+  time; title "Time with at least one call running, in this range"). All three start descending (newest, most
+  recent, longest first). Right: line 1 the harness spacer and **Turns**, **Agents**, **Spend**; line 2 the
+  merged key header (**Folder** / **Worktree** / **Repo** / **Remote**).
+- **Footer, one row.** The session column holds the date axis (the same x as the graphs); the block's upper
+  line the totals (turns, agents, spend of the range's groups, under a search or a selection those of the
+  rows shown) under a `TOTAL` label in the harness slot, the lower line what they count ("102 sessions",
+  "25 matching sessions", "16 sessions in ~/acme").
 - **Sorting is the column headers.** Every sortable header reserves a fixed slot for the arrow (invisible
-  when the column is not the sorted one), so no label moves when the sort changes. A click sorts by that column (descending first); a click on the
-  active column flips the direction; an arrow marks it. A tiny rule (1 px, `border-line`, 55 % of the header's
-  height, centred) stands between adjacent header cells, so that each arrow visibly belongs to its own.
-  Columns: first (Sessions only; not sortable), **Session**, harness (below; not sortable)
-  (sessions by start time, groups by number of sessions), **Turns**, **Agents**, **Spend** (default,
-  descending), **Last** (last activity). In the grouped modes the sort orders the groups by their
-  aggregate and the sessions inside each group by the same column; ties by spend, then id. URL: `sort`
-  (`session`, `turns`, `agents`, `spend`, `last`; absent = spend) and `dir=asc` (absent = descending).
-- **Harness column**: 44 px, after the Session column and before Turns (with the structured data on the
-  right; the text and the graphs start at the left edge of the table), header empty (title "Harness"),
-  not sortable, in the header's column hover and the totals line's too. A
+  when the column is not the sorted one), so no label moves when the sort changes. A click sorts by that
+  column in its own first direction; a click on the active column flips it; an arrow marks it. A tiny rule
+  (1 px, `border-line`, 55 % of the header's height, centred) stands between adjacent header cells. In the
+  grouped modes the sort orders the groups by their aggregate and the sessions inside each group by the same
+  column (under the key, by spend: they share it); ties by spend, then id. URL: `sort` (`start`, `last`,
+  `active`, `turns`, `agents`, `spend`, `key`; absent = spend; an old `session` reads as `start`) and `dir`
+  (`asc` / `desc`; absent = the column's own start: descending, but **ascending for `key`**).
+- **Sort by the key.** The key header sorts by the place in the order of the sidebar tree: paths compared
+  segment by segment, case-insensitive (`comparePlace` in `model.ts`, also the tree's sibling order), so
+  `~/work/merlin` sits right after `~/work` and before `~/work/yimple` and the flat list clusters by folder in
+  the tree's order; `(none)` last whichever way; ties by spend, then id. A group's place is its own, so
+  Grouped and Groups order the groups by it.
+- The title of a row's text line also carries the value of the active timeline sort (start, last activity or
+  running time), since the table has no column for it.
+- **Harness column**: 44 px, the first of the structured block, header empty (title "Harness"), not
+  sortable, in the header's column hover too. A
   session row has the mark of its harness; a group row the distinct harnesses of all its sessions (up to 3,
   most sessions first, side by side at 12 px). The mark is the shared `HarnessIcon` (`ui/harness.tsx`, 14 px)
   and it is the product's real logo, its path data inline (no file, no fetch): Claude and OpenAI from
@@ -863,18 +899,16 @@ Group + Sessions, the click that scrolls, the harness column at the left).
     scroll-to-group and no scroll-spy.
 - **Same names**: groups that share a name (three repositories called `merlin`) are named in the table
   with `placeLabels` of `lib/places.ts`: the fewest trailing directories that tell them apart
-  (`work/merlin`, `old/merlin`), in the group rows' bold head (its `title` is the full key) and in the
-  first column of the flat table.
+  (`work/merlin`, `old/merlin`), in the group rows' bold head (its `title` is the full key).
 - **Row text**, one line, an ellipsis where it ends, the whole text in the `title`. A session: its **bold
   head** (its own name from /rename, else its title, else the first 8 characters of its id; a link to the
   Session page) and in muted text the latest recap, else the first prompt, else the last prompt. A
   group: the bold name and "18 sessions . priciest: <head of the priciest session> $96". Numbers
-  right-aligned, tabular: Turns, Agents, Spend (`<Money>`), Last (compact: `5 min`, `15 h`, `yesterday`,
-  `9 Nov`; fixed width). All counts are in the range.
+  right-aligned, tabular: Turns, Agents, Spend (`<Money>`). All counts are in the range.
 - The session title links to the Session page. Group rows use the group arrays, session rows their lanes.
 - **Time axis: linear.** Wall-clock time maps linearly to x over the whole range; nights and empty
   days take their real width. Midnight ticks and day labels; at `1d`, hour ticks. Every graph uses the
-  same axis; the graph cell spans the data columns. In a row, the day lines are drawn only inside the
+  same axis; the graph is the width of the session column. In a row, the day lines are drawn only inside the
   lifetime of its session (a group row: of any of its sessions), not where nothing was alive.
 - **Resolution.** The page asks for the slot that gives about one slot per pixel of the cell's width
   (`1m` to `1h`). **One SVG per row**, all of the same width. Because every session of the range comes
@@ -910,14 +944,15 @@ Group + Sessions, the click that scrolls, the harness column at the left).
 - **Hover** reads the table; the graphs stay `aria-hidden` and `pointer-events: none`, no readout.
   - **Row**: the hovered row (its text line and graph cell as one) takes a light background (the text
     colour at 5 % over the row's own, CSS `:hover`, so the rows do not render as the pointer moves).
-  - **Columns**: the pointer's x over the rows picks the header column under it (Session, harness,
-    Turns, Agents, Spend, Last; the first column too in the header): that header cell and the footer's
-    totals cell get the same light band. The x over the plot also picks the **day** under it (the
+  - **Columns**: the pointer's x over the rows picks the column under it: the structured block's
+    (harness, Turns, Agents, Spend; their header cell and footer total get the same light band), the **key**
+    when the pointer is on a key cell (the key header and the footer's count line, as one column), or
+    Session (the whole session header cell). The x over the plot also picks the **day** under it (the
     **hour** when the range is two days or less) and the date axis gets a light band for it with its
     label in the body colour. There is no guide line through the rows.
   - **Index**: the hovered row's group is lit in the index.
-  - One state (x, group) at table level; rows are memoised and take no hover props. Leaving the rows
-    clears it. Pure helpers in `model.ts`: `columnBoxes`, `columnAt`, `bandAt`.
+  - One state (x, group, key line) at table level; rows are memoised and take no hover props. Leaving the rows
+    clears it. Pure helpers in `model.ts`: `columnBoxes`, `columnAt`, `bandAt`, `blockWidth`.
 
 ## 11. As built
 

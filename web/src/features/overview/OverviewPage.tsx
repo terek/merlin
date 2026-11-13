@@ -1,9 +1,10 @@
 // The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day,
 // a week or a month, as one full-bleed table under the top bar: the toolbar and the sortable column headers
 // stay on top, the rows scroll, the date axis and the totals stay at the bottom, and beside the rows an
-// index of the places (always there; its selection filters the table). Every row has its text line (head,
-// description, harness, turns, agents, spend, last activity) and under it a merged cell with the row's graph
-// on one shared linear time axis.
+// index of the places (always there; its selection filters the table). Every row is two blocks: the session
+// column (the text line, and under it the row's graph on one shared linear time axis) and, behind a rule,
+// the structured block (harness, turns, agents, spend, and under them the row's key: its folder, worktree,
+// repo or remote).
 
 import {
   ArrowDown,
@@ -22,7 +23,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useOverview, useSearch } from '../../api/queries'
 import type { Overview, OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { plural } from '../../lib/format'
+import { formatDuration, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { placeLabels } from '../../lib/places'
 import { useShortcut } from '../../shell/useShortcut'
@@ -40,6 +41,7 @@ import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
   type Axis,
+  activeMs,
   activityRuns,
   ancestorIds,
   axisTicks,
@@ -47,6 +49,7 @@ import {
   BYS,
   type By,
   bandAt,
+  blockWidth,
   buildPlaceTree,
   buildRows,
   type Column,
@@ -55,9 +58,11 @@ import {
   columnAt,
   columnBoxes,
   displayPath,
+  earliestStart,
   type Filtered,
   filterOverview,
   fitLabels,
+  fitTail,
   formatIn,
   formatSort,
   formatView,
@@ -68,13 +73,13 @@ import {
   type IndexItem,
   isBranch,
   keepSelection,
+  keyText,
   LANE_DEPTH,
   type Layout,
   laneDescription,
   laneHead,
   laneScale,
   lanesByGroup,
-  lastLabel,
   lifeSpan,
   makeAxis,
   markedNode,
@@ -88,6 +93,7 @@ import {
   parseIn,
   parseSort,
   parseView,
+  placeSegs,
   RANGES,
   type Range,
   type Row,
@@ -104,16 +110,17 @@ import {
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
 
-/** The harness column (after Session), the first column (flat table only), the numeric columns (px) and the cell padding the graph sits in. */
+/** The structured block's columns (px: harness, then the numbers) and the cell padding the graph sits in. */
 const HARNESS_W = 44
-const GUTTER_W = 140
-const COLS = { turns: 52, agents: 56, spend: 84, last: 64 }
+const COLS = { turns: 52, agents: 56, spend: 84 }
 const CELL_PAD = 12
 const GAP = 8
 /** The index beside the rows (px, its right border included), and the strip it folds to. */
 const SIDEBAR_W = 260
 const STRIP_W = 37
-const LAYOUT: Omit<Layout, 'gutter'> = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
+const LAYOUT: Layout = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
+/** The structured block's width: its rule, padding and columns. */
+const BLOCK_W = blockWidth(LAYOUT)
 /** The hovered row's background: the text colour, faintly, over the row's own. */
 const HOVER = 'hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
 const HOVER_TINT = 'hover:bg-[color-mix(in_srgb,var(--text)_6%,var(--surface-2))]'
@@ -321,54 +328,71 @@ function Num({ w, children, className }: { w: number; children: ReactNode; class
 }
 
 /**
- * The text line of a row: a bold head and a muted description on one line (cut with an ellipsis, the whole
- * text in the title), then the four columns.
+ * The text line of a row, in the session column: a bold head and a muted description on one line (cut with
+ * an ellipsis, the whole text in the title).
  */
-function TextLine({
+function SessionText({
   head,
   headText,
   desc,
-  harnesses,
+  note,
   indent = 0,
-  turns,
-  agents,
-  usd,
-  last,
   className,
 }: {
   head: ReactNode
   headText: string
   desc?: string
+  /** What the timeline sort orders by, for the title (the row shows no column for it). */
+  note?: string
+  indent?: number
+  className?: string
+}) {
+  const text = oneLine(desc ?? '')
+  const title = text ? `${headText}: ${text}` : headText
+  return (
+    <div
+      className={cn('min-w-0 truncate pt-1 text-sec', className)}
+      style={{ paddingLeft: indent }}
+      title={note ? `${title}\n${note}` : title}
+    >
+      {head}
+      {text && <span className="ml-2 text-muted">{text}</span>}
+    </div>
+  )
+}
+
+/** The block's first line: the harness mark(s), then turns, agents and spend. */
+function BlockFigures({
+  harnesses,
+  label,
+  turns,
+  agents,
+  usd,
+  className,
+}: {
   /** The marks of the harness column (none: the column stays empty). */
   harnesses?: string[]
-  indent?: number
+  /** Text for the harness column instead (the footer's "Total"). */
+  label?: string
   turns?: number
   agents?: number
   usd?: number
-  last?: string
   className?: string
 }) {
-  const now = useNow()
   const count = (n: number | undefined) =>
     n === undefined ? '' : n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US')
-  const text = oneLine(desc ?? '')
   return (
-    <div className={cn('flex items-baseline pt-1 text-sec', className)} style={{ paddingLeft: indent, columnGap: GAP }}>
-      <div className="min-w-0 flex-1 truncate" title={text ? `${headText}: ${text}` : headText}>
-        {head}
-        {text && <span className="ml-2 text-muted">{text}</span>}
-      </div>
-      <HarnessCell harnesses={harnesses ?? []} />
+    <div className={cn('flex items-baseline pt-1 text-sec', className)} style={{ columnGap: GAP }}>
+      {label ? (
+        <span className="shrink-0 text-faint text-meta uppercase tracking-wide" style={{ width: HARNESS_W }}>
+          {label}
+        </span>
+      ) : (
+        <HarnessCell harnesses={harnesses ?? []} />
+      )}
       <Num w={COLS.turns}>{count(turns)}</Num>
       <Num w={COLS.agents}>{count(agents)}</Num>
       <Num w={COLS.spend}>{usd !== undefined && <Money usd={usd} />}</Num>
-      <Num w={COLS.last} className="whitespace-nowrap text-muted">
-        {last !== undefined && (
-          <time dateTime={last} title={last}>
-            {lastLabel(last, now.getTime())}
-          </time>
-        )}
-      </Num>
     </div>
   )
 }
@@ -385,35 +409,71 @@ function HarnessCell({ harnesses }: { harnesses: string[] }) {
   )
 }
 
+let measure: CanvasRenderingContext2D | null | undefined
+
 /**
- * A row: the first column (flat table only) and the cell with the text line and the graph. The row's hover is CSS, so that moving the pointer does not render it; `data-group` lets the
- * table find the group a hovered row belongs to.
+ * The key cell: one muted line under the numbers, the row's folder, worktree, repo or remote as a display
+ * path. When it does not fit its end stays (`…/work/merlin/web`; `fitTail` measures with the cell's own font);
+ * the full text is in the title.
+ */
+function KeyCell({ text, title, dim }: { text: string; title?: string; dim?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [shown, setShown] = useState(text)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    if (measure === undefined) measure = document.createElement('canvas').getContext('2d')
+    if (!measure || text === '') return setShown(text)
+    const cs = getComputedStyle(el)
+    measure.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+    const ctx = measure
+    const room = el.clientWidth - 1
+    setShown(fitTail(text, (s) => ctx.measureText(s).width <= room))
+  }, [text])
+  return (
+    <div
+      ref={ref}
+      data-keycell=""
+      title={title ?? text}
+      className={cn(
+        'min-w-0 flex-1 overflow-hidden whitespace-nowrap pb-1 text-meta',
+        dim ? 'text-faint' : 'text-muted',
+      )}
+    >
+      {shown}
+    </div>
+  )
+}
+
+/**
+ * A row, two blocks side by side: the session column (the text line and under it the graph) and, behind a
+ * thin rule, the structured block (the figures and under them the key). The row's hover is CSS, so that moving
+ * the pointer does not render it; `data-group` lets the table find the group a hovered row belongs to.
  */
 function Frame({
   group,
-  gutter,
-  first,
   tint,
-  children,
+  session,
+  figures,
+  keyCell,
 }: {
   group: string
-  gutter: number
-  first?: ReactNode
   tint?: boolean
-  children: ReactNode
+  session: ReactNode
+  figures: ReactNode
+  keyCell?: ReactNode
 }) {
   return (
     <div
       data-group={group}
       className={cn('flex border-line border-t first:border-t-0', tint ? `bg-surface-2 ${HOVER_TINT}` : HOVER)}
     >
-      {gutter > 0 && (
-        <div className="min-w-0 shrink-0 truncate pt-1 pr-1 text-muted text-sec" style={{ width: gutter }}>
-          {first}
-        </div>
-      )}
       <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
-        {children}
+        {session}
+      </div>
+      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W, paddingInline: CELL_PAD }}>
+        {figures}
+        {keyCell ?? <KeyCell text="" />}
       </div>
     </div>
   )
@@ -422,43 +482,45 @@ function Frame({
 const SessionRow = memo(function SessionRow({
   l,
   nested,
-  groupName,
-  gutter,
+  place,
+  placeTitle,
+  note,
   shared,
 }: {
   l: OverviewLane
   nested: boolean
-  groupName: string
-  gutter: number
+  /** Its group's place: empty under a group row, which says it. */
+  place: string
+  placeTitle: string
+  note: string
   shared: Shared
 }) {
   const head = laneHead(l)
   return (
     <Frame
       group={l.group}
-      gutter={gutter}
-      first={<span title={groupName || 'no value'}>{groupName || 'no value'}</span>}
-    >
-      <TextLine
-        head={
-          <Link
-            to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
-            className="font-semibold text-fg hover:underline"
-          >
-            {head}
-          </Link>
-        }
-        headText={head}
-        desc={laneDescription(l)}
-        harnesses={[l.harness]}
-        indent={nested ? INDENT : 0}
-        turns={l.turns}
-        agents={l.agents}
-        usd={l.usd}
-        last={l.lastActivityAt}
-      />
-      <RowGraph data={laneData(l)} shared={shared} />
-    </Frame>
+      session={
+        <>
+          <SessionText
+            head={
+              <Link
+                to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
+                className="font-semibold text-fg hover:underline"
+              >
+                {head}
+              </Link>
+            }
+            headText={head}
+            desc={laneDescription(l)}
+            note={note}
+            indent={nested ? INDENT : 0}
+          />
+          <RowGraph data={laneData(l)} shared={shared} />
+        </>
+      }
+      figures={<BlockFigures harnesses={[l.harness]} turns={l.turns} agents={l.agents} usd={l.usd} />}
+      keyCell={<KeyCell text={place} title={placeTitle} dim={place === '(none)'} />}
+    />
   )
 })
 
@@ -468,7 +530,8 @@ const GroupRow = memo(function GroupRow({
   lanes,
   shown,
   priciestHead,
-  gutter,
+  place,
+  note,
   tint,
   shared,
 }: {
@@ -479,44 +542,64 @@ const GroupRow = memo(function GroupRow({
   lanes: OverviewLane[]
   /** The group's sessions that match the search (undefined: no search). */
   shown?: number
-  gutter: number
+  /** The group's own place. */
+  place: string
+  note: string
   tint: boolean
   shared: Shared
 }) {
   const name = label || 'no value'
   const harnesses = useMemo(() => groupHarnesses(lanes), [lanes])
   return (
-    <Frame group={g.key} gutter={gutter} tint={tint}>
-      <TextLine
-        head={
-          <span className="font-semibold text-fg" title={g.key || name}>
-            {name}
-          </span>
-        }
-        headText={name}
-        desc={groupDescription(g, priciestHead, shown)}
-        harnesses={harnesses}
-        turns={g.turns}
-        agents={g.agents}
-        usd={g.usd}
-        last={g.lastActivityAt}
-      />
-      <RowGraph data={groupData(g, lanes)} shared={shared} />
-    </Frame>
+    <Frame
+      group={g.key}
+      tint={tint}
+      session={
+        <>
+          <SessionText
+            head={
+              <span className="font-semibold text-fg" title={g.key || name}>
+                {name}
+              </span>
+            }
+            headText={name}
+            desc={groupDescription(g, priciestHead, shown)}
+            note={note}
+          />
+          <RowGraph data={groupData(g, lanes)} shared={shared} />
+        </>
+      }
+      figures={<BlockFigures harnesses={harnesses} turns={g.turns} agents={g.agents} usd={g.usd} />}
+      keyCell={<KeyCell text={place} title={g.key || 'no value'} dim={place === '(none)'} />}
+    />
   )
 })
 
-function ScriptedRow({ o, gutter }: { o: Overview; gutter: number }) {
+function ScriptedRow({ o }: { o: Overview }) {
+  const text = plural(o.scripted.sessions, 'scripted run')
   return (
-    <Frame group="" gutter={gutter}>
-      <TextLine
-        head={`${plural(o.scripted.sessions, 'scripted run')}`}
-        headText={`${plural(o.scripted.sessions, 'scripted run')}`}
-        usd={o.scripted.usd}
-        className="[&_*]:text-faint"
-      />
-    </Frame>
+    <Frame
+      group=""
+      session={<SessionText head={text} headText={text} className="text-faint" />}
+      figures={<BlockFigures usd={o.scripted.usd} className="[&_*]:text-faint" />}
+    />
   )
+}
+
+/** What the timeline sort orders a session by, for the row's title (the table shows no column for it). */
+function laneNote(l: OverviewLane, key: SortKey, slotMs: number): string {
+  if (key === 'start') return l.startedAt ? `Started ${new Date(l.startedAt).toLocaleString()}` : ''
+  if (key === 'last') return l.lastActivityAt ? `Last active ${new Date(l.lastActivityAt).toLocaleString()}` : ''
+  if (key === 'active') return `Active ${formatDuration(activeMs(l.active, slotMs))} in this range`
+  return ''
+}
+
+/** The same for a group: its earliest start, its latest activity, its union of running time. */
+function groupNote(g: OverviewGroup, key: SortKey, slotMs: number, start?: string): string {
+  if (key === 'start') return start ? `First session started ${new Date(start).toLocaleString()}` : ''
+  if (key === 'last') return g.lastActivityAt ? `Last active ${new Date(g.lastActivityAt).toLocaleString()}` : ''
+  if (key === 'active') return `Active ${formatDuration(activeMs(g.active, slotMs))} in this range`
+  return ''
 }
 
 // ---- the sticky top: column headers ------------------------------------------------------
@@ -529,10 +612,13 @@ function Th({
   onSort,
   title,
   rule,
+  grow = true,
 }: {
   col: SortKey
   label: string
   w?: number
+  /** Without a width: fills the line (the key header) or only its own width (the timeline sorts). */
+  grow?: boolean
   sort: Sort
   onSort: (k: SortKey) => void
   title: string
@@ -549,7 +635,7 @@ function Th({
       aria-label={`Sort by ${label.toLowerCase()}`}
       className={cn(
         'relative inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap py-1.5 text-meta uppercase tracking-wide hover:text-fg',
-        w === undefined ? 'min-w-0 flex-1 justify-start' : 'justify-end',
+        w === undefined ? cn('justify-start', grow && 'min-w-0 flex-1') : 'justify-end',
         rule && RULE,
         on ? 'text-fg' : 'text-faint',
       )}
@@ -562,62 +648,106 @@ function Th({
   )
 }
 
-/** The light band behind a column under the pointer. */
-function ColumnBand({ boxes, col, skip }: { boxes: ColumnBox[]; col: Column | null; skip?: Column[] }) {
-  const b = col && !skip?.includes(col) ? boxes.find((x) => x.col === col) : undefined
-  if (!b) return null
+/**
+ * One line of the structured block (the figures' line, or the key's), with the light band behind the column
+ * under the pointer: `line` is the one this is, and `origin` the x of its left edge, in the boxes' px. The
+ * block's columns are lit on the first line, the key on the second.
+ */
+function BlockLine({
+  line,
+  boxes,
+  col,
+  origin,
+  className,
+  children,
+}: {
+  line: 'figures' | 'key'
+  boxes: ColumnBox[]
+  col: Column | null
+  origin: number
+  className?: string
+  children: ReactNode
+}) {
+  const mine = line === 'key' ? col === 'key' : col !== null && col !== 'key' && col !== 'session'
+  const b = mine ? boxes.find((x) => x.col === col) : undefined
   return (
-    <div className={cn('pointer-events-none absolute inset-y-0', HOT)} style={{ left: b.x, width: b.w }} aria-hidden />
+    <div className={cn('relative', className)} style={{ paddingInline: CELL_PAD }}>
+      {b && (
+        <div
+          className={cn('pointer-events-none absolute inset-y-0', HOT)}
+          style={{ left: b.x - origin, width: b.w }}
+          aria-hidden
+        />
+      )}
+      <div className="relative flex min-w-0 items-center">{children}</div>
+    </div>
   )
 }
 
 function Header({
-  gutter,
   byLabel,
   byTitle,
   sort,
   onSort,
   padRight,
   boxes,
+  origin,
   hotCol,
 }: {
-  gutter: number
   byLabel: string
   byTitle?: string
   sort: Sort
   onSort: (k: SortKey) => void
   padRight: number
   boxes: ColumnBox[]
+  origin: number
   hotCol: Column | null
 }) {
   const th = { sort, onSort }
   return (
-    <div className="shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
-      <div className="relative flex items-stretch">
-        <ColumnBand boxes={boxes} col={hotCol} />
-        {gutter > 0 && (
-          <div
-            className="relative shrink-0 truncate py-1.5 text-faint text-meta uppercase tracking-wide"
-            style={{ width: gutter }}
-            title={byTitle}
-          >
-            {byLabel}
-          </div>
-        )}
-        <div className="flex min-w-0 flex-1 items-stretch" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
+    <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
+      <div
+        className={cn('flex min-w-0 flex-1 flex-col', hotCol === 'session' && HOT)}
+        style={{ paddingInline: CELL_PAD }}
+      >
+        <div className="py-1.5 text-faint text-meta uppercase tracking-wide">Session</div>
+        <div className="flex items-stretch" style={{ columnGap: GAP }}>
+          <Th {...th} col="start" label="Started" grow={false} title="Sort by start time (newest first)" />
           <Th
             {...th}
-            col="session"
-            label="Session"
-            rule={gutter > 0}
-            title="Sort by start time (group rows: by number of sessions)"
+            col="last"
+            label="Last active"
+            grow={false}
+            rule
+            title="Sort by last activity (most recent first)"
           />
-          <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
-          <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
-          <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
-          <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
-          <Th {...th} col="last" label="Last" w={COLS.last} rule title="Sort by last activity" />
+          <Th
+            {...th}
+            col="active"
+            label="Active"
+            grow={false}
+            rule
+            title="Time with at least one call running, in this range"
+          />
         </div>
+      </div>
+      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W }}>
+        <BlockLine line="figures" boxes={boxes} col={hotCol} origin={origin}>
+          <div className="flex min-w-0 flex-1 items-stretch" style={{ columnGap: GAP }}>
+            <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
+            <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
+            <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
+            <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
+          </div>
+        </BlockLine>
+        <BlockLine line="key" boxes={boxes} col={hotCol} origin={origin}>
+          <Th
+            {...th}
+            col="key"
+            label={byLabel}
+            title={`Sort by ${byLabel.toLowerCase()}, in the index's order${byTitle ? ` (${byTitle})` : ''}`}
+          />
+        </BlockLine>
       </div>
     </div>
   )
@@ -625,99 +755,89 @@ function Header({
 
 // ---- the sticky footer: date axis and totals ---------------------------------
 
-function AxisRow({
-  axis,
-  lead,
-  padRight,
-  band,
-}: {
-  axis: Axis
-  lead: number
-  padRight: number
-  /** The stretch of the axis under the pointer: a light band, its label in the body colour. */
-  band: Band | null
-}) {
-  const ticks = fitLabels(axisTicks(axis), axis.width)
-  const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
-  return (
-    <div className="border-line border-t" style={{ paddingRight: padRight }}>
-      <div className="flex">
-        <div className="shrink-0" style={{ width: lead }} />
-        <div className="min-w-0 flex-1 overflow-hidden" style={{ paddingInline: CELL_PAD }}>
-          <svg width={axis.width} height={20} className="block" role="img" aria-label="Time axis">
-            {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={20} fill="var(--surface-2)" />}
-            {ticks.map((t) => (
-              <g key={t.x}>
-                <line x1={t.x} x2={t.x} y1={0} y2={t.day ? 6 : t.labelled ? 4 : 3} stroke="var(--line)" />
-                {t.labelled && (
-                  <text
-                    x={t.x + 3}
-                    y={16}
-                    fontSize={11}
-                    fill={inBand(t.x) ? 'var(--text)' : t.day ? 'var(--muted)' : 'var(--faint)'}
-                  >
-                    {t.label}
-                  </text>
-                )}
-              </g>
-            ))}
-          </svg>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function Totals({
+/**
+ * The footer, one row of the same two blocks: the date axis under the session column (the same x as the
+ * graphs), and in the structured block the totals and, under them, what they count.
+ */
+function Footer({
   f,
   term,
-  lead,
+  scope,
+  axis,
+  band,
   padRight,
   boxes,
+  origin,
   hotCol,
 }: {
   f: Filtered
   term: string
-  lead: number
+  /** The selection, as shown, or undefined. */
+  scope?: string
+  axis: Axis
+  /** The stretch of the axis under the pointer: a light band, its label in the body colour. */
+  band: Band | null
   padRight: number
   boxes: ColumnBox[]
+  origin: number
   hotCol: Column | null
 }) {
+  const ticks = fitLabels(axisTicks(axis), axis.width)
+  const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
   // under a search the totals are those of the matching sessions
   const sum = (a: (g: OverviewGroup) => number, b: (l: OverviewLane) => number) =>
     term ? f.lanes.reduce((n, l) => n + b(l), 0) : f.groups.reduce((n, g) => n + a(g), 0)
   const n = term ? f.lanes.length : f.groups.reduce((a, g) => a + g.sessions, 0)
+  const count = `${plural(n, term ? 'matching session' : 'session')}${scope ? ` in ${scope}` : ''}`
   return (
-    <div className="border-line border-t" style={{ paddingRight: padRight }}>
-      <div className="relative">
-        <ColumnBand boxes={boxes} col={hotCol} skip={['first']} />
-        <div className="relative flex">
-          <div className="shrink-0" style={{ width: lead }} />
-          <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
-            <TextLine
-              className="font-medium"
-              head={
-                <span className="text-fg" title={term ? 'Totals of the matching sessions' : 'Totals of the range'}>
-                  Total
-                </span>
-              }
-              headText={term ? 'Totals of the matching sessions' : 'Totals'}
-              desc={term ? `${plural(n, 'matching session')}` : plural(n, 'session')}
-              turns={sum(
-                (g) => g.turns,
-                (l) => l.turns,
+    <div className="flex border-line border-t" style={{ paddingRight: padRight }}>
+      <div className="min-w-0 flex-1 overflow-hidden" style={{ paddingInline: CELL_PAD }}>
+        <svg width={axis.width} height={20} className="block" role="img" aria-label="Time axis">
+          {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={20} fill="var(--surface-2)" />}
+          {ticks.map((t) => (
+            <g key={t.x}>
+              <line x1={t.x} x2={t.x} y1={0} y2={t.day ? 6 : t.labelled ? 4 : 3} stroke="var(--line)" />
+              {t.labelled && (
+                <text
+                  x={t.x + 3}
+                  y={16}
+                  fontSize={11}
+                  fill={inBand(t.x) ? 'var(--text)' : t.day ? 'var(--muted)' : 'var(--faint)'}
+                >
+                  {t.label}
+                </text>
               )}
-              agents={sum(
-                (g) => g.agents,
-                (l) => l.agents,
-              )}
-              usd={sum(
-                (g) => g.usd,
-                (l) => l.usd,
-              )}
-            />
+            </g>
+          ))}
+        </svg>
+      </div>
+      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W }}>
+        <BlockLine line="figures" boxes={boxes} col={hotCol} origin={origin}>
+          <BlockFigures
+            className="min-w-0 flex-1 font-medium"
+            label="Total"
+            turns={sum(
+              (g) => g.turns,
+              (l) => l.turns,
+            )}
+            agents={sum(
+              (g) => g.agents,
+              (l) => l.agents,
+            )}
+            usd={sum(
+              (g) => g.usd,
+              (l) => l.usd,
+            )}
+          />
+        </BlockLine>
+        <BlockLine line="key" boxes={boxes} col={hotCol} origin={origin}>
+          <div
+            className="min-w-0 flex-1 truncate pb-1 text-meta text-muted"
+            title={term ? 'Totals of the matching sessions' : 'Totals of the range'}
+          >
+            {count}
           </div>
-        </div>
+        </BlockLine>
       </div>
     </div>
   )
@@ -1058,8 +1178,7 @@ export function OverviewPage() {
   // once the width has held still, so a drag of the window does not refetch at every pixel.
   const rootRef = useRef<HTMLDivElement>(null)
   const pageW = useWidth(rootRef)
-  const gutter = show === 'sessions' ? GUTTER_W : 0
-  const pagePlotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - SCROLLBAR - gutter - 2 * CELL_PAD)
+  const pagePlotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - SCROLLBAR - BLOCK_W - 2 * CELL_PAD)
   const slot = chooseSlot(RANGES[range].ms, useDebounced(pagePlotW, 250))
 
   // "Ending now", rounded up so that the query key holds still between refreshes.
@@ -1183,10 +1302,12 @@ export function OverviewPage() {
   )
 }
 
-/** The pointer over the rows: x from the left of the rows (whole px) and the group of the row under it. */
+/** The pointer over the rows: x from the left of the rows (whole px), the group of the row under it and the line of the block. */
 interface Hover {
   x: number
   group: string | null
+  /** The pointer is on a key cell (the block's second line). */
+  keyLine: boolean
 }
 
 function Table({
@@ -1220,8 +1341,6 @@ function Table({
   onSbOpen: (open: boolean) => void
   onSort: (k: SortKey) => void
 }) {
-  const gutter = show === 'sessions' ? GUTTER_W : 0
-  const lead = gutter
   // The rows scroll; header and footer do not. The scrollbar takes width from the rows only, so the
   // header and the footer give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -1229,11 +1348,20 @@ function Table({
   const innerW = useWidth(innerRef)
   const [padRight, setPadRight] = useState(0)
   // the plot is sized for where the index will be, not for the width it has while it slides
-  const plotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - padRight - lead - 2 * CELL_PAD)
+  const plotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - padRight - BLOCK_W - 2 * CELL_PAD)
   // the search narrows the groups; the tree shows these, the table what the selection leaves of them
   const found = useMemo(() => filterOverview(o, term, hits), [o, term, hits])
   const f = useMemo(() => selectOverview(found, sel, o.by), [found, sel, o.by])
-  const rows = useMemo(() => buildRows(f, show, sort), [f, show, sort])
+  const home = useMemo(
+    () =>
+      groupsHome(
+        o.groups.map((g) => g.key),
+        o.by,
+      ),
+    [o.groups, o.by],
+  )
+  const placeOf = useMemo(() => (k: string) => placeSegs(k, o.by, home), [o.by, home])
+  const rows = useMemo(() => buildRows(f, show, sort, { placeOf }), [f, show, sort, placeOf])
   const searching = term !== ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rows decide whether the scrollbar is there
   useLayoutEffect(() => {
@@ -1256,6 +1384,7 @@ function Table({
     [axis, scales.groups.pxPerTok, scales.lanes.pxPerTok],
   )
   const byGroup = useMemo(() => lanesByGroup(o.lanes), [o.lanes])
+  const startOf = useMemo(() => new Map([...byGroup].map(([k, ls]) => [k, earliestStart(ls)])), [byGroup])
   const priciest = useMemo(() => {
     const m = new Map(o.lanes.map((l) => [`${l.harness}/${l.id}`, laneHead(l)]))
     return (g: OverviewGroup) => (g.priciest ? m.get(`${g.priciest.harness}/${g.priciest.id}`) : undefined)
@@ -1263,15 +1392,18 @@ function Table({
 
   // ---- hover: one state, the pointer's x and the group under it ----
   const [hover, setHover] = useState<Hover | null>(null)
-  const boxes = useMemo(() => columnBoxes(innerW, { ...LAYOUT, gutter }), [innerW, gutter])
+  const boxes = useMemo(() => columnBoxes(innerW, LAYOUT), [innerW])
+  // the block's left edge as the bands' origin (inside its rule)
+  const origin = innerW - BLOCK_W + 1
   const hx = hover ? hover.x : null
-  const hotCol = hx === null ? null : columnAt(boxes, hx)
-  const band = hx === null ? null : bandAt(axis, hx - lead - CELL_PAD)
+  const hotCol = hx === null || !hover ? null : columnAt(boxes, hx, hover.keyLine)
+  const band = hx === null || hx >= innerW - BLOCK_W ? null : bandAt(axis, hx - CELL_PAD)
   const onMove = (e: React.MouseEvent) => {
     const left = innerRef.current?.getBoundingClientRect().left ?? 0
     const x = Math.floor(e.clientX - left)
     const group = (e.target as Element).closest('[data-group]')?.getAttribute('data-group') ?? null
-    setHover((h) => (h && h.x === x && h.group === group ? h : { x, group }))
+    const keyLine = !!(e.target as Element).closest('[data-keycell]')
+    setHover((h) => (h && h.x === x && h.group === group && h.keyLine === keyLine ? h : { x, group, keyLine }))
   }
 
   // ---- the index: the places of the groups the search leaves; a key that changed may drop the selection ----
@@ -1283,14 +1415,6 @@ function Table({
   const items: IndexItem[] = useMemo(
     () => found.groups.map((g) => ({ key: g.key, name: g.name, count: found.shown.get(g.key) ?? 0, usd: g.usd })),
     [found],
-  )
-  const home = useMemo(
-    () =>
-      groupsHome(
-        o.groups.map((g) => g.key),
-        o.by,
-      ),
-    [o.groups, o.by],
   )
   const tree = useMemo(() => buildPlaceTree(items, o.by, { home }), [items, o.by, home])
   const total = useMemo(() => totalOf(items), [items])
@@ -1317,13 +1441,13 @@ function Table({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header
-          gutter={gutter}
           byLabel={BY_LABEL[by]}
           byTitle={BY_TITLE[by]}
           sort={sort}
           onSort={onSort}
           padRight={padRight}
           boxes={boxes}
+          origin={origin}
           hotCol={hotCol}
         />
         <div
@@ -1343,7 +1467,8 @@ function Table({
                   lanes={byGroup.get(r.g.key) ?? []}
                   shown={searching ? found.shown.get(r.g.key) : undefined}
                   priciestHead={priciest(r.g)}
-                  gutter={gutter}
+                  place={keyText(r.g.key, o.by, home)}
+                  note={groupNote(r.g, sort.key, o.slotMs, startOf.get(r.g.key))}
                   tint={show === 'grouped'}
                   shared={shared}
                 />
@@ -1352,13 +1477,14 @@ function Table({
                   key={r.key}
                   l={r.l}
                   nested={r.nested}
-                  groupName={labelOf.get(r.l.group) ?? r.groupName}
-                  gutter={gutter}
+                  place={r.nested ? '' : keyText(r.l.group, o.by, home)}
+                  placeTitle={r.l.group || 'no value'}
+                  note={laneNote(r.l, sort.key, o.slotMs)}
                   shared={shared}
                 />
               ),
             )}
-            {!searching && sel === null && o.scripted.usd > 0 && <ScriptedRow o={o} gutter={gutter} />}
+            {!searching && sel === null && o.scripted.usd > 0 && <ScriptedRow o={o} />}
             {rows.length === 0 && (
               <div className="p-6 text-muted">
                 {searching ? `No sessions match “${term}”` : 'Nothing'}
@@ -1374,8 +1500,17 @@ function Table({
           </div>
         </div>
         <div className="shrink-0 bg-surface">
-          <AxisRow axis={axis} lead={lead} padRight={padRight} band={band} />
-          <Totals f={f} term={term} lead={lead} padRight={padRight} boxes={boxes} hotCol={hotCol} />
+          <Footer
+            f={f}
+            term={term}
+            scope={sel === null ? undefined : displayPath(sel, home)}
+            axis={axis}
+            band={band}
+            padRight={padRight}
+            boxes={boxes}
+            origin={origin}
+            hotCol={hotCol}
+          />
         </div>
       </div>
     </div>
