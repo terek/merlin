@@ -243,3 +243,31 @@ func TestOverviewRouteErrors(t *testing.T) {
 		t.Errorf("1,461 days: %d, %d slots", code, o.Slots)
 	}
 }
+
+// A lane carries its bead and the answer the chains of those beads (acme-c1's parent acme-a1).
+func TestOverviewBeads(t *testing.T) {
+	r := beadRig(t)
+	o, code := r.overview("?from=2026-10-01T00:00:00Z&to=2026-10-02T00:00:00Z&slot=1h")
+	if code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	beadOf := map[string]string{}
+	for _, l := range o.Lanes {
+		beadOf[l.ID] = l.Bead
+	}
+	if beadOf["s1"] != "acme-a1" || beadOf["s2"] != "acme-c1" || beadOf["s3"] != "" {
+		t.Errorf("lane beads = %v", beadOf)
+	}
+	if c := o.Beads["acme-c1"]; c.Title != "Child task" || c.Parent != "acme-a1" {
+		t.Errorf("beads[acme-c1] = %+v", c)
+	}
+	if a := o.Beads["acme-a1"]; a.Title != "Alpha work" || a.Parent != "" {
+		t.Errorf("beads[acme-a1] = %+v", a)
+	}
+	// without a bead in the range's lanes, the key is absent
+	var raw map[string]json.RawMessage
+	r.get("/api/overview?from=2026-10-01T10:19:00Z&to=2026-10-01T10:30:00Z&slot=1m", &raw)
+	if _, has := raw["beads"]; has {
+		t.Errorf("beads present for a range with no bead lane")
+	}
+}

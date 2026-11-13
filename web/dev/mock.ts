@@ -16,6 +16,7 @@ import type {
   MomentsReport,
   Money,
   Overview,
+  OverviewBead,
   OverviewLane,
   OverviewSlot,
   OverviewSpan,
@@ -806,6 +807,40 @@ function overviewText(id: string): Pick<OverviewLane, 'name' | 'recap' | 'firstP
   return out
 }
 
+/** The mock's beads: two prefixes, families up to three levels deep, closed beads, an implied parent without a title. */
+const OV_BEADS: Record<string, OverviewBead> = {
+  'merlin-lce': { title: 'Overview page', status: 'open', type: 'epic' },
+  'merlin-lce.1': { title: 'Session rows', parent: 'merlin-lce', status: 'in_progress', type: 'task' },
+  'merlin-lce.1.1': { title: 'Folder cell and copy', parent: 'merlin-lce.1', status: 'closed', type: 'task' },
+  'merlin-lce.1.2': { title: 'Harness mark before the title', parent: 'merlin-lce.1', status: 'open', type: 'task' },
+  'merlin-lce.2': { title: 'Custom range locator', parent: 'merlin-lce', status: 'closed', type: 'task' },
+  'merlin-lce.10': {
+    title: 'Bead hierarchy in Organise by',
+    parent: 'merlin-lce',
+    status: 'in_progress',
+    type: 'feature',
+  },
+  'merlin-lce.10.1': { title: 'Tree builder for bead paths', parent: 'merlin-lce.10', status: 'open', type: 'task' },
+  'merlin-t8s': { title: 'Cost page rework', status: 'open', type: 'epic' },
+  'merlin-t8s.2': { title: 'Day chart', parent: 'merlin-t8s', status: 'closed', type: 'task' },
+  'merlin-t8s.10': { title: 'Project table', parent: 'merlin-t8s', status: 'in_progress', type: 'task' },
+  'merlin-t8s.10.1': { title: 'Sticky header', parent: 'merlin-t8s.10', status: 'closed', type: 'bug' },
+  'merlin-zq1': { parent: undefined, status: 'open', type: 'epic' },
+  'merlin-zq1.1': { title: 'Orphaned under an implied parent', parent: 'merlin-zq1', status: 'open', type: 'task' },
+  'acme-k2': { title: 'Checkout rewrite', status: 'open', type: 'epic' },
+  'acme-k2.1': { title: 'Cart totals', parent: 'acme-k2', status: 'in_progress', type: 'task' },
+  'acme-k2.2': { title: 'Payment retries', parent: 'acme-k2', status: 'closed', type: 'task' },
+  'acme-k2.2.1': { title: 'Idempotency keys', parent: 'acme-k2.2', status: 'closed', type: 'task' },
+  'acme-p9': { title: 'Docs refresh', status: 'open', type: 'task' },
+}
+const OV_BEAD_IDS = Object.keys(OV_BEADS)
+
+/** A session's bead from its id: a third of the sessions are on none. */
+function overviewBead(id: string): string | undefined {
+  const h = [...id].reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) >>> 0, 5)
+  return h % 3 === 0 ? undefined : OV_BEAD_IDS[(h >>> 3) % OV_BEAD_IDS.length]
+}
+
 function overview(u: URL): Overview {
   const q = u.searchParams
   const to0 = overviewTime('to', q.get('to')) ?? Date.now()
@@ -885,6 +920,7 @@ function overview(u: URL): Overview {
       checkout: place('checkout'),
       repo: place('repo'),
       remote: place('remote'),
+      bead: overviewBead(sid.id),
       startedAt: new Date(os.msgs[0].at).toISOString(),
       lastActivityAt: new Date(os.msgs[os.msgs.length - 1].at).toISOString(),
       usd: r2(total),
@@ -920,7 +956,21 @@ function overview(u: URL): Overview {
   }
   scripted.usd = r2(scripted.usd)
 
-  return { from: new Date(from).toISOString(), to: new Date(to).toISOString(), slot, slotMs, slots, scripted, lanes }
+  // the beads on the lanes' chains
+  const beads: Record<string, OverviewBead> = {}
+  for (const l of lanes) {
+    for (let b = l.bead; b && OV_BEADS[b] && !beads[b]; b = OV_BEADS[b].parent) beads[b] = OV_BEADS[b]
+  }
+  return {
+    from: new Date(from).toISOString(),
+    to: new Date(to).toISOString(),
+    slot,
+    slotMs,
+    slots,
+    scripted,
+    lanes,
+    ...(Object.keys(beads).length > 0 ? { beads } : {}),
+  }
 }
 
 // ---- /api/events ----------------------------------------------------------------------

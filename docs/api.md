@@ -1015,6 +1015,15 @@ agent's description or name, or the branched session's title.
 omitted when the session has none. The page derives every name it shows from these keys, so there is no
 name lookup.
 
+**Beads.** `bead` is the session's bead: the one holding the largest share of the session's bead-attributed
+cost, the first in sort order on a tie (the `bead` key of `/api/groups`); omitted for a session on none. The
+response's `beads` holds, by id, every bead on the **chain** of any lane's `bead`: the bead itself, its
+parent, and so on up to the family root or the last parent the folded bead databases know (a parent that is
+not in the map is where the chain stops). An entry has `title` (absent for a bead only implied by a child's
+parent link), `parent` (absent at a root), `status` and `type`: enough to lay the hierarchy out and to label it.
+`beads` is omitted when no lane has a bead. The page derives the prefix from the id (what precedes the last dash
+of its root, as `beads.Prefix`).
+
 ```json
 {
   "from": "2026-11-04T00:00:00Z",
@@ -1027,7 +1036,7 @@ name lookup.
     {
       "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
       "dir": "/home/dev/merlin/web", "checkout": "/home/dev/merlin", "repo": "/home/dev/merlin/.git",
-      "remote": "github.com/dev/merlin",
+      "remote": "github.com/dev/merlin", "bead": "merlin-lce.2",
       "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
       "name": "the big one",
       "recap": { "at": "2026-11-10T21:00:00Z", "text": "Moved the parser to …", "truncated": false },
@@ -1041,7 +1050,11 @@ name lookup.
           "session": { "harness": "claude", "id": "394b4c16-…" }, "title": "Explore" }
       ]
     }
-  ]
+  ],
+  "beads": {
+    "merlin-lce.2": { "title": "Overview tree", "parent": "merlin-lce", "status": "in_progress", "type": "task" },
+    "merlin-lce": { "title": "Overview page", "status": "open", "type": "epic" }
+  }
 }
 ```
 

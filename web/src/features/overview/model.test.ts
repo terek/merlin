@@ -6,16 +6,22 @@ import {
   activityRuns,
   ancestorIds,
   axisTicks,
+  type Beads,
   bandAt,
   bandLabel,
   bandTimes,
+  beadLabel,
+  beadPath,
+  beadPrefix,
   blockWidth,
   brushRange,
   buildPlaceTree,
   CTX_MAX,
   chooseSlot,
   clipToActivity,
+  comparePath,
   comparePlace,
+  customAction,
   customDays,
   customLabel,
   customPhrase,
@@ -31,6 +37,7 @@ import {
   formatCustom,
   formatSort,
   heldContext,
+  idLess,
   inferHome,
   keepSelection,
   type Layout,
@@ -55,6 +62,7 @@ import {
   parseDay,
   parseIn,
   parseSort,
+  parseStoredCustom,
   placeItems,
   placeOf,
   presetRange,
@@ -1074,5 +1082,119 @@ describe('a click on a row graph', () => {
     expect(idle.get('to')).toBe(new Date(2026, 10, 13).toISOString())
     // outside the plot: the session whole
     expect(sessionStretchUrl(l, axis, -5)).toBe('/s/claude/abc%201')
+  })
+})
+
+describe('remembering the custom range', () => {
+  const r = { from: '2026-05-20', to: '2026-05-29' }
+  test('what is stored', () => {
+    expect(parseStoredCustom(JSON.stringify(r))).toEqual(r)
+    expect(parseStoredCustom(null)).toBeNull()
+    expect(parseStoredCustom('not json')).toBeNull()
+    expect(parseStoredCustom('{"from":"2026-05-29","to":"2026-05-20"}')).toBeNull()
+    expect(parseStoredCustom('{"from":1,"to":2}')).toBeNull()
+    expect(parseStoredCustom('[]')).toBeNull()
+  })
+  test('what a click on Custom does', () => {
+    // a preset is active and a range is remembered: apply it, no locator
+    expect(customAction(false, r)).toBe('apply')
+    // already active: the locator toggles
+    expect(customAction(true, r)).toBe('toggle')
+    // nothing remembered: the locator opens
+    expect(customAction(false, null)).toBe('toggle')
+    expect(customAction(true, null)).toBe('toggle')
+  })
+})
+
+describe('the bead key', () => {
+  const beads: Beads = {
+    'merlin-lce': { title: 'Overview page', status: 'open', type: 'epic' },
+    'merlin-lce.2': { title: 'Locator', parent: 'merlin-lce', status: 'closed' },
+    'merlin-lce.10': { title: 'Beads', parent: 'merlin-lce', status: 'open' },
+    'merlin-lce.10.1': { title: 'Tree', parent: 'merlin-lce.10', status: 'open' },
+    'merlin-q1.1': { title: 'Child of an unknown parent', parent: 'merlin-q1', status: 'open' },
+    'merlin-q1': { parent: undefined, status: 'open' },
+    'a-b': { parent: 'a-c' },
+    'a-c': { parent: 'a-b' },
+  }
+
+  test('prefix and ids in order', () => {
+    expect(beadPrefix('merlin-t8s.48.1')).toBe('merlin')
+    expect(beadPrefix('my-app-k2')).toBe('my-app')
+    expect(beadPrefix('nodash')).toBe('')
+    expect(idLess('merlin-lce.2', 'merlin-lce.10')).toBe(true)
+    expect(idLess('merlin-lce.10', 'merlin-lce.2')).toBe(false)
+    expect(idLess('merlin-lce', 'merlin-lce.1')).toBe(true)
+    expect(comparePath(idLess)(['m', 'x.2'], ['m', 'x.10'])).toBeLessThan(0)
+    expect(comparePath(idLess)(['m'], ['m', 'x'])).toBeLessThan(0)
+  })
+
+  test('the path: prefix, family root, ancestors, the bead', () => {
+    expect(beadPath('merlin-lce.10.1', beads)).toEqual(['merlin', 'merlin-lce', 'merlin-lce.10', 'merlin-lce.10.1'])
+    expect(beadPath('merlin-lce', beads)).toEqual(['merlin', 'merlin-lce'])
+    // where a parent is unknown the chain stops there
+    expect(beadPath('x-y.1', { 'x-y.1': { parent: 'x-y' } })).toEqual(['x', 'x-y.1'])
+    // a loop does not run away
+    expect(beadPath('a-b', beads).length).toBeLessThanOrEqual(3)
+    expect(beadPath('merlin-zz', undefined)).toEqual(['merlin', 'merlin-zz'])
+  })
+
+  test('labels: the title with the id apart, the id alone without a title, closed beads muted', () => {
+    expect(beadLabel('merlin-lce', beads)).toEqual({
+      text: 'Overview page',
+      id: 'merlin-lce',
+      title: 'Overview page',
+      closed: false,
+    })
+    expect(beadLabel('merlin-lce.2', beads).closed).toBe(true)
+    expect(beadLabel('merlin-q1', beads)).toEqual({ text: 'merlin-q1', id: undefined, title: undefined, closed: false })
+    // a prefix heading is no bead
+    expect(beadLabel('merlin', beads)).toEqual({ text: 'merlin', closed: false })
+  })
+
+  const l = (id: string, bead?: string, usd = 1) => lane({ id, bead, usd })
+  const lanes = [
+    l('s1', 'merlin-lce.10.1'),
+    l('s2', 'merlin-lce.2'),
+    l('s3', 'merlin-lce'),
+    l('s4'),
+    l('s5', 'merlin-lce.10'),
+  ]
+
+  test('placeOf is the bead path; the tree puts a bead with children on one node', () => {
+    expect(placeOf(lanes[0], 'bead', beads)).toBe('merlin/merlin-lce/merlin-lce.10/merlin-lce.10.1')
+    expect(placeOf(lanes[3], 'bead', beads)).toBe('')
+    const tree = buildPlaceTree(placeItems(lanes, 'bead', beads), 'bead', undefined)
+    // the prefix is a heading of its own, though it has one child
+    expect(tree.nodes.map((n) => n.label)).toEqual(['merlin'])
+    const [root] = tree.nodes[0].children
+    expect(root.label).toBe('merlin-lce')
+    expect(root.place?.count).toBe(1) // s3 sits on the root itself
+    // id order: .2 before .10
+    expect(root.children.map((n) => n.label)).toEqual(['merlin-lce.2', 'merlin-lce.10'])
+    // a bead that is a session's bead and a parent: one node, its sessions and its children's
+    const b10 = root.children[1]
+    expect(b10.place?.count).toBe(1)
+    expect(b10.children.map((n) => n.label)).toEqual(['merlin-lce.10.1'])
+    expect(b10.count).toBe(2)
+    expect(tree.none?.count).toBe(1)
+  })
+
+  test('selecting a node takes what is at or under it', () => {
+    const ids = (sel: string) => selectLanes(lanes, sel, 'bead', beads).map((x) => x.id)
+    expect(ids('merlin/merlin-lce/merlin-lce.10')).toEqual(['s1', 's5'])
+    expect(ids('merlin/merlin-lce')).toEqual(['s1', 's2', 's3', 's5'])
+    expect(ids('merlin')).toEqual(['s1', 's2', 's3', 's5'])
+    expect(ids(NONE_SEL)).toEqual(['s4'])
+    expect(keepSelection('merlin/merlin-lce/merlin-lce.2', lanes, 'bead', beads)).toBe('merlin/merlin-lce/merlin-lce.2')
+    expect(keepSelection('merlin/other', lanes, 'bead', beads)).toBeNull()
+    expect(displayPath('merlin/merlin-lce/merlin-lce.10', undefined, 'bead')).toBe('merlin-lce.10')
+  })
+
+  test('sort=key follows the tree order of the bead path, (none) last', () => {
+    const asc = sortLanes(lanes, { key: 'key', desc: false }, undefined, { by: 'bead', beads }).map((x) => x.id)
+    expect(asc).toEqual(['s3', 's2', 's5', 's1', 's4'])
+    const desc = sortLanes(lanes, { key: 'key', desc: true }, undefined, { by: 'bead', beads }).map((x) => x.id)
+    expect(desc).toEqual(['s1', 's5', 's2', 's3', 's4'])
   })
 })

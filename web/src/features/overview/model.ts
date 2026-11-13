@@ -2,7 +2,7 @@
 // the token scales, the scope's summary, sorting, search, the place tree and its selection, the spine lane of
 // a row and what the pointer is near. OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
 
-import type { GroupDim, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
+import type { GroupDim, OverviewBead, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
 import { sessionPath } from '../../lib/paths'
 import { homeOf } from '../../lib/places'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
@@ -268,8 +268,11 @@ export function lifeSpan(
 // ---- the key and sorting -----------------------------------------------------------------
 
 /** Organise by: the location key the sidebar tree is laid out by. */
-export type By = GroupDim
-export const BYS: readonly By[] = ['dir', 'checkout', 'repo', 'remote']
+export type By = GroupDim | 'bead'
+export const BYS: readonly By[] = ['dir', 'checkout', 'repo', 'remote', 'bead']
+
+/** The beads of a response (`Overview.beads`), by id. */
+export type Beads = Readonly<Record<string, OverviewBead>>
 
 /** The column a table is sorted by. */
 export type SortKey = 'start' | 'last' | 'active' | 'turns' | 'agents' | 'spend' | 'key'
@@ -323,6 +326,32 @@ export function comparePlace(a: readonly string[], b: readonly string[]): number
   return a.length - b.length
 }
 
+/** The order of paths segment by segment under `less` on a segment; a path comes before the paths under it. */
+export const comparePath =
+  (less: (a: string, b: string) => boolean) =>
+  (a: readonly string[], b: readonly string[]): number => {
+    const n = Math.min(a.length, b.length)
+    for (let i = 0; i < n; i++) {
+      if (a[i] === b[i]) continue
+      return less(a[i], b[i]) ? -1 : 1
+    }
+    return a.length - b.length
+  }
+
+/** Bead ids with their dotted numbers compared as numbers (`x.2` before `x.10`): the catalog's `idLess`. */
+export function idLess(a: string, b: string): boolean {
+  const as = a.split('.')
+  const bs = b.split('.')
+  for (let i = 0; i < as.length && i < bs.length; i++) {
+    if (as[i] === bs[i]) continue
+    const x = /^\d+$/.test(as[i]) ? Number(as[i]) : Number.NaN
+    const y = /^\d+$/.test(bs[i]) ? Number(bs[i]) : Number.NaN
+    if (!Number.isNaN(x) && !Number.isNaN(y)) return x < y
+    return as[i] < bs[i]
+  }
+  return as.length < bs.length
+}
+
 /** Slots with at least one call running. */
 export const activeSlots = (active: readonly number[]): number => active.reduce((n, v) => (v > 0 ? n + 1 : n), 0)
 
@@ -330,17 +359,30 @@ export const activeSlots = (active: readonly number[]): number => active.reduce(
 export const activeMs = (active: readonly number[], slotMs: number): number => activeSlots(active) * slotMs
 
 /** The order of the key column: (none) last whichever way, then the place. */
-function byPlace(a: string[] | null, b: string[] | null, desc: boolean): number {
+function byPlace(
+  a: string[] | null,
+  b: string[] | null,
+  desc: boolean,
+  compare: (a: readonly string[], b: readonly string[]) => number,
+): number {
   if (!a || !b) return a ? -1 : b ? 1 : 0
-  return (desc ? -1 : 1) * comparePlace(a, b)
+  return (desc ? -1 : 1) * compare(a, b)
 }
 
 /**
  * Sessions by the sort's column (key: the folder they ran in, as shown with `home` as `~`, in the tree's order);
  * ties by spend, then id.
  */
-export function sortLanes(lanes: readonly OverviewLane[], s: Sort, home?: string): OverviewLane[] {
-  const lanePlace = (l: OverviewLane) => (l.dir ? displayPath(l.dir, home).split('/') : null)
+export function sortLanes(
+  lanes: readonly OverviewLane[],
+  s: Sort,
+  home?: string,
+  /** With `by: 'bead'` the key column orders the sessions by their bead's place in the tree. */
+  tree?: { by: By; beads?: Beads },
+): OverviewLane[] {
+  const byBead = tree?.by === 'bead'
+  const lanePlace = (l: OverviewLane) =>
+    byBead ? (l.bead ? beadPath(l.bead, tree?.beads) : null) : l.dir ? displayPath(l.dir, home).split('/') : null
   const val = (l: OverviewLane): number | string =>
     s.key === 'start'
       ? (l.startedAt ?? '')
@@ -355,7 +397,9 @@ export function sortLanes(lanes: readonly OverviewLane[], s: Sort, home?: string
               : l.usd
   return [...lanes].sort((a, b) =>
     s.key === 'key'
-      ? byPlace(lanePlace(a), lanePlace(b), s.desc) || cmp(b.usd, a.usd) || cmp(a.id, b.id)
+      ? byPlace(lanePlace(a), lanePlace(b), s.desc, byBead ? comparePath(idLess) : comparePlace) ||
+        cmp(b.usd, a.usd) ||
+        cmp(a.id, b.id)
       : (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.id, b.id),
   )
 }
@@ -563,7 +607,42 @@ export const NONE_SEL = '-'
 const splitPath = (p: string): string[] => p.split(/[\\/]+/).filter(Boolean)
 
 /** A session's value of the key ('' for none). */
-export const placeOf = (l: OverviewLane, by: By): string => l[by] ?? ''
+export function placeOf(l: OverviewLane, by: By, beads?: Beads): string {
+  if (by !== 'bead') return l[by] ?? ''
+  return l.bead ? beadPath(l.bead, beads).join('/') : ''
+}
+
+/** A bead id's prefix: what precedes the last dash of its root (`merlin` for `merlin-t8s.48.1`). */
+export function beadPrefix(id: string): string {
+  const root = id.split('.')[0]
+  const i = root.lastIndexOf('-')
+  return i > 0 ? root.slice(0, i) : ''
+}
+
+/**
+ * Where a bead sits in the tree: its prefix, then its family root and the ancestors down to the bead itself.
+ * The chain follows the parent links of `beads` and stops where a parent is not known (or loops).
+ */
+export function beadPath(id: string, beads?: Beads): string[] {
+  const chain = [id]
+  for (let b = beads?.[id]?.parent; b && beads?.[b] && !chain.includes(b); b = beads[b].parent) chain.push(b)
+  chain.reverse()
+  const prefix = beadPrefix(id)
+  return prefix ? [prefix, ...chain] : chain
+}
+
+/**
+ * What a bead node of the tree shows: the title with the id apart (`merlin-lce`); the id alone for a bead
+ * without a title and for a prefix heading (which is no bead). `closed` beads are drawn muted.
+ */
+export function beadLabel(
+  segment: string,
+  beads?: Beads,
+): { text: string; id?: string; title?: string; closed: boolean } {
+  const b = beads?.[segment]
+  if (!b) return { text: segment, closed: false }
+  return { text: b.title || segment, id: b.title ? segment : undefined, title: b.title, closed: b.status === 'closed' }
+}
 
 /** The segments a place stands for: a repository's without `.git` / `.bare`. */
 const placeParts = (key: string, by: By): string[] => (by === 'repo' ? homeOf(key) : splitPath(key))
@@ -582,16 +661,22 @@ export function underPath(key: string, sel: string | null, by: By): boolean {
 }
 
 /** The sessions whose place sits at or under the selection. */
-export const selectLanes = (lanes: OverviewLane[], sel: string | null, by: By): OverviewLane[] =>
-  sel === null ? lanes : lanes.filter((l) => underPath(placeOf(l, by), sel, by))
+export const selectLanes = (lanes: OverviewLane[], sel: string | null, by: By, beads?: Beads): OverviewLane[] =>
+  sel === null ? lanes : lanes.filter((l) => underPath(placeOf(l, by, beads), sel, by))
 
 /** The selection on another key: kept when some session sits under it there, else dropped. */
-export const keepSelection = (sel: string | null, lanes: readonly OverviewLane[], by: By): string | null =>
-  sel !== null && lanes.some((l) => underPath(placeOf(l, by), sel, by)) ? sel : null
+export const keepSelection = (
+  sel: string | null,
+  lanes: readonly OverviewLane[],
+  by: By,
+  beads?: Beads,
+): string | null => (sel !== null && lanes.some((l) => underPath(placeOf(l, by, beads), sel, by)) ? sel : null)
 
 /** The selection as shown: the home as `~`, `-` as (none). */
-export function displayPath(sel: string, home: string | undefined): string {
+export function displayPath(sel: string, home: string | undefined, by?: By): string {
   if (sel === NONE_SEL) return '(none)'
+  // a bead path is shown as the id of its last segment
+  if (by === 'bead') return sel.split('/').pop() ?? sel
   if (home && sel === home) return '~'
   if (home && sel.startsWith(`${home}/`)) return `~${sel.slice(home.length)}`
   return sel
@@ -669,10 +754,10 @@ export interface PlaceItem {
 }
 
 /** The places of some sessions under a key, with their counts and spend (the empty place too), in first-seen order. */
-export function placeItems(lanes: readonly OverviewLane[], by: By): PlaceItem[] {
+export function placeItems(lanes: readonly OverviewLane[], by: By, beads?: Beads): PlaceItem[] {
   const m = new Map<string, PlaceItem>()
   for (const l of lanes) {
-    const key = placeOf(l, by)
+    const key = placeOf(l, by, beads)
     const it = m.get(key)
     if (it) {
       it.count++
@@ -821,14 +906,22 @@ export function buildPlaceTree(items: readonly PlaceItem[], by: By, home: string
       usd: (own?.usd ?? 0) + kids.reduce((n, k) => n + k.usd, 0),
     }
     // compact: a folder that is no place and has one child is that child, its label the joined segments
-    if (!own && kids.length === 1) {
+    // (not in the bead tree: a prefix is a heading of its own, and a bead is one node)
+    if (by !== 'bead' && !own && kids.length === 1) {
       const [only] = kids
       return { ...only, label: `${t.seg}/${only.label}`, chain: [t.path, ...only.chain], host: t.host || undefined }
     }
     return node
   }
+  // beads in id order (`x.2` before `x.10`), the places in a file explorer's order
   const byName = (a: PlaceNode, b: PlaceNode) =>
-    comparePlace(a.label.split('/'), b.label.split('/')) || (a.id < b.id ? -1 : 1)
+    (by === 'bead'
+      ? idLess(a.label, b.label)
+        ? -1
+        : idLess(b.label, a.label)
+          ? 1
+          : 0
+      : comparePlace(a.label.split('/'), b.label.split('/'))) || (a.id < b.id ? -1 : 1)
   const sortTree = (ns: PlaceNode[]): PlaceNode[] => {
     for (const n of ns) sortTree(n.children)
     return ns.sort(byName)
@@ -927,6 +1020,25 @@ export function customWindow(r: CustomRange, nowMs: number): { fromMs: number; t
   const toMs = Math.min(addDays(dayStart(r.to).getTime(), 1), nowMs)
   return { fromMs, toMs: Math.max(toMs, fromMs + MIN) }
 }
+
+/** The remembered custom range as stored (`{from, to}` JSON): null when absent or not a custom range. */
+export function parseStoredCustom(raw: string | null): CustomRange | null {
+  try {
+    const v: unknown = JSON.parse(raw ?? 'null')
+    if (typeof v !== 'object' || v === null) return null
+    const { from, to } = v as Record<string, unknown>
+    return parseCustom(typeof from === 'string' ? from : null, typeof to === 'string' ? to : null)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What a click on the Custom segment does: `apply` the remembered range (a preset is active and one is
+ * remembered), else `toggle` the locator (Custom is already active, or there is nothing to apply).
+ */
+export const customAction = (pressed: boolean, remembered: CustomRange | null): 'apply' | 'toggle' =>
+  !pressed && remembered ? 'apply' : 'toggle'
 
 /** The days a preset covers, ending today: `1d` is today, `7d` today and the six days before. */
 export function presetRange(range: Range, today: Date): CustomRange {

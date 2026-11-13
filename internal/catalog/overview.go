@@ -69,6 +69,17 @@ type Overview struct {
 	Slots    int              `json:"slots"`
 	Scripted OverviewScripted `json:"scripted"`
 	Lanes    []OverviewLane   `json:"lanes"`
+	// Beads holds every bead on the chain (the bead, its parent, and so on up to the family root or the
+	// last parent the folded databases know) of any lane's Bead, by id. Absent when no lane has one.
+	Beads map[string]OverviewBead `json:"beads,omitempty"`
+}
+
+// OverviewBead is a bead on a lane's chain: what a client needs to lay the hierarchy out.
+type OverviewBead struct {
+	Title  string `json:"title,omitempty"`
+	Parent string `json:"parent,omitempty"`
+	Status string `json:"status,omitempty"`
+	Type   string `json:"type,omitempty"`
 }
 
 // OverviewScripted sums the scripted (sdk) sessions with a message in the range.
@@ -83,13 +94,16 @@ type OverviewScripted struct {
 // Dir, Checkout, Repo and Remote are its places, the primary value of each location key ("" when
 // it has none).
 type OverviewLane struct {
-	Harness        string         `json:"harness"`
-	ID             string         `json:"id"`
-	Title          string         `json:"title,omitempty"`
-	Dir            string         `json:"dir,omitempty"`
-	Checkout       string         `json:"checkout,omitempty"`
-	Repo           string         `json:"repo,omitempty"`
-	Remote         string         `json:"remote,omitempty"`
+	Harness  string `json:"harness"`
+	ID       string `json:"id"`
+	Title    string `json:"title,omitempty"`
+	Dir      string `json:"dir,omitempty"`
+	Checkout string `json:"checkout,omitempty"`
+	Repo     string `json:"repo,omitempty"`
+	Remote   string `json:"remote,omitempty"`
+	// Bead is the bead holding the largest share of the session's bead-attributed cost (the `bead` key of
+	// the groups); "" for a session on none.
+	Bead           string         `json:"bead,omitempty"`
 	StartedAt      time.Time      `json:"startedAt,omitzero"`
 	LastActivityAt time.Time      `json:"lastActivityAt,omitzero"`
 	USD            float64        `json:"usd"`
@@ -209,6 +223,9 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			Spans: sortedSpans(overviewSpans(s, from, to))}
 		sf := &fv.ses[s.idx]
 		l.Checkout, l.Repo, l.Remote = sf.checkout, sf.repo, sf.remote
+		if b := fv.topValue(sf, GroupBead); b != NoBead {
+			l.Bead = b
+		}
 		inherited := make(map[int]bool, len(s.info.InheritedTurns))
 		for _, i := range s.info.InheritedTurns {
 			inherited[i] = true
@@ -236,6 +253,9 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		}
 		l.Slot0, l.Context, l.Idle, l.Active = lo, o.ctx[lo:hi+1], o.idle[lo:hi+1], active[lo:hi+1]
 		out.Lanes = append(out.Lanes, l)
+	}
+	for _, l := range out.Lanes {
+		fv.addChain(&out, l.Bead)
 	}
 	sort.Slice(out.Lanes, func(i, j int) bool {
 		a, b := out.Lanes[i], out.Lanes[j]
@@ -411,4 +431,23 @@ func sortedSpans(in []OverviewSpan) []OverviewSpan {
 		return a.Session.Harness < b.Session.Harness
 	})
 	return out
+}
+
+// addChain puts bead id and its ancestors, up to the family root or the last parent the folded
+// databases know, into o.Beads.
+func (fv *facets) addChain(o *Overview, id string) {
+	for id != "" {
+		if _, done := o.Beads[id]; done {
+			return
+		}
+		b, ok := fv.bead[id]
+		if !ok {
+			return
+		}
+		if o.Beads == nil {
+			o.Beads = map[string]OverviewBead{}
+		}
+		o.Beads[id] = OverviewBead{Title: b.Title, Parent: b.Parent, Status: b.Status, Type: b.Type}
+		id = b.Parent
+	}
 }

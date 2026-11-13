@@ -1207,6 +1207,8 @@ export interface OverviewLane {
   checkout?: string
   repo?: string
   remote?: string
+  /** The bead holding the largest share of the session's bead-attributed cost; absent for none. */
+  bead?: string
   startedAt?: string
   lastActivityAt?: string
   usd: number
@@ -1227,4 +1229,14 @@ export interface Overview {
   slots: number
   scripted: { sessions: number; usd: number }
   lanes: OverviewLane[]
+  /** The beads on the lanes' chains (the bead, its parent, … up to the last one known), by id. */
+  beads?: Record<string, OverviewBead>
+}
+
+/** A bead on a lane's chain. */
+export interface OverviewBead {
+  title?: string
+  parent?: string
+  status?: string
+  type?: string
 }

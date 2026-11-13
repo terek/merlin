@@ -747,7 +747,7 @@ The table only ever lists sessions.
 
 - **URL**: `range` (`1d`, `7d` default, `30d`, ending now) or a custom range `from` and `to` (local days,
   `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
-  them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`), `in` (the selection), `q` (the
+  them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`, `bead`), `in` (the selection), `q` (the
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
 - **Toolbar**: no title; the **range control** first on the left, and centred in the space that is left the
   **search box** with, when a place is selected, a removable chip `in ~/work x` (the display path; x clears).
@@ -756,6 +756,12 @@ The table only ever lists sessions.
   current one), also while the locator is closed. A custom range asks the API for local midnight of `from` to
   the next local midnight after `to`, capped at now; the empty state reads "Nothing ran between May 20 and May
   29." (`on May 20` for one day). The presets cover the days up to today.
+  The last custom range applied (a locator drag or a URL with `from` and `to`) is **remembered** in
+  `localStorage` (`overview.custom`, `{from, to}`, try/catch; the URL stays the truth for what is shown). While
+  a preset is active the Custom segment still reads that range, unpressed and muted like the other unpressed
+  segments; a click on it applies the range (`from`, `to`) without opening the locator (`customAction`), and a
+  click while Custom is active toggles the locator. With nothing remembered it reads `Custom` and a click opens
+  the locator.
 - **Locator.** A click on Custom opens the locator: it grows (150 ms) from the range control to the toolbar's
   right edge over the search box and the `in` chip, with a `x` at the very right; Escape and `x` close it, the
   range stays. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
@@ -853,14 +859,29 @@ The table only ever lists sessions.
     vertical and its run starts at the left edge;
   - the day lines, only inside the session's lifetime.
 - **Sidebar**: a 260 px column left of the table under the toolbar (its own scroll, right border). Its heading
-  row is the **Organise by** selector (the shared `Select`: Folder, Worktree, Repo, Remote; `by`) and a
+  row is the **Organise by** selector (the shared `Select`: Folder, Worktree, Repo, Remote, Bead; `by`) and a
   collapse button (`PanelLeftClose` / `PanelLeftOpen`); collapsed it is a 37 px strip with the open button. The
   width animates in 150 ms (instantly under reduced motion); the choice is kept in `localStorage`
   (`overview.sidebar`, try/catch). The plot is sized for the final layout, so the graphs do not recompute while
   it slides. Organise by is client-side: every lane carries its value of each key (`dir`, `checkout`, `repo`,
   `remote`), and switching rebuilds the tree from them. **Folder** is the directory the session started in;
   **Worktree** its git checkout; **Repo** its repository (worktrees of one clone merge); **Remote** its origin
-  URL (clones of one remote merge).
+  URL (clones of one remote merge); **Bead** the session's bead (below).
+  - **The Bead key.** The tree is the bead hierarchy. A session has one bead: the one holding the largest share
+    of its bead-attributed cost, ties to the first in sort order (the lane's `bead`, as the `bead` key of
+    `/api/groups`; whole session cost, no splitting); sessions on none are `(none)`, so All appears under the
+    usual rule. A session's path is `prefix → family root → … ancestors … → the bead` (`beadPath`: the prefix
+    from the id, as `beads.Prefix`; the chain from the `beads` map of the response, which stops where a parent
+    is not known). The prefixes are the top-level headings (no chevron, always open, even with one child:
+    compaction is off for this key). A bead that is a session's bead and the parent of others is one node: its
+    sessions count there and its children sit under it. Children are in natural id order (`idLess`, as the
+    catalog: `x.2` before `x.10`). A node shows the bead's **title** with the id after it, muted and smaller
+    (`merlin-lce`; the id wraps out of sight when it does not fit whole beside the title), the title and id in
+    its `title`; a bead without a title (implied by a child's parent link) shows its id; a closed bead is muted
+    with a ticked circle (`CircleCheck`; an open one is a `Circle`; a prefix is a folder). `in` is the node's
+    path (`merlin/merlin-lce/merlin-lce.10`), matched segment-wise like every key; the chip reads
+    `in merlin-lce.10 x`, the title in its tooltip. `sort=key` orders the rows by the tree order of their bead
+    path, `(none)` last. The row's folder stays the folder; the row's tooltip names its bead (id and title).
   - **The tree** (`buildPlaceTree`): the places of the sessions the search leaves where they sit in the
     filesystem: dir and worktree at their path, a repository at its working directory (the key without its
     `.git` / `.bare`), a remote as host / owner / name (a local-path remote stays a path). The home is `~`: the

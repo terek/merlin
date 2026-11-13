@@ -584,3 +584,59 @@ func TestOverviewLaneTrimming(t *testing.T) {
 		t.Errorf("b: slot0 %d, %d slots", l.Slot0, len(l.Context))
 	}
 }
+
+// A lane carries the bead holding the largest share of its bead-attributed cost, and the answer the
+// chains (the bead and its parents up to the last one the databases know) of those beads.
+func TestOverviewLaneBeadAndChains(t *testing.T) {
+	create := func(min int, id, title, parent string) model.BeadEvent {
+		e := bev(min, "", model.BeadCreate, "/w", id)
+		e.Title, e.Parent = title, parent
+		return e
+	}
+	// s1 works on a grandchild (parent acme-c1, whose parent acme-r0 is a title-less implied root)
+	s1 := oneMsgSession("s1", "/w", 1, 0, 1, 2)
+	s1.Beads = []model.BeadEvent{
+		create(0, "acme-c1", "Child task", "acme-r0"),
+		create(0, "acme-c1.1", "Grandchild", "acme-c1"),
+		bev(1, "", model.BeadClaim, "/w", "acme-c1.1"),
+	}
+	// s2 claims a parent-less bead and a child bead: the larger share decides
+	s2 := oneMsgSession("s2", "/w", 1, 5, 6, 7)
+	s2.Beads = []model.BeadEvent{create(5, "other-a1", "Alone", ""), bev(6, "", model.BeadClaim, "/w", "other-a1")}
+	s3 := oneMsgSession("s3", "/w", 1, 10, 11) // no bead
+	c := ovCatalog(s1, s2, s3)
+	c.SetPlaces(Places{})
+	o, err := c.Overview(ovQuery(time.Hour, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := laneOf(t, o, "s1").Bead; got != "acme-c1.1" {
+		t.Errorf("s1 bead = %q", got)
+	}
+	if got := laneOf(t, o, "s2").Bead; got != "other-a1" {
+		t.Errorf("s2 bead = %q", got)
+	}
+	if got := laneOf(t, o, "s3").Bead; got != "" {
+		t.Errorf("s3 bead = %q, want none", got)
+	}
+	want := map[string]OverviewBead{
+		"acme-c1.1": {Title: "Grandchild", Parent: "acme-c1"},
+		"acme-c1":   {Title: "Child task", Parent: "acme-r0"},
+		"acme-r0":   {},
+		"other-a1":  {Title: "Alone"},
+	}
+	for id, w := range want {
+		g, ok := o.Beads[id]
+		if !ok || g.Title != w.Title || g.Parent != w.Parent {
+			t.Errorf("beads[%s] = %+v (%v), want %+v", id, g, ok, w)
+		}
+	}
+	if len(o.Beads) != len(want) {
+		t.Errorf("beads = %+v, want only the chains", o.Beads)
+	}
+	// no lane on a bead: no beads at all
+	o2, err := ovCatalog(s3).Overview(ovQuery(time.Hour, 3))
+	if err != nil || o2.Beads != nil {
+		t.Errorf("beads without any bead lane = %+v, %v", o2.Beads, err)
+	}
+}

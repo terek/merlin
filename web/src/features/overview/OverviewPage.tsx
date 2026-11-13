@@ -10,6 +10,8 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronRight,
+  Circle,
+  CircleCheck,
   Folder,
   FolderGit2,
   FolderOpen,
@@ -50,16 +52,19 @@ import {
   ancestorIds,
   axisTicks,
   type Band,
+  type Beads,
   type Brush,
   BYS,
   type By,
   bandAt,
   bandLabel,
+  beadLabel,
   blockWidth,
   brushRange,
   buildPlaceTree,
   type CustomRange,
   chooseSlot,
+  customAction,
   customLabel,
   customPhrase,
   customWindow,
@@ -98,6 +103,7 @@ import {
   parseCustom,
   parseIn,
   parseSort,
+  parseStoredCustom,
   placeItems,
   placeOf,
   presetRange,
@@ -158,6 +164,7 @@ const BY_LABEL: Record<By, string> = {
   checkout: 'Worktree',
   repo: 'Repo',
   remote: 'Remote',
+  bead: 'Bead',
 }
 
 /** The title of the sidebar's (none): the sessions with no value for the key. */
@@ -166,6 +173,7 @@ const NONE_TITLE: Record<By, string> = {
   checkout: 'Sessions in no worktree',
   repo: 'Sessions in no repository',
   remote: 'Sessions with no remote',
+  bead: 'Sessions on no bead',
 }
 
 /** The colour a span is drawn in: the Session page's, by kind; a branched session is the main colour. */
@@ -518,7 +526,13 @@ const SessionRow = memo(function SessionRow({
 })
 
 /** What the timeline sort orders a session by, for the row's title (the table shows no column for it). */
-function laneNote(l: OverviewLane, key: SortKey, slotMs: number): string {
+function laneNote(l: OverviewLane, key: SortKey, slotMs: number, beads?: Beads): string {
+  // with the Bead key the row names its bead (the folder is the line's own)
+  const bead = beads && l.bead ? `Bead: ${l.bead}${beads[l.bead]?.title ? ` ${beads[l.bead].title}` : ''}` : ''
+  return [bead, timelineNote(l, key, slotMs)].filter(Boolean).join('\n')
+}
+
+function timelineNote(l: OverviewLane, key: SortKey, slotMs: number): string {
   if (key === 'start') return l.startedAt ? `Started ${new Date(l.startedAt).toLocaleString()}` : ''
   if (key === 'last') return l.lastActivityAt ? `Last active ${new Date(l.lastActivityAt).toLocaleString()}` : ''
   if (key === 'active') return `Active ${formatDuration(activeMs(l.active, slotMs))} in this range`
@@ -856,6 +870,34 @@ function useClosed(by: By): [ReadonlySet<string>, (id: string) => void, (ids: st
   return [closed, toggle, open]
 }
 
+const CUSTOM_KEY = 'overview.custom'
+
+/**
+ * The last custom range applied (the URL's `from` and `to`, or a locator drag), kept in the browser so that
+ * it survives choosing a preset (a per-viewer convenience: fine without storage, for this page only).
+ */
+function useRememberedCustom(applied: CustomRange | null): CustomRange | null {
+  const [last, setLast] = useState<CustomRange | null>(() => {
+    try {
+      return parseStoredCustom(localStorage.getItem(CUSTOM_KEY))
+    } catch {
+      return null
+    }
+  })
+  const from = applied?.from
+  const to = applied?.to
+  useEffect(() => {
+    if (!from || !to) return
+    setLast((cur) => (cur?.from === from && cur.to === to ? cur : { from, to }))
+    try {
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify({ from, to }))
+    } catch {
+      // no storage: it is remembered for this page only
+    }
+  }, [from, to])
+  return applied ?? last
+}
+
 /** Whether the sidebar is open: the user's choice, kept in the browser (open without it). */
 function useSidebarOpen(): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {
@@ -878,7 +920,9 @@ function useSidebarOpen(): [boolean, (open: boolean) => void] {
   ]
 }
 
-const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
+const folderIcon = (n: PlaceNode, by: By, open: boolean, beads?: Beads) => {
+  // a bead: a circle, ticked when it is closed; a prefix is a folder
+  if (by === 'bead' && beads?.[n.label]) return beads[n.label].status === 'closed' ? CircleCheck : Circle
   if (n.host) return Globe
   if (n.place && (by === 'repo' || by === 'checkout' || by === 'remote')) return FolderGit2
   return open ? FolderOpen : Folder
@@ -922,6 +966,7 @@ function TreeLine({
   onToggle,
   icon: Icon,
   label,
+  sub,
   title,
   count,
   usd,
@@ -938,6 +983,8 @@ function TreeLine({
   onToggle?: () => void
   icon: typeof Folder
   label: string
+  /** Smaller and muted after the label (a bead's id). */
+  sub?: string
   title: string
   count: number
   usd: number
@@ -984,7 +1031,15 @@ function TreeLine({
         )}
       >
         <Icon size={14} aria-hidden className="shrink-0 text-muted" />
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {/* the id wraps out of sight (the line is clipped) when it does not fit whole beside the title */}
+        <span className="flex h-5 min-w-0 flex-1 flex-wrap items-baseline overflow-hidden">
+          <span className="max-w-full truncate">{label}</span>
+          {sub && (
+            <span className={cn('ml-1.5 whitespace-nowrap text-meta', selected ? 'text-accent' : 'text-faint')}>
+              {sub}
+            </span>
+          )}
+        </span>
         <Figures count={count} usd={usd} />
       </button>
     </li>
@@ -1004,6 +1059,7 @@ function Sidebar({
   by,
   onBy,
   tree,
+  beads,
   all,
   sel,
   hover,
@@ -1014,6 +1070,8 @@ function Sidebar({
   by: By
   onBy: (by: By) => void
   tree: PlaceTree
+  /** The beads of the response, for the labels of the Bead key. */
+  beads?: Beads
   /** The figures of everything the search leaves. */
   all: Totals
   sel: string | null
@@ -1107,6 +1165,7 @@ function Sidebar({
           {rows.map(({ node: n, depth }) => {
             const folder = n.children.length > 0
             const isOpen = folder && !closed.has(n.id)
+            const shown = by === 'bead' ? beadLabel(n.label, beads) : { text: n.label, closed: false }
             return (
               <TreeLine
                 key={n.id}
@@ -1114,9 +1173,11 @@ function Sidebar({
                 level={depth + lift}
                 open={folder ? isOpen : undefined}
                 onToggle={() => toggle(n.id)}
-                icon={folderIcon(n, by, isOpen)}
-                label={n.label}
-                title={n.id}
+                icon={folderIcon(n, by, isOpen, beads)}
+                label={shown.text}
+                sub={shown.id}
+                muted={shown.closed}
+                title={shown.title ? `${shown.title}\n${n.label}` : n.id}
                 count={n.count}
                 usd={n.usd}
                 selected={selNode?.id === n.id}
@@ -1454,7 +1515,10 @@ export function OverviewPage() {
     }
   }, [])
 
+  // the last custom range outlives the presets: the Custom segment keeps showing it, unpressed
+  const remembered = useRememberedCustom(custom)
   const shown = live ?? custom
+  const label = shown ?? remembered
   const grow = 'transition-[flex-grow,min-width] duration-150 motion-reduce:transition-none'
   return (
     <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
@@ -1471,8 +1535,8 @@ export function OverviewPage() {
               // a fixed width while the locator is open or a range is shown, so the label changing
               // length under a drag ("Feb 9 → 8d", "Feb 19 → 18d") does not shift the strip beside it
               label: (() => {
-                const text = shown ? customLabel(shown, now) : 'Custom'
-                if (!shown && !locOpen) return text
+                const text = label ? customLabel(label, now) : 'Custom'
+                if (!label && !locOpen) return text
                 return (
                   <span
                     className={cn('inline-block text-center', text.includes(',') ? 'min-w-[20ch]' : 'min-w-[14ch]')}
@@ -1485,7 +1549,11 @@ export function OverviewPage() {
             },
           ]}
           onChange={(v) => {
-            if (v === 'custom') return openLocator(!locOpen)
+            if (v === 'custom') {
+              if (customAction(shown !== null, remembered) === 'toggle') return openLocator(!locOpen)
+              openLocator(false)
+              return set({ range: undefined, ...formatCustom(remembered) })
+            }
             openLocator(false)
             set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
           }}
@@ -1507,8 +1575,15 @@ export function OverviewPage() {
           {sel !== null && (
             <span className="inline-flex h-7 max-w-[260px] shrink-0 items-center gap-1 rounded-card border border-line bg-surface-2 pr-1 pl-2 text-sec">
               <span className="text-muted">in</span>
-              <span className="truncate font-medium text-fg" title={sel}>
-                {displayPath(sel, home)}
+              <span
+                className="truncate font-medium text-fg"
+                title={
+                  by === 'bead'
+                    ? [query.data?.beads?.[displayPath(sel, home, by)]?.title, sel].filter(Boolean).join('\n')
+                    : sel
+                }
+              >
+                {displayPath(sel, home, by)}
               </span>
               <button
                 type="button"
@@ -1565,7 +1640,7 @@ export function OverviewPage() {
               sel={sel}
               onSelect={select}
               // a new key keeps the selection where some session sits under it there
-              onBy={(v) => set({ by: v === 'dir' ? undefined : v, in: keepSelection(sel, o.lanes, v) })}
+              onBy={(v) => set({ by: v === 'dir' ? undefined : v, in: keepSelection(sel, o.lanes, v, o.beads) })}
               sbOpen={sbOpen}
               onSbOpen={setSbOpen}
               onSort={(k) => set(formatSort(nextSort(sort, k)))}
@@ -1622,11 +1697,11 @@ function Table({
   const plotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - padRight - BLOCK_W - 2 * CELL_PAD)
   // the search narrows the sessions; the tree shows these, the table and the summary what the selection leaves
   const found = useMemo(() => searchLanes(o.lanes, term, hits), [o.lanes, term, hits])
-  const scope = useMemo(() => selectLanes(found, sel, by), [found, sel, by])
-  const rows = useMemo(() => sortLanes(scope, sort, home), [scope, sort, home])
+  const scope = useMemo(() => selectLanes(found, sel, by, o.beads), [found, sel, by, o.beads])
+  const rows = useMemo(() => sortLanes(scope, sort, home, { by, beads: o.beads }), [scope, sort, home, by, o.beads])
   const totals = useMemo(() => totalsOf(scope), [scope])
   const all = useMemo(() => totalsOf(found), [found])
-  const tree = useMemo(() => buildPlaceTree(placeItems(found, by), by, home), [found, by, home])
+  const tree = useMemo(() => buildPlaceTree(placeItems(found, by, o.beads), by, home), [found, by, home, o.beads])
   const pxPerTok = useMemo(() => laneScale(o.lanes).pxPerTok, [o.lanes])
   const searching = term !== ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rows decide whether the scrollbar is there
@@ -1658,7 +1733,7 @@ function Table({
     setHover((h) => (h && h.x === x && h.place === place ? h : { x, place }))
   }
 
-  const where = sel === null ? '' : ` in ${displayPath(sel, home)}`
+  const where = sel === null ? '' : ` in ${displayPath(sel, home, by)}`
   return (
     <div className="flex min-h-0 flex-1">
       <Sidebar
@@ -1667,6 +1742,7 @@ function Table({
         by={by}
         onBy={onBy}
         tree={tree}
+        beads={o.beads}
         all={all}
         sel={sel}
         hover={sbOpen && hover ? hover.place : null}
@@ -1686,9 +1762,9 @@ function Table({
               <SessionRow
                 key={`${l.harness}/${l.id}`}
                 l={l}
-                place={placeOf(l, by)}
+                place={placeOf(l, by, o.beads)}
                 folder={folderText(l.dir, home)}
-                note={laneNote(l, sort.key, o.slotMs)}
+                note={laneNote(l, sort.key, o.slotMs, by === 'bead' ? o.beads : undefined)}
                 axis={axis}
                 pxPerTok={pxPerTok}
               />
@@ -1696,7 +1772,7 @@ function Table({
             {rows.length === 0 && (
               <div className="p-6 text-muted">
                 {searching ? `No sessions match “${term}”` : 'Nothing'}
-                {sel !== null && ` under ${displayPath(sel, home)}`}
+                {sel !== null && ` under ${displayPath(sel, home, by)}`}
                 {searching ? '' : ' in this range'}.{' '}
                 {sel !== null && (
                   <button type="button" onClick={() => onSelect(null)} className="text-accent hover:underline">
