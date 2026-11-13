@@ -616,10 +616,10 @@ describe('search', () => {
 })
 
 describe('hover geometry', () => {
-  const L: Layout = { harness: 44, pad: 12, turns: 64, agents: 70, spend: 84, gap: 8 }
-  const BLOCK = 1 + 24 + 44 + 64 + 70 + 84 + 24
+  const L: Layout = { pad: 12, turns: 64, agents: 70, spend: 84, gap: 8 }
+  const BLOCK = 1 + 24 + 64 + 70 + 84 + 16
 
-  test('the block is the rule, the padding and four columns with their gaps', () => {
+  test('the block is the rule, the padding and three columns with their gaps', () => {
     expect(blockWidth(L)).toBe(BLOCK)
   })
 

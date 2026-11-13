@@ -736,14 +736,13 @@ The table only ever lists sessions.
 
 ```
  [1d 7d 30d Custom]            ( Search sessions...  / ) [in ~/work x]                   (sticky)
- ORGANISE BY [Folder v] [<]| SESSION                         FOLDER ↕ |   TURNS   AGENTS   SPEND  (sticky)
-   ~             95  $342  | START [..-=#=-..] END  (LENGTH over it)   |
-   acme          21  $73   |-------------------------------------------|----------------------------------
-   > api          5  $33   | bold head  muted description...  ~/acme/web|   *     22     14   $96.20 (scrolls)
- v work/merlin   22  $48   | ..-=#=-..    ..=#=#=..  graph, this column |
-   web            9  $20   |-------------------------------------------|----------------------------------
-                           | ..==##=..  the scope's summed context      | 102 sessions  708  1,139  $353 (sticky)
-                           | Sat 7     Sun 8     Mon 9  ... axis       | 913 scripted runs · $5.36
+ ORGANISE BY [Folder v] [<]|   START [..-=#=-..] END         FOLDER |   TURNS   AGENTS   SPEND  (sticky)
+   ~             95  $342  |-------------------------------------------|----------------------------------
+   acme          21  $73   | * bold head  muted description...  ~/acme/web|    22     14   $96.20 (scrolls)
+   > api          5  $33   | ..-=#=-..    ..=#=#=..  graph, this column |
+ v work/merlin   22  $48   |-------------------------------------------|----------------------------------
+   web            9  $20   | ..==##=..  the scope's summed context      |  708  1,139  $353 (sticky)
+                           | Sat 7     Sun 8     Mon 9  ... axis       | 102 sessions · 913 scripted runs
 ```
 
 - **URL**: `range` (`1d`, `7d` default, `30d`, ending now) or a custom range `from` and `to` (local days,
@@ -774,45 +773,49 @@ The table only ever lists sessions.
   Nothing matching: "No sessions match "term"."
 - **Container, full bleed.** The page fills the area under the top bar edge to edge, as tall as the viewport
   (the page itself does not scroll); the toolbar has a bottom border. Beside the sidebar the table has three
-  parts: **top, fixed**, the two-line column header; **middle, scrolls**, the rows; **bottom, fixed**, the
+  parts: **top, fixed**, the one-line column header; **middle, scrolls**, the rows; **bottom, fixed**, the
   summary. Every part has the same two blocks: the **session column** (takes the width that is left; the plot
   is exactly its inner width, 12 px of padding each side) and the **structured block** (a 1 px rule on its
-  left, 12 px padding, then harness 44, Turns 64, Agents 70, Spend 84, 8 px between). The scrollbar of the
+  left, 12 px padding, then Turns 64, Agents 70, Spend 84, 8 px between). The scrollbar of the
   middle takes width from the rows only, so the header and the summary give up as much (padding right) and the
   columns, the graphs and the axis stay exactly above one another.
-- **Row** (one per session in scope). Session column: the text line on top, the graph under it. The text is
-  the session's **bold head** (its own name from /rename, else its title, else the first 8 characters of its
-  id; a link to the Session page) and in muted text the latest recap, else the first prompt, else the last
-  prompt; one line, an ellipsis where it ends (it gives way first), the whole text and the value of the active
-  timeline sort (start, last activity or running time) in the `title`. At the very right of that line stands
-  the **folder**: the session's `dir` as a display path (`~/work/merlin/web`; `(none)`, faint, without one),
-  muted `text-meta`, at most 40 % of the line and at least 96 px. When it is too long its start is cut and the
-  end stays (`…/merlin/web`, at a `/` where possible): `fitTail` measures with the cell's own font on a canvas,
-  and the full text sizes the cell, so it grows back when there is room. Its `title` is the real path. A click
-  on the folder **copies the resume command** (`resumeCommand(dir, id, harness.resume)`, as the Session page's
-  resume box; `copyText` from `ui/controls.tsx`): the title is "Copy: <command>", the text reads "Copied" for
-  1.2 s, the session does not open. A harness with no resume template leaves the folder plain text.
-  Structured block: one line, centred vertically in the two-line row: the harness mark, Turns, Agents and
-  Spend (right-aligned, tabular, `<Money>`; all counts in the range).
+- **Row** (one per session in scope). Session column: the text line on top, the graph under it. The text line
+  is, from the left: the **harness mark** (`HarnessIcon`, 13 px, vertically centred with the text; its title is
+  the harness name), the session's **bold head** (its own name from /rename, else its title, else the first 8
+  characters of its id; a link to the Session page) and in muted text the latest recap, else the first prompt,
+  else the last prompt, then at the very right the **folder**. Head and description are one run, cut with an
+  ellipsis where it reaches the folder (the whole text and the value of the active timeline sort (start, last
+  activity or running time) in the `title`). The folder is the session's `dir` as a display path
+  (`~/work/merlin/web`; `(none)`, faint, without one), muted `text-meta`, **always printed in full**
+  (`shrink-0`): only a path longer than 45 % of the line is capped there and loses its start (`…/merlin/web`, at
+  a `/` where possible; `fitTail` measures with the cell's own font on a canvas, and the full text sizes the
+  cell, so it grows back when there is room). Its `title` is the real path. A click on the folder **copies the
+  resume command** (`resumeCommand(dir, id, harness.resume)`, as the Session page's resume box; `copyText` from
+  `ui/controls.tsx`): the title is "Copy: <command>", the text reads "Copied" for 1.2 s, the session does not
+  open. A harness with no resume template leaves the folder plain text. Structured block: one line, centred
+  vertically in the two-line row: Turns, Agents and Spend (right-aligned, tabular, `<Money>`; all counts in
+  the range).
 - **Click on the graph.** The graph is a link: a click opens the Session page at the stretch under the pointer
   (`/s/:harness/:id?from=<ISO>&to=<ISO>`): the local day, or in a range of two days or less the hour (`bandAt`),
   cut to the session's own activity in it (`clipToActivity`; a stretch where it did nothing opens as it is).
   The pointer is a pointer and the title reads "Open this session at Mon, May 18". Cmd, ctrl or shift and the
   middle button open a new tab. The head and the rest of the text line open the session whole.
-- **Harness mark**: the shared `HarnessIcon` (`ui/harness.tsx`, 14 px), the product's real logo with its path
+- **Harness mark**: the shared `HarnessIcon` (`ui/harness.tsx`, 13 px in a row), the product's real logo with its path
   data inline: Claude and OpenAI from Simple Icons (CC0), Pi from pi.dev; the marks are the products'
   trademarks, used to name them. Claude's is filled with `--harness-claude`, Codex's with the body colour, Pi's
   keeps its own colours; any other harness gets its first letter in a circle.
-- **Header, two lines of 28 px.** Left: line 1 `SESSION`, centred, and at its right end, over the folders,
-  the small sort control **FOLDER ↕** (`sort=key`; the arrow shows the direction when it is the sort); line 2
-  **`TimelineSort`**, a pictogram of a session in the row graph's own vocabulary and constants (context rising
-  and falling in steps, a pale idle stretch, the thin grey baseline with the session line on it in the
-  lightest weight), as high as a text line, up to 340 px wide, shrinking to a narrower cell, aria-hidden; its
-  baseline is the text baseline of the START and END labels. Three sort buttons sit on it: **START** before
-  the drawn session's left end (`sort=start`), **END** after its right end (`sort=last`, last activity) and
-  **LENGTH** over the middle, knocked out of the drawing (`sort=active`: the slots with a call running times
-  the slot, from the lane's `active`); all three start descending. Right: one line, centred in the two,
-  the harness spacer and **Turns**, **Agents**, **Spend**. Every other sortable header is centred in its cell with an arrow slot of the same width (12 px) on both sides; the
+- **Header, one 28 px line**, a text line tall. Session column: **`TimelineSort`**, a pictogram of a session
+  centred in the cell, and at its right end, over the folders, the sort **FOLDER** (`sort=key`; same caps, size
+  and tracking as the other headers, its arrow in a slot to the left of the label). The pictogram is drawn with
+  the row graph's own helpers and constants from synthetic slots (`pictoLane`: calls at irregular gaps through
+  `heldContext`, so the context holds in narrow per-slot steps and spikes like a real row, a pause that holds as
+  idle, the same fills, the thin grey baseline with the session line on it in the lightest weight); up to
+  340 px wide, shrinking to a narrower cell, aria-hidden; its baseline is the text baseline of the START and
+  END labels. Three sort buttons sit on it: **START** before the drawn session's left end (`sort=start`),
+  **END** after its right end (`sort=last`, last activity) and **LENGTH** over the middle, knocked out of the
+  drawing (`sort=active`: the slots with a call running times the slot, from the lane's `active`); all three
+  start descending. Structured block: **Turns**, **Agents**, **Spend** over their columns on the same line.
+  Every sortable header of the block is centred in its cell with an arrow slot of the same width (12 px) on both sides; the
   arrow draws in the left one, so a label does not move when it becomes the sort. A tiny rule (1 px,
   `border-line`, 55 % of the height) stands between adjacent header cells.
 - **Sorting.** A click sorts by that column in its own first direction; a click on the active column flips
@@ -824,15 +827,14 @@ The table only ever lists sessions.
 - **Summary** (the footer, sticky). Session column: the scope's **aggregate graph**, the lanes' trimmed
   `context` and `idle` summed into dense arrays (`sumLanes`), drawn as the summed context area over the summed
   idle area on a token scale of its own, with the day lines inside the lifetimes of its sessions (no baseline,
-  session line or spine lane), and directly under it the **date axis**. Structured block, on the top line:
-  "102 sessions" where the harness column is (running on into the room Turns leaves; "102 sess." when the
-  Turns total would collide), then the totals of Turns, Agents and Spend of the scope (`totalsOf`). The count's
-  `title` says what the scope is ("25 matching sessions in ~/acme"). Under them, only while there is no search
-  and no selection, one faint line of the scripted runs ("913 scripted runs · $5.36").
+  session line or spine lane), and directly under it the **date axis**. Structured block, centred: on the top
+  line the totals of Turns, Agents and Spend of the scope (`totalsOf`), under them in small type "102 sessions"
+  (its `title` says what the scope is: "25 matching sessions in ~/acme") and, only while there is no search and
+  no selection, the scripted runs ("· 913 scripted runs · $5.36", faint).
 - **Time axis: linear.** Wall-clock time maps linearly to x over the whole range. Midnight ticks and day
   labels; at `1d`, hour ticks. Every graph uses the same axis and is the width of the session column.
 - **Resolution.** The page asks for the slot that gives about one slot per pixel of the plot (`1m` to `1h`);
-  the width is followed live, the slot once it has held still. One SVG per row. Every session of the range comes
+  the page measures its width before the first paint and asks for nothing until then, so a load makes one request, at the right slot; later resizes follow the width live and the slot once it has held still. One SVG per row. Every session of the range comes
   in one response, so the sidebar's key, the selection and the search work without another request.
 - **Row graph**, drawn with the spend graph's constants (`COLOR`, `CTX_FILL`, `WORKFLOW_DASH`, `elbowPath` from
   `features/spend/TimeView.tsx`):

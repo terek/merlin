@@ -624,8 +624,6 @@ export function ancestorIds(nodes: readonly PlaceNode[], path: string): string[]
 
 /** The widths the columns are laid out with (OverviewPage.tsx). */
 export interface Layout {
-  /** The harness column: the first of the structured block. */
-  harness: number
   /** The padding inside the block, left and right (the block's left border is 1 px more). */
   pad: number
   turns: number
@@ -635,8 +633,8 @@ export interface Layout {
   gap: number
 }
 
-/** The width of the structured block: its left rule, the padding and the four columns with their gaps. */
-export const blockWidth = (L: Layout): number => 1 + 2 * L.pad + L.harness + L.turns + L.agents + L.spend + 3 * L.gap
+/** The width of the structured block: its left rule, the padding and the three columns with their gaps. */
+export const blockWidth = (L: Layout): number => 1 + 2 * L.pad + L.turns + L.agents + L.spend + 2 * L.gap
 
 export interface Band {
   x0: number

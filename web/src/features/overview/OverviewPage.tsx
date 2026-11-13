@@ -9,7 +9,6 @@
 import {
   ArrowDown,
   ArrowUp,
-  ArrowUpDown,
   ChevronRight,
   Folder,
   FolderGit2,
@@ -74,6 +73,8 @@ import {
   folderText,
   formatCustom,
   formatSort,
+  type HeldCall,
+  heldContext,
   inferHome,
   isBranch,
   keepSelection,
@@ -122,17 +123,16 @@ import {
   totalsOf,
   visibleRows,
 } from './model'
-import { useDebounced, useWidth } from './useWidth'
+import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
 
-/** The structured block's columns (px: harness, then the numbers) and the cell padding the graph sits in. */
-const HARNESS_W = 44
+/** The structured block's columns (px) and the cell padding the graph sits in. */
 const COLS = { turns: 64, agents: 70, spend: 84 }
 const CELL_PAD = 12
 const GAP = 8
 /** The sidebar beside the rows (px, its right border included), and the strip it folds to. */
 const SIDEBAR_W = 260
 const STRIP_W = 37
-const LAYOUT: Layout = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
+const LAYOUT: Layout = { pad: CELL_PAD, gap: GAP, ...COLS }
 /** The structured block's width: its rule, padding and columns. */
 const BLOCK_W = blockWidth(LAYOUT)
 /** The hovered row's background: the text colour, faintly, over the row's own. */
@@ -318,16 +318,19 @@ function Num({ w, children }: { w: number; children: ReactNode }) {
 }
 
 /**
- * The text line of a row, in the session column: a bold head and a muted description on the left (cut with
- * an ellipsis, the whole text in the title; it gives way first) and the folder at the very right.
+ * The text line of a row, in the session column: the harness mark, a bold head and a muted description on the
+ * left (cut with an ellipsis, the whole text in the title; they give way to the folder) and the folder, always
+ * printed, at the very right.
  */
 function SessionText({
+  mark,
   head,
   headText,
   desc,
   note,
   folder,
 }: {
+  mark: ReactNode
   head: ReactNode
   headText: string
   desc: string
@@ -339,53 +342,33 @@ function SessionText({
   const title = text ? `${headText}: ${text}` : headText
   return (
     <div className="flex items-baseline gap-3 pt-1 text-sec">
-      <div className="min-w-0 flex-[1_1_0%] truncate" title={note ? `${title}\n${note}` : title}>
-        {head}
-        {text && <span className="ml-2 text-muted">{text}</span>}
+      <div className="flex min-w-0 flex-[1_1_0%] items-baseline gap-1.5">
+        <span className="shrink-0 self-center">{mark}</span>
+        <div className="min-w-0 flex-1 truncate" title={note ? `${title}\n${note}` : title}>
+          {head}
+          {text && <span className="ml-2 text-muted">{text}</span>}
+        </div>
       </div>
       {folder}
     </div>
   )
 }
 
-/** The block's first line: the harness mark (or the summary's session count), then turns, agents and spend. */
+/** The block's one line: turns, agents and spend. */
 function BlockFigures({
-  harness,
-  label,
-  labelTitle,
   turns,
   agents,
   usd,
   className,
-  flat,
 }: {
-  harness?: string
-  /** Text for the harness column instead (the summary's session count); it may run on into Turns' room. */
-  label?: string
-  labelTitle?: string
   turns: number
   agents: number
   usd: number
   className?: string
-  /** No padding above (the row centres the line itself). */
-  flat?: boolean
 }) {
   const count = (n: number) => (n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US'))
   return (
-    <div className={cn('flex items-baseline text-sec', !flat && 'pt-1', className)} style={{ columnGap: GAP }}>
-      {label ? (
-        <span
-          className="shrink-0 whitespace-nowrap text-meta text-muted"
-          style={{ width: HARNESS_W }}
-          title={labelTitle}
-        >
-          {label}
-        </span>
-      ) : (
-        <div className="flex shrink-0 items-center self-center" style={{ width: HARNESS_W }}>
-          {harness && <HarnessIcon harness={harness} size={14} />}
-        </div>
-      )}
+    <div className={cn('flex items-baseline text-sec', className)} style={{ columnGap: GAP }}>
       <Num w={COLS.turns}>{count(turns)}</Num>
       <Num w={COLS.agents}>{count(agents)}</Num>
       <Num w={COLS.spend}>
@@ -423,7 +406,7 @@ function FolderCell({ text, path, command }: { text: string; path: string; comma
     const cs = getComputedStyle(el)
     measure.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
     const ctx = measure
-    const room = el.clientWidth - 1
+    const room = el.clientWidth
     setShown(fitTail(text, (s) => ctx.measureText(s).width <= room))
   }, [text, w])
   const copy = async (e: React.MouseEvent) => {
@@ -436,8 +419,8 @@ function FolderCell({ text, path, command }: { text: string; path: string; comma
   }
   const tone = copied ? 'text-ok' : text === '(none)' ? 'text-faint' : 'text-muted'
   return (
-    <span ref={ref} className="relative min-w-[96px] max-w-[40%] shrink-0 overflow-hidden whitespace-nowrap text-meta">
-      <span className="invisible block">{text}</span>
+    <span ref={ref} className="relative max-w-[45%] shrink-0 overflow-hidden whitespace-nowrap text-meta">
+      <span className="invisible block pr-0.5">{text}</span>
       {command ? (
         <button
           type="button"
@@ -489,6 +472,7 @@ const SessionRow = memo(function SessionRow({
     <div data-place={place} className={cn('flex border-line border-t first:border-t-0', HOVER)}>
       <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
         <SessionText
+          mark={<HarnessIcon harness={l.harness} size={13} />}
           head={
             <Link to={sessionPath(l)} className="font-semibold text-fg hover:underline">
               {head}
@@ -527,7 +511,7 @@ const SessionRow = memo(function SessionRow({
         className="flex shrink-0 flex-col justify-center border-line border-l"
         style={{ width: BLOCK_W, paddingInline: CELL_PAD }}
       >
-        <BlockFigures flat harness={l.harness} turns={l.turns} agents={l.agents} usd={l.usd} />
+        <BlockFigures turns={l.turns} agents={l.agents} usd={l.usd} />
       </div>
     </div>
   )
@@ -609,21 +593,39 @@ const PICTO_W = 340
 const PICTO_X0 = 64
 const PICTO_X1 = 276
 const PICTO_BASE = 18
-/** The context in steps (px of height) the session rises and falls through, and where it rests (idle). */
-const PICTO_STEP = 11
-const PICTO_CTX = [3, 5, 4, 8, 6, 10, 13, 9, 7, 0, 0, 0, 0, 0, 0, 8, 12, 9, 4]
-const PICTO_IDLE = [0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 7, 6, 6, 5, 0, 0, 0, 0]
-/** The session line: runs of steps (drawn in the row graph's lightest weight). */
-const PICTO_RUNS: [number, number][] = [
-  [0, 9],
-  [15, 19],
-]
 
 /**
- * The Session header's second line, a pictogram of a session (not data), in the row graph's own vocabulary
- * and constants: context rising and falling in steps, a pale idle stretch in the middle, the thin grey
- * baseline and on it the session line in its lightest weight; the baseline sits on the text baseline of the
- * labels. Three sort buttons: START just before the session's left end, END just after its right end and
+ * The drawn session's slots, made as a real one is: calls (context in px, one slot of 1 px each) at irregular
+ * gaps through `heldContext`, so that the context holds between calls closer than the hold time and spikes where
+ * they are further apart; a pause in the middle that holds its context as idle. A fixed pseudo-random
+ * sequence: the same drawing every time.
+ */
+function pictoLane(): { ctx: number[]; idle: number[]; active: number[] } {
+  const n = PICTO_X1 - PICTO_X0
+  let seed = 11
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    return seed / 0x7fffffff
+  }
+  const calls: HeldCall[] = []
+  const burst = (from: number, to: number, lo: number, hi: number) => {
+    for (let t = from; t < to; t += 1 + Math.floor(rnd() * rnd() * rnd() * 11)) {
+      const k = (t - from) / (to - from)
+      calls.push({ at: t * 60_000, ctx: Math.max(2, (lo + (hi - lo) * k) * (0.55 + 0.45 * rnd())) })
+    }
+  }
+  burst(0, 78, 6, 13)
+  burst(120, n - 1, 10, 16)
+  const { context, idle } = heldContext(calls, 0, 60_000, n)
+  return { ctx: context, idle, active: context.map((v) => (v > 0 ? 1 : 0)) }
+}
+const PICTO = pictoLane()
+
+/**
+ * The header's one line, a pictogram of a session (not data), drawn with the row graph's own helpers and
+ * constants from synthetic slots: context in narrow per-slot spikes and steps, a pale idle stretch, the thin
+ * grey baseline and on it the session line in its lightest weight; the baseline sits on the text baseline of
+ * the labels. Three sort buttons: START just before the session's left end, END just after its right end and
  * LENGTH (time with a call running) in the middle, knocked out of the drawing so that it reads. It is as high
  * as a text line, centred in the header cell, and shrinks (horizontally) when the cell is narrower than its
  * design.
@@ -652,8 +654,8 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
       </button>
     )
   }
-  const axis = makeAxis(0, PICTO_CTX.length * 60_000, 60_000, PICTO_CTX.length * PICTO_STEP)
-  const stepX = (i: number) => PICTO_X0 + 2 + i * PICTO_STEP
+  const axis = makeAxis(0, PICTO.ctx.length * 60_000, 60_000, PICTO.ctx.length)
+  const runs = activityRuns(PICTO.active)
   const nonScaling = { vectorEffect: 'non-scaling-stroke' } as const
   return (
     <div className="relative mx-auto" style={{ width: `min(100%, ${PICTO_W}px)`, height: LINE_H }}>
@@ -666,23 +668,23 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
         className="pointer-events-none absolute inset-0"
         aria-hidden
       >
-        <g transform={`translate(${PICTO_X0 + 2} 0)`}>
-          <path d={stepAreaPath(PICTO_IDLE, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={IDLE_FILL} />
-          <path d={stepAreaPath(PICTO_CTX, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={CTX_FILL} />
+        <g transform={`translate(${PICTO_X0} 0)`}>
+          <path d={stepAreaPath(PICTO.idle, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={IDLE_FILL} />
+          <path d={stepAreaPath(PICTO.ctx, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={CTX_FILL} />
+          <line x1={0} x2={axis.width} y1={PICTO_BASE} y2={PICTO_BASE} stroke="var(--line)" {...nonScaling} />
+          {runs.map((r) => (
+            <line
+              key={r.from}
+              x1={slotX(axis, r.from)}
+              x2={slotX(axis, r.to)}
+              y1={PICTO_BASE}
+              y2={PICTO_BASE}
+              stroke={COLOR.main}
+              strokeWidth={ACTIVE_W[1]}
+              {...nonScaling}
+            />
+          ))}
         </g>
-        <line x1={PICTO_X0} x2={PICTO_X1} y1={PICTO_BASE} y2={PICTO_BASE} stroke="var(--line)" {...nonScaling} />
-        {PICTO_RUNS.map(([a, b]) => (
-          <line
-            key={a}
-            x1={stepX(a)}
-            x2={stepX(b)}
-            y1={PICTO_BASE}
-            y2={PICTO_BASE}
-            stroke={COLOR.main}
-            strokeWidth={ACTIVE_W[1]}
-            {...nonScaling}
-          />
-        ))}
       </svg>
       {btn('start', 'Start', 'Sort by when the session started', { right: pct(PICTO_W - PICTO_X0 + 3) }, '')}
       {btn('last', 'End', 'Sort by its last activity', { left: pct(PICTO_X1 + 3) }, '')}
@@ -700,35 +702,28 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
 function Header({ sort, onSort, padRight }: { sort: Sort; onSort: (k: SortKey) => void; padRight: number }) {
   const th = { sort, onSort }
   const folderOn = sort.key === 'key'
-  const FolderArrow = !folderOn ? ArrowUpDown : sort.desc ? ArrowDown : ArrowUp
   return (
     <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
-      <div className="flex min-w-0 flex-1 flex-col" style={{ paddingInline: CELL_PAD }}>
-        <div
-          className="relative flex items-center justify-center text-faint text-meta uppercase tracking-wide"
-          style={{ height: LINE_H }}
-        >
-          Session
-          <button
-            type="button"
-            onClick={() => onSort('key')}
-            title="Sort by folder, in the order of the folder tree"
-            aria-label="Sort by folder"
-            className={cn(
-              'absolute right-0 inline-flex items-center gap-1 whitespace-nowrap hover:text-fg',
-              folderOn ? 'text-fg' : 'text-faint',
-            )}
-          >
-            Folder
-            <FolderArrow size={11} aria-hidden className={cn(!folderOn && 'opacity-70')} />
-          </button>
-        </div>
+      <div className="relative min-w-0 flex-1" style={{ paddingInline: CELL_PAD }}>
         <TimelineSort {...th} />
+        <button
+          type="button"
+          onClick={() => onSort('key')}
+          title="Sort by folder, in the order of the folder tree"
+          aria-label="Sort by folder"
+          className={cn(
+            'absolute top-0 inline-flex items-center whitespace-nowrap text-meta uppercase tracking-wide hover:text-fg',
+            folderOn ? 'text-fg' : 'text-faint',
+          )}
+          style={{ right: CELL_PAD, height: LINE_H }}
+        >
+          <ArrowSlot on={folderOn} desc={sort.desc} />
+          Folder
+        </button>
       </div>
       <div className="flex shrink-0 items-center border-line border-l" style={{ width: BLOCK_W }}>
         <div className="flex w-full" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
-          <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
-          <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
+          <Th {...th} col="turns" label="Turns" w={COLS.turns} title="Sort by turns" />
           <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
           <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
         </div>
@@ -775,11 +770,6 @@ function Summary({
   const scale = useMemo(() => tokenScale([data.ctx, data.idle]), [data])
   const ticks = fitLabels(axisTicks(axis), axis.width)
   const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
-  // the count may run over the room of the turns figure; when it would reach it, the short form
-  const n = totals.sessions
-  const full = plural(n, 'session')
-  const room = HARNESS_W + GAP + COLS.turns - totals.turns.toLocaleString('en-US').length * 7 - 4
-  const count = full.length * 6.2 <= room ? full : `${n} sess.`
   return (
     <div className="flex border-line border-t bg-surface" style={{ paddingRight: padRight }}>
       <div className="min-w-0 flex-1 overflow-hidden pt-1" style={{ paddingInline: CELL_PAD }}>
@@ -808,20 +798,18 @@ function Summary({
         className="flex shrink-0 flex-col justify-center border-line border-l"
         style={{ width: BLOCK_W, paddingInline: CELL_PAD }}
       >
-        <BlockFigures
-          flat
-          className="font-medium"
-          label={count}
-          labelTitle={title}
-          turns={totals.turns}
-          agents={totals.agents}
-          usd={totals.usd}
-        />
-        {scripted && (
-          <div className="truncate pt-1 text-faint text-meta" title="Scripted runs (sdk) are in no place">
-            {plural(scripted.sessions, 'scripted run')} · <Money usd={scripted.usd} dim />
-          </div>
-        )}
+        <BlockFigures className="font-medium" turns={totals.turns} agents={totals.agents} usd={totals.usd} />
+        <div className="truncate pt-0.5 text-meta">
+          <span className="text-muted" title={title}>
+            {plural(totals.sessions, 'session')}
+          </span>
+          {scripted && (
+            <span className="text-faint" title="Scripted runs (sdk) are in no place">
+              {' · '}
+              {plural(scripted.sessions, 'scripted run')} · <Money usd={scripted.usd} dim />
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -1438,15 +1426,22 @@ export function OverviewPage() {
   // The plot's width picks the slot (about one per pixel); the width is followed live, the slot only
   // once the width has held still, so a drag of the window does not refetch at every pixel.
   const rootRef = useRef<HTMLDivElement>(null)
-  const pageW = useWidth(rootRef)
+  const measured = useMeasuredWidth(rootRef)
+  const pageW = measured ?? 900
   const pagePlotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - SCROLLBAR - BLOCK_W - 2 * CELL_PAD)
-  const slot = chooseSlot(rangeMs, useDebounced(pagePlotW, 250))
+  // the first measurement is used as it is; the debounce only holds back the slot of later resizes
+  const settledW = useDebounced(measured === null ? null : pagePlotW, 250)
+  const slot = chooseSlot(rangeMs, settledW ?? pagePlotW)
 
-  const query = useOverview({
-    from: new Date(win.fromMs).toISOString(),
-    to: new Date(win.toMs).toISOString(),
-    slot,
-  })
+  // nothing is asked for before the width is known: one request, at the right slot
+  const query = useOverview(
+    {
+      from: new Date(win.fromMs).toISOString(),
+      to: new Date(win.toMs).toISOString(),
+      slot,
+    },
+    measured !== null,
+  )
 
   // The home the paths show as `~`: the one the sessions' folders share.
   const home = useMemo(() => inferHome(query.data?.lanes.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [query.data])
