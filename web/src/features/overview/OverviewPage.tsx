@@ -1,10 +1,10 @@
-// The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day,
-// a week or a month, as one full-bleed table under the top bar: the toolbar and the sortable column headers
-// stay on top, the rows scroll, the date axis and the totals stay at the bottom, and beside the rows an
-// index of the places (always there; its selection filters the table). Every row is two blocks: the session
-// column (the text line, and under it the row's graph on one shared linear time axis) and, behind a rule,
-// the structured block (harness, turns, agents, spend, and under them the row's key: its folder, worktree,
-// repo or remote).
+// The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day, a week or
+// a month, as one full-bleed table of sessions under the top bar. The sidebar's place tree is the scope: the
+// table lists the sessions at or under its selection (and the search), and the summary at the bottom draws
+// that scope's aggregate graph over the date axis, with its totals. The toolbar and the sortable column
+// headers stay on top, the rows scroll. Every row is two blocks: the session column (the text line, and under
+// it the row's graph on one shared linear time axis) and, behind a rule, the structured block (harness,
+// turns, agents, spend, and under them the session's folder).
 
 import {
   ArrowDown,
@@ -23,11 +23,10 @@ import {
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useOverview, useSearch } from '../../api/queries'
-import type { Overview, OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
+import type { Overview, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatDuration, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
-import { placeLabels } from '../../lib/places'
 import { useShortcut } from '../../shell/useShortcut'
 import {
   HarnessIcon,
@@ -53,31 +52,20 @@ import {
   bandAt,
   blockWidth,
   buildPlaceTree,
-  buildRows,
   chooseSlot,
   displayPath,
-  earliestStart,
-  type Filtered,
-  filterOverview,
   fitLabels,
   fitTail,
-  formatIn,
+  folderText,
   formatSort,
-  formatView,
-  groupDescription,
-  groupHarnesses,
-  groupScale,
-  groupsHome,
-  type IndexItem,
+  inferHome,
   isBranch,
   keepSelection,
-  keyText,
   LANE_DEPTH,
   type Layout,
   laneDescription,
   laneHead,
   laneScale,
-  lanesByGroup,
   lifeSpan,
   makeAxis,
   markedNode,
@@ -88,22 +76,26 @@ import {
   oneLine,
   type PlaceNode,
   type PlaceTree,
+  parseBy,
   parseIn,
   parseSort,
-  parseView,
-  placeSegs,
+  placeItems,
+  placeOf,
   RANGES,
   type Range,
-  type Row,
-  type Show,
   type Sort,
   type SortKey,
-  selectOverview,
+  searchLanes,
+  selectLanes,
   sessionKey,
   slotX,
+  sortLanes,
   spineLanes,
   stepAreaPath,
-  totalOf,
+  sumLanes,
+  type Totals,
+  tokenScale,
+  totalsOf,
   visibleRows,
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
@@ -113,7 +105,7 @@ const HARNESS_W = 44
 const COLS = { turns: 64, agents: 70, spend: 84 }
 const CELL_PAD = 12
 const GAP = 8
-/** The index beside the rows (px, its right border included), and the strip it folds to. */
+/** The sidebar beside the rows (px, its right border included), and the strip it folds to. */
 const SIDEBAR_W = 260
 const STRIP_W = 37
 const LAYOUT: Layout = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
@@ -121,13 +113,11 @@ const LAYOUT: Layout = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
 const BLOCK_W = blockWidth(LAYOUT)
 /** The hovered row's background: the text colour, faintly, over the row's own. */
 const HOVER = 'hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
-const HOVER_TINT = 'hover:bg-[color-mix(in_srgb,var(--text)_6%,var(--surface-2))]'
 /** A header cell's rule on its left: tiny, between the sort arrows. */
 const RULE =
   'before:absolute before:top-1/2 before:left-[-4px] before:h-[55%] before:w-px before:-translate-y-1/2 before:bg-line'
 
-/** A nested session's indent, and the scrollbar width the page assumes before it has measured one. */
-const INDENT = 16
+/** The scrollbar width the page assumes before it has measured one. */
 const SCROLLBAR = 15
 const TEN_MIN = 600_000
 
@@ -146,6 +136,14 @@ const BY_LABEL: Record<By, string> = {
   remote: 'Remote',
 }
 
+/** The title of the sidebar's (none): the sessions with no value for the key. */
+const NONE_TITLE: Record<By, string> = {
+  dir: 'Sessions with no folder',
+  checkout: 'Sessions in no worktree',
+  repo: 'Sessions in no repository',
+  remote: 'Sessions with no remote',
+}
+
 /** The colour a span is drawn in: the Session page's, by kind; a branched session is the main colour. */
 const spanColor = (k: OverviewSpan['kind']): string =>
   k === 'session-fork' || k === 'continuation'
@@ -156,42 +154,22 @@ const spanColor = (k: OverviewSpan['kind']): string =>
         ? COLOR.fork
         : COLOR.subagent
 
-// ---- the rows' data, one shape for a group and a lane ------------------------------------
+// ---- the graph of a session row, and of the summary ----------------------------------------
 
 interface RowData {
-  key: string
   ctx: number[]
   idle: number[]
   active: number[]
   /** The slot of index 0 of the arrays (a lane's are trimmed). */
   offset: number
-  /** The sessions whose lifetimes the row covers: day lines are drawn only inside them. */
-  lives: OverviewLane[]
+  /** The sessions whose lifetimes the graph covers: day lines are drawn only inside them. */
+  lives: readonly OverviewLane[]
   spans: OverviewSpan[]
   /** A session row: its lifetime is drawn as the faint baseline, and the line, spine and nodes on it. */
   lane?: OverviewLane
 }
 
-/** The axis and the two token scales: one for the group rows (total context), one for the session rows. */
-interface Shared {
-  axis: Axis
-  groupPx: number
-  lanePx: number
-}
-
-/** A group row shows only its total context, held and idle: no session line, spawns or baseline. */
-const groupData = (g: OverviewGroup, lanes: OverviewLane[]): RowData => ({
-  key: `g:${g.key}`,
-  lives: lanes,
-  ctx: g.contextSum,
-  idle: g.idleSum,
-  active: [],
-  offset: 0,
-  spans: [],
-})
-
 const laneData = (l: OverviewLane): RowData => ({
-  key: `l:${l.group}\u0000${l.harness}/${l.id}`,
   lives: [l],
   ctx: l.context,
   idle: l.idle,
@@ -201,11 +179,7 @@ const laneData = (l: OverviewLane): RowData => ({
   lane: l,
 })
 
-// ---- the graph of one row ----------------------------------------------------------------
-
-function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
-  const { axis } = shared
-  const pxPerTok = data.lane ? shared.lanePx : shared.groupPx
+function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; pxPerTok: number }) {
   const base = PAD_TOP + 15
   const spines = useMemo(() => spineLanes(data.spans, axis), [data.spans, axis])
   const laneY = base + LANE_DEPTH
@@ -311,9 +285,9 @@ function RowGraph({ data, shared }: { data: RowData; shared: Shared }) {
 const oneOf = <T extends string>(v: string | null, allowed: readonly T[], def: T): T =>
   allowed.includes(v as T) ? (v as T) : def
 
-function Num({ w, children, className }: { w: number; children: ReactNode; className?: string }) {
+function Num({ w, children }: { w: number; children: ReactNode }) {
   return (
-    <span className={cn('shrink-0 text-right tabular-nums', className)} style={{ width: w }}>
+    <span className="shrink-0 text-right tabular-nums" style={{ width: w }}>
       {children}
     </span>
   )
@@ -328,34 +302,26 @@ function SessionText({
   headText,
   desc,
   note,
-  indent = 0,
-  className,
 }: {
   head: ReactNode
   headText: string
-  desc?: string
+  desc: string
   /** What the timeline sort orders by, for the title (the row shows no column for it). */
-  note?: string
-  indent?: number
-  className?: string
+  note: string
 }) {
-  const text = oneLine(desc ?? '')
+  const text = oneLine(desc)
   const title = text ? `${headText}: ${text}` : headText
   return (
-    <div
-      className={cn('min-w-0 truncate pt-1 text-sec', className)}
-      style={{ paddingLeft: indent }}
-      title={note ? `${title}\n${note}` : title}
-    >
+    <div className="min-w-0 truncate pt-1 text-sec" title={note ? `${title}\n${note}` : title}>
       {head}
       {text && <span className="ml-2 text-muted">{text}</span>}
     </div>
   )
 }
 
-/** The block's first line: the harness mark(s), then turns, agents and spend. */
+/** The block's first line: the harness mark (or the summary's session count), then turns, agents and spend. */
 function BlockFigures({
-  harnesses,
+  harness,
   label,
   labelTitle,
   turns,
@@ -363,18 +329,16 @@ function BlockFigures({
   usd,
   className,
 }: {
-  /** The marks of the harness column (none: the column stays empty). */
-  harnesses?: string[]
-  /** Text for the harness column instead (the footer's session count); it may run on into Turns' room. */
+  harness?: string
+  /** Text for the harness column instead (the summary's session count); it may run on into Turns' room. */
   label?: string
   labelTitle?: string
-  turns?: number
-  agents?: number
-  usd?: number
+  turns: number
+  agents: number
+  usd: number
   className?: string
 }) {
-  const count = (n: number | undefined) =>
-    n === undefined ? '' : n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US')
+  const count = (n: number) => (n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US'))
   return (
     <div className={cn('flex items-baseline pt-1 text-sec', className)} style={{ columnGap: GAP }}>
       {label ? (
@@ -386,23 +350,15 @@ function BlockFigures({
           {label}
         </span>
       ) : (
-        <HarnessCell harnesses={harnesses ?? []} />
+        <div className="flex shrink-0 items-center self-center" style={{ width: HARNESS_W }}>
+          {harness && <HarnessIcon harness={harness} size={14} />}
+        </div>
       )}
       <Num w={COLS.turns}>{count(turns)}</Num>
       <Num w={COLS.agents}>{count(agents)}</Num>
-      <Num w={COLS.spend}>{usd !== undefined && <Money usd={usd} />}</Num>
-    </div>
-  )
-}
-
-/** The harness column of a text line: one mark, or up to three of a group's side by side (a little smaller). */
-function HarnessCell({ harnesses }: { harnesses: string[] }) {
-  const many = harnesses.length > 1
-  return (
-    <div className="flex shrink-0 items-center gap-0.5 self-center" style={{ width: HARNESS_W }}>
-      {harnesses.map((h) => (
-        <HarnessIcon key={h} harness={h} size={many ? 12 : 14} />
-      ))}
+      <Num w={COLS.spend}>
+        <Money usd={usd} />
+      </Num>
     </div>
   )
 }
@@ -410,18 +366,18 @@ function HarnessCell({ harnesses }: { harnesses: string[] }) {
 let measure: CanvasRenderingContext2D | null | undefined
 
 /**
- * The key cell: one muted line under the numbers, the row's folder, worktree, repo or remote as a display
- * path. When it does not fit its end stays (`…/work/merlin/web`; `fitTail` measures with the cell's own font);
- * the full text is in the title.
+ * The folder cell: one muted line under the numbers, the session's folder as a display path. When it does not
+ * fit its end stays (`…/work/merlin/web`; `fitTail` measures with the cell's own font); the full path is in the
+ * title.
  */
-function KeyCell({ text, title, dim }: { text: string; title?: string; dim?: boolean }) {
+function KeyCell({ text, title }: { text: string; title: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(text)
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     if (measure === undefined) measure = document.createElement('canvas').getContext('2d')
-    if (!measure || text === '') return setShown(text)
+    if (!measure) return setShown(text)
     const cs = getComputedStyle(el)
     measure.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
     const ctx = measure
@@ -431,10 +387,10 @@ function KeyCell({ text, title, dim }: { text: string; title?: string; dim?: boo
   return (
     <div
       ref={ref}
-      title={title ?? text}
+      title={title}
       className={cn(
         'min-w-0 flex-1 overflow-hidden whitespace-nowrap pb-1 text-meta',
-        dim ? 'text-faint' : 'text-muted',
+        text === '(none)' ? 'text-faint' : 'text-muted',
       )}
     >
       {shown}
@@ -443,161 +399,59 @@ function KeyCell({ text, title, dim }: { text: string; title?: string; dim?: boo
 }
 
 /**
- * A row, two blocks side by side: the session column (the text line and under it the graph) and, behind a
- * thin rule, the structured block (the figures and under them the key). The row's hover is CSS, so that moving
- * the pointer does not render it; `data-group` lets the table find the group a hovered row belongs to.
+ * A session row, two blocks side by side: the session column (the text line and under it the graph) and,
+ * behind a thin rule, the structured block (the figures and under them the folder). The row's hover is CSS, so
+ * that moving the pointer does not render it; `data-place` lets the table find the place a hovered row is in.
  */
-function Frame({
-  group,
-  tint,
-  session,
-  figures,
-  keyCell,
-}: {
-  group: string
-  tint?: boolean
-  session: ReactNode
-  figures: ReactNode
-  keyCell?: ReactNode
-}) {
-  return (
-    <div
-      data-group={group}
-      className={cn('flex border-line border-t first:border-t-0', tint ? `bg-surface-2 ${HOVER_TINT}` : HOVER)}
-    >
-      <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
-        {session}
-      </div>
-      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W, paddingInline: CELL_PAD }}>
-        {figures}
-        {keyCell ?? <KeyCell text="" />}
-      </div>
-    </div>
-  )
-}
-
 const SessionRow = memo(function SessionRow({
   l,
-  nested,
   place,
-  placeTitle,
+  folder,
   note,
-  shared,
+  axis,
+  pxPerTok,
 }: {
   l: OverviewLane
-  nested: boolean
-  /** Its group's place: empty under a group row, which says it. */
+  /** The session's value of the sidebar's key. */
   place: string
-  placeTitle: string
+  /** Its folder, as shown. */
+  folder: string
   note: string
-  shared: Shared
+  axis: Axis
+  pxPerTok: number
 }) {
   const head = laneHead(l)
   return (
-    <Frame
-      group={l.group}
-      session={
-        <>
-          <SessionText
-            head={
-              <Link
-                to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
-                className="font-semibold text-fg hover:underline"
-              >
-                {head}
-              </Link>
-            }
-            headText={head}
-            desc={laneDescription(l)}
-            note={note}
-            indent={nested ? INDENT : 0}
-          />
-          <RowGraph data={laneData(l)} shared={shared} />
-        </>
-      }
-      figures={<BlockFigures harnesses={[l.harness]} turns={l.turns} agents={l.agents} usd={l.usd} />}
-      keyCell={<KeyCell text={place} title={placeTitle} dim={place === '(none)'} />}
-    />
+    <div data-place={place} className={cn('flex border-line border-t first:border-t-0', HOVER)}>
+      <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
+        <SessionText
+          head={
+            <Link
+              to={`/s/${encodeURIComponent(l.harness)}/${encodeURIComponent(l.id)}`}
+              className="font-semibold text-fg hover:underline"
+            >
+              {head}
+            </Link>
+          }
+          headText={head}
+          desc={laneDescription(l)}
+          note={note}
+        />
+        <RowGraph data={laneData(l)} axis={axis} pxPerTok={pxPerTok} />
+      </div>
+      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W, paddingInline: CELL_PAD }}>
+        <BlockFigures harness={l.harness} turns={l.turns} agents={l.agents} usd={l.usd} />
+        <KeyCell text={folder} title={l.dir || 'No folder'} />
+      </div>
+    </div>
   )
 })
-
-const GroupRow = memo(function GroupRow({
-  g,
-  label,
-  lanes,
-  shown,
-  priciestHead,
-  place,
-  faint,
-  note,
-  tint,
-  shared,
-}: {
-  g: OverviewGroup
-  /** The name shown: with enough of the path when groups share a name. */
-  label: string
-  priciestHead?: string
-  lanes: OverviewLane[]
-  /** The group's sessions that match the search (undefined: no search). */
-  shown?: number
-  /** The group's own place: its folder (a remote's host/owner/repo: there is no one folder, so a step fainter). */
-  place: string
-  faint: boolean
-  note: string
-  tint: boolean
-  shared: Shared
-}) {
-  const name = label || 'no value'
-  const harnesses = useMemo(() => groupHarnesses(lanes), [lanes])
-  return (
-    <Frame
-      group={g.key}
-      tint={tint}
-      session={
-        <>
-          <SessionText
-            head={
-              <span className="font-semibold text-fg" title={g.key || name}>
-                {name}
-              </span>
-            }
-            headText={name}
-            desc={groupDescription(g, priciestHead, shown)}
-            note={note}
-          />
-          <RowGraph data={groupData(g, lanes)} shared={shared} />
-        </>
-      }
-      figures={<BlockFigures harnesses={harnesses} turns={g.turns} agents={g.agents} usd={g.usd} />}
-      keyCell={<KeyCell text={place} title={g.key || 'no value'} dim={faint || place === '(none)'} />}
-    />
-  )
-})
-
-function ScriptedRow({ o }: { o: Overview }) {
-  const text = plural(o.scripted.sessions, 'scripted run')
-  return (
-    <Frame
-      group=""
-      session={<SessionText head={text} headText={text} className="text-faint" />}
-      figures={<BlockFigures usd={o.scripted.usd} className="[&_*]:text-faint" />}
-    />
-  )
-}
 
 /** What the timeline sort orders a session by, for the row's title (the table shows no column for it). */
 function laneNote(l: OverviewLane, key: SortKey, slotMs: number): string {
   if (key === 'start') return l.startedAt ? `Started ${new Date(l.startedAt).toLocaleString()}` : ''
   if (key === 'last') return l.lastActivityAt ? `Last active ${new Date(l.lastActivityAt).toLocaleString()}` : ''
   if (key === 'active') return `Active ${formatDuration(activeMs(l.active, slotMs))} in this range`
-  return ''
-}
-
-/** The same for a group: its earliest start, its latest activity, its union of running time. */
-function groupNote(g: OverviewGroup, key: SortKey, slotMs: number, start?: string): string {
-  if (key === 'start') return start ? `First session started ${new Date(start).toLocaleString()}` : ''
-  if (key === 'last') return g.lastActivityAt ? `Last active ${new Date(g.lastActivityAt).toLocaleString()}` : ''
-  if (key === 'active') return `Active ${formatDuration(activeMs(g.active, slotMs))} in this range`
   return ''
 }
 
@@ -837,52 +691,56 @@ function Header({ sort, onSort, padRight }: { sort: Sort; onSort: (k: SortKey) =
   )
 }
 
-// ---- the sticky footer: date axis and totals ---------------------------------
+// ---- the sticky bottom: the summary of the scope ------------------------------------------
 
 /**
- * The footer, one row of the same two blocks: the date axis under the session column (the same x as the
- * graphs), and in the structured block the number of sessions where the harness column is, then the totals.
- * The only thing lit under the pointer is the day (or hour) on the axis.
+ * The summary, one row of the same two blocks, sticky at the bottom: under the session column the scope's
+ * aggregate graph (its sessions' context and idle context summed, on a token scale of its own, the day lines
+ * inside their lifetimes) and right under it the date axis (the same x as the graphs; the day or hour under
+ * the pointer gets a light band). In the structured block the number of sessions where the harness column is,
+ * then the totals; with no search and no selection, a faint line of the scripted runs under them.
  */
-function Footer({
-  f,
-  term,
-  scope,
+function Summary({
+  lanes,
+  slots,
+  totals,
+  title,
+  scripted,
   axis,
   band,
   padRight,
 }: {
-  f: Filtered
-  term: string
-  /** The selection, as shown, or undefined. */
-  scope?: string
+  /** The sessions in scope. */
+  lanes: readonly OverviewLane[]
+  slots: number
+  totals: Totals
+  /** The count's title: what the scope is. */
+  title: string
+  scripted?: Overview['scripted']
   axis: Axis
   /** The stretch of the axis under the pointer: a light band, its label in the body colour. */
   band: Band | null
   padRight: number
 }) {
+  const data = useMemo((): RowData => {
+    const sum = sumLanes(lanes, slots)
+    return { ctx: sum.context, idle: sum.idle, active: [], offset: 0, lives: lanes, spans: [] }
+  }, [lanes, slots])
+  const scale = useMemo(() => tokenScale([data.ctx, data.idle]), [data])
   const ticks = fitLabels(axisTicks(axis), axis.width)
   const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
-  // under a search the totals are those of the matching sessions
-  const sum = (a: (g: OverviewGroup) => number, b: (l: OverviewLane) => number) =>
-    term ? f.lanes.reduce((n, l) => n + b(l), 0) : f.groups.reduce((n, g) => n + a(g), 0)
-  const n = term ? f.lanes.length : f.groups.reduce((a, g) => a + g.sessions, 0)
-  const turns = sum(
-    (g) => g.turns,
-    (l) => l.turns,
-  )
-  const title = `${plural(n, term ? 'matching session' : 'session')}${scope ? ` in ${scope}` : ''}: totals of the ${
-    term ? 'matching sessions' : 'range'
-  }`
   // the count may run over the room of the turns figure; when it would reach it, the short form
+  const n = totals.sessions
   const full = plural(n, 'session')
-  const room = HARNESS_W + GAP + COLS.turns - turns.toLocaleString('en-US').length * 7 - 4
+  const room = HARNESS_W + GAP + COLS.turns - totals.turns.toLocaleString('en-US').length * 7 - 4
   const count = full.length * 6.2 <= room ? full : `${n} sess.`
   return (
-    <div className="flex border-line border-t" style={{ paddingRight: padRight }}>
-      <div className="min-w-0 flex-1 overflow-hidden" style={{ paddingInline: CELL_PAD }}>
+    <div className="flex border-line border-t bg-surface" style={{ paddingRight: padRight }}>
+      <div className="min-w-0 flex-1 overflow-hidden pt-1" style={{ paddingInline: CELL_PAD }}>
+        <RowGraph data={data} axis={axis} pxPerTok={scale.pxPerTok} />
         <svg width={axis.width} height={22} className="block" role="img" aria-label="Time axis">
           {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={22} fill="var(--surface-2)" />}
+          <line x1={0} x2={axis.width} y1={0.5} y2={0.5} stroke="var(--line)" />
           {ticks.map((t) => (
             <g key={t.x}>
               <line x1={t.x} x2={t.x} y1={0} y2={t.day ? 6 : t.labelled ? 4 : 3} stroke="var(--line)" />
@@ -905,27 +763,26 @@ function Footer({
           className="font-medium"
           label={count}
           labelTitle={title}
-          turns={turns}
-          agents={sum(
-            (g) => g.agents,
-            (l) => l.agents,
-          )}
-          usd={sum(
-            (g) => g.usd,
-            (l) => l.usd,
-          )}
+          turns={totals.turns}
+          agents={totals.agents}
+          usd={totals.usd}
         />
+        {scripted && (
+          <div className="truncate pt-1 text-faint text-meta" title="Scripted runs (sdk) are in no place">
+            {plural(scripted.sessions, 'scripted run')} · <Money usd={scripted.usd} dim />
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ---- the index beside the rows -----------------------------------------------------------
+// ---- the sidebar: the places as a file tree, and the scope -------------------------------
 
 const TREE_INDENT = 12
 const TREE_GUTTER = 8
 
-/** The ids of the folders the user closed in this grouping: kept per grouping, and fine without storage. */
+/** The ids of the folders the user closed under this key: kept per key, and fine without storage. */
 function useClosed(by: By): [ReadonlySet<string>, (id: string) => void, (ids: string[]) => void] {
   const storeKey = `overview.tree.${by}`
   const read = (): Set<string> => {
@@ -937,7 +794,7 @@ function useClosed(by: By): [ReadonlySet<string>, (id: string) => void, (ids: st
     }
   }
   const [state, setState] = useState(() => ({ storeKey, closed: read() }))
-  // the grouping changed: its own closed folders
+  // the key changed: its own closed folders
   const closed = state.storeKey === storeKey ? state.closed : read()
   if (state.storeKey !== storeKey) setState({ storeKey, closed })
   const write = (next: Set<string>) => {
@@ -961,7 +818,7 @@ function useClosed(by: By): [ReadonlySet<string>, (id: string) => void, (ids: st
   return [closed, toggle, open]
 }
 
-/** Whether the index is open: the user's choice, kept in the browser (open without it). */
+/** Whether the sidebar is open: the user's choice, kept in the browser (open without it). */
 function useSidebarOpen(): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {
     try {
@@ -985,16 +842,19 @@ function useSidebarOpen(): [boolean, (open: boolean) => void] {
 
 const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
   if (n.host) return Globe
-  if (n.group && (by === 'repo' || by === 'checkout' || by === 'remote')) return FolderGit2
+  if (n.place && (by === 'repo' || by === 'checkout' || by === 'remote')) return FolderGit2
   return open ? FolderOpen : Folder
 }
 
 const ITEM = 'flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left text-body'
 const SELECTED = 'bg-accent-soft font-medium text-accent'
 
-/** The faint vertical guides of the levels above an item at `depth`, but not of the outermost one. */
-function Guides({ depth }: { depth: number }) {
-  return Array.from({ length: Math.max(0, depth - 1) }, (_, j) => j + 1).map((i) => (
+/**
+ * The faint vertical guides of the levels above an item `indent` steps in: one through the chevron of each
+ * ancestor that has its own indent step.
+ */
+function Guides({ indent }: { indent: number }) {
+  return Array.from({ length: indent }, (_, j) => j).map((i) => (
     <span
       key={i}
       aria-hidden
@@ -1015,12 +875,87 @@ function Figures({ count, usd }: { count: number; usd: number }) {
 }
 
 /**
- * The index as a file explorer, and the table's filter: the places of the groups where they sit in the
- * filesystem (a repository at its working directory, a remote as host / owner / name), compact folders, the
- * home as `~`. The heading is the key the tree is organised by. A click on an item selects it (the table
- * shows what is at or under it), a click on the selected item or on All clears; the chevron only opens or
- * closes. `hover` is the group of the row under the pointer (when a closed folder hides it, the folder is
- * marked). It folds to a strip.
+ * One line of the tree. `level` 0 is a section heading (semibold); its children start flush under it, and each
+ * level below them is one indent step further. The chevron only opens or closes; the label selects.
+ */
+function TreeLine({
+  level,
+  open,
+  onToggle,
+  icon: Icon,
+  label,
+  title,
+  count,
+  usd,
+  selected,
+  hot,
+  muted,
+  onPick,
+  node,
+}: {
+  level: number
+  /** Whether its folder is open; undefined for a line with nothing under it (no chevron). */
+  open?: boolean
+  onToggle?: () => void
+  icon: typeof Folder
+  label: string
+  title: string
+  count: number
+  usd: number
+  selected: boolean
+  hot: boolean
+  muted?: boolean
+  onPick: () => void
+  /** Its node id, for scrolling the selection into view. */
+  node?: string
+}) {
+  const indent = Math.max(0, level - 1)
+  return (
+    <li
+      data-node={node}
+      className={cn('relative flex items-center rounded-card', hot && 'bg-surface-2', selected && SELECTED)}
+      style={{ paddingLeft: TREE_GUTTER + indent * TREE_INDENT }}
+    >
+      <Guides indent={indent} />
+      {open === undefined ? (
+        <span className="size-4 shrink-0" aria-hidden />
+      ) : (
+        <button
+          type="button"
+          data-nav
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-label={`${open ? 'Close' : 'Open'} ${label}`}
+          className="flex size-4 shrink-0 items-center justify-center text-muted hover:text-fg"
+        >
+          <ChevronRight size={12} aria-hidden className={cn('transition-transform', open && 'rotate-90')} />
+        </button>
+      )}
+      <button
+        type="button"
+        data-nav
+        onClick={onPick}
+        aria-current={selected ? 'true' : undefined}
+        title={title}
+        className={cn(ITEM, 'pl-0.5', level === 0 && 'font-semibold', muted && !selected && 'text-muted')}
+      >
+        <Icon size={14} aria-hidden className="shrink-0 text-muted" />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <Figures count={count} usd={usd} />
+      </button>
+    </li>
+  )
+}
+
+/** The closed-folder id of the All heading (no place has an empty id). */
+const ALL_ID = ''
+
+/**
+ * The sidebar: a file explorer of the places under the key it is organised by, and the table's scope. The places
+ * sit where they are in the filesystem (a repository at its working directory, a remote as host / owner / name),
+ * compact folders, the home as `~`. A click on a line selects it (the table shows what is at or under it), a
+ * click on the selected line or on All clears; the chevron only opens or closes. `hover` is the place of the row
+ * under the pointer (when a closed folder hides it, the folder is marked). It folds to a strip.
  */
 function Sidebar({
   open,
@@ -1028,7 +963,7 @@ function Sidebar({
   by,
   onBy,
   tree,
-  total,
+  all,
   sel,
   hover,
   onSelect,
@@ -1038,7 +973,8 @@ function Sidebar({
   by: By
   onBy: (by: By) => void
   tree: PlaceTree
-  total: { count: number; usd: number }
+  /** The figures of everything the search leaves. */
+  all: Totals
   sel: string | null
   hover: string | null
   onSelect: (path: string | null) => void
@@ -1048,13 +984,18 @@ function Sidebar({
   const rows = useMemo(() => visibleRows(tree.nodes, closed), [tree.nodes, closed])
   const selNode = sel === null || sel === NONE_SEL ? null : nodeForPath(tree.nodes, sel)
   const hot = hover === null ? null : markedNode(tree.nodes, hover, closed)
+  // with sessions of no value the places hang under an All heading, so that (none) is their sibling; without
+  // them the places are the top level and nothing else is added
+  const none = tree.none
+  const rooted = !!none
+  const allOpen = !rooted || !closed.has(ALL_ID)
   // the selection's ancestors are open, once for each selection
   const opened = useRef('')
   // biome-ignore lint/correctness/useExhaustiveDependencies: once for each selection, not at every change of the folders
   useEffect(() => {
     if (!selNode || sel === null || opened.current === `${by}|${sel}`) return
     opened.current = `${by}|${sel}`
-    const shut = ancestorIds(tree.nodes, sel).filter((id) => closed.has(id))
+    const shut = [ALL_ID, ...ancestorIds(tree.nodes, sel)].filter((id) => closed.has(id))
     if (shut.length > 0) openFolders(shut)
   }, [sel, by, selNode, tree.nodes])
   useEffect(() => {
@@ -1071,20 +1012,16 @@ function Sidebar({
     all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
   }
   const pick = (path: string) => onSelect(sel === path ? null : path)
-  const none = tree.none
-  // with a group of no value the places hang under an All root, so that (none) is their sibling; without one the
-  // places are the top level and nothing else is added
-  const rooted = !!none
-  const noneOn = sel === NONE_SEL
+  const lift = rooted ? 1 : 0
   return (
     <aside
-      aria-label={`${BY_LABEL[by]} index`}
+      aria-label={`${BY_LABEL[by]} tree`}
       className="relative shrink-0 overflow-hidden border-line border-r transition-[width] duration-150 motion-reduce:transition-none"
       style={{ width: open ? SIDEBAR_W : STRIP_W }}
     >
       {!open && (
         <div className="absolute inset-x-0 top-0 flex justify-center border-line border-b py-1">
-          <IconButton label="Show the index" onClick={() => onOpen(true)}>
+          <IconButton label="Show the sidebar" onClick={() => onOpen(true)}>
             <PanelLeftOpen size={15} />
           </IconButton>
         </div>
@@ -1104,105 +1041,61 @@ function Sidebar({
             options={BYS.map((v) => ({ value: v, label: BY_LABEL[v] }))}
             className="min-w-0 flex-1"
           />
-          <IconButton label="Hide the index" onClick={() => onOpen(false)}>
+          <IconButton label="Hide the sidebar" onClick={() => onOpen(false)}>
             <PanelLeftClose size={15} />
           </IconButton>
         </div>
         <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onKeyDown}>
           {rooted && (
-            <li
-              className={cn('flex items-center rounded-card', sel === null && SELECTED)}
-              style={{ paddingLeft: TREE_GUTTER }}
-            >
-              <span className="size-4 shrink-0" aria-hidden />
-              <button
-                type="button"
-                data-nav
-                onClick={() => onSelect(null)}
-                aria-current={sel === null ? 'true' : undefined}
-                title="Every place"
-                className={cn(ITEM, 'pl-0.5')}
-              >
-                <HardDrive size={14} aria-hidden className="shrink-0 text-muted" />
-                <span className="min-w-0 flex-1 truncate">All</span>
-                <Figures count={total.count} usd={total.usd} />
-              </button>
-            </li>
+            <TreeLine
+              level={0}
+              open={allOpen}
+              onToggle={() => toggle(ALL_ID)}
+              icon={HardDrive}
+              label="All"
+              title="Every place"
+              count={all.sessions}
+              usd={all.usd}
+              selected={sel === null}
+              hot={false}
+              onPick={() => onSelect(null)}
+            />
           )}
-          {rows.map(({ node: n, depth: d }) => {
-            const depth = d + (rooted ? 1 : 0)
-            const folder = n.children.length > 0
-            const isOpen = folder && !closed.has(n.id)
-            const Icon = folderIcon(n, by, isOpen)
-            const on = selNode?.id === n.id
-            return (
-              <li
-                key={n.id}
-                data-node={n.id}
-                data-key={n.group?.key}
-                className={cn(
-                  'relative flex items-center rounded-card',
-                  hot === n.id && 'bg-surface-2',
-                  on && SELECTED,
-                )}
-                style={{ paddingLeft: TREE_GUTTER + depth * TREE_INDENT }}
-              >
-                <Guides depth={depth} />
-                {folder ? (
-                  <button
-                    type="button"
-                    data-nav
-                    onClick={() => toggle(n.id)}
-                    aria-expanded={isOpen}
-                    aria-label={`${isOpen ? 'Close' : 'Open'} ${n.label}`}
-                    className="flex size-4 shrink-0 items-center justify-center text-muted hover:text-fg"
-                  >
-                    <ChevronRight size={12} aria-hidden className={cn('transition-transform', isOpen && 'rotate-90')} />
-                  </button>
-                ) : (
-                  <span className="size-4 shrink-0" aria-hidden />
-                )}
-                <button
-                  type="button"
-                  data-nav
-                  onClick={() => pick(n.path)}
-                  aria-current={on ? 'true' : undefined}
+          {allOpen &&
+            rows.map(({ node: n, depth }) => {
+              const folder = n.children.length > 0
+              const isOpen = folder && !closed.has(n.id)
+              return (
+                <TreeLine
+                  key={n.id}
+                  node={n.id}
+                  level={depth + lift}
+                  open={folder ? isOpen : undefined}
+                  onToggle={() => toggle(n.id)}
+                  icon={folderIcon(n, by, isOpen)}
+                  label={n.label}
                   title={n.id}
-                  className={cn(ITEM, 'pl-0.5')}
-                >
-                  <Icon size={14} aria-hidden className="shrink-0 text-muted" />
-                  <span className="min-w-0 flex-1 truncate">{n.label}</span>
-                  <Figures count={n.count} usd={n.usd} />
-                </button>
-              </li>
-            )
-          })}
-          {none && (
-            <li
-              data-node=""
-              data-key=""
-              className={cn(
-                'relative flex items-center rounded-card',
-                hover === '' && 'bg-surface-2',
-                noneOn && SELECTED,
-              )}
-              style={{ paddingLeft: TREE_GUTTER + TREE_INDENT }}
-            >
-              <Guides depth={1} />
-              <span className="size-4 shrink-0" aria-hidden />
-              <button
-                type="button"
-                data-nav
-                onClick={() => pick(NONE_SEL)}
-                aria-current={noneOn ? 'true' : undefined}
-                title={none.name || 'no value'}
-                className={cn(ITEM, 'pl-0.5', !noneOn && 'text-muted')}
-              >
-                <FolderX size={14} aria-hidden className="shrink-0 text-muted" />
-                <span className="min-w-0 flex-1 truncate">(none)</span>
-                <Figures count={none.count} usd={none.usd} />
-              </button>
-            </li>
+                  count={n.count}
+                  usd={n.usd}
+                  selected={selNode?.id === n.id}
+                  hot={hot === n.id}
+                  onPick={() => pick(n.path)}
+                />
+              )
+            })}
+          {none && allOpen && (
+            <TreeLine
+              level={1}
+              icon={FolderX}
+              label="(none)"
+              title={NONE_TITLE[by]}
+              count={none.count}
+              usd={none.usd}
+              selected={sel === NONE_SEL}
+              hot={hover === ''}
+              muted
+              onPick={() => pick(NONE_SEL)}
+            />
           )}
         </ul>
       </div>
@@ -1216,16 +1109,16 @@ export function OverviewPage() {
   useDocumentTitle('Overview')
   const [sp, setSp] = useSearchParams()
   const range = oneOf<Range>(sp.get('range'), ['1d', '7d', '30d'], '7d')
-  const { by, show } = parseView(sp.get('by'), sp.get('show'))
+  const by = parseBy(sp.get('by'))
   const sel = parseIn(sp.get('in'))
   const sort = useMemo(() => parseSort(sp.get('sort'), sp.get('dir')), [sp])
   const q = sp.get('q') ?? ''
   const [sbOpen, setSbOpen] = useSidebarOpen()
 
-  const set = (changes: Record<string, string | undefined>) => {
+  const set = (changes: Record<string, string | null | undefined>) => {
     const next = new URLSearchParams(sp)
     for (const [k, v] of Object.entries(changes)) {
-      if (v === undefined || v === '') next.delete(k)
+      if (!v) next.delete(k)
       else next.set(k, v)
     }
     setSp(next, { replace: true })
@@ -1237,8 +1130,6 @@ export function OverviewPage() {
     else next.set('in', path)
     setSp(next)
   }
-  // a new key keeps the selection for now; the table drops it when no group sits under it
-  const setBy = (v: By) => set({ ...formatView(v, show), in: formatIn(sel) })
 
   // ---- search box: typing is local, the URL follows after 200 ms ----
   const [draft, setDraft] = useState(q)
@@ -1284,17 +1175,10 @@ export function OverviewPage() {
     from: new Date(to - RANGES[range].ms).toISOString(),
     to: new Date(to).toISOString(),
     slot,
-    by,
   })
 
-  // Group rows (total context) and session rows have a token scale each.
-  const scales = useMemo(
-    () => ({
-      groups: query.data ? groupScale(query.data.groups) : { maxTok: 0, pxPerTok: 0 },
-      lanes: query.data ? laneScale(query.data.lanes) : { maxTok: 0, pxPerTok: 0 },
-    }),
-    [query.data],
-  )
+  // The home the paths show as `~`: the one the sessions' folders share.
+  const home = useMemo(() => inferHome(query.data?.lanes.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [query.data])
 
   // The page fills the window and scrolls inside: the document drops its reserved scrollbar gutter meanwhile.
   useEffect(() => {
@@ -1303,13 +1187,6 @@ export function OverviewPage() {
       delete document.documentElement.dataset.fullbleed
     }
   }, [])
-
-  const home = query.data
-    ? groupsHome(
-        query.data.groups.map((g) => g.key),
-        query.data.by,
-      )
-    : undefined
 
   return (
     <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
@@ -1325,19 +1202,6 @@ export function OverviewPage() {
           ]}
           onChange={(v) => set({ range: v === '7d' ? undefined : v })}
         />
-        <div className="flex items-center gap-1.5 text-muted text-sec">
-          show
-          <SegmentedControl<Show>
-            label="Show"
-            value={show}
-            options={[
-              { value: 'sessions', label: 'Sessions', title: 'One row per session' },
-              { value: 'grouped', label: 'Grouped', title: 'Every group with all its sessions under it' },
-              { value: 'groups', label: 'Groups', title: 'The groups alone, each with the graph of all its sessions' },
-            ]}
-            onChange={(v) => set(formatView(by, v))}
-          />
-        </div>
         <div className="flex min-w-[220px] flex-1 items-center justify-center gap-2">
           <SearchInput
             value={draft}
@@ -1370,7 +1234,7 @@ export function OverviewPage() {
       <div className="flex min-h-0 flex-1 flex-col">
         <QueryBoundary
           query={query}
-          isEmpty={(o) => o.groups.length === 0 && o.scripted.usd === 0}
+          isEmpty={(o) => o.lanes.length === 0 && o.scripted.sessions === 0}
           empty={<div className="p-6 text-muted">Nothing ran in this range.</div>}
           skeleton={<Skeleton className="m-3 h-64" />}
         >
@@ -1378,15 +1242,15 @@ export function OverviewPage() {
             <Table
               o={o}
               by={by}
-              show={show}
               sort={sort}
               term={term}
               hits={hits}
+              home={home}
               pageW={pageW}
-              scales={scales}
               sel={sel}
               onSelect={select}
-              onBy={setBy}
+              // a new key keeps the selection where some session sits under it there
+              onBy={(v) => set({ by: v === 'dir' ? undefined : v, in: keepSelection(sel, o.lanes, v) })}
               sbOpen={sbOpen}
               onSbOpen={setSbOpen}
               onSort={(k) => set(formatSort(nextSort(sort, k)))}
@@ -1398,21 +1262,20 @@ export function OverviewPage() {
   )
 }
 
-/** The pointer over the rows: x from the left of the rows (whole px), and the group of the row under it. */
+/** The pointer over the rows: x from the left of the rows (whole px), and the place of the row under it. */
 interface Hover {
   x: number
-  group: string | null
+  place: string | null
 }
 
 function Table({
   o,
   by,
-  show,
   sort,
   term,
   hits,
+  home,
   pageW,
-  scales,
   sel,
   onSelect,
   onBy,
@@ -1422,12 +1285,11 @@ function Table({
 }: {
   o: Overview
   by: By
-  show: Show
   sort: Sort
   term: string
   hits?: ReadonlySet<string>
+  home: string | undefined
   pageW: number
-  scales: { groups: { pxPerTok: number }; lanes: { pxPerTok: number } }
   sel: string | null
   onSelect: (path: string | null) => void
   onBy: (by: By) => void
@@ -1435,45 +1297,23 @@ function Table({
   onSbOpen: (open: boolean) => void
   onSort: (k: SortKey) => void
 }) {
-  // The rows scroll; header and footer do not. The scrollbar takes width from the rows only, so the
-  // header and the footer give up as much (padRight) and the columns and the date axis stay aligned.
+  // The rows scroll; header and summary do not. The scrollbar takes width from the rows only, so the
+  // header and the summary give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
   const innerW = useWidth(innerRef)
   const [padRight, setPadRight] = useState(0)
-  // the plot is sized for where the index will be, not for the width it has while it slides
+  // the plot is sized for where the sidebar will be, not for the width it has while it slides
   const plotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - padRight - BLOCK_W - 2 * CELL_PAD)
-  // the search narrows the groups; the tree shows these, the table what the selection leaves of them
-  const found = useMemo(() => filterOverview(o, term, hits), [o, term, hits])
-  const f = useMemo(() => selectOverview(found, sel, o.by), [found, sel, o.by])
-  const home = useMemo(
-    () =>
-      groupsHome(
-        o.groups.map((g) => g.key),
-        o.by,
-      ),
-    [o.groups, o.by],
-  )
-  // the key line's home: the groups' (they are the folders), or for remotes the sessions' directories
-  const keyHome = useMemo(() => {
-    const dirHome = groupsHome(
-      o.lanes.flatMap((l) => (l.dir ? [l.dir] : [])),
-      'dir',
-    )
-    return o.by === 'remote' ? dirHome : (home ?? dirHome)
-  }, [o.lanes, o.by, home])
-  const placeOf = useMemo(() => (k: string) => placeSegs(k, o.by, keyHome), [o.by, keyHome])
-  const lanePlaceOf = useMemo(
-    () => (l: OverviewLane) => (l.dir ? placeSegs(l.dir, 'dir', keyHome) : placeOf(l.group)),
-    [keyHome, placeOf],
-  )
-  const rows = useMemo(() => buildRows(f, show, sort, { placeOf, lanePlaceOf }), [f, show, sort, placeOf, lanePlaceOf])
+  // the search narrows the sessions; the tree shows these, the table and the summary what the selection leaves
+  const found = useMemo(() => searchLanes(o.lanes, term, hits), [o.lanes, term, hits])
+  const scope = useMemo(() => selectLanes(found, sel, by), [found, sel, by])
+  const rows = useMemo(() => sortLanes(scope, sort, home), [scope, sort, home])
+  const totals = useMemo(() => totalsOf(scope), [scope])
+  const all = useMemo(() => totalsOf(found), [found])
+  const tree = useMemo(() => buildPlaceTree(placeItems(found, by), by, home), [found, by, home])
+  const pxPerTok = useMemo(() => laneScale(o.lanes).pxPerTok, [o.lanes])
   const searching = term !== ''
-  // a session's folder; under its group row it is left out when that row already says it
-  const sessionPlace = (l: OverviewLane, nested: boolean): string => {
-    const own = l.dir ? keyText(l.dir, 'dir', keyHome) : o.by === 'remote' ? '' : keyText(l.group, o.by, keyHome)
-    return nested && own === keyText(l.group, o.by, keyHome) ? '' : own
-  }
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rows decide whether the scrollbar is there
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -1490,49 +1330,20 @@ function Table({
     () => makeAxis(Date.parse(o.from), Date.parse(o.to), o.slotMs, plotW),
     [o.from, o.to, o.slotMs, plotW],
   )
-  const shared: Shared = useMemo(
-    () => ({ axis, groupPx: scales.groups.pxPerTok, lanePx: scales.lanes.pxPerTok }),
-    [axis, scales.groups.pxPerTok, scales.lanes.pxPerTok],
-  )
-  const byGroup = useMemo(() => lanesByGroup(o.lanes), [o.lanes])
-  const startOf = useMemo(() => new Map([...byGroup].map(([k, ls]) => [k, earliestStart(ls)])), [byGroup])
-  const priciest = useMemo(() => {
-    const m = new Map(o.lanes.map((l) => [`${l.harness}/${l.id}`, laneHead(l)]))
-    return (g: OverviewGroup) => (g.priciest ? m.get(`${g.priciest.harness}/${g.priciest.id}`) : undefined)
-  }, [o.lanes])
 
-  // ---- hover: one state, the pointer's x and the group under it ----
+  // ---- hover: one state, the pointer's x and the place under it ----
   const [hover, setHover] = useState<Hover | null>(null)
-  // the only thing the pointer lights besides its row: the day (the hour) on the footer's axis
+  // the only thing the pointer lights besides its row: the day (the hour) on the summary's axis
   const hx = hover ? hover.x : null
   const band = hx === null || hx >= innerW - BLOCK_W ? null : bandAt(axis, hx - CELL_PAD)
   const onMove = (e: React.MouseEvent) => {
     const left = innerRef.current?.getBoundingClientRect().left ?? 0
     const x = Math.floor(e.clientX - left)
-    const group = (e.target as Element).closest('[data-group]')?.getAttribute('data-group') ?? null
-    setHover((h) => (h && h.x === x && h.group === group ? h : { x, group }))
+    const place = (e.target as Element).closest('[data-place]')?.getAttribute('data-place') ?? null
+    setHover((h) => (h && h.x === x && h.place === place ? h : { x, place }))
   }
 
-  // ---- the index: the places of the groups the search leaves; a key that changed may drop the selection ----
-  // groups that share a name are told apart by the fewest trailing directories that differ
-  const labelOf = useMemo(() => {
-    const ls = placeLabels(o.groups.map((g) => ({ key: g.key, name: g.name })))
-    return new Map(o.groups.map((g, i) => [g.key, ls[i]]))
-  }, [o.groups])
-  const items: IndexItem[] = useMemo(
-    () => found.groups.map((g) => ({ key: g.key, name: g.name, count: found.shown.get(g.key) ?? 0, usd: g.usd })),
-    [found],
-  )
-  const tree = useMemo(() => buildPlaceTree(items, o.by, { home }), [items, o.by, home])
-  const total = useMemo(() => totalOf(items), [items])
-  const seenBy = useRef(o.by)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only a change of the key looks at the selection
-  useEffect(() => {
-    if (seenBy.current === o.by) return
-    seenBy.current = o.by
-    if (sel !== null && keepSelection(sel, o.groups, o.by) === null) onSelect(null)
-  }, [o.by])
-
+  const where = sel === null ? '' : ` in ${displayPath(sel, home)}`
   return (
     <div className="flex min-h-0 flex-1">
       <Sidebar
@@ -1541,9 +1352,9 @@ function Table({
         by={by}
         onBy={onBy}
         tree={tree}
-        total={total}
+        all={all}
         sel={sel}
-        hover={sbOpen && hover ? hover.group : null}
+        hover={sbOpen && hover ? hover.place : null}
         onSelect={onSelect}
       />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -1556,34 +1367,17 @@ function Table({
           onMouseLeave={() => setHover(null)}
         >
           <div ref={innerRef} className="relative">
-            {rows.map((r: Row) =>
-              r.kind === 'group' ? (
-                <GroupRow
-                  key={r.key}
-                  g={r.g}
-                  label={labelOf.get(r.g.key) ?? r.g.name}
-                  lanes={byGroup.get(r.g.key) ?? []}
-                  shown={searching ? found.shown.get(r.g.key) : undefined}
-                  priciestHead={priciest(r.g)}
-                  place={keyText(r.g.key, o.by, keyHome)}
-                  faint={o.by === 'remote'}
-                  note={groupNote(r.g, sort.key, o.slotMs, startOf.get(r.g.key))}
-                  tint={show === 'grouped'}
-                  shared={shared}
-                />
-              ) : (
-                <SessionRow
-                  key={r.key}
-                  l={r.l}
-                  nested={r.nested}
-                  place={sessionPlace(r.l, r.nested)}
-                  placeTitle={r.l.dir || r.l.group || 'no value'}
-                  note={laneNote(r.l, sort.key, o.slotMs)}
-                  shared={shared}
-                />
-              ),
-            )}
-            {!searching && sel === null && o.scripted.usd > 0 && <ScriptedRow o={o} />}
+            {rows.map((l) => (
+              <SessionRow
+                key={`${l.harness}/${l.id}`}
+                l={l}
+                place={placeOf(l, by)}
+                folder={folderText(l.dir, home)}
+                note={laneNote(l, sort.key, o.slotMs)}
+                axis={axis}
+                pxPerTok={pxPerTok}
+              />
+            ))}
             {rows.length === 0 && (
               <div className="p-6 text-muted">
                 {searching ? `No sessions match “${term}”` : 'Nothing'}
@@ -1598,16 +1392,16 @@ function Table({
             )}
           </div>
         </div>
-        <div className="shrink-0 bg-surface">
-          <Footer
-            f={f}
-            term={term}
-            scope={sel === null ? undefined : displayPath(sel, home)}
-            axis={axis}
-            band={band}
-            padRight={padRight}
-          />
-        </div>
+        <Summary
+          lanes={scope}
+          slots={o.slots}
+          totals={totals}
+          title={`${plural(totals.sessions, searching ? 'matching session' : 'session')}${where}`}
+          scripted={!searching && sel === null && o.scripted.sessions > 0 ? o.scripted : undefined}
+          axis={axis}
+          band={band}
+          padRight={padRight}
+        />
       </div>
     </div>
   )

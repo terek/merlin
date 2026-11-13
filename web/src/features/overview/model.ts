@@ -1,9 +1,8 @@
 // The Overview page's pure logic: the linear time axis, the slot a plot asks for, held and idle context,
-// the shared token scale, sorting, the spine lane of a row and what the pointer is near.
-// OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
+// the token scales, the scope's summary, sorting, search, the place tree and its selection, the spine lane of
+// a row and what the pointer is near. OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
 
-import type { GroupDim, OverviewGroup, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
-import { formatMoney } from '../../lib/format'
+import type { GroupDim, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
 import { homeOf } from '../../lib/places'
 import { HOLD_MS } from '../spend/timeline'
 
@@ -46,8 +45,6 @@ export function chooseSlot(rangeMs: number, plotWidth: number): OverviewSlot {
   const hit = SLOTS.find((s) => s.ms >= want && rangeMs / s.ms <= MAX_SLOTS)
   return (hit ?? SLOTS[SLOTS.length - 1]).name
 }
-
-export const slotMsOf = (slot: OverviewSlot): number => SLOTS.find((s) => s.name === slot)?.ms ?? HOUR
 
 // ---- the axis: linear in time ------------------------------------------------------------
 
@@ -196,9 +193,7 @@ export function heldContext(
   return { context, idle }
 }
 
-// ---- lanes: trimmed arrays ---------------------------------------------------------------
-
-// ---- the token scales --------------------------------------------------------------------
+// ---- the token scales and the summary --------------------------------------------------
 
 /** The context area's greatest height, in px. */
 export const CTX_MAX = 15
@@ -208,23 +203,50 @@ export interface TokenScale {
   pxPerTok: number
 }
 
-const peakOf = (a: number[]): number => a.reduce((m, v) => (v > m ? v : m), 0)
-
-const scaleOf = (maxTok: number): TokenScale => ({ maxTok, pxPerTok: maxTok > 0 ? CTX_MAX / maxTok : 0 })
-
-/** The scale of the group rows: their largest total context (or idle context) reaches `CTX_MAX` px. */
-export function groupScale(groups: OverviewGroup[]): TokenScale {
-  let max = 0
-  for (const g of groups) max = Math.max(max, peakOf(g.contextSum), peakOf(g.idleSum))
-  return scaleOf(max)
+/** The scale on which the largest value of the arrays reaches `CTX_MAX` px. */
+export function tokenScale(arrays: readonly (readonly number[])[]): TokenScale {
+  let maxTok = 0
+  for (const a of arrays) for (const v of a) if (v > maxTok) maxTok = v
+  return { maxTok, pxPerTok: maxTok > 0 ? CTX_MAX / maxTok : 0 }
 }
 
-/** The scale of the session rows, their own: the largest context (or idle context) of any session. */
-export function laneScale(lanes: OverviewLane[]): TokenScale {
-  let max = 0
-  for (const l of lanes) max = Math.max(max, peakOf(l.context), peakOf(l.idle))
-  return scaleOf(max)
+/** The scale of the session rows: the largest context (or idle context) of any session. */
+export const laneScale = (lanes: readonly OverviewLane[]): TokenScale =>
+  tokenScale(lanes.flatMap((l) => [l.context, l.idle]))
+
+/** The scope's aggregate graph: the lanes' context and idle context summed per slot, dense (`slots` long). */
+export function sumLanes(lanes: readonly OverviewLane[], slots: number): { context: number[]; idle: number[] } {
+  const context = new Array<number>(slots).fill(0)
+  const idle = new Array<number>(slots).fill(0)
+  const add = (out: number[], a: readonly number[], slot0: number) =>
+    a.forEach((v, k) => {
+      if (slot0 + k < slots) out[slot0 + k] += v
+    })
+  for (const l of lanes) {
+    add(context, l.context, l.slot0)
+    add(idle, l.idle, l.slot0)
+  }
+  return { context, idle }
 }
+
+export interface Totals {
+  sessions: number
+  turns: number
+  agents: number
+  usd: number
+}
+
+/** The scope's figures: its sessions and the sums of their turns, agents and spend. */
+export const totalsOf = (lanes: readonly OverviewLane[]): Totals =>
+  lanes.reduce(
+    (t, l) => ({ sessions: t.sessions + 1, turns: t.turns + l.turns, agents: t.agents + l.agents, usd: t.usd + l.usd }),
+    {
+      sessions: 0,
+      turns: 0,
+      agents: 0,
+      usd: 0,
+    },
+  )
 
 /**
  * Where a session lived on the plot: from its start to its last activity, clipped to the axis, as x
@@ -241,17 +263,11 @@ export function lifeSpan(
   return [Math.max(0, xOf(axis, a)), Math.min(axis.width, xOf(axis, b))]
 }
 
-// ---- modes, sorting and the rows ---------------------------------------------------------
+// ---- the key and sorting -----------------------------------------------------------------
 
-/** Organise by: the key that decides what the groups are and how the sidebar tree is laid out. */
+/** Organise by: the location key the sidebar tree is laid out by. */
 export type By = GroupDim
 export const BYS: readonly By[] = ['dir', 'checkout', 'repo', 'remote']
-/**
- * Show: the level of the table. `sessions` one flat row per session, `grouped` each group row with its
- * sessions under it, `groups` the group rows alone.
- */
-export type Show = 'sessions' | 'grouped' | 'groups'
-export const SHOWS: readonly Show[] = ['sessions', 'grouped', 'groups']
 
 /** The column a table is sorted by. */
 export type SortKey = 'start' | 'last' | 'active' | 'turns' | 'agents' | 'spend' | 'key'
@@ -265,22 +281,8 @@ export const DEFAULT_SORT: Sort = { key: 'spend', desc: true }
 const oneOf = <T extends string>(v: string | null, allowed: readonly T[], def: T): T =>
   allowed.includes(v as T) ? (v as T) : def
 
+/** `by` from the URL: the folder unless it names another key. */
 export const parseBy = (v: string | null): By => oneOf(v, BYS, 'dir')
-export const parseShow = (v: string | null): Show => oneOf(v, SHOWS, 'grouped')
-
-/**
- * `by` and `show` from the URL. An old link with `by=none` (the flat table) is the folder key shown as
- * sessions; a `show` the table does not know reads as grouped.
- */
-export function parseView(by: string | null, show: string | null): { by: By; show: Show } {
-  if (by === 'none') return { by: 'dir', show: 'sessions' }
-  return { by: parseBy(by), show: parseShow(show) }
-}
-
-/** The URL params of a view; undefined where the default holds. */
-export function formatView(by: By, show: Show): { by?: string; show?: string } {
-  return { by: by === 'dir' ? undefined : by, show: show === 'grouped' ? undefined : show }
-}
 
 /** The direction a column starts in: the figures and times descending, the key (a path) ascending, A to Z. */
 export const startsDesc = (key: SortKey): boolean => key !== 'key'
@@ -319,33 +321,11 @@ export function comparePlace(a: readonly string[], b: readonly string[]): number
   return a.length - b.length
 }
 
-/** The segments a group's key sorts by (see `placeSegs`); null for the group with no value, which sorts last. */
-export type PlaceOf = (groupKey: string) => string[] | null
-
-const splitKey: PlaceOf = (k) => (k ? splitPath(k) : null)
-
-/** What the sorts need besides the rows themselves. */
-export interface SortOpts {
-  /** The place of a group key, for the key column (default: the key's path segments). */
-  placeOf?: PlaceOf
-  /** The place of a session, for the key column: where it ran (default: its group's place). */
-  lanePlaceOf?: (l: OverviewLane) => string[] | null
-  /** The sessions of each group, for a group's start time. */
-  lanes?: Map<string, OverviewLane[]>
-}
-
 /** Slots with at least one call running. */
 export const activeSlots = (active: readonly number[]): number => active.reduce((n, v) => (v > 0 ? n + 1 : n), 0)
 
-/**
- * Time actually working in the range: the slots with at least one call running, times the slot. A session's
- * array is trimmed, a group's dense (the union of its sessions' running time); both count the same way.
- */
+/** Time actually working in the range: the slots with at least one call running, times the slot. */
 export const activeMs = (active: readonly number[], slotMs: number): number => activeSlots(active) * slotMs
-
-/** The earliest start of some sessions ('' when none has one). */
-export const earliestStart = (lanes: readonly OverviewLane[] | undefined): string =>
-  (lanes ?? []).reduce((m, l) => (l.startedAt && (!m || l.startedAt < m) ? l.startedAt : m), '')
 
 /** The order of the key column: (none) last whichever way, then the place. */
 function byPlace(a: string[] | null, b: string[] | null, desc: boolean): number {
@@ -354,34 +334,11 @@ function byPlace(a: string[] | null, b: string[] | null, desc: boolean): number 
 }
 
 /**
- * Groups by the sort's column on their aggregates (start: the earliest start of their sessions; last: the
- * latest activity; active: the union of their running time; key: the place); ties by spend, then key.
+ * Sessions by the sort's column (key: the folder they ran in, as shown with `home` as `~`, in the tree's order);
+ * ties by spend, then id.
  */
-export function sortGroups(groups: OverviewGroup[], s: Sort, opts: SortOpts = {}): OverviewGroup[] {
-  const placeOf = opts.placeOf ?? splitKey
-  const val = (g: OverviewGroup): number | string =>
-    s.key === 'start'
-      ? earliestStart(opts.lanes?.get(g.key))
-      : s.key === 'last'
-        ? (g.lastActivityAt ?? '')
-        : s.key === 'active'
-          ? activeSlots(g.active)
-          : s.key === 'turns'
-            ? g.turns
-            : s.key === 'agents'
-              ? g.agents
-              : g.usd
-  return [...groups].sort((a, b) =>
-    s.key === 'key'
-      ? byPlace(placeOf(a.key), placeOf(b.key), s.desc) || cmp(b.usd, a.usd) || cmp(a.key, b.key)
-      : (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.key, b.key),
-  )
-}
-
-/** Sessions by the sort's column (key: where they ran); ties by spend, then id. */
-export function sortLanes(lanes: OverviewLane[], s: Sort, opts: SortOpts = {}): OverviewLane[] {
-  const placeOf = opts.placeOf ?? splitKey
-  const lanePlace = opts.lanePlaceOf ?? ((l: OverviewLane) => placeOf(l.group))
+export function sortLanes(lanes: readonly OverviewLane[], s: Sort, home?: string): OverviewLane[] {
+  const lanePlace = (l: OverviewLane) => (l.dir ? displayPath(l.dir, home).split('/') : null)
   const val = (l: OverviewLane): number | string =>
     s.key === 'start'
       ? (l.startedAt ?? '')
@@ -401,51 +358,6 @@ export function sortLanes(lanes: OverviewLane[], s: Sort, opts: SortOpts = {}): 
   )
 }
 
-/** The lanes of each group, by the lane's group key. */
-export function lanesByGroup(lanes: OverviewLane[]): Map<string, OverviewLane[]> {
-  const out = new Map<string, OverviewLane[]>()
-  for (const l of lanes) {
-    const list = out.get(l.group)
-    if (list) list.push(l)
-    else out.set(l.group, [l])
-  }
-  return out
-}
-
-export type Row =
-  | { kind: 'group'; key: string; g: OverviewGroup }
-  | { kind: 'session'; key: string; l: OverviewLane /** Under a group row. */; nested: boolean; groupName: string }
-
-/**
- * The table's rows. `sessions`: every session, flat, with its group's name for the first column. `grouped`:
- * each group row, then all its sessions; `groups`: the group rows alone. The sort orders the groups and, by
- * the same column, the sessions inside each (by the key they all share, so by spend then).
- */
-export function buildRows(
-  o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
-  show: Show,
-  sort: Sort,
-  opts: SortOpts = {},
-): Row[] {
-  const name = new Map(o.groups.map((g) => [g.key, g.name]))
-  const lane = (l: OverviewLane, nested: boolean): Row => ({
-    kind: 'session',
-    key: `l:${l.group}\u0000${l.harness}/${l.id}`,
-    l,
-    nested,
-    groupName: name.get(l.group) ?? l.group,
-  })
-  if (show === 'sessions') return sortLanes(o.lanes, sort, opts).map((l) => lane(l, false))
-  const rows: Row[] = []
-  const lanes = lanesByGroup(o.lanes)
-  const inner: Sort = sort.key === 'key' ? DEFAULT_SORT : sort
-  for (const g of sortGroups(o.groups, sort, { ...opts, lanes })) {
-    rows.push({ kind: 'group', key: `g:${g.key}`, g })
-    if (show === 'grouped') for (const l of sortLanes(lanes.get(g.key) ?? [], inner, opts)) rows.push(lane(l, true))
-  }
-  return rows
-}
-
 // ---- row text ----------------------------------------------------------------------------
 
 /** The session's short name: the user's own, else the title, else the id's first 8 characters. */
@@ -459,19 +371,9 @@ export const laneDescription = (l: OverviewLane): string =>
 /** Whitespace folded to single spaces. */
 export const oneLine = (t: string): string => t.replace(/\s+/g, ' ').trim()
 
-/**
- * The group row's description: "18 sessions · priciest: <head> $96". `head` resolves the priciest's lane;
- * `shown` (under a search) is the number of the group's sessions that match: "3 of 18 sessions match · ...".
- */
-export function groupDescription(g: OverviewGroup, head?: string, shown?: number): string {
-  const n =
-    shown !== undefined && shown < g.sessions
-      ? `${shown} of ${g.sessions} sessions match`
-      : `${g.sessions} ${g.sessions === 1 ? 'session' : 'sessions'}`
-  if (!g.priciest) return n
-  const h = head || g.priciest.title || g.priciest.id.slice(0, 8)
-  return `${n} · priciest: ${oneLine(h)} ${formatMoney(g.priciest.usd)}`
-}
+/** The folder line of a row: the session's directory as shown, `(none)` when it has none. */
+export const folderText = (dir: string | undefined, home: string | undefined): string =>
+  dir ? displayPath(dir, home) : '(none)'
 
 // ---- row marks ---------------------------------------------------------------------------
 
@@ -616,8 +518,6 @@ export function spineLanes(spans: OverviewSpan[] | undefined, axis: Axis): KindS
   return out
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
 /** Drops the labels that would run into the previous one or past the right edge of the plot (greedy, left to right). */
 export function fitLabels(ticks: Tick[], width: number, charW = 6.2, gap = 6): Tick[] {
   let end = -Infinity
@@ -630,110 +530,62 @@ export function fitLabels(ticks: Tick[], width: number, charW = 6.2, gap = 6): T
   })
 }
 
-/** A compact "last activity": "now", "5 min", "15 h", "yesterday", "9 Nov". */
-export function lastLabel(iso: string | undefined, nowMs: number): string {
-  const t = iso ? Date.parse(iso) : Number.NaN
-  if (Number.isNaN(t)) return '–'
-  const d = nowMs - t
-  if (d < MIN) return 'now'
-  if (d < HOUR) return `${Math.floor(d / MIN)} min`
-  const day = (ms: number) => new Date(ms).setHours(0, 0, 0, 0)
-  const days = Math.round((day(nowMs) - day(t)) / DAY)
-  if (days === 0) return `${Math.floor(d / HOUR)} h`
-  if (days === 1) return 'yesterday'
-  const a = new Date(t)
-  return `${a.getDate()} ${MONTHS[a.getMonth()]}`
-}
-
 // ---- search ------------------------------------------------------------------------------
 
 /** The key of a session in a set of search hits. */
 export const sessionKey = (harness: string, id: string): string => `${harness}/${id}`
 
 /**
- * Whether a session matches a search term (trimmed, lowercased by the caller; empty matches all): the
- * term is in its head (name, title, id), its description texts or its group's name, or (term of 2+
- * characters) the session is among the server's full-text `hits`.
+ * Whether a session matches a search term (trimmed, lowercased by the caller; empty matches all): the term is in
+ * its head (name, title, id) or its description texts, or (term of 2+ characters) the session is among the
+ * server's full-text `hits`.
  */
-export function laneMatches(l: OverviewLane, groupName: string, term: string, hits?: ReadonlySet<string>): boolean {
+export function laneMatches(l: OverviewLane, term: string, hits?: ReadonlySet<string>): boolean {
   if (!term) return true
-  const hay = [l.name, l.title, l.id, l.recap?.text, l.firstPrompt?.text, l.lastPrompt?.text, groupName]
+  const hay = [l.name, l.title, l.id, l.recap?.text, l.firstPrompt?.text, l.lastPrompt?.text]
   if (hay.some((t) => t?.toLowerCase().includes(term))) return true
   return term.length >= 2 && !!hits?.has(sessionKey(l.harness, l.id))
 }
 
-export interface Filtered {
-  groups: OverviewGroup[]
-  lanes: OverviewLane[]
-  /** Per group key, the number of its sessions that match. */
-  shown: Map<string, number>
-}
-
-/**
- * The groups with at least one matching session and the matching sessions. A group whose own name
- * matches counts all its sessions as matching. An empty term returns everything.
- */
-export function filterOverview(
-  o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
-  rawTerm: string,
-  hits?: ReadonlySet<string>,
-): Filtered {
+/** The sessions that match a search; an empty term keeps them all. */
+export function searchLanes(lanes: OverviewLane[], rawTerm: string, hits?: ReadonlySet<string>): OverviewLane[] {
   const term = rawTerm.trim().toLowerCase()
-  const shown = new Map<string, number>()
-  if (!term) {
-    for (const g of o.groups) shown.set(g.key, g.sessions)
-    return { groups: o.groups, lanes: o.lanes, shown }
-  }
-  const byName = new Map(o.groups.map((g) => [g.key, g.name]))
-  const lanes = o.lanes.filter((l) => laneMatches(l, byName.get(l.group) ?? l.group, term, hits))
-  for (const l of lanes) shown.set(l.group, (shown.get(l.group) ?? 0) + 1)
-  return { groups: o.groups.filter((g) => shown.has(g.key)), lanes, shown }
+  return term ? lanes.filter((l) => laneMatches(l, term, hits)) : lanes
 }
 
-// ---- the selection: the sidebar filters the table ------------------------------------------
+// ---- the selection: the sidebar is the scope ------------------------------------------------
 
-/** The `in` of the group with no value. */
+/** The `in` of the sessions with no value for the key. */
 export const NONE_SEL = '-'
 
 const splitPath = (p: string): string[] => p.split(/[\\/]+/).filter(Boolean)
 
-/** The segments a group's key stands for: a repository's without `.git` / `.bare`. */
-export const groupSegments = (key: string, by: By): string[] => (by === 'repo' ? homeOf(key) : splitPath(key))
+/** A session's value of the key ('' for none). */
+export const placeOf = (l: OverviewLane, by: By): string => l[by] ?? ''
+
+/** The segments a place stands for: a repository's without `.git` / `.bare`. */
+const placeParts = (key: string, by: By): string[] => (by === 'repo' ? homeOf(key) : splitPath(key))
 
 /** `in` from the URL: the selected node's real path prefix, `-` for (none); null for no selection. */
 export const parseIn = (v: string | null): string | null => (v ? v : null)
 
-/** The URL param of a selection. */
-export const formatIn = (sel: string | null): string | undefined => sel ?? undefined
-
-/** Whether a group sits at or under the selected path (segment-wise); `-` is the group with no value. */
-export function underPath(g: { key: string }, sel: string | null, by: By): boolean {
+/** Whether a place sits at or under the selected path (segment-wise); `-` is the empty place. */
+export function underPath(key: string, sel: string | null, by: By): boolean {
   if (sel === null) return true
-  if (sel === NONE_SEL) return g.key === ''
-  if (!g.key) return false
+  if (sel === NONE_SEL) return key === ''
+  if (!key) return false
   const want = splitPath(sel)
-  const have = groupSegments(g.key, by)
+  const have = placeParts(key, by)
   return want.length <= have.length && want.every((s, i) => have[i] === s)
 }
 
-/** The search's result narrowed to the groups at or under the selection (and their sessions). */
-export function selectOverview(f: Filtered, sel: string | null, by: By): Filtered {
-  if (sel === null) return f
-  const groups = f.groups.filter((g) => underPath(g, sel, by))
-  const keep = new Set(groups.map((g) => g.key))
-  const shown = new Map([...f.shown].filter(([k]) => keep.has(k)))
-  return { groups, lanes: f.lanes.filter((l) => keep.has(l.group)), shown }
-}
+/** The sessions whose place sits at or under the selection. */
+export const selectLanes = (lanes: OverviewLane[], sel: string | null, by: By): OverviewLane[] =>
+  sel === null ? lanes : lanes.filter((l) => underPath(placeOf(l, by), sel, by))
 
-/** The selection after the key changed: kept when some group sits under it in the new key, else dropped. */
-export const keepSelection = (sel: string | null, groups: readonly { key: string }[], by: By): string | null =>
-  sel !== null && groups.some((g) => underPath(g, sel, by)) ? sel : null
-
-/** The figures of the "All" item: the sessions shown and the spend of everything the items list. */
-export const totalOf = (items: readonly IndexItem[]): { count: number; usd: number } => ({
-  count: items.reduce((n, i) => n + i.count, 0),
-  usd: items.reduce((n, i) => n + i.usd, 0),
-})
+/** The selection on another key: kept when some session sits under it there, else dropped. */
+export const keepSelection = (sel: string | null, lanes: readonly OverviewLane[], by: By): string | null =>
+  sel !== null && lanes.some((l) => underPath(placeOf(l, by), sel, by)) ? sel : null
 
 /** The selection as shown: the home as `~`, `-` as (none). */
 export function displayPath(sel: string, home: string | undefined): string {
@@ -764,16 +616,6 @@ export function ancestorIds(nodes: readonly PlaceNode[], path: string): string[]
     return null
   }
   return walk(nodes, []) ?? []
-}
-
-/** The distinct harnesses of some sessions, most sessions first (ties by name). */
-export function groupHarnesses(lanes: readonly { harness: string }[], max = 3): string[] {
-  const n = new Map<string, number>()
-  for (const l of lanes) n.set(l.harness, (n.get(l.harness) ?? 0) + 1)
-  return [...n.entries()]
-    .sort((a, b) => b[1] - a[1] || cmp(a[0], b[0]))
-    .slice(0, max)
-    .map(([h]) => h)
 }
 
 // ---- what the pointer is over ------------------------------------------------------------
@@ -817,17 +659,30 @@ export function bandAt(axis: Axis, x: number): Band | null {
   return { x0: Math.max(0, xOf(axis, a)), x1: Math.min(axis.width, xOf(axis, e.getTime())) }
 }
 
-// ---- the index as a file tree -------------------------------------------------------------
+// ---- the sidebar: a file tree of the places -------------------------------------------------------------
 
-/** What the index lists: a group of the table, its sessions shown and its spend. */
-export interface IndexItem {
+/** What the tree lists: a place, the sessions in it and their spend. */
+export interface PlaceItem {
   key: string
-  name: string
   count: number
   usd: number
 }
 
-/** One line of the tree: a group of the table, a folder, or both. */
+/** The places of some sessions under a key, with their counts and spend (the empty place too), in first-seen order. */
+export function placeItems(lanes: readonly OverviewLane[], by: By): PlaceItem[] {
+  const m = new Map<string, PlaceItem>()
+  for (const l of lanes) {
+    const key = placeOf(l, by)
+    const it = m.get(key)
+    if (it) {
+      it.count++
+      it.usd += l.usd
+    } else m.set(key, { key, count: 1, usd: l.usd })
+  }
+  return [...m.values()]
+}
+
+/** One line of the tree: a place, a folder, or both. */
 export interface PlaceNode {
   /** Where it sits, as shown (`~/work/app`, `github.com/acme`): unique in a tree, and what the open state is keyed by. */
   id: string
@@ -837,22 +692,20 @@ export interface PlaceNode {
   path: string
   /** Every path the node stands for: a compacted chain of folders is one node (`path` is its deepest). */
   chain: string[]
-  /** The group this node is, when it is one. */
-  group?: IndexItem
+  /** The place this node is, when it is one. */
+  place?: PlaceItem
   /** A host at the top of a remote tree. */
   host?: boolean
   children: PlaceNode[]
-  /** Sessions shown and spend, summed over the groups at or under it. */
+  /** Sessions and spend, summed over the places at or under it. */
   count: number
   usd: number
 }
 
 export interface PlaceTree {
   nodes: PlaceNode[]
-  /** The home directory the tree shows as `~`. */
-  home?: string
-  /** The group of the sessions with no value, listed apart below the tree. */
-  none?: IndexItem
+  /** The sessions with no value, listed apart below the tree. */
+  none?: PlaceItem
 }
 
 const HOME = /^\/(?:Users|home)\/[^/]+/
@@ -873,19 +726,12 @@ interface Trie {
   seg: string
   path: string
   children: Map<string, Trie>
-  group?: IndexItem
+  place?: PlaceItem
   host?: boolean
 }
 
-/** Where a group sits on the disk, for finding the home: a repository stands at its directory, not its `.git`. */
-const whereOf = (key: string, by: By): string => (by === 'repo' ? `/${homeOf(key).join('/')}` : key)
-
-/** The home directory the groups share, if they do (see `inferHome`). */
-export const groupsHome = (keys: readonly string[], by: By): string | undefined =>
-  inferHome(keys.filter((k) => k.startsWith('/')).map((k) => whereOf(k, by)))
-
 /**
- * The segments of a group's place, as shown (`~` for the home, a leading `/` on the first segment of an
+ * The segments of a place, as shown (`~` for the home, a leading `/` on the first segment of an
  * absolute path) and the real path prefix each one stands for.
  */
 function placeSegments(
@@ -894,7 +740,7 @@ function placeSegments(
   home: string | undefined,
 ): { segs: string[]; paths: string[]; host: boolean } {
   const isPath = key.startsWith('/') || /^[A-Za-z]:[\\/]/.test(key)
-  const parts = groupSegments(key, by)
+  const parts = placeParts(key, by)
   const abs = key.startsWith('/') ? '/' : ''
   const real = parts.map((_, j) => abs + parts.slice(0, j + 1).join('/'))
   if (by === 'remote' && !isPath) return { segs: parts, paths: real, host: true }
@@ -912,17 +758,6 @@ function placeSegments(
     host: false,
   }
 }
-
-/**
- * The segments a group sits at in the tree (`~`, `work`, `merlin`; a remote's host, owner, name); the order the
- * key column sorts by. Null for the group with no value.
- */
-export const placeSegs = (key: string, by: By, home: string | undefined): string[] | null =>
-  key ? placeSegments(key, by, home).segs : null
-
-/** The key cell's text: the place as the tree shows it (`~/work/merlin`; a repository without its `.bare`), `(none)` for no value. */
-export const keyText = (key: string, by: By, home: string | undefined): string =>
-  key ? placeSegments(key, by, home).segs.join('/') : '(none)'
 
 /**
  * `text` cut at the start so that it fits, keeping its end: `…/work/merlin/web`. `fits` says whether a string
@@ -945,21 +780,14 @@ export function fitTail(text: string, fits: (s: string) => boolean): string {
 }
 
 /**
- * The groups of the table laid out as the filesystem the user knows (docs/ui.md section 10b): a repository
- * at its working directory, a remote as host / owner / name, the home as `~`. A folder that is no group and
- * has one child is merged into it (`~/work`, `work/merlin`); children are ordered by name, like Finder.
- * Counts and spend are summed up the tree. The group with no value is returned apart. `fixed` names the
- * home to use instead of the one the items share.
+ * The places laid out as the filesystem the user knows (docs/ui.md section 10b): a repository at its working
+ * directory, a remote as host / owner / name, `home` as `~`. A folder that is no place and has one child is
+ * merged into it (`~/work`, `work/merlin`); children are ordered by name, like Finder. Counts and spend are
+ * summed up the tree. The empty place is returned apart.
  */
-export function buildPlaceTree(items: readonly IndexItem[], by: By, fixed?: { home: string | undefined }): PlaceTree {
+export function buildPlaceTree(items: readonly PlaceItem[], by: By, home: string | undefined): PlaceTree {
   const root: Trie = { seg: '', path: '', children: new Map() }
-  let none: IndexItem | undefined
-  const home = fixed
-    ? fixed.home
-    : groupsHome(
-        items.map((i) => i.key),
-        by,
-      )
+  let none: PlaceItem | undefined
   for (const it of items) {
     if (!it.key) {
       none = it
@@ -975,24 +803,24 @@ export function buildPlaceTree(items: readonly IndexItem[], by: By, fixed?: { ho
       }
       at = next
     })
-    if (segs.length) at.group = it
+    if (segs.length) at.place = it
   }
   const make = (t: Trie, trail: string[]): PlaceNode => {
     const path = [...trail, t.seg]
     const kids = [...t.children.values()].map((c) => make(c, path))
-    const own = t.group
+    const own = t.place
     const node: PlaceNode = {
       id: path.join('/'),
       label: t.seg,
       path: t.path,
       chain: [t.path],
-      group: own,
+      place: own,
       host: t.host,
       children: kids,
       count: (own?.count ?? 0) + kids.reduce((n, k) => n + k.count, 0),
       usd: (own?.usd ?? 0) + kids.reduce((n, k) => n + k.usd, 0),
     }
-    // compact: a folder that is no group and has one child is that child, its label the joined segments
+    // compact: a folder that is no place and has one child is that child, its label the joined segments
     if (!own && kids.length === 1) {
       const [only] = kids
       return { ...only, label: `${t.seg}/${only.label}`, chain: [t.path, ...only.chain], host: t.host || undefined }
@@ -1005,7 +833,7 @@ export function buildPlaceTree(items: readonly IndexItem[], by: By, fixed?: { ho
     for (const n of ns) sortTree(n.children)
     return ns.sort(byName)
   }
-  return { nodes: sortTree([...root.children.values()].map((c) => make(c, []))), home, none }
+  return { nodes: sortTree([...root.children.values()].map((c) => make(c, []))), none }
 }
 
 /** A node of the tree as drawn: how deep it sits. */
@@ -1022,12 +850,12 @@ export function visibleRows(nodes: readonly PlaceNode[], closed: ReadonlySet<str
   ])
 }
 
-/** The id of the line that stands for a group: its own, or when a closed folder hides it, the outermost closed one. */
+/** The id of the line that stands for a place: its own, or when a closed folder hides it, the outermost closed one. */
 export function markedNode(nodes: readonly PlaceNode[], key: string, closed: ReadonlySet<string>): string | null {
   const walk = (ns: readonly PlaceNode[], hidden: string | null): string | null => {
     for (const n of ns) {
       const at = hidden ?? (closed.has(n.id) ? n.id : null)
-      if (n.group?.key === key) return hidden ?? n.id
+      if (n.place?.key === key) return hidden ?? n.id
       const r = walk(n.children, at)
       if (r) return r
     }

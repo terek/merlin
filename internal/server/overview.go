@@ -35,15 +35,6 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request) {
 		qq  catalog.OverviewQuery
 		err error
 	)
-	switch by := q.Get("by"); by {
-	case "", "dir", "project":
-		qq.By = catalog.GroupDir
-	case "checkout", "repo", "remote":
-		qq.By = catalog.GroupBy(by)
-	default:
-		a.badParam(w, "by=%q: use dir (or project), checkout, repo or remote", by)
-		return
-	}
 	if s := q.Get("slot"); s != "" {
 		for _, d := range catalog.OverviewSlots {
 			if catalog.OverviewSlotName(d) == s {
@@ -68,10 +59,6 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request) {
 			a.paramError(w, err)
 			return
 		}
-	}
-	if q.Has("group") {
-		g := q.Get("group")
-		qq.Group = &g
 	}
 	o, err := cat.Overview(qq)
 	var oe *catalog.OverviewError

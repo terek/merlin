@@ -87,7 +87,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
-| `/overview` | Overview (experimental, section 10b): one table of sessions, flat or grouped by project, over a day, week or month, each row with a text line and a small graph of its context and the agents it launched | `range`, `by` (`dir`, `checkout`, `repo`, `remote`), `show` (`sessions`, `grouped`, `groups`), `in` (the selected place), `sort`, `dir=asc` |
+| `/overview` | Overview (experimental, section 10b): one table of sessions over a day, week or month, each row with a text line and a small graph of its context and the agents it launched, scoped by a tree of their places, with a summary of the scope | `range`, `by` (`dir`, `checkout`, `repo`, `remote`), `in` (the selected place), `q`, `sort`, `dir` |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -723,256 +723,153 @@ bead's id as bd prints it (`acme-k1.2`); an unknown id shows "No such bead" (the
 
 ## 10b. Overview page (`/overview`, experimental)
 
-Where the agents' work went over a day, a week or a month: a **table of sessions**, like the Sessions
-page, grouped by folder (or worktree, repository, remote). Every row has a text line with columns and,
-under it, a **merged cell** with the row's graph on one shared linear time axis. Data from
-`GET /api/overview` ([api.md](api.md)); code in `features/overview/` (epic `merlin-lce`). A separate
-route while it is an experiment: if it works, it becomes the landing page and the Cost page's day
-chart and project table go.
+Where the agents' work went over a day, a week or a month: one full-bleed **table of sessions**, each row a
+text line over a small graph of the session's context and the agents it launched, on one shared linear time
+axis. Beside it a **sidebar**, the places of those sessions as a file tree, whose selection is the table's
+**scope**; under the rows, a **summary** of that scope. Data from `GET /api/overview` ([api.md](api.md));
+code in `features/overview/` (epic `merlin-lce`). A separate route while it is an experiment: if it works, it
+becomes the landing page and the Cost page's day chart and project table go.
 
-Round 3 (2026-11-12, Zsolt's feedback on round 2): no spend ticks, no compaction marks, no `x2`; context
-at a quarter of its height and without an outline, the pauses as a pale tint; one spine lane with a
-thin vertical per spawned agent; and the space this frees used for a table.
-
-Round 4 (same day, feedback on round 3): the whole page is one table in a fixed-height container, with
-the toolbar and the sortable column headers on top and the date axis at the bottom, both fixed; rows say
-what the session is, not only its title; and the grouping becomes a mode of the whole table, not a state
-of each group. The graphics are round 3's, unchanged.
-
-Round 6 (2026-11-13, feedback on round 5): the page is full bleed (it will replace Sessions as the first
-tab); an index of the groups beside the rows; a hover that reads the table; search in the toolbar; a
-harness column; the grouping is renamed (below). Sections that say otherwise are superseded.
-
-Round 7 (2026-11-13): the index is a file explorer tree in the filesystem's hierarchy; groups that share
-a name are told apart in the table; the harness marks are the real logos.
-
-Round 8 (2026-11-13): two independent choices, **Organise by** (the key; it owns the sidebar tree) and
-**Show** (the level of the table); the sidebar is always there and its selection **filters** the table
-(it no longer scrolls to a group); the harness column moves to the right, beside the numbers. Where
-this round says otherwise it supersedes the sections below (the "None" mode, the index shown only for
-Group + Sessions, the click that scrolls, the harness column at the left).
-
-Round 9 (2026-11-13): a row is **two blocks side by side**. The session column (wide, flexible) holds
-the text line and, under it, the graph, so the graph is only as wide as that column; behind a thin vertical
-rule the structured block (fixed width: harness, Turns, Agents, Spend) holds the figures on the upper line
-and, merged across the block on the lower line, the row's **key** (folder, worktree, ...). The **Last**
-column and the muted first column of the flat table are gone (the key lives on the right); the header is two
-lines and the footer one row of the same two blocks; the key is sortable. Where this round says otherwise it
-supersedes the sections below.
+There are no group rows. Comparing places is the sidebar's job (every node has its sessions and spend), and
+the aggregate of a place is the summary once it is selected: one level up in the tree is the "groups view".
+The table only ever lists sessions.
 
 ```
- Overview [1d 7d 30d]  show [Sessions|Grouped|Groups]     ( Search sessions...  / ) [in ~/work x]   (sticky)
- ORGANISE BY [Folder v] [<]| SESSION                                   |   TURNS   AGENTS   SPEND    (sticky)
- [] All          102  $354 | START [..-=#=-..] END  (LENGTH over it)   |  ^ FOLDER ^
-   v ~            95  $342 |-------------------------------------------|---------------------------------
-      work/merlin 22  $48  | bold head  muted description...           |   *     22     14   $96.20      (scrolls)
-   x (none)       15   $27 | ..-=#=-..    ..=#=#=..  graph, this column |  ~/work/merlin
-                           |-------------------------------------------|---------------------------------
-                           | Sat 7     Sun 8     Mon 9  ... axis       | 102 sessions  708  1,139   $353  (sticky)
+ Overview [1d 7d 30d]               ( Search sessions...  / ) [in ~/work x]                   (sticky)
+ ORGANISE BY [Folder v] [<]| SESSION                                   |   TURNS   AGENTS   SPEND  (sticky)
+ v ~             95  $342  | START [..-=#=-..] END  (LENGTH over it)   |  ^ FOLDER ^
+ v acme          21  $73   |-------------------------------------------|----------------------------------
+   > api          5  $33   | bold head  muted description...           |   *     22     14   $96.20 (scrolls)
+ v work/merlin   22  $48   | ..-=#=-..    ..=#=#=..  graph, this column |  ~/work/merlin/web
+   web            9  $20   |-------------------------------------------|----------------------------------
+                           | ..==##=..  the scope's summed context      | 102 sessions  708  1,139  $353 (sticky)
+                           | Sat 7     Sun 8     Mon 9  ... axis       | 913 scripted runs · $5.36
 ```
 
-
-- **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; **show** `Sessions`,
-  `Grouped` (default), `Groups` (`show`); and, centred in the space that is left, a **search box**
-  (`q`) with, when a place is selected, a removable chip `in ~/work x` beside it (the display path;
-  x clears). The organising key is not in the toolbar: it is the sidebar's heading (below). There is no context legend (the graphs are scaled
-  per kind of row, as before; the note is gone). The grouping's labels: **Folder** is the session's
-  directory; **Worktree** is a git checkout (a worktree: "git dir" would be the `.git` directory, which for
-  a linked worktree sits inside the main repo, so the wrong word); **Repo** ("Repository: worktrees of one
-  clone merge") and **Remote** ("Origin URL: clones of one remote merge"). They are the options of the
-  sidebar's selector; the table's key line is the folder on disk whatever the key (below).
-- **Search.** Typing is local and the URL's `q` follows after 200 ms (back and forward move the box);
-  `/` focuses it and Esc clears, then blurs. A session matches when the term (trimmed, case-insensitive
-  substring) is in its head (name, title, id), its description texts (recap, first and last prompt) or
-  its group's name, or, for a term of two characters or more, when it is among the hits of
-  `/api/search` (full text); until that answers, the local matches show. Rows are only the matching
-  sessions. Sessions: groups with a match, each with only its matching sessions; the group row keeps its
-  full aggregate graph and figures and reads "3 of 18 sessions match . priciest: ...". Groups: the
-  groups with a match. A group whose name matches counts all its sessions. Nothing matching: "No sessions
-  match "term"." The totals describe the rows shown (their title says "of the matching sessions"); the
-  scripted-runs line is hidden.
-- **Two independent choices.** **Organise by** (`by`: `dir` default, `checkout`, `repo`, `remote`;
-  there is no None) is the key: the API is always asked with it, and it decides what the groups are and
-  how the sidebar tree is laid out. **Show** (`show`) is the level of the main table, a scope decision of
-  the main window; there is no collapsing of single groups:
-  1. **Sessions**: flat, one row per session of the range, ordered by the sort; each row's key cell
-     holds the folder the session ran in.
-  2. **Grouped** (default, `show` absent): a group row (tinted) with the group's aggregate graph, then
-     all its sessions under it, their text indented 16 px (their graphs stay on the shared axis).
-  3. **Groups** (`show=groups`): the group rows alone, each with the graph of the union of its sessions.
-  In Grouped a session row under a group leaves its key cell empty only when its folder is the one the group
-  row shows (a repository whose sessions ran in different worktrees shows them). Old links:
-  `by=none` reads as `by=dir`, `show=sessions`; an unknown `show` reads as grouped.
-- **Container, full bleed.** The page fills the area under the top bar edge to edge (no max width, padding,
-  card border or page background around it), as tall as the viewport (the page itself does not scroll). The
-  toolbar has a bottom border. Beside the rows sits the index (below); the table has three parts. **Top, fixed**:
-  toolbar and the two-line column header. **Middle, scrolls**: the rows (and the scripted-runs line).
-  **Bottom, fixed**: one footer row. Every part has the same two blocks: the **session column** (takes the
-  width that is left; the plot is exactly its inner width, 12 px of padding each side) and the **structured
-  block** (a 1 px rule on its left, 12 px padding, then harness 44, Turns 64, Agents 70, Spend 84, 8 px
-  between). The scrollbar of the middle takes width from the rows only, so the header and the footer give up as
-  much as it measures (padding right) and the columns and the axis stay exactly above and below the rows.
-- **Row.** Session column: the text line on top, the graph under it. Structured block: the figures on the upper
-  line (aligned with the text line) and, under them, the **key cell**, **always the folder on disk**: one
-  muted `text-meta` line, a display path (`~/work/merlin`). A **session row** shows its `dir` (the lane's
-  start directory, the value the Folder grouping keys on, whatever the key), the real path in its `title`. A
-  **group row** shows its own place: for Folder, Worktree and Repo the group's path on disk (a repository at
-  its working directory, without `.bare`); for Remote the remote's host/owner/repo (there is no one folder),
-  a step fainter. `(none)` is faint. When the text is too long its **start** is cut and the end stays
-  (`…/work/merlin/web`, cut at a `/` where possible): `fitTail` in `model.ts` measures with the cell's own
-  font on a canvas (no `direction: rtl`).
-- **Header, two lines across the table.** Left: line 1 `SESSION`, centred in the cell (a label); line 2 a
-  **legend-like control** (`TimelineSort`), centred in the cell, up to 340 px wide (it shrinks horizontally
-  to a narrower cell) and 42 px high: an abstract inline SVG, aria-hidden and not data, a pictogram of a
-  session in the row graph's own vocabulary and constants: the context in steps rising and falling
-  (`stepAreaPath`, `CTX_FILL`), a pale idle stretch in the middle (`IDLE_FILL`), the session line (`ACTIVE_W`),
-  under it the spine lane (`LANE_DEPTH`) with a few spawns (a thin vertical, mirrored-J runs in the sub-agent,
-  fork and teammate colours, `elbowPath`), over a faint axis with ticks. Three sort buttons:
-  **START** just before the drawn session's left end (`sort=start`: the session's start; a group: the
-  earliest start of its sessions, titled "Sort by when the session started"), **END** just after its right end
-  (`sort=last`: last activity, a group's the latest of its sessions; "Sort by its last activity") and
-  **LENGTH** over the middle, knocked out of the drawing with a square header-coloured pill so that it reads
-  (`sort=active`: time actually working in the range, the slots with at least one call running times the slot,
-  from the lane's `active` array; a group: the same over its dense array, the union of its sessions' running
-  time; "Sort by time with a call running (in this range)"). The active one has its colour and the arrow; all
-  three start descending (newest, most recent, longest first). Right: line 1 the harness spacer and **Turns**,
-  **Agents**, **Spend**; line 2 the key header, always **FOLDER** ("Sort by folder, in the order of the folder
-  tree"). Every sortable header of the block is **centred** in its cell with an arrow slot of the same width
-  (12 px) on both sides; the arrow draws in the left one, the other stays empty, so a label sits in the exact
-  centre whether or not it is the active sort.
-- **Footer, one row.** The session column holds the date axis (the same x as the graphs); the structured block
-  the session count where the harness column is ("102 sessions", at the block's left padding and running on
-  into the room Turns leaves; the short "102 sess." only when the Turns total is so long that it would
-  collide), then the totals (turns, agents, spend of the range's groups; under a search or a selection those
-  of the rows shown). The count's `title` carries the qualifiers ("25 matching sessions", "16 sessions in
-  ~/acme").
-- **Sorting is the column headers.** Every sortable header reserves its arrow slots (above), so
-  no label moves when the sort changes. A click sorts by that
-  column in its own first direction; a click on the active column flips it; an arrow marks it. A tiny rule
-  (1 px, `border-line`, 55 % of the header's height, centred) stands between adjacent header cells. In the
-  grouped modes the sort orders the groups by their aggregate and the sessions inside each group by the same
-  column (under the key, by spend: they share it); ties by spend, then id. URL: `sort` (`start`, `last`,
-  `active`, `turns`, `agents`, `spend`, `key`; absent = spend; an old `session` reads as `start`) and `dir`
-  (`asc` / `desc`; absent = the column's own start: descending, but **ascending for `key`**).
-- **Sort by the folder** (`sort=key`). Session rows by their `dir`, group rows by the path they show, in the
-  order of the sidebar tree: paths compared segment by segment, case-insensitive (`comparePlace` in
-  `model.ts`, also the tree's sibling order), so `~/work/merlin` sits right after `~/work` and before
-  `~/work/yimple` and the flat list clusters by folder in the tree's order; `(none)` last whichever way; ties by
-  spend, then id. In Grouped and Groups the groups are ordered by their path and the sessions inside a group
-  by spend. A session of an older server without `dir` sorts by its group's place.
-- The title of a row's text line also carries the value of the active timeline sort (start, last activity or
-  running time), since the table has no column for it.
-- **Harness column**: 44 px, the first of the structured block, header empty (title "Harness"), not
-  sortable. A
-  session row has the mark of its harness; a group row the distinct harnesses of all its sessions (up to 3,
-  most sessions first, side by side at 12 px). The mark is the shared `HarnessIcon` (`ui/harness.tsx`, 14 px)
-  and it is the product's real logo, its path data inline (no file, no fetch): Claude and OpenAI from
-  Simple Icons (CC0), Pi from pi.dev; the marks are the products' trademarks, used to name them. Claude's
-  is filled with the token `--harness-claude` (clay orange), Codex's (OpenAI) with the body colour, Pi's
-  keeps its own three colours; any other harness gets its first letter in a circle. Its title is the
-  product name from `/api/harnesses`.
-- **Index** (the sidebar; always there, in every mode): a 260 px column left of the table under the
-  toolbar (its own scroll, right border). Its heading row is the **Organise by** selector (the shared
-  `Select`: Folder, Worktree, Repo, Remote) and a collapse button (lucide `PanelLeftClose` /
-  `PanelLeftOpen`, the shared `IconButton`); collapsed it is a 37 px strip holding the open button. The
+- **URL**: `range` (`1d`, `7d` default, `30d`, ending now), `by` (the sidebar's key: `dir` default,
+  `checkout`, `repo`, `remote`), `in` (the selection), `q` (the search), `sort` and `dir`. Nothing else; an old
+  link's `show` is ignored.
+- **Toolbar**: the title, the range, and centred in the space that is left the **search box** with, when a place
+  is selected, a removable chip `in ~/work x` (the display path; x clears).
+- **Search.** Typing is local and `q` follows after 200 ms (back and forward move the box); `/` focuses it and
+  Esc clears, then blurs. A session matches when the term (trimmed, case-insensitive substring) is in its head
+  (name, title, id) or its description texts (recap, first and last prompt), or, for a term of two characters
+  or more, when it is among the hits of `/api/search` (full text); until that answers, the local matches show.
+  Nothing matching: "No sessions match "term"."
+- **Container, full bleed.** The page fills the area under the top bar edge to edge, as tall as the viewport
+  (the page itself does not scroll); the toolbar has a bottom border. Beside the sidebar the table has three
+  parts: **top, fixed**, the two-line column header; **middle, scrolls**, the rows; **bottom, fixed**, the
+  summary. Every part has the same two blocks: the **session column** (takes the width that is left; the plot
+  is exactly its inner width, 12 px of padding each side) and the **structured block** (a 1 px rule on its
+  left, 12 px padding, then harness 44, Turns 64, Agents 70, Spend 84, 8 px between). The scrollbar of the
+  middle takes width from the rows only, so the header and the summary give up as much (padding right) and the
+  columns, the graphs and the axis stay exactly above one another.
+- **Row** (one per session in scope). Session column: the text line on top, the graph under it. The text is
+  the session's **bold head** (its own name from /rename, else its title, else the first 8 characters of its
+  id; a link to the Session page) and in muted text the latest recap, else the first prompt, else the last
+  prompt; one line, an ellipsis where it ends, the whole text and the value of the active timeline sort (start,
+  last activity or running time) in the `title`. Structured block: the harness mark, Turns, Agents and Spend
+  (right-aligned, tabular, `<Money>`; all counts in the range) on the upper line and under them the **folder
+  line**, the session's `dir` as a display path (`~/work/merlin/web`; `(none)`, faint, without one), the real
+  path in its `title`. When it is too long its start is cut and the end stays (`…/merlin/web`, at a `/` where
+  possible): `fitTail` measures with the cell's own font on a canvas.
+- **Harness mark**: the shared `HarnessIcon` (`ui/harness.tsx`, 14 px), the product's real logo with its path
+  data inline: Claude and OpenAI from Simple Icons (CC0), Pi from pi.dev; the marks are the products'
+  trademarks, used to name them. Claude's is filled with `--harness-claude`, Codex's with the body colour, Pi's
+  keeps its own colours; any other harness gets its first letter in a circle.
+- **Header, two lines.** Left: line 1 `SESSION`, centred; line 2 **`TimelineSort`**, a pictogram of a session
+  in the row graph's own vocabulary and constants (context rising and falling in steps, a pale idle stretch, the
+  session line, the spine lane with a few spawns, a faint axis), up to 340 × 42 px, shrinking to a narrower
+  cell, aria-hidden. Three sort buttons sit on it: **START** before the drawn session's left end (`sort=start`),
+  **END** after its right end (`sort=last`, last activity) and **LENGTH** over the middle, knocked out of the
+  drawing (`sort=active`: the slots with a call running times the slot, from the lane's `active`); all three
+  start descending. Right: line 1 the harness spacer and **Turns**, **Agents**, **Spend**; line 2 **FOLDER**.
+  Every sortable header is centred in its cell with an arrow slot of the same width (12 px) on both sides; the
+  arrow draws in the left one, so a label does not move when it becomes the sort. A tiny rule (1 px,
+  `border-line`, 55 % of the height) stands between adjacent header cells.
+- **Sorting.** A click sorts by that column in its own first direction; a click on the active column flips
+  it. `sort` is `start`, `last`, `active`, `turns`, `agents`, `spend` or `key` (absent: spend; an old `session`
+  reads as `start`); `dir` is `asc` / `desc` (absent: the column's own start, descending, but ascending for
+  `key`). Ties by spend, then id. **FOLDER** (`sort=key`) orders the sessions by their folder line in the
+  sidebar's order: segment by segment, case-insensitive (`comparePlace`), so `~/work/merlin` sits right after
+  `~/work` and before `~/work/yimple`; no folder last whichever way.
+- **Summary** (the footer, sticky). Session column: the scope's **aggregate graph**, the lanes' trimmed
+  `context` and `idle` summed into dense arrays (`sumLanes`), drawn as the summed context area over the summed
+  idle area on a token scale of its own, with the day lines inside the lifetimes of its sessions (no baseline,
+  session line or spine lane), and directly under it the **date axis**. Structured block, on the top line:
+  "102 sessions" where the harness column is (running on into the room Turns leaves; "102 sess." when the
+  Turns total would collide), then the totals of Turns, Agents and Spend of the scope (`totalsOf`). The count's
+  `title` says what the scope is ("25 matching sessions in ~/acme"). Under them, only while there is no search
+  and no selection, one faint line of the scripted runs ("913 scripted runs · $5.36").
+- **Time axis: linear.** Wall-clock time maps linearly to x over the whole range. Midnight ticks and day
+  labels; at `1d`, hour ticks. Every graph uses the same axis and is the width of the session column.
+- **Resolution.** The page asks for the slot that gives about one slot per pixel of the plot (`1m` to `1h`);
+  the width is followed live, the slot once it has held still. One SVG per row. Every session of the range comes
+  in one response, so the sidebar's key, the selection and the search work without another request.
+- **Row graph**, drawn with the spend graph's constants (`COLOR`, `CTX_FILL`, `WORKFLOW_DASH`, `elbowPath` from
+  `features/spend/TimeView.tsx`):
+  - **context**: a step area above the baseline, at most 15 px high, filled in the main colour (`CTX_FILL`),
+    no outline, on one token scale shared by the session rows;
+  - **idle**: where the session is open but paused (the context held through a pause of 5 minutes to an hour,
+    the API's `idle`), the same step area in a severely tinted fill (`IDLE_FILL`, 0.2) under the context;
+  - a faint **baseline** over the session's lifetime (its start to its last activity, clipped to the range),
+    and on it the **session line** where it ran (`active > 0`);
+  - **one spine lane**, 7 px under the baseline (omitted when the session launched nothing). Every agent gets a
+    thin vertical (0.75 px) from the baseline to the lane at its start, so a burst of spawns reads as a comb.
+    Per kind (sub-agent, teammate, fork, workflow dashed) the lives `[start, max(end, start + 10 px)]` are
+    merged into runs when they overlap or lie under 4 px apart; a run is the mirrored J, its elbow at the first
+    spawn. A forked or continued session is not on the lane: its own row gets a vertical in the main colour
+    (`RUN_W`) from the top of the row down to the baseline at its start. A spawn from before the range has no
+    vertical and its run starts at the left edge;
+  - the day lines, only inside the session's lifetime.
+- **Sidebar**: a 260 px column left of the table under the toolbar (its own scroll, right border). Its heading
+  row is the **Organise by** selector (the shared `Select`: Folder, Worktree, Repo, Remote; `by`) and a
+  collapse button (`PanelLeftClose` / `PanelLeftOpen`); collapsed it is a 37 px strip with the open button. The
   width animates in 150 ms (instantly under reduced motion); the choice is kept in `localStorage`
-  (`overview.sidebar`: `open` / `closed`, try/catch; open by default). The plot is sized for the final
-  layout, so the graphs do not recompute while it slides. Below the heading, **when there is a group with no value** ("(none)"): the tree's **root**,
-  **All** (lucide `HardDrive`, title "Every place", the sessions and spend of everything the search
-  leaves; selecting it clears the selection), and under it, one level in, the **file explorer tree** of the
-  groups and, as the root's last child with no separator, "(none)" (muted, lucide `FolderX`, the title the
-  API's name for the empty group). **When there is none** there is no All and no (none): the tree's top nodes
-  are the top level, and the selection is cleared by a click on the selected node or the toolbar chip's x. The
-  **outermost indent guide** (the top level's, whichever the top is) is not drawn; deeper levels keep theirs.
-  The tree is placed in the filesystem
-  hierarchy (`buildPlaceTree` in `model.ts`):
-  - **Path of a group**: dir and worktree: the key; repo: the key without its trailing `.git` / `.bare`
-    (`homeOf` of `lib/places.ts`), so a repository sits at its working directory; remote: the normalised
-    URL split into host / owner / name (a local-path remote stays a path).
-  - **Home as `~`**: the API has none, so it is inferred (`groupsHome`): the most common `/Users/<u>` or
-    `/home/<u>` prefix among the paths of all the groups of the range. Other paths stay absolute.
-  - **Compact folders**: a node that is no group and has one child merges into it, its label the joined
-    segments (`~/work`, `old/merlin`); the node stands for every path of the chain. A node can be a group
-    and a folder. Children are ordered by name, case-insensitive, like Finder, not by spend.
-  - **Figures**: shown sessions and spend, summed over the groups at or under the node. They come from
-    the groups the search leaves and ignore the selection, so the tree does not shrink to it.
-  - **Lines**: 12 px of indent per level with faint guide lines (not the outermost level's); a chevron for a node with children;
-    lucide `Folder` / `FolderOpen`, `FolderGit2` for a group in repo, worktree or remote mode, `Globe`
-    for a host. The label truncates; `title` is the display path.
-  - **The selection filters.** A click on a node's label (any node, folder or group) selects it; the
-    table shows only the sessions of the groups **at or under** its path, matched segment-wise on the
-    node's real path (`underPath`: repo keys without `.git` / `.bare`, remotes as host/owner/repo, so
-    `~/work` does not take `~/workshop`). `(none)` selects the group with the empty key. A click on the
-    selected node again, on All, or on the chip's x clears it. The chevron only opens or closes. The
-    selected node has the Sessions rail's active style (accent); All has it when nothing is selected.
-    The selection applies after the search (`selectOverview`); the totals line and the rows follow it, the
-    scripted-runs line is hidden while one is active. Nothing under it: "Nothing under ~/work in this
-    range." with a "Clear the selection" link.
-  - **URL** `in` = the selected node's real path prefix (not the `~` form; `-` for (none); absent = no
-    selection). Selecting adds a history entry, so back and forward walk through the selections. It
-    survives a change of Show and of the search. On a change of Organise by it is kept, and dropped once
-    the new groups arrive when none sits under it (`keepSelection`). Its node's ancestors are opened once
-    per selection so it is visible (`ancestorIds`).
+  (`overview.sidebar`, try/catch). The plot is sized for the final layout, so the graphs do not recompute while
+  it slides. Organise by is client-side: every lane carries its value of each key (`dir`, `checkout`, `repo`,
+  `remote`), and switching rebuilds the tree from them. **Folder** is the directory the session started in;
+  **Worktree** its git checkout; **Repo** its repository (worktrees of one clone merge); **Remote** its origin
+  URL (clones of one remote merge).
+  - **The tree** (`buildPlaceTree`): the places of the sessions the search leaves where they sit in the
+    filesystem: dir and worktree at their path, a repository at its working directory (the key without its
+    `.git` / `.bare`), a remote as host / owner / name (a local-path remote stays a path). The home is `~`: the
+    API has none, so it is inferred from the sessions' folders (`inferHome`: the most common `/Users/<u>` or
+    `/home/<u>` prefix); other paths stay absolute. A folder that is no place and has one child merges into it
+    (`~/work`, `old/merlin`). Children are ordered by name, case-insensitive, like Finder.
+  - **Figures**: sessions and spend summed over the places at or under the node, from the sessions the search
+    leaves; they ignore the selection, so the tree does not shrink to it.
+  - **(none) and All**: when some sessions have no value for the key, the tree's root is **All** (`HardDrive`,
+    "Every place", the figures of everything the search leaves; selecting it clears the selection), with the
+    places under it and, as its last child, "(none)" (muted, `FolderX`; its title says which value is
+    missing). When there are none, there is no All and no (none): the selection is cleared by a click on the
+    selected node or the chip's x.
+  - **Headings**: the top-level lines (All when it exists, else the top places) are section headings,
+    semibold with a chevron, like an editor's workspace roots; their children start flush under them, and each
+    level below that indents 12 px with a faint guide line through its parent's chevron. A chevron for a node
+    with children; `Folder` / `FolderOpen`, `FolderGit2` for a place in repo, worktree or remote mode, `Globe` for
+    a host. The label truncates; `title` is the display path.
+  - **The selection is the scope.** A click on a line's label selects it: the table and the summary take only
+    the sessions whose place sits **at or under** its path, matched segment-wise on the real path (`underPath`;
+    so `~/work` does not take `~/workshop`); `(none)` takes the sessions with no value. A click on the selected
+    line, on All or on the chip's x clears it; the chevron only opens or closes. The selected line has the
+    accent style; All has it when nothing is selected. The selection applies after the search. Nothing under it:
+    "Nothing under ~/work in this range." with a "Clear the selection" link.
+  - **URL** `in` = the selected node's real path prefix (`-` for (none)). Selecting adds a history entry.
+    On a change of Organise by it is kept when some session sits under it in the new key, else dropped
+    (`keepSelection`). The selection's ancestors are opened once per selection (`ancestorIds`).
   - **Open and closed**: open by default; the closed folders are kept per key in `localStorage`
-    (`overview.tree.<by>`; every access in try/catch, it works without). Up / Down move between the
-    buttons; Enter and Space select.
-  - **Hover**: the group of the row under the pointer has the light hover background in the tree; when
-    a closed folder hides it, the outermost closed folder is marked (`markedNode`). There is no
-    scroll-to-group and no scroll-spy.
-- **Same names**: groups that share a name (three repositories called `merlin`) are named in the table
-  with `placeLabels` of `lib/places.ts`: the fewest trailing directories that tell them apart
-  (`work/merlin`, `old/merlin`), in the group rows' bold head (its `title` is the full key).
-- **Row text**, one line, an ellipsis where it ends, the whole text in the `title`. A session: its **bold
-  head** (its own name from /rename, else its title, else the first 8 characters of its id; a link to the
-  Session page) and in muted text the latest recap, else the first prompt, else the last prompt. A
-  group: the bold name and "18 sessions . priciest: <head of the priciest session> $96". Numbers
-  right-aligned, tabular: Turns, Agents, Spend (`<Money>`). All counts are in the range.
-- The session title links to the Session page. Group rows use the group arrays, session rows their lanes.
-- **Time axis: linear.** Wall-clock time maps linearly to x over the whole range; nights and empty
-  days take their real width. Midnight ticks and day labels; at `1d`, hour ticks. Every graph uses the
-  same axis; the graph is the width of the session column. In a row, the day lines are drawn only inside the
-  lifetime of its session (a group row: of any of its sessions), not where nothing was alive.
-- **Resolution.** The page asks for the slot that gives about one slot per pixel of the cell's width
-  (`1m` to `1h`). **One SVG per row**, all of the same width. Because every session of the range comes
-  in one response (`lanes`), a group opens without another request.
-- **Row graph**, drawn with the spend graph's constants (`COLOR`, `CTX_FILL`, `ELBOW_R`,
-  `WORKFLOW_DASH`, `elbowPath` from `features/spend/TimeView.tsx`):
-  - **context**: a step area above the baseline, at most 15 px high, filled in the main colour
-    (`CTX_FILL`) with no outline, on a token scale of its own kind: the group rows share one (total context, so large), the session
-    rows share another (so a session is not a sliver next to its group);
-  - **idle**: where a session is open but paused (the context held through a pause of 5 minutes to an
-    hour, the API's `idle`), the same step area in a severely tinted fill (`IDLE_FILL`, 0.2), drawn
-    under the context, so a working stretch reads as one shape, saturated where calls happened and
-    pale while the user read or typed;
-  - the **session line** (session rows) on the baseline where a session ran (`active > 0`), 1 px, 2 px with two at
-    once, 3.5 px with three or more;
-  - **one spine lane**, 7 px under the baseline (omitted when the row launched nothing). Every agent
-    gets a thin vertical (0.75 px) from the baseline to the lane at its start, so a burst of spawns
-    reads as a comb. Per kind (sub-agent, teammate, fork, workflow dashed; then forked and continued
-    sessions) the lives `[start, max(end, start + 10 px)]` are
-    merged into runs when they overlap or lie under 4 px apart; a run is the mirrored J: the elbow at
-    its first spawn and the horizontal at full strength along the run. Kinds share the lane's depth,
-    drawn in that order, later on top. A forked or continued session is not a run and not on the lane: its own row
-    gets a vertical in the main colour at full strength (`RUN_W`) from the top of the row down to the
-    baseline at its start (it came from another session), with no elbow and no horizontal. A spawn from before the range has no vertical and its run
-    starts at the left edge.
-  - no spend lines, compaction marks, `x n` labels or sub-lanes.
-- **Group rows** draw only the group's total: `contextSum` as the context area and `idleSum` as the pale
-  idle area under it, with the day lines inside its sessions' lifetimes. No baseline, session line, spine lane, ticks or nodes: it is the
-  buzz over time, and the row is correspondingly short.
-- **Session rows** draw the faint baseline only over the session's lifetime (its start to its last
-  activity, clipped to the range), not the whole width; the thicker session line, the context, the idle
-  area, the spine lane and the branch nodes are as above.
-- **Hover** reads the table; the graphs stay `aria-hidden` and `pointer-events: none`, no readout.
-  - **Row**: the hovered row (its text line and graph cell as one) takes a light background (the text
-    colour at 5 % over the row's own, CSS `:hover`, so the rows do not render as the pointer moves).
-  - **Day**: the pointer's x over the plot picks the **day** under it (the **hour** when the range is two
-    days or less) and the date axis in the footer gets a light band for it with its label in the body
-    colour. That is the only thing lit besides the row: no header cell and no total is highlighted (it
-    flickered as the pointer moved). There is no guide line through the rows.
-  - **Index**: the hovered row's group is lit in the index.
-  - One state (x, group) at table level; rows are memoised and take no hover props. Leaving the rows
-    clears it. Pure helpers in `model.ts`: `bandAt`, `blockWidth`.
+    (`overview.tree.<by>`, try/catch). Up / Down move between the buttons; Enter and Space select.
+- **Hover** reads the table; the graphs stay `aria-hidden` and `pointer-events: none`.
+  - **Row**: the hovered row takes a light background (the text colour at 5 % over the row's own, CSS
+    `:hover`).
+  - **Day**: the pointer's x over the plot picks the **day** under it (the **hour** when the range is two days
+    or less), and the summary's date axis gets a light band for it with its label in the body colour. Nothing
+    else is lit.
+  - **Sidebar**: the hovered row's place is lit in the tree; when a closed folder hides it, the outermost
+    closed folder is marked (`markedNode`).
+  - One state (x, place) at table level; rows are memoised and take no hover props. Pure helpers in
+    `model.ts`: `bandAt`, `blockWidth`.
 
 ## 11. As built
 

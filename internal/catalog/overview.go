@@ -10,9 +10,9 @@ import (
 	"github.com/terek/merlin/internal/model"
 )
 
-// The Overview rollup (docs/api.md, GET /api/overview): per group of sessions and per slot of a
-// time range, what was spent and how much context was carried, and the work that was launched.
-// It reads owned messages only, so a copied message counts once, as everywhere.
+// The Overview rollup (docs/api.md, GET /api/overview): per session and per slot of a time range,
+// how much context it carried and when it ran, and the work it launched. It reads owned messages
+// only, so a copied message counts once, as everywhere.
 
 // Overview limits.
 const (
@@ -53,81 +53,49 @@ func (e *OverviewError) Error() string { return e.Msg }
 
 // OverviewQuery is the question Overview answers. From and To are required and From must be
 // before To; both are moved outward to slot boundaries in the catalog's location. Slot 0 picks
-// the default. By is one of GroupDir, GroupCheckout, GroupRepo, GroupRemote ("" is GroupDir).
-// Group, when not nil, restricts the groups and lanes to that group key ("" is the group with
-// no value).
+// the default.
 type OverviewQuery struct {
 	From, To time.Time
 	Slot     time.Duration
-	By       GroupBy
-	Group    *string
 }
 
-// Overview is the answer: dense per-slot arrays of groups, Slots long, slot i covering
-// [From + i·SlotMs, From + (i+1)·SlotMs). A lane's arrays are trimmed (see OverviewLane).
+// Overview is the answer: Slots slots, slot i covering [From + i·SlotMs, From + (i+1)·SlotMs),
+// and one lane per session (see OverviewLane).
 type Overview struct {
 	From     time.Time        `json:"from"`
 	To       time.Time        `json:"to"`
 	Slot     string           `json:"slot"`
 	SlotMs   int64            `json:"slotMs"`
 	Slots    int              `json:"slots"`
-	By       GroupBy          `json:"by"`
-	Groups   []OverviewGroup  `json:"groups"`
 	Scripted OverviewScripted `json:"scripted"`
 	Lanes    []OverviewLane   `json:"lanes"`
 }
 
-// OverviewGroup is one value of the location key with a message in the range.
-type OverviewGroup struct {
-	Key            string          `json:"key"`
-	Name           string          `json:"name"`
-	Sessions       int             `json:"sessions"`
-	Turns          int             `json:"turns"`
-	Agents         int             `json:"agents"`
-	USD            float64         `json:"usd"`
-	LastActivityAt time.Time       `json:"lastActivityAt,omitzero"`
-	Priciest       OverviewSession `json:"priciest"`
-	USDSlots       []float64       `json:"usdSlots"`
-	ContextPeak    []int64         `json:"contextPeak"`
-	ContextSum     []int64         `json:"contextSum"`
-	IdleSum        []int64         `json:"idleSum"`
-	IdlePeak       []int64         `json:"idlePeak"`
-	Active         []int           `json:"active"`
-	Spans          []OverviewSpan  `json:"spans"`
-}
-
-// OverviewSession names a session and what it cost in the range.
-type OverviewSession struct {
-	Harness string  `json:"harness"`
-	ID      string  `json:"id"`
-	Title   string  `json:"title,omitempty"`
-	USD     float64 `json:"usd"`
-}
-
 // OverviewScripted sums the scripted (sdk) sessions with a message in the range.
 type OverviewScripted struct {
-	Sessions int       `json:"sessions"`
-	USD      float64   `json:"usd"`
-	USDSlots []float64 `json:"usdSlots"`
+	Sessions int     `json:"sessions"`
+	USD      float64 `json:"usd"`
 }
 
 // OverviewLane is one session with an owned message in the range. Its arrays start at Slot0,
 // the first slot where any of them is non-zero, and end at the last such slot; Turns counts the
 // session's own turns that started in the range, Agents the agent spans that started in it.
+// Dir, Checkout, Repo and Remote are its places, the primary value of each location key ("" when
+// it has none).
 type OverviewLane struct {
-	Harness string `json:"harness"`
-	ID      string `json:"id"`
-	Title   string `json:"title,omitempty"`
-	Group   string `json:"group"`
-	// Dir is the session's start directory, the value the dir grouping keys on ("" when unknown).
+	Harness        string         `json:"harness"`
+	ID             string         `json:"id"`
+	Title          string         `json:"title,omitempty"`
 	Dir            string         `json:"dir,omitempty"`
+	Checkout       string         `json:"checkout,omitempty"`
+	Repo           string         `json:"repo,omitempty"`
+	Remote         string         `json:"remote,omitempty"`
 	StartedAt      time.Time      `json:"startedAt,omitzero"`
 	LastActivityAt time.Time      `json:"lastActivityAt,omitzero"`
 	USD            float64        `json:"usd"`
 	Turns          int            `json:"turns"`
 	Agents         int            `json:"agents"`
 	Slot0          int            `json:"slot0"`
-	USDSlots       []float64      `json:"usdSlots"`
 	Context        []int64        `json:"context"`
 	Idle           []int64        `json:"idle"`
 	Active         []int          `json:"active"`
@@ -167,28 +135,15 @@ func overviewRange(from, to time.Time, slot time.Duration, loc *time.Location) (
 
 // ovSess is what one session did in the range.
 type ovSess struct {
-	s      *sess
-	usd    []float64
-	ctx    []int64
-	seen   []bool  // a message of its own in the slot
-	held   []bool  // context held in the slot (ctx > 0 from a call before it, or inside it)
-	idle   []int64 // largest idle context held in the slot, 0 where ctx > 0
-	total  float64
-	turns  int
-	agents int
-	key    string // its group key
-	spans  []OverviewSpan
+	s     *sess
+	ctx   []int64
+	held  []bool  // context held, or a message of its own, in the slot
+	idle  []int64 // largest idle context held in the slot, 0 where ctx > 0
+	total float64
 }
 
-// Overview computes the rollup. Groups come ordered by usd, largest first, then key.
+// Overview computes the rollup. Lanes come ordered by usd, largest first, then id.
 func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
-	by := q.By
-	if by == "" {
-		by = GroupDir
-	}
-	if !slices.Contains([]GroupBy{GroupDir, GroupCheckout, GroupRepo, GroupRemote}, by) {
-		return Overview{}, &OverviewError{fmt.Sprintf("by=%q: use dir, checkout, repo or remote", by)}
-	}
 	if !q.From.Before(q.To) {
 		return Overview{}, &OverviewError{"from must be before to"}
 	}
@@ -220,19 +175,11 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		return int(t.Sub(from) / slot)
 	}
 
-	out := Overview{From: from, To: to, Slot: OverviewSlotName(slot), SlotMs: slot.Milliseconds(), Slots: n, By: by,
-		Groups: []OverviewGroup{}, Scripted: OverviewScripted{USDSlots: make([]float64, n)}}
-
-	type groupAcc struct {
-		g     OverviewGroup
-		spans []OverviewSpan
-		best  *ovSess
-	}
-	groups := map[string]*groupAcc{}
-	var lanes []*ovSess
+	out := Overview{From: from, To: to, Slot: OverviewSlotName(slot), SlotMs: slot.Milliseconds(), Slots: n, Lanes: []OverviewLane{}}
 	for _, s := range v.sessions {
 		o := &ovSess{s: s}
 		var main []*model.Message // the main agent's owned messages
+		seen := false
 		for _, m := range s.own {
 			if m.AgentID == "" {
 				main = append(main, m)
@@ -241,143 +188,65 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			if i < 0 {
 				continue
 			}
-			if o.usd == nil {
-				o.usd, o.ctx, o.seen, o.held, o.idle = make([]float64, n), make([]int64, n), make([]bool, n), make([]bool, n), make([]int64, n)
+			if !seen {
+				seen = true
+				o.ctx, o.held, o.idle = make([]int64, n), make([]bool, n), make([]int64, n)
 			}
-			o.seen[i] = true
-			o.usd[i] += m.USD
+			o.held[i] = true
 			o.total += m.USD
 		}
-		if o.usd == nil {
+		if !seen {
 			continue
 		}
 		if s.d.Kind == model.KindSDK {
 			out.Scripted.Sessions++
 			out.Scripted.USD += o.total
-			for i, x := range o.usd {
-				out.Scripted.USDSlots[i] += x
-			}
 			continue
 		}
 		o.holdContext(main, from, slot)
-		o.spans = overviewSpans(s, from, to)
+		l := OverviewLane{Harness: s.key.Harness, ID: s.key.ID, Title: s.info.Title, Dir: s.project,
+			StartedAt: s.d.StartedAt.UTC(), LastActivityAt: s.d.LastActivityAt.UTC(), USD: o.total,
+			Spans: sortedSpans(overviewSpans(s, from, to))}
+		sf := &fv.ses[s.idx]
+		l.Checkout, l.Repo, l.Remote = sf.checkout, sf.repo, sf.remote
 		inherited := make(map[int]bool, len(s.info.InheritedTurns))
 		for _, i := range s.info.InheritedTurns {
 			inherited[i] = true
 		}
 		for _, t := range s.d.Turns {
 			if !inherited[t.Index] && slotOf(t.StartedAt) >= 0 {
-				o.turns++
+				l.Turns++
 			}
 		}
-		for _, sp := range o.spans {
+		for _, sp := range l.Spans {
 			if sp.Kind != "session-fork" && sp.Kind != "continuation" && slotOf(sp.Start) >= 0 {
-				o.agents++
+				l.Agents++
 			}
 		}
-
-		sf := &fv.ses[s.idx]
-		var key string
-		switch by {
-		case GroupDir:
-			key = s.project
-		case GroupCheckout:
-			key = sf.checkout
-		case GroupRepo:
-			key = sf.repo
-		case GroupRemote:
-			key = sf.remote
-		}
-		o.key = key
-		if q.Group != nil && *q.Group != key {
-			continue
-		}
-		a := groups[key]
-		if a == nil {
-			a = &groupAcc{g: OverviewGroup{Key: key, Name: fv.group(by, key).Name,
-				USDSlots: make([]float64, n), ContextPeak: make([]int64, n), ContextSum: make([]int64, n),
-				IdleSum: make([]int64, n), IdlePeak: make([]int64, n), Active: make([]int, n)}}
-			groups[key] = a
-		}
-		g := &a.g
-		g.Sessions++
-		g.Turns += o.turns
-		g.Agents += o.agents
-		g.USD += o.total
-		g.LastActivityAt = later(g.LastActivityAt, s.d.LastActivityAt)
-		for i := range o.usd {
-			g.USDSlots[i] += o.usd[i]
-			g.ContextPeak[i] = max(g.ContextPeak[i], o.ctx[i])
-			g.ContextSum[i] += o.ctx[i]
-			g.IdleSum[i] += o.idle[i]
-			g.IdlePeak[i] = max(g.IdlePeak[i], o.idle[i])
-			if o.seen[i] || o.held[i] {
-				g.Active[i]++
-			}
-		}
-		a.spans = append(a.spans, o.spans...)
-		if a.best == nil || o.total > a.best.total {
-			a.best = o
-		}
-		lanes = append(lanes, o)
-	}
-
-	for _, a := range groups {
-		g := a.g
-		g.Spans = sortedSpans(a.spans)
-		b := a.best.s
-		g.Priciest = OverviewSession{Harness: b.key.Harness, ID: b.key.ID, Title: b.info.Title, USD: a.best.total}
-		out.Groups = append(out.Groups, g)
-	}
-	sort.Slice(out.Groups, func(i, j int) bool {
-		a, b := out.Groups[i], out.Groups[j]
-		if a.USD != b.USD {
-			return a.USD > b.USD
-		}
-		return a.Key < b.Key
-	})
-
-	order := make(map[string]int, len(out.Groups))
-	for i, g := range out.Groups {
-		order[g.Key] = i
-	}
-	sort.SliceStable(lanes, func(i, j int) bool {
-		a, b := lanes[i], lanes[j]
-		if oa, ob := order[a.key], order[b.key]; oa != ob {
-			return oa < ob
-		}
-		if a.total != b.total {
-			return a.total > b.total
-		}
-		if a.s.key.ID != b.s.key.ID {
-			return a.s.key.ID < b.s.key.ID
-		}
-		return a.s.key.Harness < b.s.key.Harness
-	})
-	out.Lanes = []OverviewLane{}
-	for _, o := range lanes {
-		d := o.s.d
 		active := make([]int, n)
-		for i := range active {
-			if o.seen[i] || o.held[i] {
-				active[i] = 1
-			}
-		}
 		lo, hi := n, -1
 		for i := range n {
-			if o.usd[i] != 0 || o.ctx[i] != 0 || o.idle[i] != 0 || active[i] != 0 {
+			if o.held[i] {
+				active[i] = 1
+			}
+			if o.ctx[i] != 0 || o.idle[i] != 0 || o.held[i] {
 				lo = min(lo, i)
 				hi = i
 			}
 		}
-		if hi < 0 {
-			lo, hi = 0, -1
-		}
-		out.Lanes = append(out.Lanes, OverviewLane{Harness: o.s.key.Harness, ID: o.s.key.ID, Title: o.s.info.Title, Group: o.key, Dir: o.s.project,
-			StartedAt: d.StartedAt.UTC(), LastActivityAt: d.LastActivityAt.UTC(), USD: o.total, Turns: o.turns, Agents: o.agents,
-			Slot0: lo, USDSlots: o.usd[lo : hi+1], Context: o.ctx[lo : hi+1], Idle: o.idle[lo : hi+1], Active: active[lo : hi+1],
-			Spans: sortedSpans(o.spans)})
+		l.Slot0, l.Context, l.Idle, l.Active = lo, o.ctx[lo:hi+1], o.idle[lo:hi+1], active[lo:hi+1]
+		out.Lanes = append(out.Lanes, l)
 	}
+	sort.Slice(out.Lanes, func(i, j int) bool {
+		a, b := out.Lanes[i], out.Lanes[j]
+		if a.USD != b.USD {
+			return a.USD > b.USD
+		}
+		if a.ID != b.ID {
+			return a.ID < b.ID
+		}
+		return a.Harness < b.Harness
+	})
 	return out, nil
 }
 

@@ -16,7 +16,6 @@ import type {
   MomentsReport,
   Money,
   Overview,
-  OverviewGroup,
   OverviewLane,
   OverviewSlot,
   OverviewSpan,
@@ -809,9 +808,6 @@ function overviewText(id: string): Pick<OverviewLane, 'name' | 'recap' | 'firstP
 
 function overview(u: URL): Overview {
   const q = u.searchParams
-  const by = q.get('by') === 'project' ? 'dir' : (q.get('by') ?? 'dir')
-  if (by !== 'dir' && by !== 'checkout' && by !== 'repo' && by !== 'remote')
-    throw new BadRequest(`by=${JSON.stringify(by)}: use dir, checkout, repo or remote`)
   const to0 = overviewTime('to', q.get('to')) ?? Date.now()
   const from0 = overviewTime('from', q.get('from')) ?? to0 - 7 * 86_400_000
   if (from0 >= to0) throw new BadRequest('from must be before to')
@@ -828,41 +824,23 @@ function overview(u: URL): Overview {
   const slots = Math.round((to - from) / slotMs)
   if (slots > 2000) throw new BadRequest(`${slots} slots: at most 2000`)
   const at = (t: number) => Math.floor((t - from) / slotMs)
-  const zeros = () => new Array<number>(slots).fill(0)
   const r2 = (x: number) => Math.round(x * 1e6) / 1e6
-  const wantGroup = q.has('group') ? q.get('group') : undefined
   const inRange = (t: number) => t >= from && t < to
-
-  interface Acc {
-    group: OverviewGroup
-    ctxPeak: number[]
-    ctxSum: number[]
-    idlePeak: number[]
-    idleSum: number[]
-    priciest?: { s: Sess; usd: number }
-  }
-  const accs = new Map<string, Acc>()
-  const lanes: OverviewLane[] = []
   const bySpan = (a: OverviewSpan, b: OverviewSpan) =>
     a.start < b.start ? -1 : a.start > b.start ? 1 : a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0
 
+  const lanes: OverviewLane[] = []
   for (const s of visible()) {
     const os = overviewSession(s)
-    const key = costKey(by, s.summary)
-    if (wantGroup !== undefined && wantGroup !== key) continue
-    const usd = zeros()
-    const active = zeros()
+    const active = new Array<number>(slots).fill(0)
     let total = 0
-    let any = false
     for (const m of os.msgs) {
       const i = at(m.at)
       if (i < 0 || i >= slots) continue
-      any = true
-      usd[i] += m.usd
       total += m.usd
       active[i] = 1
     }
-    if (!any) continue
+    if (!active.includes(1)) continue
     const { context, idle } = heldContext(
       os.msgs.filter((m) => m.ctx > 0).map((m) => ({ at: m.at, ctx: m.ctx })),
       from,
@@ -891,112 +869,38 @@ function overview(u: URL): Overview {
         title: b.title,
       })
     spans.sort(bySpan)
-    const turns = os.turns.filter(inRange).length
-    const nAgents = agents.filter((a) => inRange(a.start)).length
-    const lastMsg = os.msgs[os.msgs.length - 1].at
-
-    let a = accs.get(key)
-    if (!a) {
-      a = {
-        group: {
-          key,
-          name: costLabel(by, key),
-          sessions: 0,
-          turns: 0,
-          agents: 0,
-          usd: 0,
-          usdSlots: zeros(),
-          contextPeak: [],
-          contextSum: [],
-          idlePeak: [],
-          idleSum: [],
-          active: zeros(),
-          spans: [],
-        },
-        ctxPeak: zeros(),
-        ctxSum: zeros(),
-        idlePeak: zeros(),
-        idleSum: zeros(),
-      }
-      accs.set(key, a)
-    }
-    const g = a.group
-    g.sessions++
-    g.turns += turns
-    g.agents += nAgents
-    g.usd += total
-    if (!a.priciest || total > a.priciest.usd) a.priciest = { s, usd: total }
-    const lastIso = new Date(lastMsg).toISOString()
-    if (lastIso > (g.lastActivityAt ?? '')) g.lastActivityAt = lastIso
-    for (let i = 0; i < slots; i++) {
-      g.usdSlots[i] += usd[i]
-      g.active[i] += active[i]
-      a.ctxSum[i] += context[i]
-      a.idleSum[i] += idle[i]
-      if (context[i] > a.ctxPeak[i]) a.ctxPeak[i] = context[i]
-      if (idle[i] > a.idlePeak[i]) a.idlePeak[i] = idle[i]
-    }
-    g.spans.push(...spans)
 
     // the lane's arrays from its first to its last non-empty slot
-    let lo = slots
-    let hi = -1
-    for (let i = 0; i < slots; i++) {
-      if (usd[i] > 0 || context[i] > 0 || idle[i] > 0 || active[i] > 0) {
-        if (lo === slots) lo = i
-        hi = i
-      }
-    }
+    const lo = active.findIndex((v, i) => v > 0 || idle[i] > 0)
+    let hi = slots - 1
+    while (hi > lo && !(active[hi] > 0 || idle[hi] > 0)) hi--
     const cut = (x: number[]) => x.slice(lo, hi + 1)
+    const place = (by: 'checkout' | 'repo' | 'remote') => costKey(by, s.summary) || undefined
     lanes.push({
       harness: sid.harness,
       id: sid.id,
       title: s.summary.title,
       ...overviewText(sid.id),
-      group: key,
       dir: s.summary.project || undefined,
+      checkout: place('checkout'),
+      repo: place('repo'),
+      remote: place('remote'),
       startedAt: new Date(os.msgs[0].at).toISOString(),
-      lastActivityAt: lastIso,
+      lastActivityAt: new Date(os.msgs[os.msgs.length - 1].at).toISOString(),
       usd: r2(total),
-      turns,
-      agents: nAgents,
+      turns: os.turns.filter(inRange).length,
+      agents: agents.filter((a) => inRange(a.start)).length,
       slot0: lo,
-      usdSlots: cut(usd).map(r2),
       context: cut(context),
       idle: cut(idle),
       active: cut(active),
       spans,
     })
   }
-
-  const groups: OverviewGroup[] = [...accs.values()]
-    .map((a) => ({
-      ...a.group,
-      usd: r2(a.group.usd),
-      priciest: a.priciest && {
-        harness: a.priciest.s.summary.key.harness,
-        id: a.priciest.s.summary.key.id,
-        title: a.priciest.s.summary.title,
-        usd: r2(a.priciest.usd),
-      },
-      usdSlots: a.group.usdSlots.map(r2),
-      contextPeak: a.ctxPeak,
-      contextSum: a.ctxSum,
-      idlePeak: a.idlePeak,
-      idleSum: a.idleSum,
-      spans: a.group.spans.sort(bySpan),
-    }))
-    .sort((x, y) => y.usd - x.usd || (x.key < y.key ? -1 : 1))
-  const order = new Map(groups.map((g, i) => [g.key, i]))
-  lanes.sort(
-    (x, y) =>
-      (order.get(x.group) ?? 0) - (order.get(y.group) ?? 0) ||
-      y.usd - x.usd ||
-      (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
-  )
+  lanes.sort((x, y) => y.usd - x.usd || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))
 
   // Scripted runs: each day's line spread over local working hours, the weights from a hash.
-  const scripted = { sessions: 0, usd: 0, usdSlots: zeros() }
+  const scripted = { sessions: 0, usd: 0 }
   for (const l of ds.scripted) {
     const [y, mo, d] = l.day.split('-').map(Number)
     const day0 = new Date(y, mo - 1, d).getTime()
@@ -1007,9 +911,7 @@ function overview(u: URL): Overview {
     hours.forEach((t, h) => {
       const i = at(t)
       if (i < 0 || i >= slots) return
-      const part = (l.totalUSD * w[h]) / wsum
-      scripted.usdSlots[i] += part
-      scripted.usd += part
+      scripted.usd += (l.totalUSD * w[h]) / wsum
       if (!counted) {
         scripted.sessions += l.count
         counted = true
@@ -1017,19 +919,8 @@ function overview(u: URL): Overview {
     })
   }
   scripted.usd = r2(scripted.usd)
-  scripted.usdSlots = scripted.usdSlots.map(r2)
 
-  return {
-    from: new Date(from).toISOString(),
-    to: new Date(to).toISOString(),
-    slot,
-    slotMs,
-    slots,
-    by,
-    groups,
-    scripted,
-    lanes,
-  }
+  return { from: new Date(from).toISOString(), to: new Date(to).toISOString(), slot, slotMs, slots, scripted, lanes }
 }
 
 // ---- /api/events ----------------------------------------------------------------------

@@ -203,9 +203,9 @@ type GroupList struct {
 	Groups []catalog.Group `json:"groups"`
 }
 
-// Overview is the body of GET /api/overview (experimental): what each group of sessions spent
-// and carried in each slot of a range. See catalog.Overview; its lanes carry the session's
-// name and previews besides.
+// Overview is the body of GET /api/overview (experimental): what each session carried and launched
+// in each slot of a range. See catalog.Overview; its lanes carry the session's name and previews
+// besides.
 type Overview struct {
 	catalog.Overview
 	Lanes []OverviewLane `json:"lanes"`

@@ -1178,9 +1178,6 @@ export interface OverviewParams {
   from?: string
   to?: string
   slot?: OverviewSlot
-  by?: GroupDim
-  /** A group key of `by`: only that group's groups and lanes. */
-  group?: string
 }
 
 /** One agent a session launched (or a branched session), with its life: a spine. */
@@ -1191,26 +1188,6 @@ export interface OverviewSpan {
   /** The session that launched it (for a branched session, itself). */
   session: { harness: string; id: string }
   title?: string
-}
-
-/** A group's arrays are dense: `slots` long. */
-export interface OverviewGroup {
-  key: string
-  name: string
-  sessions: number
-  turns: number
-  agents: number
-  usd: number
-  lastActivityAt?: string
-  priciest?: { harness: string; id: string; title?: string; usd: number }
-  usdSlots: number[]
-  contextPeak: number[]
-  contextSum: number[]
-  /** Context held through a pause of 5 minutes to an hour (largest / summed over sessions). */
-  idlePeak: number[]
-  idleSum: number[]
-  active: number[]
-  spans: OverviewSpan[]
 }
 
 /** A lane's arrays are trimmed: index j is slot `slot0 + j`; outside them everything is zero. */
@@ -1225,17 +1202,17 @@ export interface OverviewLane {
   /** The first human turn's prompt (the session's opening ask). */
   firstPrompt?: PromptPreview
   lastPrompt?: PromptPreview
-  /** The group key of the session ('' for none). */
-  group: string
-  /** The session's start directory (the `dir` grouping's key, whatever `by` is); absent when unknown. */
+  /** The session's places, the primary value of each location key; absent when it has none. */
   dir?: string
+  checkout?: string
+  repo?: string
+  remote?: string
   startedAt?: string
   lastActivityAt?: string
   usd: number
   turns: number
   agents: number
   slot0: number
-  usdSlots: number[]
   context: number[]
   idle: number[]
   active: number[]
@@ -1248,8 +1225,6 @@ export interface Overview {
   slot: OverviewSlot
   slotMs: number
   slots: number
-  by: GroupDim
-  groups: OverviewGroup[]
-  scripted: { sessions: number; usd: number; usdSlots: number[] }
+  scripted: { sessions: number; usd: number }
   lanes: OverviewLane[]
 }

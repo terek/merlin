@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
+import type { OverviewLane, OverviewSpan } from '../../api/types'
 import {
   activeMs,
   activeSlots,
@@ -9,34 +9,22 @@ import {
   bandAt,
   blockWidth,
   buildPlaceTree,
-  buildRows,
   CTX_MAX,
   chooseSlot,
   comparePlace,
   displayPath,
-  earliestStart,
-  filterOverview,
   fitLabels,
   fitTail,
-  formatIn,
+  folderText,
   formatSort,
-  formatView,
-  groupDescription,
-  groupHarnesses,
-  groupScale,
-  groupsHome,
   heldContext,
-  type IndexItem,
   inferHome,
   keepSelection,
-  keyText,
   type Layout,
   laneDescription,
   laneHead,
   laneMatches,
   laneScale,
-  lanesByGroup,
-  lastLabel,
   lifeSpan,
   MERGE_GAP,
   MIN_SPINE,
@@ -46,23 +34,24 @@ import {
   NONE_SEL,
   nextSort,
   nodeForPath,
+  type PlaceItem,
   type PlaceNode,
   parseBy,
   parseIn,
-  parseShow,
   parseSort,
-  parseView,
-  placeSegs,
-  type Row,
+  placeItems,
+  placeOf,
   type Sort,
   type SortKey,
-  selectOverview,
+  searchLanes,
+  selectLanes,
   slotX,
-  sortGroups,
   sortLanes,
   spineLanes,
   stepAreaPath,
-  totalOf,
+  sumLanes,
+  tokenScale,
+  totalsOf,
   underPath,
   visibleRows,
   xOf,
@@ -72,33 +61,13 @@ const MIN = 60_000
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
 
-function group(p: Partial<OverviewGroup> & { key: string }): OverviewGroup {
-  return {
-    name: p.key,
-    sessions: 1,
-    turns: 0,
-    agents: 0,
-    usd: 0,
-    usdSlots: [0, 0, 0, 0],
-    contextPeak: [0, 0, 0, 0],
-    contextSum: [0, 0, 0, 0],
-    idlePeak: [0, 0, 0, 0],
-    idleSum: [0, 0, 0, 0],
-    active: [0, 0, 0, 0],
-    spans: [],
-    ...p,
-  }
-}
-
 function lane(p: Partial<OverviewLane> & { id: string }): OverviewLane {
   return {
     harness: 'claude',
-    group: '',
     usd: 0,
     turns: 0,
     agents: 0,
     slot0: 0,
-    usdSlots: [],
     context: [],
     idle: [],
     active: [],
@@ -237,23 +206,43 @@ describe('lane arrays are trimmed', () => {
 })
 
 describe('token scales', () => {
-  test('the group rows share one scale of total context, idle included', () => {
-    const a = group({ key: 'a', contextSum: [100, 400, 0, 0], idleSum: [0, 0, 800, 0], contextPeak: [50, 200, 0, 0] })
-    const b = group({ key: 'b', contextSum: [0, 40, 0, 0] })
-    const s = groupScale([a, b])
+  test('the largest value of the arrays reaches the full height', () => {
+    const s = tokenScale([
+      [100, 400],
+      [0, 800, 3],
+    ])
     expect(s.maxTok).toBe(800)
     expect(s.pxPerTok).toBeCloseTo(CTX_MAX / 800, 9)
   })
 
-  test('the session rows have their own', () => {
+  test('the session rows have their own, idle included', () => {
     const s = laneScale([lane({ id: 'a', context: [10, 90] }), lane({ id: 'b', context: [5], idle: [300] })])
     expect(s.maxTok).toBe(300)
     expect(s.pxPerTok).toBeCloseTo(CTX_MAX / 300, 9)
   })
 
   test('nothing carried, no scale', () => {
-    expect(groupScale([group({ key: 'a' })])).toEqual({ maxTok: 0, pxPerTok: 0 })
+    expect(tokenScale([[0, 0], []])).toEqual({ maxTok: 0, pxPerTok: 0 })
     expect(laneScale([])).toEqual({ maxTok: 0, pxPerTok: 0 })
+  })
+})
+
+describe('the summary', () => {
+  test("the lanes' trimmed context and idle summed into dense arrays", () => {
+    const a = lane({ id: 'a', slot0: 1, context: [10, 0, 30], idle: [0, 5, 0] })
+    const b = lane({ id: 'b', slot0: 2, context: [1, 2], idle: [4, 0] })
+    expect(sumLanes([a, b], 5)).toEqual({ context: [0, 10, 1, 32, 0], idle: [0, 0, 9, 0, 0] })
+  })
+
+  test('nothing in scope: zeros; a lane past the end is cut', () => {
+    expect(sumLanes([], 3)).toEqual({ context: [0, 0, 0], idle: [0, 0, 0] })
+    expect(sumLanes([lane({ id: 'a', slot0: 2, context: [7, 8], idle: [0, 0] })], 3).context).toEqual([0, 0, 7])
+  })
+
+  test('the totals: sessions, turns, agents and spend', () => {
+    const t = totalsOf([lane({ id: 'a', turns: 3, agents: 1, usd: 2.5 }), lane({ id: 'b', turns: 4, usd: 1 })])
+    expect(t).toEqual({ sessions: 2, turns: 7, agents: 1, usd: 3.5 })
+    expect(totalsOf([])).toEqual({ sessions: 0, turns: 0, agents: 0, usd: 0 })
   })
 })
 
@@ -273,63 +262,13 @@ describe('lifeSpan', () => {
 })
 
 describe('sorting', () => {
-  const a = group({
-    key: 'a',
-    usd: 10,
-    sessions: 5,
-    turns: 3,
-    agents: 9,
-    lastActivityAt: '2026-11-01T00:00:00Z',
-  })
-  const b = group({ key: 'b', usd: 5, sessions: 9, turns: 8, agents: 1, lastActivityAt: '2026-11-03T00:00:00Z' })
-  const c = group({ key: 'c', usd: 5, sessions: 1, turns: 8, agents: 4, lastActivityAt: '2026-11-02T00:00:00Z' })
-  const keys = (gs: OverviewGroup[]) => gs.map((g) => g.key)
   const desc = (key: SortKey): Sort => ({ key, desc: true })
   const asc = (key: SortKey): Sort => ({ key, desc: false })
-
-  test('groups by each column and direction; ties by spend, then key', () => {
-    expect(keys(sortGroups([c, b, a], desc('spend')))).toEqual(['a', 'b', 'c'])
-    expect(keys(sortGroups([a, b, c], asc('spend')))).toEqual(['b', 'c', 'a'])
-    expect(keys(sortGroups([a, b, c], desc('turns')))).toEqual(['b', 'c', 'a'])
-    expect(keys(sortGroups([a, b, c], asc('turns')))).toEqual(['a', 'b', 'c'])
-    expect(keys(sortGroups([a, b, c], desc('agents')))).toEqual(['a', 'c', 'b'])
-    expect(keys(sortGroups([a, b, c], desc('last')))).toEqual(['b', 'c', 'a'])
-    expect(keys(sortGroups([a, b, c], asc('last')))).toEqual(['a', 'c', 'b'])
-  })
-
-  test('groups by start (the earliest of their sessions) and by running time', () => {
-    const lanes = new Map([
-      [
-        'a',
-        [lane({ id: '1', startedAt: '2026-11-05T00:00:00Z' }), lane({ id: '2', startedAt: '2026-11-02T00:00:00Z' })],
-      ],
-      ['b', [lane({ id: '3', startedAt: '2026-11-04T00:00:00Z' })]],
-      ['c', [lane({ id: '4', startedAt: '2026-11-03T00:00:00Z' })]],
-    ])
-    expect(keys(sortGroups([a, b, c], desc('start'), { lanes }))).toEqual(['b', 'c', 'a'])
-    expect(keys(sortGroups([a, b, c], asc('start'), { lanes }))).toEqual(['a', 'c', 'b'])
-    const run = (key: string, active: number[]) => group({ key, usd: 1, active })
-    const g1 = run('g1', [0, 1, 0, 2, 0])
-    const g2 = run('g2', [1, 1, 1, 0, 0])
-    const g3 = run('g3', [])
-    expect(keys(sortGroups([g3, g1, g2], desc('active')))).toEqual(['g2', 'g1', 'g3'])
-    expect(keys(sortGroups([g1, g2, g3], asc('active')))).toEqual(['g3', 'g1', 'g2'])
-  })
 
   test('running time: the slots with a call running, times the slot', () => {
     expect(activeSlots([0, 1, 0, 3, 2])).toBe(3)
     expect(activeMs([0, 1, 0, 3, 2], 600_000)).toBe(1_800_000)
     expect(activeMs([], 600_000)).toBe(0)
-    expect(earliestStart([lane({ id: 'x', startedAt: '2026-11-03T00:00:00Z' }), lane({ id: 'y' })])).toBe(
-      '2026-11-03T00:00:00Z',
-    )
-    expect(earliestStart(undefined)).toBe('')
-  })
-
-  test('does not change its input', () => {
-    const input = [c, a]
-    sortGroups(input, desc('spend'))
-    expect(input.map((g) => g.key)).toEqual(['c', 'a'])
   })
 
   const l1 = lane({
@@ -375,45 +314,10 @@ describe('sorting', () => {
     expect(ids(sortLanes([w1, w2, w3], asc('active')))).toEqual(['3', '1', '2'])
   })
 
-  test('lanes by group', () => {
-    const m = lanesByGroup([lane({ id: 'a', group: 'x' }), lane({ id: 'b', group: '' }), lane({ id: 'c', group: 'x' })])
-    expect(m.get('x')?.map((l) => l.id)).toEqual(['a', 'c'])
-    expect(m.get('')?.map((l) => l.id)).toEqual(['b'])
-  })
-})
-
-describe('rows by mode', () => {
-  const gx = group({ key: 'x', name: 'proj-x', usd: 6, sessions: 2 })
-  const gy = group({ key: 'y', name: 'proj-y', usd: 9, sessions: 1 })
-  const lanes = [
-    lane({ id: 'a', group: 'x', usd: 1 }),
-    lane({ id: 'b', group: 'x', usd: 5 }),
-    lane({ id: 'c', group: 'y', usd: 9 }),
-  ]
-  const o = { groups: [gx, gy], lanes }
-  const spend: Sort = { key: 'spend', desc: true }
-  const tag = (r: Row) => (r.kind === 'group' ? `g:${r.g.key}` : r.l.id)
-
-  test('sessions: every session flat, by the sort, with its project name', () => {
-    const rows = buildRows(o, 'sessions', spend)
-    expect(rows.map(tag)).toEqual(['c', 'b', 'a'])
-    expect(rows.map((r) => (r.kind === 'session' ? r.groupName : ''))).toEqual(['proj-y', 'proj-x', 'proj-x'])
-    expect(rows.every((r) => r.kind === 'session' && !r.nested)).toBe(true)
-  })
-
-  test('grouped: each group row then all its sessions, both by the sort', () => {
-    expect(buildRows(o, 'grouped', spend).map(tag)).toEqual(['g:y', 'c', 'g:x', 'b', 'a'])
-    expect(buildRows(o, 'grouped', { key: 'spend', desc: false }).map(tag)).toEqual(['g:x', 'a', 'b', 'g:y', 'c'])
-    expect(
-      buildRows(o, 'grouped', spend)
-        .filter((r) => r.kind === 'session')
-        .every((r) => r.kind === 'session' && r.nested),
-    ).toBe(true)
-  })
-
-  test('groups: the group rows alone', () => {
-    expect(buildRows(o, 'groups', spend).map(tag)).toEqual(['g:y', 'g:x'])
-    expect(buildRows(o, 'groups', { key: 'turns', desc: true }).map(tag)).toEqual(['g:y', 'g:x'])
+  test('does not change its input', () => {
+    const input = [l1, l2]
+    sortLanes(input, desc('spend'))
+    expect(ids(input)).toEqual(['1', '2'])
   })
 })
 
@@ -434,46 +338,26 @@ describe('row text', () => {
     expect(laneDescription(lane({ id: 'a' }))).toBe('')
   })
 
-  test('the group description names the priciest session', () => {
-    const g = group({ key: 'k', sessions: 18, priciest: { harness: 'claude', id: 'abcdef123456', usd: 96.2 } })
-    expect(groupDescription(g, 'big refactor')).toBe('18 sessions · priciest: big refactor $96.20')
-    expect(groupDescription(g)).toBe('18 sessions · priciest: abcdef12 $96.20')
-    expect(groupDescription(group({ key: 'k', sessions: 1 }))).toBe('1 session')
+  test('the folder line: the directory as shown, (none) without one', () => {
+    expect(folderText('/Users/a/work/merlin', '/Users/a')).toBe('~/work/merlin')
+    expect(folderText('/srv/x/y', '/Users/a')).toBe('/srv/x/y')
+    expect(folderText(undefined, '/Users/a')).toBe('(none)')
   })
 })
 
 describe('URL state', () => {
-  test('by and show, defaults for anything else', () => {
+  test('by: the folder unless it names another key', () => {
     expect(parseBy('repo')).toBe('repo')
     expect(parseBy('project')).toBe('dir')
+    expect(parseBy('none')).toBe('dir')
     expect(parseBy(null)).toBe('dir')
-    expect(parseShow('groups')).toBe('groups')
-    expect(parseShow('sessions')).toBe('sessions')
-    expect(parseShow('x')).toBe('grouped')
-    expect(parseShow(null)).toBe('grouped')
   })
 
-  test('an old flat link (by=none) is the folder key shown as sessions', () => {
-    expect(parseView('none', null)).toEqual({ by: 'dir', show: 'sessions' })
-    expect(parseView('none', 'groups')).toEqual({ by: 'dir', show: 'sessions' })
-    expect(parseView(null, null)).toEqual({ by: 'dir', show: 'grouped' })
-    expect(parseView('remote', 'groups')).toEqual({ by: 'remote', show: 'groups' })
-  })
-
-  test('a view writes only what is not the default, and reads back', () => {
-    expect(formatView('dir', 'grouped')).toEqual({ by: undefined, show: undefined })
-    expect(formatView('repo', 'sessions')).toEqual({ by: 'repo', show: 'sessions' })
-    const f = formatView('checkout', 'groups')
-    expect(parseView(f.by ?? null, f.show ?? null)).toEqual({ by: 'checkout', show: 'groups' })
-  })
-
-  test('in: empty is no selection; written as it is', () => {
+  test('in: empty is no selection', () => {
     expect(parseIn(null)).toBeNull()
     expect(parseIn('')).toBeNull()
     expect(parseIn('/Users/a/work')).toBe('/Users/a/work')
     expect(parseIn('-')).toBe(NONE_SEL)
-    expect(formatIn(null)).toBeUndefined()
-    expect(formatIn('/Users/a/work')).toBe('/Users/a/work')
   })
 
   test('sort and dir', () => {
@@ -534,84 +418,29 @@ describe('the key column', () => {
   })
 
   test('the tree orders its siblings with the same rule', () => {
-    const item = (key: string): IndexItem => ({ key, name: key, count: 1, usd: 1 })
-    const t = buildPlaceTree([item('/Users/a/work/yimple'), item('/Users/a/work'), item('/Users/a/work/merlin')], 'dir')
+    const item = (key: string): PlaceItem => ({ key, count: 1, usd: 1 })
+    const t = buildPlaceTree(
+      [item('/Users/a/work/yimple'), item('/Users/a/work'), item('/Users/a/work/merlin')],
+      'dir',
+      '/Users/a',
+    )
     expect(t.nodes[0].label).toBe('~/work')
     expect(t.nodes[0].children.map((n) => n.label)).toEqual(['merlin', 'yimple'])
   })
 
-  const gA = group({ key: '/Users/a/work/yimple', usd: 1 })
-  const gB = group({ key: '/Users/a/work/merlin', usd: 9 })
-  const gC = group({ key: '/Users/a/work', usd: 5 })
-  const gN = group({ key: '', usd: 100 })
-  const lanes = [
-    lane({ id: '1', group: gA.key, usd: 2 }),
-    lane({ id: '2', group: gB.key, usd: 3 }),
-    lane({ id: '3', group: gB.key, usd: 7 }),
-    lane({ id: '4', group: gC.key, usd: 1 }),
-    lane({ id: '5', group: '', usd: 50 }),
-  ]
-  const o = { groups: [gA, gB, gC, gN], lanes }
-  const home = '/Users/a'
-  const placeOf = (k: string) => placeSegs(k, 'dir', home)
-  const tag = (r: Row) => (r.kind === 'group' ? `g:${r.g.key.split('/').pop() || '-'}` : r.l.id)
-  const keyAsc: Sort = { key: 'key', desc: false }
-
-  test('sessions cluster by place in the tree order; (none) last, ties by spend', () => {
-    expect(buildRows(o, 'sessions', keyAsc, { placeOf }).map(tag)).toEqual(['4', '3', '2', '1', '5'])
-    // descending reverses the places, (none) stays last
-    expect(buildRows(o, 'sessions', { key: 'key', desc: true }, { placeOf }).map(tag)).toEqual([
-      '1',
-      '3',
-      '2',
-      '4',
-      '5',
-    ])
-  })
-
-  test('grouped and groups: groups by place, the sessions inside by spend', () => {
-    expect(buildRows(o, 'grouped', keyAsc, { placeOf }).map(tag)).toEqual([
-      'g:work',
-      '4',
-      'g:merlin',
-      '3',
-      '2',
-      'g:yimple',
-      '1',
-      'g:-',
-      '5',
-    ])
-    expect(buildRows(o, 'groups', keyAsc, { placeOf }).map(tag)).toEqual(['g:work', 'g:merlin', 'g:yimple', 'g:-'])
-    expect(buildRows(o, 'groups', { key: 'key', desc: true }, { placeOf }).map(tag)).toEqual([
-      'g:yimple',
-      'g:merlin',
-      'g:work',
-      'g:-',
-    ])
-  })
-
-  test('sessions sort by the folder they ran in, falling back to their group', () => {
+  test('sessions cluster by their folder in the tree order; no folder last, ties by spend', () => {
     const ls = [
-      lane({ id: 'a', group: gC.key, dir: '/Users/a/work/yimple', usd: 1 }),
-      lane({ id: 'b', group: gC.key, dir: '/Users/a/work/merlin/web', usd: 1 }),
-      lane({ id: 'c', group: gC.key, dir: '/Users/a/work/merlin', usd: 1 }),
-      lane({ id: 'd', group: gC.key, usd: 9 }),
+      lane({ id: 'a', dir: '/Users/a/work/yimple', usd: 2 }),
+      lane({ id: 'b', dir: '/Users/a/work/merlin/web', usd: 1 }),
+      lane({ id: 'c', dir: '/Users/a/work/merlin', usd: 3 }),
+      lane({ id: 'd', dir: '/Users/a/work/merlin', usd: 7 }),
+      lane({ id: 'e', dir: '/Users/a/work', usd: 1 }),
+      lane({ id: 'f', usd: 50 }),
     ]
-    const lanePlaceOf = (l: OverviewLane) => (l.dir ? placeSegs(l.dir, 'dir', home) : placeOf(l.group))
-    const order = (desc: boolean) => sortLanes(ls, { key: 'key', desc }, { placeOf, lanePlaceOf }).map((l) => l.id)
-    // the group's own place ~/work comes first
-    expect(order(false)).toEqual(['d', 'c', 'b', 'a'])
-    expect(order(true)).toEqual(['a', 'b', 'c', 'd'])
-  })
-
-  test('the place and the text of a key', () => {
-    expect(placeSegs('/Users/a/work/merlin', 'dir', home)).toEqual(['~', 'work', 'merlin'])
-    expect(placeSegs('', 'dir', home)).toBeNull()
-    expect(keyText('/Users/a/work/merlin', 'dir', home)).toBe('~/work/merlin')
-    expect(keyText('/Users/a/work/merlin/.bare', 'repo', home)).toBe('~/work/merlin')
-    expect(keyText('/srv/x/y', 'dir', home)).toBe('/srv/x/y')
-    expect(keyText('github.com/acme/api', 'remote', undefined)).toBe('github.com/acme/api')
-    expect(keyText('', 'dir', home)).toBe('(none)')
+    const order = (desc: boolean) => sortLanes(ls, { key: 'key', desc }, '/Users/a').map((l) => l.id)
+    expect(order(false)).toEqual(['e', 'd', 'c', 'b', 'a', 'f'])
+    // descending reverses the folders, no folder stays last
+    expect(order(true)).toEqual(['a', 'b', 'd', 'c', 'e', 'f'])
   })
 
   test('fitTail keeps the end, cuts at a slash, and falls back to the last segment', () => {
@@ -731,91 +560,32 @@ describe('fitLabels', () => {
   })
 })
 
-describe('lastLabel', () => {
-  const now = new Date(2026, 10, 12, 15, 0).getTime()
-  const ago = (ms: number) => new Date(now - ms).toISOString()
-  test('compact forms', () => {
-    expect(lastLabel(ago(20_000), now)).toBe('now')
-    expect(lastLabel(ago(5 * MIN), now)).toBe('5 min')
-    expect(lastLabel(ago(2 * HOUR), now)).toBe('2 h')
-    expect(lastLabel(new Date(2026, 10, 11, 9, 0).toISOString(), now)).toBe('yesterday')
-    expect(lastLabel(new Date(2026, 10, 9, 9, 0).toISOString(), now)).toBe('9 Nov')
-    expect(lastLabel(undefined, now)).toBe('–')
-  })
-})
-
 describe('search', () => {
-  const g1 = group({ key: 'a', name: 'payments', sessions: 2 })
-  const g2 = group({ key: 'b', name: 'website', sessions: 1 })
-  const l1 = lane({
-    id: 'aaaa1111',
-    group: 'a',
-    title: 'Fix the retry loop',
-    recap: { text: 'Working on BACKOFF' } as never,
-  })
-  const l2 = lane({ id: 'bbbb2222', group: 'a', name: 'migration' })
-  const l3 = lane({
-    id: 'cccc3333',
-    group: 'b',
-    harness: 'codex',
-    firstPrompt: { text: 'Make the header sticky' } as never,
-  })
-  const o = { groups: [g1, g2], lanes: [l1, l2, l3] }
+  const l1 = lane({ id: 'aaaa1111', title: 'Fix the retry loop', recap: { text: 'Working on BACKOFF' } as never })
+  const l2 = lane({ id: 'bbbb2222', name: 'migration' })
+  const l3 = lane({ id: 'cccc3333', harness: 'codex', firstPrompt: { text: 'Make the header sticky' } as never })
+  const all = [l1, l2, l3]
 
-  test('matches head, description and group name, case-insensitively', () => {
-    expect(laneMatches(l1, 'payments', 'retry')).toBe(true)
-    expect(laneMatches(l1, 'payments', 'backoff')).toBe(true)
-    expect(laneMatches(l3, 'website', 'sticky')).toBe(true)
-    expect(laneMatches(l2, 'payments', 'bbbb')).toBe(true)
-    expect(laneMatches(l2, 'payments', 'PAYM'.toLowerCase())).toBe(true)
-    expect(laneMatches(l2, 'payments', 'sticky')).toBe(false)
+  test('matches head and description, case-insensitively', () => {
+    expect(laneMatches(l1, 'retry')).toBe(true)
+    expect(laneMatches(l1, 'backoff')).toBe(true)
+    expect(laneMatches(l3, 'sticky')).toBe(true)
+    expect(laneMatches(l2, 'bbbb')).toBe(true)
+    expect(laneMatches(l2, 'migr')).toBe(true)
+    expect(laneMatches(l2, 'sticky')).toBe(false)
   })
 
   test('server hits count for terms of two characters or more', () => {
     const hits = new Set(['claude/bbbb2222'])
-    expect(laneMatches(l2, 'payments', 'zz', hits)).toBe(true)
-    expect(laneMatches(l2, 'payments', 'z', hits)).toBe(false)
-    expect(laneMatches(l1, 'payments', 'zz', hits)).toBe(false)
+    expect(laneMatches(l2, 'zz', hits)).toBe(true)
+    expect(laneMatches(l2, 'z', hits)).toBe(false)
+    expect(laneMatches(l1, 'zz', hits)).toBe(false)
   })
 
-  test('an empty term keeps everything', () => {
-    const f = filterOverview(o, '  ')
-    expect(f.groups).toHaveLength(2)
-    expect(f.lanes).toHaveLength(3)
-    expect(f.shown.get('a')).toBe(2)
-  })
-
-  test('only groups with a match remain, with only matching sessions', () => {
-    const f = filterOverview(o, 'sticky')
-    expect(f.groups.map((g) => g.key)).toEqual(['b'])
-    expect(f.lanes.map((l) => l.id)).toEqual(['cccc3333'])
-    expect(f.shown.get('b')).toBe(1)
-  })
-
-  test('a group whose name matches counts all its sessions', () => {
-    const f = filterOverview(o, 'Payments')
-    expect(f.groups.map((g) => g.key)).toEqual(['a'])
-    expect(f.shown.get('a')).toBe(2)
-  })
-
-  test('nothing matches: empty', () => {
-    const f = filterOverview(o, 'nope')
-    expect(f.groups).toEqual([])
-    expect(f.lanes).toEqual([])
-  })
-
-  test('the group description says how many sessions match', () => {
-    const g = group({ key: 'k', sessions: 18 })
-    expect(groupDescription(g, undefined, 3)).toBe('3 of 18 sessions match')
-    expect(groupDescription(g, undefined, 18)).toBe('18 sessions')
-  })
-})
-
-describe('group harnesses', () => {
-  test('distinct, most sessions first, at most three', () => {
-    const ls = ['codex', 'claude', 'pi', 'codex', 'claude', 'claude', 'x'].map((harness) => ({ harness }))
-    expect(groupHarnesses(ls)).toEqual(['claude', 'codex', 'pi'])
-    expect(groupHarnesses([])).toEqual([])
+  test('the matching sessions; an empty term keeps them all', () => {
+    expect(searchLanes(all, '  ')).toBe(all)
+    expect(searchLanes(all, ' Sticky ').map((l) => l.id)).toEqual(['cccc3333'])
+    expect(searchLanes(all, 'nope')).toEqual([])
   })
 })
 
@@ -845,7 +615,7 @@ describe('hover geometry', () => {
 })
 
 describe('the place tree', () => {
-  const item = (key: string, count = 1, usd = 1): IndexItem => ({ key, name: key.split('/').pop() ?? key, count, usd })
+  const item = (key: string, count = 1, usd = 1): PlaceItem => ({ key, count, usd })
   const shape = (ns: PlaceNode[]): unknown[] =>
     ns.map((n) => (n.children.length ? [n.label, shape(n.children)] : n.label))
 
@@ -866,6 +636,7 @@ describe('the place tree', () => {
         item('/tmp/scratch'),
       ],
       'dir',
+      '/Users/ann',
     )
     expect(shape(t.nodes)).toEqual([
       '/tmp/scratch',
@@ -874,11 +645,15 @@ describe('the place tree', () => {
   })
 
   test('a group that has children is both: its figures are the subtree sums', () => {
-    const t = buildPlaceTree([item('/Users/a/x', 2, 10), item('/Users/a/x/web', 3, 5), item('/Users/a/y', 1, 1)], 'dir')
+    const t = buildPlaceTree(
+      [item('/Users/a/x', 2, 10), item('/Users/a/x/web', 3, 5), item('/Users/a/y', 1, 1)],
+      'dir',
+      '/Users/a',
+    )
     const [home] = t.nodes
     expect(home.label).toBe('~')
     const x = home.children.find((n) => n.label === 'x')
-    expect(x?.group?.key).toBe('/Users/a/x')
+    expect(x?.place?.key).toBe('/Users/a/x')
     expect(x?.count).toBe(5)
     expect(x?.usd).toBe(15)
     expect(home.count).toBe(6)
@@ -889,33 +664,37 @@ describe('the place tree', () => {
     const t = buildPlaceTree(
       [item('/Users/a/w/merlin/.bare'), item('/Users/a/o/merlin/.git'), item('/Users/a/merlin/.git')],
       'repo',
+      '/Users/a',
     )
     expect(shape(t.nodes)).toEqual([['~', ['merlin', 'o/merlin', 'w/merlin']]])
-    expect(t.nodes[0].children[0].group?.key).toBe('/Users/a/merlin/.git')
+    expect(t.nodes[0].children[0].place?.key).toBe('/Users/a/merlin/.git')
   })
 
   test('remotes split into host, owner and name; local paths stay paths', () => {
     const t = buildPlaceTree(
       [item('github.com/acme/api'), item('github.com/acme/web'), item('git.example.test/x/y'), item('/srv/git/app')],
       'remote',
+      undefined,
     )
     expect(shape(t.nodes)).toEqual(['/srv/git/app', 'git.example.test/x/y', ['github.com/acme', ['api', 'web']]])
     expect(t.nodes.map((n) => !!n.host)).toEqual([false, true, true])
   })
 
-  test('the group with no value is apart, not in the tree', () => {
-    const t = buildPlaceTree([item('', 4, 2), item('/tmp/a')], 'dir')
+  test('the empty place is apart, not in the tree', () => {
+    const t = buildPlaceTree([item('', 4, 2), item('/tmp/a')], 'dir', undefined)
     expect(t.none?.count).toBe(4)
     expect(shape(t.nodes)).toEqual(['/tmp/a'])
     expect(t.nodes[0].count).toBe(1)
   })
 
   test('paths with no shared home stay absolute', () => {
-    expect(shape(buildPlaceTree([item('/srv/a/x'), item('/srv/a/y')], 'dir').nodes)).toEqual([['/srv/a', ['x', 'y']]])
+    expect(shape(buildPlaceTree([item('/srv/a/x'), item('/srv/a/y')], 'dir', undefined).nodes)).toEqual([
+      ['/srv/a', ['x', 'y']],
+    ])
   })
 
-  test('visible rows follow the open state; a hidden group is marked by its closed folder', () => {
-    const t = buildPlaceTree([item('/Users/a/x'), item('/Users/a/x/web'), item('/Users/a/y')], 'dir')
+  test('visible rows follow the open state; a hidden place is marked by its closed folder', () => {
+    const t = buildPlaceTree([item('/Users/a/x'), item('/Users/a/x/web'), item('/Users/a/y')], 'dir', '/Users/a')
     const all = visibleRows(t.nodes, new Set())
     expect(all.map((r) => [r.node.label, r.depth])).toEqual([
       ['~', 0],
@@ -934,126 +713,142 @@ describe('the place tree', () => {
 })
 
 describe('the selection', () => {
-  const item = (key: string, count = 1, usd = 1): IndexItem => ({ key, name: key.split('/').pop() ?? key, count, usd })
-  const g = (key: string) => ({ key })
+  const item = (key: string, count = 1, usd = 1): PlaceItem => ({ key, count, usd })
 
-  test('a group is under a path when its segments start with the path, not its characters', () => {
-    expect(underPath(g('/Users/a/work/merlin'), '/Users/a/work', 'dir')).toBe(true)
-    expect(underPath(g('/Users/a/work'), '/Users/a/work', 'dir')).toBe(true)
-    expect(underPath(g('/Users/a/workshop'), '/Users/a/work', 'dir')).toBe(false)
-    expect(underPath(g('/Users/a'), '/Users/a/work', 'dir')).toBe(false)
-    expect(underPath(g('/Users/a/work/merlin'), null, 'dir')).toBe(true)
-    expect(underPath(g(''), null, 'dir')).toBe(true)
+  test('a place is under a path when its segments start with the path, not its characters', () => {
+    expect(underPath('/Users/a/work/merlin', '/Users/a/work', 'dir')).toBe(true)
+    expect(underPath('/Users/a/work', '/Users/a/work', 'dir')).toBe(true)
+    expect(underPath('/Users/a/workshop', '/Users/a/work', 'dir')).toBe(false)
+    expect(underPath('/Users/a', '/Users/a/work', 'dir')).toBe(false)
+    expect(underPath('/Users/a/work/merlin', null, 'dir')).toBe(true)
+    expect(underPath('', null, 'dir')).toBe(true)
   })
 
-  test('(none) selects the group with the empty key alone', () => {
-    expect(underPath(g(''), NONE_SEL, 'dir')).toBe(true)
-    expect(underPath(g('/Users/a'), NONE_SEL, 'dir')).toBe(false)
-    expect(underPath(g(''), '/Users/a', 'dir')).toBe(false)
+  test('(none) selects the empty place alone', () => {
+    expect(underPath('', NONE_SEL, 'dir')).toBe(true)
+    expect(underPath('/Users/a', NONE_SEL, 'dir')).toBe(false)
+    expect(underPath('', '/Users/a', 'dir')).toBe(false)
   })
 
   test('a repository stands at its directory: .git and .bare do not count', () => {
-    expect(underPath(g('/Users/a/work/merlin/.bare'), '/Users/a/work', 'repo')).toBe(true)
-    expect(underPath(g('/Users/a/work/merlin/.bare'), '/Users/a/work/merlin', 'repo')).toBe(true)
-    expect(underPath(g('/Users/a/work/merlin/.bare'), '/Users/a/work/merlin/.bare', 'repo')).toBe(false)
-    expect(underPath(g('/Users/a/merlin/.git'), '/Users/a/merlin', 'repo')).toBe(true)
+    expect(underPath('/Users/a/work/merlin/.bare', '/Users/a/work', 'repo')).toBe(true)
+    expect(underPath('/Users/a/work/merlin/.bare', '/Users/a/work/merlin', 'repo')).toBe(true)
+    expect(underPath('/Users/a/work/merlin/.bare', '/Users/a/work/merlin/.bare', 'repo')).toBe(false)
+    expect(underPath('/Users/a/merlin/.git', '/Users/a/merlin', 'repo')).toBe(true)
   })
 
   test('a remote is under its host and owner', () => {
-    expect(underPath(g('github.com/acme/api'), 'github.com/acme', 'remote')).toBe(true)
-    expect(underPath(g('github.com/acme/api'), 'github.com', 'remote')).toBe(true)
-    expect(underPath(g('github.com/acme/api'), 'github.com/acm', 'remote')).toBe(false)
-    expect(underPath(g('gitlab.com/acme/api'), 'github.com/acme', 'remote')).toBe(false)
+    expect(underPath('github.com/acme/api', 'github.com/acme', 'remote')).toBe(true)
+    expect(underPath('github.com/acme/api', 'github.com', 'remote')).toBe(true)
+    expect(underPath('github.com/acme/api', 'github.com/acm', 'remote')).toBe(false)
+    expect(underPath('gitlab.com/acme/api', 'github.com/acme', 'remote')).toBe(false)
   })
 
-  const o = {
-    groups: [
-      group({ key: '/Users/a/work/merlin', usd: 5, sessions: 2 }),
-      group({ key: '/Users/a/work/yimple', usd: 3, sessions: 1 }),
-      group({ key: '/Users/a/play', usd: 1, sessions: 1 }),
-      group({ key: '', usd: 2, sessions: 1 }),
-    ],
-    lanes: [
-      lane({ id: '1', group: '/Users/a/work/merlin' }),
-      lane({ id: '2', group: '/Users/a/work/merlin' }),
-      lane({ id: '3', group: '/Users/a/work/yimple' }),
-      lane({ id: '4', group: '/Users/a/play' }),
-      lane({ id: '5', group: '' }),
-    ],
-  }
+  // the merlin sessions ran in two worktrees of one repository; 4 in no repository
+  const lanes = [
+    lane({
+      id: '1',
+      dir: '/Users/a/work/merlin/main',
+      checkout: '/Users/a/work/merlin/main',
+      repo: '/Users/a/work/merlin/.bare',
+      remote: 'github.com/a/merlin',
+      usd: 5,
+    }),
+    lane({
+      id: '2',
+      dir: '/Users/a/work/merlin/wt/web',
+      checkout: '/Users/a/work/merlin/wt',
+      repo: '/Users/a/work/merlin/.bare',
+      remote: 'github.com/a/merlin',
+      usd: 2,
+    }),
+    lane({
+      id: '3',
+      dir: '/Users/a/work/yimple',
+      checkout: '/Users/a/work/yimple',
+      repo: '/Users/a/work/yimple/.git',
+      usd: 3,
+    }),
+    lane({ id: '4', dir: '/Users/a/play', usd: 1 }),
+  ]
+  const ids = (ls: OverviewLane[]) => ls.map((l) => l.id)
 
-  test('the overview narrows to the groups at or under the selection, with their sessions', () => {
-    const all = filterOverview(o, '')
-    expect(selectOverview(all, null, 'dir')).toBe(all)
-    const w = selectOverview(all, '/Users/a/work', 'dir')
-    expect(w.groups.map((x) => x.key)).toEqual(['/Users/a/work/merlin', '/Users/a/work/yimple'])
-    expect(w.lanes.map((l) => l.id)).toEqual(['1', '2', '3'])
-    expect([...w.shown]).toEqual([
-      ['/Users/a/work/merlin', 2],
-      ['/Users/a/work/yimple', 1],
+  test("a session's place is its value of the key", () => {
+    expect(placeOf(lanes[1], 'dir')).toBe('/Users/a/work/merlin/wt/web')
+    expect(placeOf(lanes[1], 'checkout')).toBe('/Users/a/work/merlin/wt')
+    expect(placeOf(lanes[1], 'repo')).toBe('/Users/a/work/merlin/.bare')
+    expect(placeOf(lanes[2], 'remote')).toBe('')
+  })
+
+  test('the places of the sessions, with counts and spend; the empty one too', () => {
+    expect(placeItems(lanes, 'repo')).toEqual([
+      { key: '/Users/a/work/merlin/.bare', count: 2, usd: 7 },
+      { key: '/Users/a/work/yimple/.git', count: 1, usd: 3 },
+      { key: '', count: 1, usd: 1 },
     ])
-    expect(selectOverview(all, '-', 'dir').lanes.map((l) => l.id)).toEqual(['5'])
-    expect(selectOverview(all, '/nope', 'dir').groups).toEqual([])
+    expect(placeItems(lanes, 'remote').map((i) => [i.key, i.count])).toEqual([
+      ['github.com/a/merlin', 2],
+      ['', 2],
+    ])
   })
 
-  test('the selection follows the search: it narrows what the search left', () => {
-    const found = filterOverview(o, 'yimple')
-    expect(selectOverview(found, '/Users/a/work', 'dir').groups.map((x) => x.key)).toEqual(['/Users/a/work/yimple'])
-    expect(selectOverview(found, '/Users/a/play', 'dir').groups).toEqual([])
+  test('the scope is the sessions whose place sits at or under the selection, under the key', () => {
+    expect(selectLanes(lanes, null, 'dir')).toBe(lanes)
+    expect(ids(selectLanes(lanes, '/Users/a/work', 'dir'))).toEqual(['1', '2', '3'])
+    expect(ids(selectLanes(lanes, '/Users/a/work/merlin', 'repo'))).toEqual(['1', '2'])
+    expect(ids(selectLanes(lanes, '/Users/a/work/merlin/wt', 'checkout'))).toEqual(['2'])
+    expect(ids(selectLanes(lanes, '-', 'remote'))).toEqual(['3', '4'])
+    expect(selectLanes(lanes, '/nope', 'dir')).toEqual([])
   })
 
-  test('All is the sum of what the items list', () => {
-    expect(totalOf([item('a', 2, 10), item('b', 3, 5.5), item('', 1, 1)])).toEqual({ count: 6, usd: 16.5 })
-    expect(totalOf([])).toEqual({ count: 0, usd: 0 })
-  })
-
-  test('a selection is kept on a new key only where a group sits under it', () => {
-    const repos = [g('/Users/a/work/merlin/.bare'), g('/Users/a/play/x/.git')]
-    expect(keepSelection('/Users/a/work', repos, 'repo')).toBe('/Users/a/work')
-    expect(keepSelection('/Users/a/other', repos, 'repo')).toBeNull()
-    expect(keepSelection('github.com/acme', repos, 'remote')).toBeNull()
-    expect(keepSelection('-', [g('')], 'remote')).toBe('-')
-    expect(keepSelection(null, repos, 'repo')).toBeNull()
+  test('a selection is kept on a new key only where a session sits under it', () => {
+    expect(keepSelection('/Users/a/work', lanes, 'repo')).toBe('/Users/a/work')
+    expect(keepSelection('/Users/a/play', lanes, 'repo')).toBeNull()
+    expect(keepSelection('github.com/a', lanes, 'remote')).toBe('github.com/a')
+    expect(keepSelection('github.com/a', lanes, 'dir')).toBeNull()
+    expect(keepSelection('-', lanes, 'repo')).toBe('-')
+    expect(keepSelection(null, lanes, 'repo')).toBeNull()
   })
 
   test('the tree nodes carry the real path; the home is spelled out', () => {
-    const t = buildPlaceTree([item('/Users/a/work/merlin'), item('/Users/a/work/yimple'), item('/Users/a/play')], 'dir')
-    expect(t.home).toBe('/Users/a')
+    const t = buildPlaceTree(
+      [item('/Users/a/work/merlin'), item('/Users/a/work/yimple'), item('/Users/a/play')],
+      'dir',
+      '/Users/a',
+    )
     const [home] = t.nodes
     expect(home.path).toBe('/Users/a')
     expect(home.children.map((n) => n.path)).toEqual(['/Users/a/play', '/Users/a/work'])
     expect(home.children[1].children.map((n) => n.path)).toEqual(['/Users/a/work/merlin', '/Users/a/work/yimple'])
     // a compacted chain is its deepest path
-    const c = buildPlaceTree([item('/Users/a/src/github.com/acme/api'), item('/Users/a/x')], 'dir')
+    const c = buildPlaceTree([item('/Users/a/src/github.com/acme/api'), item('/Users/a/x')], 'dir', '/Users/a')
     expect(c.nodes[0].children.map((n) => [n.label, n.path])).toEqual([
       ['src/github.com/acme/api', '/Users/a/src/github.com/acme/api'],
       ['x', '/Users/a/x'],
     ])
-    const r = buildPlaceTree([item('github.com/acme/api'), item('github.com/acme/web')], 'remote')
+    const r = buildPlaceTree([item('github.com/acme/api'), item('github.com/acme/web')], 'remote', undefined)
     expect(r.nodes[0].path).toBe('github.com/acme')
     expect(r.nodes[0].children.map((n) => n.path)).toEqual(['github.com/acme/api', 'github.com/acme/web'])
-    const b = buildPlaceTree([item('/Users/a/w/merlin/.bare'), item('/Users/a/x/.git')], 'repo')
+    const b = buildPlaceTree([item('/Users/a/w/merlin/.bare'), item('/Users/a/x/.git')], 'repo', '/Users/a')
     expect(b.nodes[0].children.map((n) => n.path)).toEqual(['/Users/a/w/merlin', '/Users/a/x'])
-  })
-
-  test("a fixed home is used instead of the items' own", () => {
-    const t = buildPlaceTree([item('/srv/a/x')], 'dir', { home: undefined })
-    expect(t.home).toBeUndefined()
-    expect(groupsHome(['/Users/a/x', '/Users/a/y'], 'dir')).toBe('/Users/a')
-    expect(groupsHome(['/Users/a/w/m/.bare', '/Users/a/y/.git'], 'repo')).toBe('/Users/a')
   })
 
   test('the node of a path and the folders to open above it', () => {
     const t = buildPlaceTree(
       [item('/Users/a/x/web'), item('/Users/a/x/api'), item('/Users/a/y/z/deep'), item('/Users/a/y/z/also')],
       'dir',
+      '/Users/a',
     )
     const web = nodeForPath(t.nodes, '/Users/a/x/web')
     expect(web?.label).toBe('web')
     expect(nodeForPath(t.nodes, '/Users/a/x')?.label).toBe('x')
     expect(nodeForPath(t.nodes, '/nope')).toBeNull()
     // a folder inside a compacted chain is the chain's node
-    const chain = buildPlaceTree([item('/Users/a/work/m/web'), item('/Users/a/work/m'), item('/Users/a/x')], 'dir')
+    const chain = buildPlaceTree(
+      [item('/Users/a/work/m/web'), item('/Users/a/work/m'), item('/Users/a/x')],
+      'dir',
+      '/Users/a',
+    )
     expect(nodeForPath(chain.nodes, '/Users/a/work')).toBe(nodeForPath(chain.nodes, '/Users/a/work/m'))
     expect(nodeForPath(chain.nodes, '/Users/a/work')?.label).toBe('work/m')
     const ids = ancestorIds(t.nodes, '/Users/a/x/web')

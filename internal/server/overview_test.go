@@ -74,54 +74,39 @@ func TestOverviewRoute(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("status %d", code)
 	}
-	if o.Slot != "1h" || o.SlotMs != 3600000 || o.Slots != 168 || o.By != "dir" ||
+	if o.Slot != "1h" || o.SlotMs != 3600000 || o.Slots != 168 ||
 		o.From.Format(time.RFC3339) != "2026-12-25T12:00:00Z" || o.To.Format(time.RFC3339) != "2027-01-01T12:00:00Z" {
 		t.Fatalf("header: %+v", o)
 	}
-	if len(o.Groups) != 2 || o.Groups[0].Key != "/other" || o.Groups[1].Key != "/main" {
-		t.Fatalf("groups: %+v", o.Groups)
+	// By usd: c (8), then b (m3, 4: the copy of m1 is a's), then a (m1 and m2, 3); the scripted
+	// run is apart.
+	if len(o.Lanes) != 3 || o.Lanes[0].ID != "c" || o.Lanes[1].ID != "b" || o.Lanes[2].ID != "a" {
+		t.Fatalf("lanes: %+v", o.Lanes)
 	}
-	main := o.Groups[1] // /other spent 8, /main 7
-	if len(main.USDSlots) != 168 || len(main.ContextPeak) != 168 || len(main.ContextSum) != 168 || len(main.Active) != 168 {
-		t.Fatalf("arrays not dense")
+	c, b, a := o.Lanes[0], o.Lanes[1], o.Lanes[2]
+	if !near(c.USD, 8) || !near(b.USD, 4) || !near(a.USD, 3) || c.Dir != "/other" || b.Dir != "/main" {
+		t.Errorf("usd %v %v %v, dirs %q %q", c.USD, b.USD, a.USD, c.Dir, b.Dir)
 	}
-	// m1 once ($1) + m2 ($2) + m3 ($4); the scripted run is apart.
-	if !near(main.USD, 7) || main.Sessions != 2 || main.Name != "main" {
-		t.Errorf("main: usd %v sessions %d name %q", main.USD, main.Sessions, main.Name)
+	// a: m1 at 09:00Z (slot 165) and m2 at 10:10Z (slot 166): trimmed to those two. b: m3 at
+	// 09:20Z (slot 165) only.
+	if a.Slot0 != 165 || len(a.Context) != 2 || len(a.Idle) != 2 || len(a.Active) != 2 || a.Context[0] != 1000 || a.Context[1] != 4000 {
+		t.Errorf("lane a: slot0 %d, %v %v", a.Slot0, a.Context, a.Idle)
 	}
-	// 09:00Z is slot 165 (from 12:00Z Dec 25 + 165h), 10:10Z is slot 166.
-	if i := 165; !near(main.USDSlots[i], 5) || !near(main.USDSlots[i+1], 2) {
-		t.Errorf("slots %v %v", main.USDSlots[165], main.USDSlots[166])
-	}
-	if main.ContextSum[165] != 1500 || main.ContextPeak[165] != 1000 || main.ContextPeak[166] != 4000 {
-		t.Errorf("context: sum %d peak %d / %d", main.ContextSum[165], main.ContextPeak[165], main.ContextPeak[166])
-	}
-	// a's m1 (09:00) is followed by m2 70 minutes later: idle until then, but slot 165 holds
-	// m1 as context and slot 166 has m2's.
-	if len(main.IdleSum) != 168 || len(main.IdlePeak) != 168 || main.IdleSum[165] != 0 || main.IdleSum[166] != 0 {
-		t.Errorf("idle: %v", main.IdleSum[160:])
-	}
-	if main.Turns != 2 || main.Agents != 1 {
-		t.Errorf("main: turns %d agents %d", main.Turns, main.Agents)
+	if b.Slot0 != 165 || len(b.Context) != 1 || a.Turns != 1 || a.Agents != 1 || b.Agents != 0 {
+		t.Errorf("lane b: slot0 %d, %d slots; turns a %d, agents a %d b %d", b.Slot0, len(b.Context), a.Turns, a.Agents, b.Agents)
 	}
 	// The agent (a zero-length span: no end, no messages) and the fork b.
 	t1 := testNow.Add(-3 * time.Hour)
-	wantSpans := []catalog.OverviewSpan{
-		{Kind: "subagent", Start: t1.Add(time.Minute), End: t1.Add(time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "a"}},
-		{Kind: "session-fork", Start: t1.Add(10 * time.Minute), End: t1.Add(70 * time.Minute), Session: catalog.SessionRef{Harness: "claude", ID: "b"}, Title: "title b"},
+	if want := []catalog.OverviewSpan{{Kind: "subagent", Start: t1.Add(time.Minute), End: t1.Add(time.Minute),
+		Session: catalog.SessionRef{Harness: "claude", ID: "a"}}}; !reflect.DeepEqual(a.Spans, want) {
+		t.Errorf("a spans %+v, want %+v", a.Spans, want)
 	}
-	if !reflect.DeepEqual(main.Spans, wantSpans) {
-		t.Errorf("spans %+v, want %+v", main.Spans, wantSpans)
+	if want := []catalog.OverviewSpan{{Kind: "session-fork", Start: t1.Add(10 * time.Minute), End: t1.Add(70 * time.Minute),
+		Session: catalog.SessionRef{Harness: "claude", ID: "b"}, Title: "title b"}}; !reflect.DeepEqual(b.Spans, want) {
+		t.Errorf("b spans %+v, want %+v", b.Spans, want)
 	}
-	if o.Scripted.Sessions != 1 || !near(o.Scripted.USD, 0.5) || len(o.Scripted.USDSlots) != 168 {
+	if o.Scripted.Sessions != 1 || !near(o.Scripted.USD, 0.5) {
 		t.Errorf("scripted %+v", o.Scripted)
-	}
-	// Lanes come without group: /other first (the group order), then /main by usd: b, a.
-	if len(o.Lanes) != 3 || o.Lanes[0].ID != "c" || o.Lanes[1].ID != "b" || o.Lanes[2].ID != "a" || o.Lanes[1].Group != "/main" {
-		t.Errorf("lanes: %+v", o.Lanes)
-	}
-	if main.Priciest.ID != "b" {
-		t.Errorf("priciest %+v", main.Priciest)
 	}
 }
 
@@ -161,33 +146,47 @@ func TestOverviewRoutePreviews(t *testing.T) {
 	if c.Name != "" || c.Recap != nil || c.FirstPrompt != nil || c.LastPrompt != nil {
 		t.Errorf("c: %+v", c)
 	}
-	resp, err := http.Get(r.srv.URL + "/api/overview?group=%2Fother")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	var keys struct {
-		Lanes []map[string]json.RawMessage `json:"lanes"`
-	}
-	if err := json.Unmarshal(raw, &keys); err != nil || len(keys.Lanes) != 1 {
-		t.Fatalf("wire: %v %d", err, len(keys.Lanes))
-	}
+	// c is the first lane on the wire: without the keys it has no value for.
 	for _, k := range []string{"name", "recap", "firstPrompt", "lastPrompt"} {
-		if _, has := keys.Lanes[0][k]; has {
+		if _, has := r.wireLanes()[0][k]; has {
 			t.Errorf("key %q on a lane without it", k)
 		}
 	}
 }
 
+// wireLanes is /api/overview's lanes as raw JSON objects, and its top level.
+func (r *rig) wireLanes() []map[string]json.RawMessage {
+	lanes, _ := r.wire()
+	return lanes
+}
+
+func (r *rig) wire() ([]map[string]json.RawMessage, map[string]json.RawMessage) {
+	r.t.Helper()
+	resp, err := http.Get(r.srv.URL + "/api/overview")
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var top map[string]json.RawMessage
+	var lanes []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &top); err != nil {
+		r.t.Fatal(err)
+	}
+	if err := json.Unmarshal(top["lanes"], &lanes); err != nil || len(lanes) == 0 {
+		r.t.Fatalf("lanes on the wire: %v, %d", err, len(lanes))
+	}
+	return lanes, top
+}
+
 func TestOverviewRouteParameters(t *testing.T) {
 	r := ovRig(t)
 	from, to := testNow.Add(-4*time.Hour), testNow
-	// RFC 3339 and Unix milliseconds name the same range; project is dir.
+	// RFC 3339 and Unix milliseconds name the same range; a by= of an older page is ignored.
 	var rfc, ms Overview
-	r.get("/api/overview?by=project&slot=1h&from="+url.QueryEscape(from.Format(time.RFC3339))+"&to="+url.QueryEscape(to.Format(time.RFC3339)), &rfc)
-	r.get("/api/overview?by=dir&slot=1h&from="+strconv.FormatInt(from.UnixMilli(), 10)+"&to="+strconv.FormatInt(to.UnixMilli(), 10), &ms)
-	if !reflect.DeepEqual(rfc, ms) || rfc.Slots != 4 || rfc.By != "dir" {
+	r.get("/api/overview?by=repo&slot=1h&from="+url.QueryEscape(from.Format(time.RFC3339))+"&to="+url.QueryEscape(to.Format(time.RFC3339)), &rfc)
+	r.get("/api/overview?slot=1h&from="+strconv.FormatInt(from.UnixMilli(), 10)+"&to="+strconv.FormatInt(to.UnixMilli(), 10), &ms)
+	if !reflect.DeepEqual(rfc, ms) || rfc.Slots != 4 || len(rfc.Lanes) != 3 {
 		t.Errorf("rfc %+v\n ms %+v", rfc, ms)
 	}
 	// 1d slots start at local (UTC+2) midnight: 2026-12-31T22:00Z.
@@ -195,90 +194,41 @@ func TestOverviewRouteParameters(t *testing.T) {
 	if o.From.Format(time.RFC3339) != "2026-12-30T22:00:00Z" || o.Slots != 2 {
 		t.Errorf("1d: from %s, %d slots", o.From, o.Slots)
 	}
-	for _, by := range []string{"checkout", "repo", "remote"} {
-		o, code := r.overview("?by=" + by)
-		if code != 200 || o.By != catalog.GroupBy(by) || len(o.Groups) != 1 || o.Groups[0].Key != "" {
-			t.Errorf("by=%s: %d %+v", by, code, o.Groups)
-		}
-	}
 }
 
-func TestOverviewRouteLanes(t *testing.T) {
+func TestOverviewRouteWire(t *testing.T) {
 	r := ovRig(t)
-	o, _ := r.overview("?group=%2Fmain")
-	if len(o.Groups) != 1 || o.Groups[0].Key != "/main" {
-		t.Errorf("groups with group=: %+v", o.Groups)
-	}
-	if len(o.Lanes) != 2 || o.Lanes[0].ID != "b" || o.Lanes[1].ID != "a" {
-		t.Fatalf("lanes %+v", o.Lanes)
-	}
-	b, a := o.Lanes[0], o.Lanes[1]
-	if !near(b.USD, 4) || !near(a.USD, 3) || b.Group != "/main" {
-		t.Errorf("lane usd %v %v, group %q", b.USD, a.USD, b.Group)
-	}
-	// a: m1 at 09:00Z (slot 165) and m2 at 10:10Z (slot 166): trimmed to those two. b: m3 at
-	// 09:20Z (slot 165) only.
-	if a.Slot0 != 165 || len(a.Context) != 2 || len(a.USDSlots) != 2 || len(a.Idle) != 2 || len(a.Active) != 2 || a.Context[0] != 1000 || a.Context[1] != 4000 {
-		t.Errorf("lane a: slot0 %d, %v %v", a.Slot0, a.Context, a.Idle)
-	}
-	if b.Slot0 != 165 || len(b.Context) != 1 || a.Turns != 1 || a.Agents != 1 || b.Agents != 0 {
-		t.Errorf("lane b: slot0 %d, %d slots; turns a %d, agents a %d b %d", b.Slot0, len(b.Context), a.Turns, a.Agents, b.Agents)
-	}
-	// group= is the group with no value.
-	o, _ = r.overview("?by=repo&group=")
-	if len(o.Lanes) != 3 {
-		t.Errorf("group= lanes: %d, want 3", len(o.Lanes))
-	}
-	if o, _ = r.overview("?by=repo"); len(o.Lanes) != 3 {
-		t.Errorf("no group, lanes: %d, want 3", len(o.Lanes))
-	}
-	// The wire form: lanes is always there, and group even when empty.
-	resp, err := http.Get(r.srv.URL + "/api/overview?by=repo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
-	var keys struct {
-		Lanes []map[string]json.RawMessage `json:"lanes"`
-	}
-	if err := json.Unmarshal(raw, &keys); err != nil {
-		t.Fatal(err)
-	}
-	if len(keys.Lanes) != 3 {
-		t.Fatalf("lanes on the wire: %d", len(keys.Lanes))
-	}
-	for _, k := range []string{"group", "turns", "agents", "slot0", "usdSlots", "context", "idle", "active", "spans"} {
-		if _, has := keys.Lanes[0][k]; !has {
-			t.Errorf("lane key %q missing", k)
-		}
-	}
-	if string(keys.Lanes[0]["group"]) != `""` {
-		t.Errorf("lane group = %s", keys.Lanes[0]["group"])
-	}
-	var top map[string]json.RawMessage
-	json.Unmarshal(raw, &top)
-	for _, k := range []string{"from", "to", "slot", "slotMs", "slots", "by", "groups", "scripted", "lanes"} {
+	lanes, top := r.wire()
+	for _, k := range []string{"from", "to", "slot", "slotMs", "slots", "scripted", "lanes"} {
 		if _, has := top[k]; !has {
 			t.Errorf("key %q missing", k)
 		}
 	}
-	var groups []map[string]json.RawMessage
-	json.Unmarshal(top["groups"], &groups)
-	for _, k := range []string{"turns", "agents", "idleSum", "idlePeak"} {
-		if _, has := groups[0][k]; !has {
-			t.Errorf("group key %q missing", k)
+	for _, k := range []string{"by", "groups"} {
+		if _, has := top[k]; has {
+			t.Errorf("key %q still there", k)
 		}
 	}
-	if _, has := groups[0]["events"]; has {
-		t.Error("group still has events")
+	if string(top["scripted"]) != `{"sessions":1,"usd":0.5}` {
+		t.Errorf("scripted = %s", top["scripted"])
+	}
+	for _, k := range []string{"dir", "turns", "agents", "slot0", "context", "idle", "active", "spans"} {
+		if _, has := lanes[0][k]; !has {
+			t.Errorf("lane key %q missing", k)
+		}
+	}
+	// no places beyond the directory in this rig: checkout, repo and remote are left out
+	for _, k := range []string{"group", "usdSlots", "checkout", "repo", "remote"} {
+		if _, has := lanes[0][k]; has {
+			t.Errorf("lane key %q on the wire", k)
+		}
 	}
 }
 
 func TestOverviewRouteErrors(t *testing.T) {
 	r := ovRig(t)
 	for _, q := range []string{
-		"?slot=7m", "?slot=3m", "?slot=1w", "?by=session", "?by=prefix",
+		"?slot=7m", "?slot=3m", "?slot=1w",
 		"?from=yesterday", "?to=x", "?from=2027-01-02T00:00:00Z&to=2027-01-01T00:00:00Z",
 		"?slot=15m&from=2026-01-01T00:00:00Z&to=2026-12-01T00:00:00Z", // 32,000 slots
 		"?from=2019-01-01T00:00:00Z&to=2027-01-01T00:00:00Z",          // 2,922 days, even with 1d
