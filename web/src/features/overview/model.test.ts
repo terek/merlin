@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
 import {
   activityRuns,
-  apiBy,
+  ancestorIds,
   axisTicks,
   bandAt,
   buildPlaceTree,
@@ -11,15 +11,20 @@ import {
   chooseSlot,
   columnAt,
   columnBoxes,
+  displayPath,
   filterOverview,
   fitLabels,
+  formatIn,
   formatSort,
+  formatView,
   groupDescription,
   groupHarnesses,
   groupScale,
+  groupsHome,
   heldContext,
   type IndexItem,
   inferHome,
+  keepSelection,
   type Layout,
   laneDescription,
   laneHead,
@@ -33,19 +38,26 @@ import {
   makeAxis,
   markedNode,
   midnights,
+  NONE_SEL,
   nextSort,
+  nodeForPath,
   type PlaceNode,
   parseBy,
+  parseIn,
   parseShow,
   parseSort,
+  parseView,
   type Row,
   type Sort,
   type SortKey,
+  selectOverview,
   slotX,
   sortGroups,
   sortLanes,
   spineLanes,
   stepAreaPath,
+  totalOf,
+  underPath,
   visibleRows,
   xOf,
 } from './model'
@@ -345,34 +357,26 @@ describe('rows by mode', () => {
   const spend: Sort = { key: 'spend', desc: true }
   const tag = (r: Row) => (r.kind === 'group' ? `g:${r.g.key}` : r.l.id)
 
-  test('none: every session flat, by the sort, with its project name', () => {
-    const rows = buildRows(o, 'none', 'sessions', spend)
+  test('sessions: every session flat, by the sort, with its project name', () => {
+    const rows = buildRows(o, 'sessions', spend)
     expect(rows.map(tag)).toEqual(['c', 'b', 'a'])
     expect(rows.map((r) => (r.kind === 'session' ? r.groupName : ''))).toEqual(['proj-y', 'proj-x', 'proj-x'])
     expect(rows.every((r) => r.kind === 'session' && !r.nested)).toBe(true)
-    // `show` does not matter without groups
-    expect(buildRows(o, 'none', 'groups', spend).map(tag)).toEqual(['c', 'b', 'a'])
   })
 
-  test('grouped, sessions: each group row then all its sessions, both by the sort', () => {
-    expect(buildRows(o, 'dir', 'sessions', spend).map(tag)).toEqual(['g:y', 'c', 'g:x', 'b', 'a'])
-    expect(buildRows(o, 'dir', 'sessions', { key: 'spend', desc: false }).map(tag)).toEqual([
-      'g:x',
-      'a',
-      'b',
-      'g:y',
-      'c',
-    ])
+  test('grouped: each group row then all its sessions, both by the sort', () => {
+    expect(buildRows(o, 'grouped', spend).map(tag)).toEqual(['g:y', 'c', 'g:x', 'b', 'a'])
+    expect(buildRows(o, 'grouped', { key: 'spend', desc: false }).map(tag)).toEqual(['g:x', 'a', 'b', 'g:y', 'c'])
     expect(
-      buildRows(o, 'dir', 'sessions', spend)
+      buildRows(o, 'grouped', spend)
         .filter((r) => r.kind === 'session')
         .every((r) => r.kind === 'session' && r.nested),
     ).toBe(true)
   })
 
-  test('grouped, groups: the group rows alone', () => {
-    expect(buildRows(o, 'repo', 'groups', spend).map(tag)).toEqual(['g:y', 'g:x'])
-    expect(buildRows(o, 'repo', 'groups', { key: 'session', desc: true }).map(tag)).toEqual(['g:x', 'g:y'])
+  test('groups: the group rows alone', () => {
+    expect(buildRows(o, 'groups', spend).map(tag)).toEqual(['g:y', 'g:x'])
+    expect(buildRows(o, 'groups', { key: 'session', desc: true }).map(tag)).toEqual(['g:x', 'g:y'])
   })
 })
 
@@ -403,13 +407,36 @@ describe('row text', () => {
 
 describe('URL state', () => {
   test('by and show, defaults for anything else', () => {
-    expect(parseBy('none')).toBe('none')
     expect(parseBy('repo')).toBe('repo')
     expect(parseBy('project')).toBe('dir')
     expect(parseBy(null)).toBe('dir')
     expect(parseShow('groups')).toBe('groups')
-    expect(parseShow('x')).toBe('sessions')
-    expect(parseShow(null)).toBe('sessions')
+    expect(parseShow('sessions')).toBe('sessions')
+    expect(parseShow('x')).toBe('grouped')
+    expect(parseShow(null)).toBe('grouped')
+  })
+
+  test('an old flat link (by=none) is the folder key shown as sessions', () => {
+    expect(parseView('none', null)).toEqual({ by: 'dir', show: 'sessions' })
+    expect(parseView('none', 'groups')).toEqual({ by: 'dir', show: 'sessions' })
+    expect(parseView(null, null)).toEqual({ by: 'dir', show: 'grouped' })
+    expect(parseView('remote', 'groups')).toEqual({ by: 'remote', show: 'groups' })
+  })
+
+  test('a view writes only what is not the default, and reads back', () => {
+    expect(formatView('dir', 'grouped')).toEqual({ by: undefined, show: undefined })
+    expect(formatView('repo', 'sessions')).toEqual({ by: 'repo', show: 'sessions' })
+    const f = formatView('checkout', 'groups')
+    expect(parseView(f.by ?? null, f.show ?? null)).toEqual({ by: 'checkout', show: 'groups' })
+  })
+
+  test('in: empty is no selection; written as it is', () => {
+    expect(parseIn(null)).toBeNull()
+    expect(parseIn('')).toBeNull()
+    expect(parseIn('/Users/a/work')).toBe('/Users/a/work')
+    expect(parseIn('-')).toBe(NONE_SEL)
+    expect(formatIn(null)).toBeUndefined()
+    expect(formatIn('/Users/a/work')).toBe('/Users/a/work')
   })
 
   test('sort and dir', () => {
@@ -428,11 +455,6 @@ describe('URL state', () => {
     expect(nextSort({ key: 'spend', desc: true }, 'spend')).toEqual({ key: 'spend', desc: false })
     expect(nextSort({ key: 'spend', desc: false }, 'spend')).toEqual({ key: 'spend', desc: true })
     expect(nextSort({ key: 'spend', desc: false }, 'turns')).toEqual({ key: 'turns', desc: true })
-  })
-
-  test('the API is asked for projects when the table is flat', () => {
-    expect(apiBy('none')).toBe('dir')
-    expect(apiBy('repo')).toBe('repo')
   })
 })
 
@@ -632,13 +654,15 @@ describe('group harnesses', () => {
 })
 
 describe('hover geometry', () => {
-  const L: Layout = { harness: 48, gutter: 0, pad: 12, turns: 52, agents: 56, spend: 84, last: 64, gap: 8 }
+  const L: Layout = { harness: 44, gutter: 0, pad: 12, turns: 52, agents: 56, spend: 84, last: 64, gap: 8 }
 
   test('columns from the right edge', () => {
     const boxes = columnBoxes(1000, L)
-    expect(boxes.map((b) => b.col)).toEqual(['harness', 'session', 'turns', 'agents', 'spend', 'last'])
-    expect(columnAt(boxes, 10)).toBe('harness')
+    expect(boxes.map((b) => b.col)).toEqual(['session', 'harness', 'turns', 'agents', 'spend', 'last'])
+    expect(columnAt(boxes, 10)).toBe('session')
     expect(columnAt(boxes, 100)).toBe('session')
+    // the harness column sits just before Turns
+    expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 84 - 8 - 56 - 8 - 52 - 8 - 20)).toBe('harness')
     expect(columnAt(boxes, 1000 - 12 - 30)).toBe('last')
     expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 40)).toBe('spend')
     expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 84 - 8 - 20)).toBe('agents')
@@ -651,6 +675,7 @@ describe('hover geometry', () => {
     const boxes = columnBoxes(1000, { ...L, gutter: 140 })
     expect(columnAt(boxes, 100)).toBe('first')
     expect(columnAt(boxes, 200)).toBe('session')
+    expect(boxes.map((b) => b.col)).toEqual(['first', 'session', 'harness', 'turns', 'agents', 'spend', 'last'])
     const total = boxes.reduce((n, b) => n + b.w, 0)
     expect(total).toBe(1000)
   })
@@ -758,5 +783,144 @@ describe('the place tree', () => {
     expect(markedNode(t.nodes, '/Users/a/x/web', closed)).toBe(x.id)
     expect(markedNode(t.nodes, '/Users/a/x', closed)).toBe(x.id)
     expect(markedNode(t.nodes, '/nope', closed)).toBeNull()
+  })
+})
+
+describe('the selection', () => {
+  const item = (key: string, count = 1, usd = 1): IndexItem => ({ key, name: key.split('/').pop() ?? key, count, usd })
+  const g = (key: string) => ({ key })
+
+  test('a group is under a path when its segments start with the path, not its characters', () => {
+    expect(underPath(g('/Users/a/work/merlin'), '/Users/a/work', 'dir')).toBe(true)
+    expect(underPath(g('/Users/a/work'), '/Users/a/work', 'dir')).toBe(true)
+    expect(underPath(g('/Users/a/workshop'), '/Users/a/work', 'dir')).toBe(false)
+    expect(underPath(g('/Users/a'), '/Users/a/work', 'dir')).toBe(false)
+    expect(underPath(g('/Users/a/work/merlin'), null, 'dir')).toBe(true)
+    expect(underPath(g(''), null, 'dir')).toBe(true)
+  })
+
+  test('(none) selects the group with the empty key alone', () => {
+    expect(underPath(g(''), NONE_SEL, 'dir')).toBe(true)
+    expect(underPath(g('/Users/a'), NONE_SEL, 'dir')).toBe(false)
+    expect(underPath(g(''), '/Users/a', 'dir')).toBe(false)
+  })
+
+  test('a repository stands at its directory: .git and .bare do not count', () => {
+    expect(underPath(g('/Users/a/work/merlin/.bare'), '/Users/a/work', 'repo')).toBe(true)
+    expect(underPath(g('/Users/a/work/merlin/.bare'), '/Users/a/work/merlin', 'repo')).toBe(true)
+    expect(underPath(g('/Users/a/work/merlin/.bare'), '/Users/a/work/merlin/.bare', 'repo')).toBe(false)
+    expect(underPath(g('/Users/a/merlin/.git'), '/Users/a/merlin', 'repo')).toBe(true)
+  })
+
+  test('a remote is under its host and owner', () => {
+    expect(underPath(g('github.com/acme/api'), 'github.com/acme', 'remote')).toBe(true)
+    expect(underPath(g('github.com/acme/api'), 'github.com', 'remote')).toBe(true)
+    expect(underPath(g('github.com/acme/api'), 'github.com/acm', 'remote')).toBe(false)
+    expect(underPath(g('gitlab.com/acme/api'), 'github.com/acme', 'remote')).toBe(false)
+  })
+
+  const o = {
+    groups: [
+      group({ key: '/Users/a/work/merlin', usd: 5, sessions: 2 }),
+      group({ key: '/Users/a/work/yimple', usd: 3, sessions: 1 }),
+      group({ key: '/Users/a/play', usd: 1, sessions: 1 }),
+      group({ key: '', usd: 2, sessions: 1 }),
+    ],
+    lanes: [
+      lane({ id: '1', group: '/Users/a/work/merlin' }),
+      lane({ id: '2', group: '/Users/a/work/merlin' }),
+      lane({ id: '3', group: '/Users/a/work/yimple' }),
+      lane({ id: '4', group: '/Users/a/play' }),
+      lane({ id: '5', group: '' }),
+    ],
+  }
+
+  test('the overview narrows to the groups at or under the selection, with their sessions', () => {
+    const all = filterOverview(o, '')
+    expect(selectOverview(all, null, 'dir')).toBe(all)
+    const w = selectOverview(all, '/Users/a/work', 'dir')
+    expect(w.groups.map((x) => x.key)).toEqual(['/Users/a/work/merlin', '/Users/a/work/yimple'])
+    expect(w.lanes.map((l) => l.id)).toEqual(['1', '2', '3'])
+    expect([...w.shown]).toEqual([
+      ['/Users/a/work/merlin', 2],
+      ['/Users/a/work/yimple', 1],
+    ])
+    expect(selectOverview(all, '-', 'dir').lanes.map((l) => l.id)).toEqual(['5'])
+    expect(selectOverview(all, '/nope', 'dir').groups).toEqual([])
+  })
+
+  test('the selection follows the search: it narrows what the search left', () => {
+    const found = filterOverview(o, 'yimple')
+    expect(selectOverview(found, '/Users/a/work', 'dir').groups.map((x) => x.key)).toEqual(['/Users/a/work/yimple'])
+    expect(selectOverview(found, '/Users/a/play', 'dir').groups).toEqual([])
+  })
+
+  test('All is the sum of what the items list', () => {
+    expect(totalOf([item('a', 2, 10), item('b', 3, 5.5), item('', 1, 1)])).toEqual({ count: 6, usd: 16.5 })
+    expect(totalOf([])).toEqual({ count: 0, usd: 0 })
+  })
+
+  test('a selection is kept on a new key only where a group sits under it', () => {
+    const repos = [g('/Users/a/work/merlin/.bare'), g('/Users/a/play/x/.git')]
+    expect(keepSelection('/Users/a/work', repos, 'repo')).toBe('/Users/a/work')
+    expect(keepSelection('/Users/a/other', repos, 'repo')).toBeNull()
+    expect(keepSelection('github.com/acme', repos, 'remote')).toBeNull()
+    expect(keepSelection('-', [g('')], 'remote')).toBe('-')
+    expect(keepSelection(null, repos, 'repo')).toBeNull()
+  })
+
+  test('the tree nodes carry the real path; the home is spelled out', () => {
+    const t = buildPlaceTree([item('/Users/a/work/merlin'), item('/Users/a/work/yimple'), item('/Users/a/play')], 'dir')
+    expect(t.home).toBe('/Users/a')
+    const [home] = t.nodes
+    expect(home.path).toBe('/Users/a')
+    expect(home.children.map((n) => n.path)).toEqual(['/Users/a/play', '/Users/a/work'])
+    expect(home.children[1].children.map((n) => n.path)).toEqual(['/Users/a/work/merlin', '/Users/a/work/yimple'])
+    // a compacted chain is its deepest path
+    const c = buildPlaceTree([item('/Users/a/src/github.com/acme/api'), item('/Users/a/x')], 'dir')
+    expect(c.nodes[0].children.map((n) => [n.label, n.path])).toEqual([
+      ['src/github.com/acme/api', '/Users/a/src/github.com/acme/api'],
+      ['x', '/Users/a/x'],
+    ])
+    const r = buildPlaceTree([item('github.com/acme/api'), item('github.com/acme/web')], 'remote')
+    expect(r.nodes[0].path).toBe('github.com/acme')
+    expect(r.nodes[0].children.map((n) => n.path)).toEqual(['github.com/acme/api', 'github.com/acme/web'])
+    const b = buildPlaceTree([item('/Users/a/w/merlin/.bare'), item('/Users/a/x/.git')], 'repo')
+    expect(b.nodes[0].children.map((n) => n.path)).toEqual(['/Users/a/w/merlin', '/Users/a/x'])
+  })
+
+  test("a fixed home is used instead of the items' own", () => {
+    const t = buildPlaceTree([item('/srv/a/x')], 'dir', { home: undefined })
+    expect(t.home).toBeUndefined()
+    expect(groupsHome(['/Users/a/x', '/Users/a/y'], 'dir')).toBe('/Users/a')
+    expect(groupsHome(['/Users/a/w/m/.bare', '/Users/a/y/.git'], 'repo')).toBe('/Users/a')
+  })
+
+  test('the node of a path and the folders to open above it', () => {
+    const t = buildPlaceTree(
+      [item('/Users/a/x/web'), item('/Users/a/x/api'), item('/Users/a/y/z/deep'), item('/Users/a/y/z/also')],
+      'dir',
+    )
+    const web = nodeForPath(t.nodes, '/Users/a/x/web')
+    expect(web?.label).toBe('web')
+    expect(nodeForPath(t.nodes, '/Users/a/x')?.label).toBe('x')
+    expect(nodeForPath(t.nodes, '/nope')).toBeNull()
+    // a folder inside a compacted chain is the chain's node
+    const chain = buildPlaceTree([item('/Users/a/work/m/web'), item('/Users/a/work/m'), item('/Users/a/x')], 'dir')
+    expect(nodeForPath(chain.nodes, '/Users/a/work')).toBe(nodeForPath(chain.nodes, '/Users/a/work/m'))
+    expect(nodeForPath(chain.nodes, '/Users/a/work')?.label).toBe('work/m')
+    const ids = ancestorIds(t.nodes, '/Users/a/x/web')
+    expect(ids).toEqual(['~', '~/x'])
+    expect(visibleRows(t.nodes, new Set(ids.slice(1))).map((r) => r.node.label)).toContain('x')
+    expect(ancestorIds(t.nodes, '/Users/a')).toEqual([])
+    expect(ancestorIds(t.nodes, '/nope')).toEqual([])
+  })
+
+  test('a path as shown', () => {
+    expect(displayPath('/Users/a/work', '/Users/a')).toBe('~/work')
+    expect(displayPath('/Users/a', '/Users/a')).toBe('~')
+    expect(displayPath('/Users/ab/work', '/Users/a')).toBe('/Users/ab/work')
+    expect(displayPath('github.com/acme', undefined)).toBe('github.com/acme')
+    expect(displayPath('-', '/Users/a')).toBe('(none)')
   })
 })

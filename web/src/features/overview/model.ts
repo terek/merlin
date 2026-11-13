@@ -243,12 +243,15 @@ export function lifeSpan(
 
 // ---- modes, sorting and the rows ---------------------------------------------------------
 
-/** Group by: a dimension, or `none` for a flat table of sessions. */
-export type By = GroupDim | 'none'
-export const BYS: readonly By[] = ['none', 'dir', 'checkout', 'repo', 'remote']
-/** What a grouped table shows: every session under its group row, or the group rows alone. */
-export type Show = 'sessions' | 'groups'
-export const SHOWS: readonly Show[] = ['sessions', 'groups']
+/** Organise by: the key that decides what the groups are and how the sidebar tree is laid out. */
+export type By = GroupDim
+export const BYS: readonly By[] = ['dir', 'checkout', 'repo', 'remote']
+/**
+ * Show: the level of the table. `sessions` one flat row per session, `grouped` each group row with its
+ * sessions under it, `groups` the group rows alone.
+ */
+export type Show = 'sessions' | 'grouped' | 'groups'
+export const SHOWS: readonly Show[] = ['sessions', 'grouped', 'groups']
 
 /** The column a table is sorted by. */
 export type SortKey = 'session' | 'turns' | 'agents' | 'spend' | 'last'
@@ -263,7 +266,21 @@ const oneOf = <T extends string>(v: string | null, allowed: readonly T[], def: T
   allowed.includes(v as T) ? (v as T) : def
 
 export const parseBy = (v: string | null): By => oneOf(v, BYS, 'dir')
-export const parseShow = (v: string | null): Show => oneOf(v, SHOWS, 'sessions')
+export const parseShow = (v: string | null): Show => oneOf(v, SHOWS, 'grouped')
+
+/**
+ * `by` and `show` from the URL. An old link with `by=none` (the flat table) is the folder key shown as
+ * sessions; a `show` the table does not know reads as grouped.
+ */
+export function parseView(by: string | null, show: string | null): { by: By; show: Show } {
+  if (by === 'none') return { by: 'dir', show: 'sessions' }
+  return { by: parseBy(by), show: parseShow(show) }
+}
+
+/** The URL params of a view; undefined where the default holds. */
+export function formatView(by: By, show: Show): { by?: string; show?: string } {
+  return { by: by === 'dir' ? undefined : by, show: show === 'grouped' ? undefined : show }
+}
 
 /** `sort=<column>` (default spend) and `dir=asc` (default descending). */
 export function parseSort(sort: string | null, dir: string | null): Sort {
@@ -278,9 +295,6 @@ export function formatSort(s: Sort): { sort?: string; dir?: string } {
 /** A click on a column header: the same column flips its direction, another starts descending. */
 export const nextSort = (cur: Sort, key: SortKey): Sort =>
   cur.key === key ? { key, desc: !cur.desc } : { key, desc: true }
-
-/** The dimension the API is asked for: a flat table still needs the project of each session. */
-export const apiBy = (by: By): GroupDim => (by === 'none' ? 'dir' : by)
 
 const cmp = <T extends number | string>(a: T, b: T): number => (a < b ? -1 : a > b ? 1 : 0)
 
@@ -330,16 +344,11 @@ export type Row =
   | { kind: 'session'; key: string; l: OverviewLane /** Under a group row. */; nested: boolean; groupName: string }
 
 /**
- * The table's rows. `none`: every session, flat, with its group's name for the first column. Grouped with
- * `sessions`: each group row, then all its sessions; with `groups`: the group rows alone. The sort orders
- * the groups and, by the same column, the sessions inside each.
+ * The table's rows. `sessions`: every session, flat, with its group's name for the first column. `grouped`:
+ * each group row, then all its sessions; `groups`: the group rows alone. The sort orders the groups and, by
+ * the same column, the sessions inside each.
  */
-export function buildRows(
-  o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
-  by: By,
-  show: Show,
-  sort: Sort,
-): Row[] {
+export function buildRows(o: { groups: OverviewGroup[]; lanes: OverviewLane[] }, show: Show, sort: Sort): Row[] {
   const name = new Map(o.groups.map((g) => [g.key, g.name]))
   const lane = (l: OverviewLane, nested: boolean): Row => ({
     kind: 'session',
@@ -348,12 +357,12 @@ export function buildRows(
     nested,
     groupName: name.get(l.group) ?? l.group,
   })
-  if (by === 'none') return sortLanes(o.lanes, sort).map((l) => lane(l, false))
+  if (show === 'sessions') return sortLanes(o.lanes, sort).map((l) => lane(l, false))
   const rows: Row[] = []
   const lanes = lanesByGroup(o.lanes)
   for (const g of sortGroups(o.groups, sort)) {
     rows.push({ kind: 'group', key: `g:${g.key}`, g })
-    if (show === 'sessions') for (const l of sortLanes(lanes.get(g.key) ?? [], sort)) rows.push(lane(l, true))
+    if (show === 'grouped') for (const l of sortLanes(lanes.get(g.key) ?? [], sort)) rows.push(lane(l, true))
   }
   return rows
 }
@@ -602,6 +611,82 @@ export function filterOverview(
   return { groups: o.groups.filter((g) => shown.has(g.key)), lanes, shown }
 }
 
+// ---- the selection: the sidebar filters the table ------------------------------------------
+
+/** The `in` of the group with no value. */
+export const NONE_SEL = '-'
+
+const splitPath = (p: string): string[] => p.split(/[\\/]+/).filter(Boolean)
+
+/** The segments a group's key stands for: a repository's without `.git` / `.bare`. */
+export const groupSegments = (key: string, by: By): string[] => (by === 'repo' ? homeOf(key) : splitPath(key))
+
+/** `in` from the URL: the selected node's real path prefix, `-` for (none); null for no selection. */
+export const parseIn = (v: string | null): string | null => (v ? v : null)
+
+/** The URL param of a selection. */
+export const formatIn = (sel: string | null): string | undefined => sel ?? undefined
+
+/** Whether a group sits at or under the selected path (segment-wise); `-` is the group with no value. */
+export function underPath(g: { key: string }, sel: string | null, by: By): boolean {
+  if (sel === null) return true
+  if (sel === NONE_SEL) return g.key === ''
+  if (!g.key) return false
+  const want = splitPath(sel)
+  const have = groupSegments(g.key, by)
+  return want.length <= have.length && want.every((s, i) => have[i] === s)
+}
+
+/** The search's result narrowed to the groups at or under the selection (and their sessions). */
+export function selectOverview(f: Filtered, sel: string | null, by: By): Filtered {
+  if (sel === null) return f
+  const groups = f.groups.filter((g) => underPath(g, sel, by))
+  const keep = new Set(groups.map((g) => g.key))
+  const shown = new Map([...f.shown].filter(([k]) => keep.has(k)))
+  return { groups, lanes: f.lanes.filter((l) => keep.has(l.group)), shown }
+}
+
+/** The selection after the key changed: kept when some group sits under it in the new key, else dropped. */
+export const keepSelection = (sel: string | null, groups: readonly { key: string }[], by: By): string | null =>
+  sel !== null && groups.some((g) => underPath(g, sel, by)) ? sel : null
+
+/** The figures of the "All" item: the sessions shown and the spend of everything the items list. */
+export const totalOf = (items: readonly IndexItem[]): { count: number; usd: number } => ({
+  count: items.reduce((n, i) => n + i.count, 0),
+  usd: items.reduce((n, i) => n + i.usd, 0),
+})
+
+/** The selection as shown: the home as `~`, `-` as (none). */
+export function displayPath(sel: string, home: string | undefined): string {
+  if (sel === NONE_SEL) return '(none)'
+  if (home && sel === home) return '~'
+  if (home && sel.startsWith(`${home}/`)) return `~${sel.slice(home.length)}`
+  return sel
+}
+
+/** The node that stands for `path` (a folder inside a compacted chain is its node), if the tree has one. */
+export function nodeForPath(nodes: readonly PlaceNode[], path: string): PlaceNode | null {
+  for (const n of nodes) {
+    if (n.chain.includes(path)) return n
+    const r = nodeForPath(n.children, path)
+    if (r) return r
+  }
+  return null
+}
+
+/** The ids of the folders above the node that stands for `path`, outermost first; empty when the tree has no such node. */
+export function ancestorIds(nodes: readonly PlaceNode[], path: string): string[] {
+  const walk = (ns: readonly PlaceNode[], trail: string[]): string[] | null => {
+    for (const n of ns) {
+      if (n.chain.includes(path)) return trail
+      const r = walk(n.children, [...trail, n.id])
+      if (r) return r
+    }
+    return null
+  }
+  return walk(nodes, []) ?? []
+}
+
 /** The distinct harnesses of some sessions, most sessions first (ties by name). */
 export function groupHarnesses(lanes: readonly { harness: string }[], max = 3): string[] {
   const n = new Map<string, number>()
@@ -626,6 +711,7 @@ export interface ColumnBox {
 
 /** The widths the columns are laid out with (OverviewPage.tsx). */
 export interface Layout {
+  /** The harness column: between Session and Turns. */
   harness: number
   gutter: number
   pad: number
@@ -638,8 +724,8 @@ export interface Layout {
 }
 
 /**
- * The columns' boxes for rows `width` px wide: the harness column, the first column (flat table), then
- * Session (the rest), Turns, Agents, Spend and Last against the right edge. The boxes meet in the middle
+ * The columns' boxes for rows `width` px wide: the first column (flat table), then Session (the rest),
+ * the harness column, Turns, Agents, Spend and Last against the right edge. The boxes meet in the middle
  * of the gap between two columns, and the last reaches the right edge.
  */
 export function columnBoxes(width: number, L: Layout): ColumnBox[] {
@@ -648,12 +734,14 @@ export function columnBoxes(width: number, L: Layout): ColumnBox[] {
   const spendX = lastX - L.gap - L.spend
   const agentsX = spendX - L.gap - L.agents
   const turnsX = agentsX - L.gap - L.turns
+  const harnessX = turnsX - L.gap - L.harness
   const half = L.gap / 2
-  const boxes: ColumnBox[] = [{ col: 'harness', x: 0, w: L.harness }]
-  if (L.gutter > 0) boxes.push({ col: 'first', x: L.harness, w: L.gutter })
+  const boxes: ColumnBox[] = []
+  if (L.gutter > 0) boxes.push({ col: 'first', x: 0, w: L.gutter })
   const cell = (col: Column, x: number, end: number): ColumnBox => ({ col, x, w: Math.max(0, end - x) })
   boxes.push(
-    cell('session', L.harness + L.gutter, turnsX - half),
+    cell('session', L.gutter, harnessX - half),
+    cell('harness', harnessX - half, turnsX - half),
     cell('turns', turnsX - half, agentsX - half),
     cell('agents', agentsX - half, spendX - half),
     cell('spend', spendX - half, lastX - half),
@@ -707,7 +795,11 @@ export interface PlaceNode {
   id: string
   /** The segments it stands for, joined (compact folders: `work/merlin`). */
   label: string
-  /** The group this node is, when it is one: the table row to scroll to. */
+  /** The real path prefix it stands for (what `in` holds): the home spelled out, remotes as host/owner/repo. */
+  path: string
+  /** Every path the node stands for: a compacted chain of folders is one node (`path` is its deepest). */
+  chain: string[]
+  /** The group this node is, when it is one. */
   group?: IndexItem
   /** A host at the top of a remote tree. */
   host?: boolean
@@ -719,6 +811,8 @@ export interface PlaceNode {
 
 export interface PlaceTree {
   nodes: PlaceNode[]
+  /** The home directory the tree shows as `~`. */
+  home?: string
   /** The group of the sessions with no value, listed apart below the tree. */
   none?: IndexItem
 }
@@ -739,45 +833,75 @@ export function inferHome(paths: readonly string[]): string | undefined {
 
 interface Trie {
   seg: string
+  path: string
   children: Map<string, Trie>
   group?: IndexItem
   host?: boolean
 }
 
-/** The segments of a group's place: `~` for the home, a leading `/` on the first segment of an absolute path. */
-function placeSegments(key: string, by: By, home: string | undefined): { segs: string[]; host: boolean } {
+/** Where a group sits on the disk, for finding the home: a repository stands at its directory, not its `.git`. */
+const whereOf = (key: string, by: By): string => (by === 'repo' ? `/${homeOf(key).join('/')}` : key)
+
+/** The home directory the groups share, if they do (see `inferHome`). */
+export const groupsHome = (keys: readonly string[], by: By): string | undefined =>
+  inferHome(keys.filter((k) => k.startsWith('/')).map((k) => whereOf(k, by)))
+
+/**
+ * The segments of a group's place, as shown (`~` for the home, a leading `/` on the first segment of an
+ * absolute path) and the real path prefix each one stands for.
+ */
+function placeSegments(
+  key: string,
+  by: By,
+  home: string | undefined,
+): { segs: string[]; paths: string[]; host: boolean } {
   const isPath = key.startsWith('/') || /^[A-Za-z]:[\\/]/.test(key)
-  const parts = by === 'repo' ? homeOf(key) : key.split(/[\\/]+/).filter(Boolean)
-  if (by === 'remote' && !isPath) return { segs: parts, host: true }
+  const parts = groupSegments(key, by)
+  const abs = key.startsWith('/') ? '/' : ''
+  const real = parts.map((_, j) => abs + parts.slice(0, j + 1).join('/'))
+  if (by === 'remote' && !isPath) return { segs: parts, paths: real, host: true }
   if (home && (key === home || key.startsWith(`${home}/`))) {
     const rest = parts.slice(home.split('/').filter(Boolean).length)
-    return { segs: ['~', ...rest], host: false }
+    return {
+      segs: ['~', ...rest],
+      paths: [home, ...rest.map((_, j) => `${home}/${rest.slice(0, j + 1).join('/')}`)],
+      host: false,
+    }
   }
-  return { segs: parts.length ? [key.startsWith('/') ? `/${parts[0]}` : parts[0], ...parts.slice(1)] : [], host: false }
+  return {
+    segs: parts.length ? [key.startsWith('/') ? `/${parts[0]}` : parts[0], ...parts.slice(1)] : [],
+    paths: real,
+    host: false,
+  }
 }
 
 /**
  * The groups of the table laid out as the filesystem the user knows (docs/ui.md section 10b): a repository
  * at its working directory, a remote as host / owner / name, the home as `~`. A folder that is no group and
  * has one child is merged into it (`~/work`, `work/merlin`); children are ordered by name, like Finder.
- * Counts and spend are summed up the tree. The group with no value is returned apart.
+ * Counts and spend are summed up the tree. The group with no value is returned apart. `fixed` names the
+ * home to use instead of the one the items share.
  */
-export function buildPlaceTree(items: readonly IndexItem[], by: By): PlaceTree {
-  const root: Trie = { seg: '', children: new Map() }
+export function buildPlaceTree(items: readonly IndexItem[], by: By, fixed?: { home: string | undefined }): PlaceTree {
+  const root: Trie = { seg: '', path: '', children: new Map() }
   let none: IndexItem | undefined
-  const where = (k: string) => (by === 'repo' ? `/${homeOf(k).join('/')}` : k)
-  const home = inferHome(items.filter((i) => i.key.startsWith('/')).map((i) => where(i.key)))
+  const home = fixed
+    ? fixed.home
+    : groupsHome(
+        items.map((i) => i.key),
+        by,
+      )
   for (const it of items) {
     if (!it.key) {
       none = it
       continue
     }
-    const { segs, host } = placeSegments(it.key, by, home)
+    const { segs, paths, host } = placeSegments(it.key, by, home)
     let at = root
     segs.forEach((seg, d) => {
       let next = at.children.get(seg)
       if (!next) {
-        next = { seg, children: new Map(), host: host && d === 0 ? true : undefined }
+        next = { seg, path: paths[d], children: new Map(), host: host && d === 0 ? true : undefined }
         at.children.set(seg, next)
       }
       at = next
@@ -791,6 +915,8 @@ export function buildPlaceTree(items: readonly IndexItem[], by: By): PlaceTree {
     const node: PlaceNode = {
       id: path.join('/'),
       label: t.seg,
+      path: t.path,
+      chain: [t.path],
       group: own,
       host: t.host,
       children: kids,
@@ -800,7 +926,7 @@ export function buildPlaceTree(items: readonly IndexItem[], by: By): PlaceTree {
     // compact: a folder that is no group and has one child is that child, its label the joined segments
     if (!own && kids.length === 1) {
       const [only] = kids
-      return { ...only, label: `${t.seg}/${only.label}`, host: t.host || undefined }
+      return { ...only, label: `${t.seg}/${only.label}`, chain: [t.path, ...only.chain], host: t.host || undefined }
     }
     return node
   }
@@ -810,7 +936,7 @@ export function buildPlaceTree(items: readonly IndexItem[], by: By): PlaceTree {
     for (const n of ns) sortTree(n.children)
     return ns.sort(byName)
   }
-  return { nodes: sortTree([...root.children.values()].map((c) => make(c, []))), none }
+  return { nodes: sortTree([...root.children.values()].map((c) => make(c, []))), home, none }
 }
 
 /** A node of the tree as drawn: how deep it sits. */

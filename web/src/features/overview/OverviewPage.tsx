@@ -1,11 +1,22 @@
 // The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day,
 // a week or a month, as one full-bleed table under the top bar: the toolbar and the sortable column headers
 // stay on top, the rows scroll, the date axis and the totals stay at the bottom, and beside the rows an
-// index of the groups (when the table shows sessions under groups). Every row has its text line (harness,
-// head, description, turns, agents, spend, last activity) and under it a merged cell with the row's graph
+// index of the places (always there; its selection filters the table). Every row has its text line (head,
+// description, harness, turns, agents, spend, last activity) and under it a merged cell with the row's graph
 // on one shared linear time axis.
 
-import { ArrowDown, ArrowUp, ChevronRight, Folder, FolderGit2, FolderOpen, Globe } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Folder,
+  FolderGit2,
+  FolderOpen,
+  Globe,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+} from 'lucide-react'
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useOverview, useSearch } from '../../api/queries'
@@ -15,15 +26,25 @@ import { plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { placeLabels } from '../../lib/places'
 import { useShortcut } from '../../shell/useShortcut'
-import { HarnessIcon, Money, QueryBoundary, SearchInput, SegmentedControl, Skeleton } from '../../ui'
+import {
+  HarnessIcon,
+  IconButton,
+  Money,
+  QueryBoundary,
+  SearchInput,
+  SegmentedControl,
+  Select,
+  Skeleton,
+} from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
   type Axis,
   activityRuns,
-  apiBy,
+  ancestorIds,
   axisTicks,
   type Band,
+  BYS,
   type By,
   bandAt,
   buildPlaceTree,
@@ -33,15 +54,20 @@ import {
   chooseSlot,
   columnAt,
   columnBoxes,
+  displayPath,
   type Filtered,
   filterOverview,
   fitLabels,
+  formatIn,
   formatSort,
+  formatView,
   groupDescription,
   groupHarnesses,
   groupScale,
+  groupsHome,
   type IndexItem,
   isBranch,
+  keepSelection,
   LANE_DEPTH,
   type Layout,
   laneDescription,
@@ -53,34 +79,40 @@ import {
   makeAxis,
   markedNode,
   midnightXs,
+  NONE_SEL,
   nextSort,
+  nodeForPath,
   oneLine,
   type PlaceNode,
-  parseBy,
-  parseShow,
+  type PlaceTree,
+  parseIn,
   parseSort,
+  parseView,
   RANGES,
   type Range,
   type Row,
   type Show,
   type Sort,
   type SortKey,
+  selectOverview,
   sessionKey,
   slotX,
   spineLanes,
   stepAreaPath,
+  totalOf,
   visibleRows,
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
 
-/** The harness column, the first column (flat table only), the numeric columns (px) and the cell padding the graph sits in. */
-const HARNESS_W = 48
+/** The harness column (after Session), the first column (flat table only), the numeric columns (px) and the cell padding the graph sits in. */
+const HARNESS_W = 44
 const GUTTER_W = 140
 const COLS = { turns: 52, agents: 56, spend: 84, last: 64 }
 const CELL_PAD = 12
 const GAP = 8
-/** The index beside the rows (px, its right border included). */
+/** The index beside the rows (px, its right border included), and the strip it folds to. */
 const SIDEBAR_W = 260
+const STRIP_W = 37
 const LAYOUT: Omit<Layout, 'gutter'> = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
 /** The hovered row's background: the text colour, faintly, over the row's own. */
 const HOVER = 'hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
@@ -104,7 +136,6 @@ const RUN_W = 2
 const PAD_TOP = 1
 
 const BY_LABEL: Record<By, string> = {
-  none: 'Folder',
   dir: 'Folder',
   checkout: 'Worktree',
   repo: 'Repo',
@@ -297,6 +328,7 @@ function TextLine({
   head,
   headText,
   desc,
+  harnesses,
   indent = 0,
   turns,
   agents,
@@ -307,6 +339,8 @@ function TextLine({
   head: ReactNode
   headText: string
   desc?: string
+  /** The marks of the harness column (none: the column stays empty). */
+  harnesses?: string[]
   indent?: number
   turns?: number
   agents?: number
@@ -324,6 +358,7 @@ function TextLine({
         {head}
         {text && <span className="ml-2 text-muted">{text}</span>}
       </div>
+      <HarnessCell harnesses={harnesses ?? []} />
       <Num w={COLS.turns}>{count(turns)}</Num>
       <Num w={COLS.agents}>{count(agents)}</Num>
       <Num w={COLS.spend}>{usd !== undefined && <Money usd={usd} />}</Num>
@@ -338,14 +373,11 @@ function TextLine({
   )
 }
 
-/** The harness column of a row: one mark, or up to three of a group's side by side (a little smaller). */
+/** The harness column of a text line: one mark, or up to three of a group's side by side (a little smaller). */
 function HarnessCell({ harnesses }: { harnesses: string[] }) {
   const many = harnesses.length > 1
   return (
-    <div
-      className={cn('flex shrink-0 items-start gap-0.5 pl-2', many ? 'pt-[6px]' : 'pt-[5px]')}
-      style={{ width: HARNESS_W }}
-    >
+    <div className="flex shrink-0 items-center gap-0.5 self-center" style={{ width: HARNESS_W }}>
       {harnesses.map((h) => (
         <HarnessIcon key={h} harness={h} size={many ? 12 : 14} />
       ))}
@@ -354,22 +386,17 @@ function HarnessCell({ harnesses }: { harnesses: string[] }) {
 }
 
 /**
- * A row: the harness column, the first column (flat table only) and the cell with the text line and the
- * graph. The row's hover is CSS, so that moving the pointer does not render it; `data-group` lets the
+ * A row: the first column (flat table only) and the cell with the text line and the graph. The row's hover is CSS, so that moving the pointer does not render it; `data-group` lets the
  * table find the group a hovered row belongs to.
  */
 function Frame({
   group,
-  isGroup,
-  harnesses,
   gutter,
   first,
   tint,
   children,
 }: {
   group: string
-  isGroup?: boolean
-  harnesses: string[]
   gutter: number
   first?: ReactNode
   tint?: boolean
@@ -378,10 +405,8 @@ function Frame({
   return (
     <div
       data-group={group}
-      data-grow={isGroup ? '' : undefined}
       className={cn('flex border-line border-t first:border-t-0', tint ? `bg-surface-2 ${HOVER_TINT}` : HOVER)}
     >
-      <HarnessCell harnesses={harnesses} />
       {gutter > 0 && (
         <div className="min-w-0 shrink-0 truncate pt-1 pr-1 text-muted text-sec" style={{ width: gutter }}>
           {first}
@@ -411,7 +436,6 @@ const SessionRow = memo(function SessionRow({
   return (
     <Frame
       group={l.group}
-      harnesses={[l.harness]}
       gutter={gutter}
       first={<span title={groupName || 'no value'}>{groupName || 'no value'}</span>}
     >
@@ -426,6 +450,7 @@ const SessionRow = memo(function SessionRow({
         }
         headText={head}
         desc={laneDescription(l)}
+        harnesses={[l.harness]}
         indent={nested ? INDENT : 0}
         turns={l.turns}
         agents={l.agents}
@@ -461,7 +486,7 @@ const GroupRow = memo(function GroupRow({
   const name = label || 'no value'
   const harnesses = useMemo(() => groupHarnesses(lanes), [lanes])
   return (
-    <Frame group={g.key} isGroup harnesses={harnesses} gutter={gutter} tint={tint}>
+    <Frame group={g.key} gutter={gutter} tint={tint}>
       <TextLine
         head={
           <span className="font-semibold text-fg" title={g.key || name}>
@@ -470,6 +495,7 @@ const GroupRow = memo(function GroupRow({
         }
         headText={name}
         desc={groupDescription(g, priciestHead, shown)}
+        harnesses={harnesses}
         turns={g.turns}
         agents={g.agents}
         usd={g.usd}
@@ -482,7 +508,7 @@ const GroupRow = memo(function GroupRow({
 
 function ScriptedRow({ o, gutter }: { o: Overview; gutter: number }) {
   return (
-    <Frame group="" harnesses={[]} gutter={gutter}>
+    <Frame group="" gutter={gutter}>
       <TextLine
         head={`${plural(o.scripted.sessions, 'scripted run')}`}
         headText={`${plural(o.scripted.sessions, 'scripted run')}`}
@@ -569,7 +595,6 @@ function Header({
     <div className="shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
       <div className="relative flex items-stretch">
         <ColumnBand boxes={boxes} col={hotCol} />
-        <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
         {gutter > 0 && (
           <div
             className="relative shrink-0 truncate py-1.5 text-faint text-meta uppercase tracking-wide"
@@ -587,6 +612,7 @@ function Header({
             rule={gutter > 0}
             title="Sort by start time (group rows: by number of sessions)"
           />
+          <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
           <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
           <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
           <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
@@ -664,7 +690,7 @@ function Totals({
   return (
     <div className="border-line border-t" style={{ paddingRight: padRight }}>
       <div className="relative">
-        <ColumnBand boxes={boxes} col={hotCol} skip={['harness', 'first']} />
+        <ColumnBand boxes={boxes} col={hotCol} skip={['first']} />
         <div className="relative flex">
           <div className="shrink-0" style={{ width: lead }} />
           <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
@@ -703,7 +729,7 @@ const TREE_INDENT = 12
 const TREE_GUTTER = 8
 
 /** The ids of the folders the user closed in this grouping: kept per grouping, and fine without storage. */
-function useClosed(by: By): [ReadonlySet<string>, (id: string) => void] {
+function useClosed(by: By): [ReadonlySet<string>, (id: string) => void, (ids: string[]) => void] {
   const storeKey = `overview.tree.${by}`
   const read = (): Set<string> => {
     try {
@@ -717,9 +743,7 @@ function useClosed(by: By): [ReadonlySet<string>, (id: string) => void] {
   // the grouping changed: its own closed folders
   const closed = state.storeKey === storeKey ? state.closed : read()
   if (state.storeKey !== storeKey) setState({ storeKey, closed })
-  const toggle = (id: string) => {
-    const next = new Set(closed)
-    if (!next.delete(id)) next.add(id)
+  const write = (next: Set<string>) => {
     setState({ storeKey, closed: next })
     try {
       localStorage.setItem(storeKey, JSON.stringify([...next]))
@@ -727,7 +751,39 @@ function useClosed(by: By): [ReadonlySet<string>, (id: string) => void] {
       // no storage: the state lives for this page only
     }
   }
-  return [closed, toggle]
+  const toggle = (id: string) => {
+    const next = new Set(closed)
+    if (!next.delete(id)) next.add(id)
+    write(next)
+  }
+  const open = (ids: string[]) => {
+    const next = new Set(closed)
+    for (const id of ids) next.delete(id)
+    write(next)
+  }
+  return [closed, toggle, open]
+}
+
+/** Whether the index is open: the user's choice, kept in the browser (open without it). */
+function useSidebarOpen(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem('overview.sidebar') !== 'closed'
+    } catch {
+      return true
+    }
+  })
+  return [
+    open,
+    (v) => {
+      setOpen(v)
+      try {
+        localStorage.setItem('overview.sidebar', v ? 'open' : 'closed')
+      } catch {
+        // no storage: the choice lives for this page only
+      }
+    },
+  ]
 }
 
 const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
@@ -736,43 +792,67 @@ const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
   return open ? FolderOpen : Folder
 }
 
+const ITEM = 'flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left text-body'
+const SELECTED = 'bg-accent-soft font-medium text-accent'
+
+/** The figures at the end of an item: sessions shown and spend. */
+function Figures({ count, usd }: { count: number; usd: number }) {
+  return (
+    <>
+      <span className="w-6 shrink-0 text-right text-muted text-sec tabular-nums">{count}</span>
+      <Money usd={usd} dim className="w-12 shrink-0 text-right text-sec" />
+    </>
+  )
+}
+
 /**
- * The index as a file explorer: the groups of the table where they sit in the filesystem (a repository at its
- * working directory, a remote as host / owner / name), compact folders, the home as `~`. A click on a group
- * scrolls the table to it, on a plain folder or any chevron opens or closes it; `current` is the group at the
- * top of the rows now, `hover` the group of the row under the pointer (when a closed folder hides it, the
- * folder is marked). Its width goes to 0 when the table needs no index (the rows are the index).
+ * The index as a file explorer, and the table's filter: the places of the groups where they sit in the
+ * filesystem (a repository at its working directory, a remote as host / owner / name), compact folders, the
+ * home as `~`. The heading is the key the tree is organised by. A click on an item selects it (the table
+ * shows what is at or under it), a click on the selected item or on All clears; the chevron only opens or
+ * closes. `hover` is the group of the row under the pointer (when a closed folder hides it, the folder is
+ * marked). It folds to a strip.
  */
 function Sidebar({
   open,
+  onOpen,
   by,
-  label,
-  title,
-  items,
-  current,
+  onBy,
+  tree,
+  total,
+  sel,
   hover,
-  onPick,
+  onSelect,
 }: {
   open: boolean
+  onOpen: (open: boolean) => void
   by: By
-  label: string
-  title?: string
-  items: IndexItem[]
-  current: string | null
+  onBy: (by: By) => void
+  tree: PlaceTree
+  total: { count: number; usd: number }
+  sel: string | null
   hover: string | null
-  onPick: (key: string) => void
+  onSelect: (path: string | null) => void
 }) {
   const listRef = useRef<HTMLUListElement>(null)
-  const tree = useMemo(() => buildPlaceTree(items, by), [items, by])
-  const [closed, toggle] = useClosed(by)
+  const [closed, toggle, openFolders] = useClosed(by)
   const rows = useMemo(() => visibleRows(tree.nodes, closed), [tree.nodes, closed])
-  const cur = current === null ? null : markedNode(tree.nodes, current, closed)
+  const selNode = sel === null || sel === NONE_SEL ? null : nodeForPath(tree.nodes, sel)
   const hot = hover === null ? null : markedNode(tree.nodes, hover, closed)
+  // the selection's ancestors are open, once for each selection
+  const opened = useRef('')
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once for each selection, not at every change of the folders
   useEffect(() => {
-    if (!open || cur === null) return
-    const li = [...(listRef.current?.children ?? [])].find((c) => (c as HTMLElement).dataset.node === cur)
+    if (!selNode || sel === null || opened.current === `${by}|${sel}`) return
+    opened.current = `${by}|${sel}`
+    const shut = ancestorIds(tree.nodes, sel).filter((id) => closed.has(id))
+    if (shut.length > 0) openFolders(shut)
+  }, [sel, by, selNode, tree.nodes])
+  useEffect(() => {
+    if (!open || !selNode) return
+    const li = [...(listRef.current?.children ?? [])].find((c) => (c as HTMLElement).dataset.node === selNode.id)
     li?.scrollIntoView({ block: 'nearest' })
-  }, [cur, open])
+  }, [selNode, open])
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
     const all = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-nav]') ?? [])]
@@ -781,38 +861,69 @@ function Sidebar({
     e.preventDefault()
     all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
   }
+  const pick = (path: string) => onSelect(sel === path ? null : path)
   const none = tree.none
+  const noneOn = sel === NONE_SEL
   return (
     <aside
-      aria-label={`${label} index`}
-      aria-hidden={!open}
-      inert={!open}
-      className="shrink-0 overflow-hidden border-line border-r transition-[width] duration-150 motion-reduce:transition-none"
-      style={{ width: open ? SIDEBAR_W : 0, borderRightWidth: open ? 1 : 0 }}
+      aria-label={`${BY_LABEL[by]} index`}
+      className="relative shrink-0 overflow-hidden border-line border-r transition-[width] duration-150 motion-reduce:transition-none"
+      style={{ width: open ? SIDEBAR_W : STRIP_W }}
     >
-      <div className="flex h-full flex-col" style={{ width: SIDEBAR_W - 1 }}>
-        <div
-          className="shrink-0 truncate border-line border-b px-3 py-1.5 text-faint text-meta uppercase tracking-wide"
-          title={title}
-        >
-          {label}
+      {!open && (
+        <div className="absolute inset-x-0 top-0 flex justify-center border-line border-b py-1">
+          <IconButton label="Show the index" onClick={() => onOpen(true)}>
+            <PanelLeftOpen size={15} />
+          </IconButton>
+        </div>
+      )}
+      <div
+        aria-hidden={!open}
+        inert={!open}
+        className={cn('flex h-full flex-col', !open && 'invisible')}
+        style={{ width: SIDEBAR_W - 1 }}
+      >
+        <div className="flex shrink-0 items-center gap-2 border-line border-b py-1 pr-1.5 pl-3">
+          <span className="shrink-0 text-faint text-meta uppercase tracking-wide">Organise by</span>
+          <Select<By>
+            label="Organise by"
+            value={by}
+            onChange={onBy}
+            options={BYS.map((v) => ({ value: v, label: BY_LABEL[v] }))}
+            className="min-w-0 flex-1"
+          />
+          <IconButton label="Hide the index" onClick={() => onOpen(false)}>
+            <PanelLeftClose size={15} />
+          </IconButton>
         </div>
         <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onKeyDown}>
+          <li className={cn('mb-1 flex items-center rounded-card', sel === null && SELECTED)}>
+            <button
+              type="button"
+              data-nav
+              onClick={() => onSelect(null)}
+              aria-current={sel === null ? 'true' : undefined}
+              title="Everything in this range"
+              className={cn(ITEM, 'pl-2')}
+            >
+              <span className="min-w-0 flex-1 truncate">All</span>
+              <Figures count={total.count} usd={total.usd} />
+            </button>
+          </li>
           {rows.map(({ node: n, depth }) => {
             const folder = n.children.length > 0
             const isOpen = folder && !closed.has(n.id)
             const Icon = folderIcon(n, by, isOpen)
-            const g = n.group
-            const path = n.id
+            const on = selNode?.id === n.id
             return (
               <li
                 key={n.id}
                 data-node={n.id}
-                data-key={g?.key}
+                data-key={n.group?.key}
                 className={cn(
                   'relative flex items-center rounded-card',
                   hot === n.id && 'bg-surface-2',
-                  cur === n.id && 'bg-accent-soft font-medium text-accent',
+                  on && SELECTED,
                 )}
                 style={{ paddingLeft: TREE_GUTTER + depth * TREE_INDENT }}
               >
@@ -842,15 +953,14 @@ function Sidebar({
                 <button
                   type="button"
                   data-nav
-                  onClick={() => (g ? onPick(g.key) : toggle(n.id))}
-                  aria-current={cur === n.id ? 'true' : undefined}
-                  title={path}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 pl-0.5 text-left text-body"
+                  onClick={() => pick(n.path)}
+                  aria-current={on ? 'true' : undefined}
+                  title={n.id}
+                  className={cn(ITEM, 'pl-0.5')}
                 >
                   <Icon size={14} aria-hidden className="shrink-0 text-muted" />
                   <span className="min-w-0 flex-1 truncate">{n.label}</span>
-                  <span className="w-6 shrink-0 text-right text-muted text-sec tabular-nums">{n.count}</span>
-                  <Money usd={n.usd} dim className="w-12 shrink-0 text-right text-sec" />
+                  <Figures count={n.count} usd={n.usd} />
                 </button>
               </li>
             )
@@ -862,20 +972,19 @@ function Sidebar({
               className={cn(
                 'mt-1 flex items-center rounded-card border-line border-t pt-1',
                 hover === '' && 'bg-surface-2',
-                current === '' && 'bg-accent-soft font-medium text-accent',
+                noneOn && SELECTED,
               )}
             >
               <button
                 type="button"
                 data-nav
-                onClick={() => onPick('')}
-                aria-current={current === '' ? 'true' : undefined}
+                onClick={() => pick(NONE_SEL)}
+                aria-current={noneOn ? 'true' : undefined}
                 title={none.name || 'no value'}
-                className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-body"
+                className={cn(ITEM, 'pl-2')}
               >
-                <span className="min-w-0 flex-1 truncate text-muted">(none)</span>
-                <span className="w-6 shrink-0 text-right text-muted text-sec tabular-nums">{none.count}</span>
-                <Money usd={none.usd} dim className="w-12 shrink-0 text-right text-sec" />
+                <span className={cn('min-w-0 flex-1 truncate', !noneOn && 'text-muted')}>(none)</span>
+                <Figures count={none.count} usd={none.usd} />
               </button>
             </li>
           )}
@@ -891,11 +1000,11 @@ export function OverviewPage() {
   useDocumentTitle('Overview')
   const [sp, setSp] = useSearchParams()
   const range = oneOf<Range>(sp.get('range'), ['1d', '7d', '30d'], '7d')
-  const by = parseBy(sp.get('by'))
-  const show = parseShow(sp.get('show'))
+  const { by, show } = parseView(sp.get('by'), sp.get('show'))
+  const sel = parseIn(sp.get('in'))
   const sort = useMemo(() => parseSort(sp.get('sort'), sp.get('dir')), [sp])
-  const flat = by === 'none'
   const q = sp.get('q') ?? ''
+  const [sbOpen, setSbOpen] = useSidebarOpen()
 
   const set = (changes: Record<string, string | undefined>) => {
     const next = new URLSearchParams(sp)
@@ -905,6 +1014,15 @@ export function OverviewPage() {
     }
     setSp(next, { replace: true })
   }
+  // the selection is a place in history: back and forward walk through it
+  const select = (path: string | null) => {
+    const next = new URLSearchParams(sp)
+    if (path === null) next.delete('in')
+    else next.set('in', path)
+    setSp(next)
+  }
+  // a new key keeps the selection for now; the table drops it when no group sits under it
+  const setBy = (v: By) => set({ ...formatView(v, show), in: formatIn(sel) })
 
   // ---- search box: typing is local, the URL follows after 200 ms ----
   const [draft, setDraft] = useState(q)
@@ -940,9 +1058,8 @@ export function OverviewPage() {
   // once the width has held still, so a drag of the window does not refetch at every pixel.
   const rootRef = useRef<HTMLDivElement>(null)
   const pageW = useWidth(rootRef)
-  const gutter = flat ? GUTTER_W : 0
-  const sbW = !flat && show === 'sessions' ? SIDEBAR_W : 0
-  const pagePlotW = Math.max(240, pageW - sbW - SCROLLBAR - HARNESS_W - gutter - 2 * CELL_PAD)
+  const gutter = show === 'sessions' ? GUTTER_W : 0
+  const pagePlotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - SCROLLBAR - gutter - 2 * CELL_PAD)
   const slot = chooseSlot(RANGES[range].ms, useDebounced(pagePlotW, 250))
 
   // "Ending now", rounded up so that the query key holds still between refreshes.
@@ -952,7 +1069,7 @@ export function OverviewPage() {
     from: new Date(to - RANGES[range].ms).toISOString(),
     to: new Date(to).toISOString(),
     slot,
-    by: apiBy(by),
+    by,
   })
 
   // Group rows (total context) and session rows have a token scale each.
@@ -972,6 +1089,13 @@ export function OverviewPage() {
     }
   }, [])
 
+  const home = query.data
+    ? groupsHome(
+        query.data.groups.map((g) => g.key),
+        query.data.by,
+      )
+    : undefined
+
   return (
     <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-line border-b px-3 py-2">
@@ -987,39 +1111,19 @@ export function OverviewPage() {
           onChange={(v) => set({ range: v === '7d' ? undefined : v })}
         />
         <div className="flex items-center gap-1.5 text-muted text-sec">
-          group
-          <SegmentedControl<By>
-            label="Group by"
-            value={by}
+          show
+          <SegmentedControl<Show>
+            label="Show"
+            value={show}
             options={[
-              { value: 'none', label: 'None', title: 'One row per session' },
-              { value: 'dir', label: 'Folder' },
-              { value: 'checkout', label: 'Worktree', title: 'Git worktree (checkout)' },
-              { value: 'repo', label: 'Repo', title: BY_TITLE.repo },
-              { value: 'remote', label: 'Remote', title: BY_TITLE.remote },
+              { value: 'sessions', label: 'Sessions', title: 'One row per session' },
+              { value: 'grouped', label: 'Grouped', title: 'Every group with all its sessions under it' },
+              { value: 'groups', label: 'Groups', title: 'The groups alone, each with the graph of all its sessions' },
             ]}
-            onChange={(v) => set({ by: v === 'dir' ? undefined : v })}
+            onChange={(v) => set(formatView(by, v))}
           />
         </div>
-        {!flat && (
-          <div className="flex items-center gap-1.5 text-muted text-sec">
-            show
-            <SegmentedControl<Show>
-              label="Show"
-              value={show}
-              options={[
-                { value: 'sessions', label: 'Sessions', title: 'Every group with all its sessions under it' },
-                {
-                  value: 'groups',
-                  label: 'Groups',
-                  title: 'The groups alone, each with the graph of all its sessions',
-                },
-              ]}
-              onChange={(v) => set({ show: v === 'sessions' ? undefined : v })}
-            />
-          </div>
-        )}
-        <div className="flex min-w-[220px] flex-1 justify-center">
+        <div className="flex min-w-[220px] flex-1 items-center justify-center gap-2">
           <SearchInput
             value={draft}
             onChange={setDraft}
@@ -1029,6 +1133,23 @@ export function OverviewPage() {
             label="Search sessions"
             className="w-full max-w-[420px]"
           />
+          {sel !== null && (
+            <span className="inline-flex h-7 max-w-[260px] shrink-0 items-center gap-1 rounded-card border border-line bg-surface-2 pr-1 pl-2 text-sec">
+              <span className="text-muted">in</span>
+              <span className="truncate font-medium text-fg" title={sel}>
+                {displayPath(sel, home)}
+              </span>
+              <button
+                type="button"
+                onClick={() => select(null)}
+                aria-label="Clear the selection"
+                title="Clear the selection"
+                className="inline-flex size-5 shrink-0 items-center justify-center rounded-card text-muted hover:bg-line hover:text-fg"
+              >
+                <X size={12} aria-hidden />
+              </button>
+            </span>
+          )}
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -1048,6 +1169,11 @@ export function OverviewPage() {
               hits={hits}
               pageW={pageW}
               scales={scales}
+              sel={sel}
+              onSelect={select}
+              onBy={setBy}
+              sbOpen={sbOpen}
+              onSbOpen={setSbOpen}
               onSort={(k) => set(formatSort(nextSort(sort, k)))}
             />
           )}
@@ -1072,6 +1198,11 @@ function Table({
   hits,
   pageW,
   scales,
+  sel,
+  onSelect,
+  onBy,
+  sbOpen,
+  onSbOpen,
   onSort,
 }: {
   o: Overview
@@ -1082,12 +1213,15 @@ function Table({
   hits?: ReadonlySet<string>
   pageW: number
   scales: { groups: { pxPerTok: number }; lanes: { pxPerTok: number } }
+  sel: string | null
+  onSelect: (path: string | null) => void
+  onBy: (by: By) => void
+  sbOpen: boolean
+  onSbOpen: (open: boolean) => void
   onSort: (k: SortKey) => void
 }) {
-  const flat = by === 'none'
-  const gutter = flat ? GUTTER_W : 0
-  const lead = HARNESS_W + gutter
-  const indexOpen = !flat && show === 'sessions'
+  const gutter = show === 'sessions' ? GUTTER_W : 0
+  const lead = gutter
   // The rows scroll; header and footer do not. The scrollbar takes width from the rows only, so the
   // header and the footer give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -1095,9 +1229,11 @@ function Table({
   const innerW = useWidth(innerRef)
   const [padRight, setPadRight] = useState(0)
   // the plot is sized for where the index will be, not for the width it has while it slides
-  const plotW = Math.max(240, pageW - (indexOpen ? SIDEBAR_W : 0) - padRight - lead - 2 * CELL_PAD)
-  const f = useMemo(() => filterOverview(o, term, hits), [o, term, hits])
-  const rows = useMemo(() => buildRows(f, by, show, sort), [f, by, show, sort])
+  const plotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - padRight - lead - 2 * CELL_PAD)
+  // the search narrows the groups; the tree shows these, the table what the selection leaves of them
+  const found = useMemo(() => filterOverview(o, term, hits), [o, term, hits])
+  const f = useMemo(() => selectOverview(found, sel, o.by), [found, sel, o.by])
+  const rows = useMemo(() => buildRows(f, show, sort), [f, show, sort])
   const searching = term !== ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rows decide whether the scrollbar is there
   useLayoutEffect(() => {
@@ -1138,66 +1274,46 @@ function Table({
     setHover((h) => (h && h.x === x && h.group === group ? h : { x, group }))
   }
 
-  // ---- the index: groups in the table's order, the one at the top, a click to scroll there ----
+  // ---- the index: the places of the groups the search leaves; a key that changed may drop the selection ----
   // groups that share a name are told apart by the fewest trailing directories that differ
   const labelOf = useMemo(() => {
     const ls = placeLabels(o.groups.map((g) => ({ key: g.key, name: g.name })))
     return new Map(o.groups.map((g, i) => [g.key, ls[i]]))
   }, [o.groups])
   const items: IndexItem[] = useMemo(
-    () =>
-      rows.flatMap((r) =>
-        r.kind === 'group' ? [{ key: r.g.key, name: r.g.name, count: f.shown.get(r.g.key) ?? 0, usd: r.g.usd }] : [],
-      ),
-    [rows, f.shown],
+    () => found.groups.map((g) => ({ key: g.key, name: g.name, count: found.shown.get(g.key) ?? 0, usd: g.usd })),
+    [found],
   )
-  const [current, setCurrent] = useState<string | null>(null)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: rows change what is at the top
+  const home = useMemo(
+    () =>
+      groupsHome(
+        o.groups.map((g) => g.key),
+        o.by,
+      ),
+    [o.groups, o.by],
+  )
+  const tree = useMemo(() => buildPlaceTree(items, o.by, { home }), [items, o.by, home])
+  const total = useMemo(() => totalOf(items), [items])
+  const seenBy = useRef(o.by)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a change of the key looks at the selection
   useEffect(() => {
-    const el = scrollRef.current
-    const inner = innerRef.current
-    if (!el || !inner) return
-    let raf = 0
-    const update = () => {
-      raf = 0
-      let cur: string | null = null
-      for (const n of inner.querySelectorAll<HTMLElement>('[data-grow]')) {
-        if (n.offsetTop > el.scrollTop + 2) break
-        cur = n.dataset.group ?? null
-      }
-      setCurrent(cur)
-    }
-    const onScroll = () => {
-      if (!raf) raf = requestAnimationFrame(update)
-    }
-    update()
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      el.removeEventListener('scroll', onScroll)
-      if (raf) cancelAnimationFrame(raf)
-    }
-  }, [rows])
-  const pick = (key: string) => {
-    const el = scrollRef.current
-    const n = [...(innerRef.current?.querySelectorAll<HTMLElement>('[data-grow]') ?? [])].find(
-      (x) => x.dataset.group === key,
-    )
-    if (!el || !n) return
-    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    el.scrollTo({ top: n.offsetTop, behavior: calm ? 'auto' : 'smooth' })
-  }
+    if (seenBy.current === o.by) return
+    seenBy.current = o.by
+    if (sel !== null && keepSelection(sel, o.groups, o.by) === null) onSelect(null)
+  }, [o.by])
 
   return (
     <div className="flex min-h-0 flex-1">
       <Sidebar
-        open={indexOpen}
+        open={sbOpen}
+        onOpen={onSbOpen}
         by={by}
-        label={BY_LABEL[by]}
-        title={BY_TITLE[by]}
-        items={items}
-        current={indexOpen ? current : null}
-        hover={indexOpen && hover ? hover.group : null}
-        onPick={pick}
+        onBy={onBy}
+        tree={tree}
+        total={total}
+        sel={sel}
+        hover={sbOpen && hover ? hover.group : null}
+        onSelect={onSelect}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header
@@ -1225,10 +1341,10 @@ function Table({
                   g={r.g}
                   label={labelOf.get(r.g.key) ?? r.g.name}
                   lanes={byGroup.get(r.g.key) ?? []}
-                  shown={searching ? f.shown.get(r.g.key) : undefined}
+                  shown={searching ? found.shown.get(r.g.key) : undefined}
                   priciestHead={priciest(r.g)}
                   gutter={gutter}
-                  tint={show === 'sessions'}
+                  tint={show === 'grouped'}
                   shared={shared}
                 />
               ) : (
@@ -1242,8 +1358,19 @@ function Table({
                 />
               ),
             )}
-            {!searching && o.scripted.usd > 0 && <ScriptedRow o={o} gutter={gutter} />}
-            {searching && rows.length === 0 && <div className="p-6 text-muted">No sessions match “{term}”.</div>}
+            {!searching && sel === null && o.scripted.usd > 0 && <ScriptedRow o={o} gutter={gutter} />}
+            {rows.length === 0 && (
+              <div className="p-6 text-muted">
+                {searching ? `No sessions match “${term}”` : 'Nothing'}
+                {sel !== null && ` under ${displayPath(sel, home)}`}
+                {searching ? '' : ' in this range'}.{' '}
+                {sel !== null && (
+                  <button type="button" onClick={() => onSelect(null)} className="text-accent hover:underline">
+                    Clear the selection
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="shrink-0 bg-surface">
