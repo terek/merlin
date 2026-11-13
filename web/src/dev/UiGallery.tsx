@@ -18,6 +18,7 @@ import {
   EmptyState,
   EndStateBadge,
   ErrorState,
+  HarnessIcon,
   Highlight,
   Id,
   KeyHint,
@@ -215,6 +216,15 @@ export function UiGallery() {
               <span key={s} className="flex items-center gap-1.5">
                 <StateDot state={s} />
                 {s}
+              </span>
+            ))}
+          </Row>
+          <Row label="HarnessIcon">
+            {['claude', 'codex', 'pi', 'other'].map((h) => (
+              <span key={h} className="flex items-center gap-1.5">
+                <HarnessIcon harness={h} />
+                <HarnessIcon harness={h} size={20} />
+                {h}
               </span>
             ))}
           </Row>

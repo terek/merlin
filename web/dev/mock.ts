@@ -618,6 +618,13 @@ function costTable(u: URL): CostTable {
 
 // ---- /api/overview (experimental) ------------------------------------------------------
 
+/** The overview's lanes borrow other harnesses for some sessions, so that the page shows every mark. */
+function overviewHarness(id: string, harness: string): string {
+  let h = 0
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return h % 7 === 0 ? 'codex' : h % 11 === 0 ? 'pi' : harness
+}
+
 const SLOT_MS: Record<OverviewSlot, number> = {
   '1m': MIN,
   '2m': 2 * MIN,
@@ -865,7 +872,7 @@ function overview(u: URL): Overview {
     context.forEach((v, i) => {
       if (v > 0) active[i] = 1
     })
-    const sid = { harness: s.summary.key.harness, id: s.summary.key.id }
+    const sid = { harness: overviewHarness(s.summary.key.id, s.summary.key.harness), id: s.summary.key.id }
     const agents = os.agents.filter((a) => a.end >= from && a.start < to)
     const spans: OverviewSpan[] = agents.map((a) => ({
       kind: a.kind,
@@ -1153,6 +1160,7 @@ function route(req: Request): Response {
         harnesses: [
           { name: 'claude', title: 'Claude Code', resume: 'claude --resume {id}' },
           { name: 'codex', title: 'Codex', resume: 'codex resume {id}', badge: 'codex' },
+          { name: 'pi', title: 'Pi', resume: 'pi --session {id}', badge: 'pi' },
         ],
       })
     if (p === '/api/prices')

@@ -370,9 +370,15 @@ export const laneDescription = (l: OverviewLane): string =>
 /** Whitespace folded to single spaces. */
 export const oneLine = (t: string): string => t.replace(/\s+/g, ' ').trim()
 
-/** The group row's description: "18 sessions · priciest: <head> $96". `head` resolves the priciest's lane. */
-export function groupDescription(g: OverviewGroup, head?: string): string {
-  const n = `${g.sessions} ${g.sessions === 1 ? 'session' : 'sessions'}`
+/**
+ * The group row's description: "18 sessions · priciest: <head> $96". `head` resolves the priciest's lane;
+ * `shown` (under a search) is the number of the group's sessions that match: "3 of 18 sessions match · ...".
+ */
+export function groupDescription(g: OverviewGroup, head?: string, shown?: number): string {
+  const n =
+    shown !== undefined && shown < g.sessions
+      ? `${shown} of ${g.sessions} sessions match`
+      : `${g.sessions} ${g.sessions === 1 ? 'session' : 'sessions'}`
   if (!g.priciest) return n
   const h = head || g.priciest.title || g.priciest.id.slice(0, 8)
   return `${n} · priciest: ${oneLine(h)} ${formatMoney(g.priciest.usd)}`
@@ -548,4 +554,138 @@ export function lastLabel(iso: string | undefined, nowMs: number): string {
   if (days === 1) return 'yesterday'
   const a = new Date(t)
   return `${a.getDate()} ${MONTHS[a.getMonth()]}`
+}
+
+// ---- search ------------------------------------------------------------------------------
+
+/** The key of a session in a set of search hits. */
+export const sessionKey = (harness: string, id: string): string => `${harness}/${id}`
+
+/**
+ * Whether a session matches a search term (trimmed, lowercased by the caller; empty matches all): the
+ * term is in its head (name, title, id), its description texts or its group's name, or (term of 2+
+ * characters) the session is among the server's full-text `hits`.
+ */
+export function laneMatches(l: OverviewLane, groupName: string, term: string, hits?: ReadonlySet<string>): boolean {
+  if (!term) return true
+  const hay = [l.name, l.title, l.id, l.recap?.text, l.firstPrompt?.text, l.lastPrompt?.text, groupName]
+  if (hay.some((t) => t?.toLowerCase().includes(term))) return true
+  return term.length >= 2 && !!hits?.has(sessionKey(l.harness, l.id))
+}
+
+export interface Filtered {
+  groups: OverviewGroup[]
+  lanes: OverviewLane[]
+  /** Per group key, the number of its sessions that match. */
+  shown: Map<string, number>
+}
+
+/**
+ * The groups with at least one matching session and the matching sessions. A group whose own name
+ * matches counts all its sessions as matching. An empty term returns everything.
+ */
+export function filterOverview(
+  o: { groups: OverviewGroup[]; lanes: OverviewLane[] },
+  rawTerm: string,
+  hits?: ReadonlySet<string>,
+): Filtered {
+  const term = rawTerm.trim().toLowerCase()
+  const shown = new Map<string, number>()
+  if (!term) {
+    for (const g of o.groups) shown.set(g.key, g.sessions)
+    return { groups: o.groups, lanes: o.lanes, shown }
+  }
+  const byName = new Map(o.groups.map((g) => [g.key, g.name]))
+  const lanes = o.lanes.filter((l) => laneMatches(l, byName.get(l.group) ?? l.group, term, hits))
+  for (const l of lanes) shown.set(l.group, (shown.get(l.group) ?? 0) + 1)
+  return { groups: o.groups.filter((g) => shown.has(g.key)), lanes, shown }
+}
+
+/** The distinct harnesses of some sessions, most sessions first (ties by name). */
+export function groupHarnesses(lanes: readonly { harness: string }[], max = 3): string[] {
+  const n = new Map<string, number>()
+  for (const l of lanes) n.set(l.harness, (n.get(l.harness) ?? 0) + 1)
+  return [...n.entries()]
+    .sort((a, b) => b[1] - a[1] || cmp(a[0], b[0]))
+    .slice(0, max)
+    .map(([h]) => h)
+}
+
+// ---- what the pointer is over ------------------------------------------------------------
+
+/** A column of the table the pointer can be over. */
+export type Column = 'harness' | 'first' | SortKey
+
+export interface ColumnBox {
+  col: Column
+  /** Left edge and width, in px from the left of the rows. */
+  x: number
+  w: number
+}
+
+/** The widths the columns are laid out with (OverviewPage.tsx). */
+export interface Layout {
+  harness: number
+  gutter: number
+  pad: number
+  turns: number
+  agents: number
+  spend: number
+  last: number
+  /** The gap between the text line's columns. */
+  gap: number
+}
+
+/**
+ * The columns' boxes for rows `width` px wide: the harness column, the first column (flat table), then
+ * Session (the rest), Turns, Agents, Spend and Last against the right edge. The boxes meet in the middle
+ * of the gap between two columns, and the last reaches the right edge.
+ */
+export function columnBoxes(width: number, L: Layout): ColumnBox[] {
+  const right = width - L.pad
+  const lastX = right - L.last
+  const spendX = lastX - L.gap - L.spend
+  const agentsX = spendX - L.gap - L.agents
+  const turnsX = agentsX - L.gap - L.turns
+  const half = L.gap / 2
+  const boxes: ColumnBox[] = [{ col: 'harness', x: 0, w: L.harness }]
+  if (L.gutter > 0) boxes.push({ col: 'first', x: L.harness, w: L.gutter })
+  const cell = (col: Column, x: number, end: number): ColumnBox => ({ col, x, w: Math.max(0, end - x) })
+  boxes.push(
+    cell('session', L.harness + L.gutter, turnsX - half),
+    cell('turns', turnsX - half, agentsX - half),
+    cell('agents', agentsX - half, spendX - half),
+    cell('spend', spendX - half, lastX - half),
+    cell('last', lastX - half, width),
+  )
+  return boxes
+}
+
+/** The column under x (px from the left of the rows), or null outside them. */
+export function columnAt(boxes: ColumnBox[], x: number): Column | null {
+  const b = boxes.find((c) => x >= c.x && x < c.x + c.w)
+  return b ? b.col : null
+}
+
+export interface Band {
+  x0: number
+  x1: number
+}
+
+/**
+ * The stretch of the axis under x (px from the left of the plot): the local day, or in a range of two days
+ * or less the hour; clipped to the plot. Null when x is outside the plot.
+ */
+export function bandAt(axis: Axis, x: number): Band | null {
+  if (!(x >= 0 && x <= axis.width)) return null
+  const t = timeAt(axis, x)
+  const d = new Date(t)
+  const hourly = axis.toMs - axis.fromMs <= 2 * DAY
+  if (hourly) d.setMinutes(0, 0, 0)
+  else d.setHours(0, 0, 0, 0)
+  const a = d.getTime()
+  const e = new Date(a)
+  if (hourly) e.setHours(e.getHours() + 1)
+  else e.setDate(e.getDate() + 1)
+  return { x0: Math.max(0, xOf(axis, a)), x1: Math.min(axis.width, xOf(axis, e.getTime())) }
 }

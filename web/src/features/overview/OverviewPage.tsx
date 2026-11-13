@@ -1,18 +1,20 @@
 // The Overview page (experimental, docs/ui.md section 10b): where the agents' work went over a day,
-// a week or a month, as one table in a fixed-height container: the toolbar and the sortable column headers
-// stay on top, the rows scroll, the date axis and the totals stay at the bottom. Every row has its
-// text line (head, description, turns, agents, spend, last activity) and under it a merged cell with the
-// row's graph on one shared linear time axis.
+// a week or a month, as one full-bleed table under the top bar: the toolbar and the sortable column headers
+// stay on top, the rows scroll, the date axis and the totals stay at the bottom, and beside the rows an
+// index of the groups (when the table shows sessions under groups). Every row has its text line (harness,
+// head, description, turns, agents, spend, last activity) and under it a merged cell with the row's graph
+// on one shared linear time axis.
 
 import { ArrowDown, ArrowUp } from 'lucide-react'
-import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useOverview } from '../../api/queries'
+import { useOverview, useSearch } from '../../api/queries'
 import type { Overview, OverviewGroup, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatTokens, plural } from '../../lib/format'
+import { plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
-import { Money, QueryBoundary, SegmentedControl, Skeleton } from '../../ui'
+import { useShortcut } from '../../shell/useShortcut'
+import { HarnessIcon, Money, QueryBoundary, SearchInput, SegmentedControl, Skeleton } from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
@@ -20,15 +22,25 @@ import {
   activityRuns,
   apiBy,
   axisTicks,
+  type Band,
   type By,
+  bandAt,
   buildRows,
+  type Column,
+  type ColumnBox,
   chooseSlot,
+  columnAt,
+  columnBoxes,
+  type Filtered,
+  filterOverview,
   fitLabels,
   formatSort,
   groupDescription,
+  groupHarnesses,
   groupScale,
   isBranch,
   LANE_DEPTH,
+  type Layout,
   laneDescription,
   laneHead,
   laneScale,
@@ -48,17 +60,30 @@ import {
   type Show,
   type Sort,
   type SortKey,
+  sessionKey,
   slotX,
   spineLanes,
   stepAreaPath,
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
 
-/** The first column (flat table only), the numeric columns (px) and the cell padding the graph sits in. */
+/** The harness column, the first column (flat table only), the numeric columns (px) and the cell padding the graph sits in. */
+const HARNESS_W = 48
 const GUTTER_W = 140
 const COLS = { turns: 52, agents: 56, spend: 84, last: 64 }
 const CELL_PAD = 12
-const CARD_BORDER = 2
+const GAP = 8
+/** The index beside the rows (px, its right border included). */
+const SIDEBAR_W = 220
+const LAYOUT: Omit<Layout, 'gutter'> = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
+/** The hovered row's background: the text colour, faintly, over the row's own. */
+const HOVER = 'hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
+const HOVER_TINT = 'hover:bg-[color-mix(in_srgb,var(--text)_6%,var(--surface-2))]'
+const HOT = 'bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
+/** A header cell's rule on its left: tiny, between the sort arrows. */
+const RULE =
+  'before:absolute before:top-1/2 before:left-[-4px] before:h-[55%] before:w-px before:-translate-y-1/2 before:bg-line'
+
 /** A nested session's indent, and the scrollbar width the page assumes before it has measured one. */
 const INDENT = 16
 const SCROLLBAR = 15
@@ -73,11 +98,16 @@ const RUN_W = 2
 const PAD_TOP = 1
 
 const BY_LABEL: Record<By, string> = {
-  none: 'Project',
-  dir: 'Project',
-  checkout: 'Checkout',
-  repo: 'Repository',
+  none: 'Folder',
+  dir: 'Folder',
+  checkout: 'Worktree',
+  repo: 'Repo',
   remote: 'Remote',
+}
+
+const BY_TITLE: Partial<Record<By, string>> = {
+  repo: 'Repository: worktrees of one clone merge',
+  remote: 'Origin URL: clones of one remote merge',
 }
 
 /** The colour a span is drawn in: the Session page's, by kind; a branched session is the main colour. */
@@ -283,7 +313,7 @@ function TextLine({
     n === undefined ? '' : n === 0 ? <span className="text-faint">0</span> : n.toLocaleString('en-US')
   const text = oneLine(desc ?? '')
   return (
-    <div className={cn('flex items-baseline gap-2 pt-1 text-sec', className)} style={{ paddingLeft: indent }}>
+    <div className={cn('flex items-baseline pt-1 text-sec', className)} style={{ paddingLeft: indent, columnGap: GAP }}>
       <div className="min-w-0 flex-1 truncate" title={text ? `${headText}: ${text}` : headText}>
         {head}
         {text && <span className="ml-2 text-muted">{text}</span>}
@@ -302,22 +332,52 @@ function TextLine({
   )
 }
 
-/** A row: the first column (flat table only) and the cell with the text line and the graph. */
+/** The harness column of a row: one mark, or up to three of a group's side by side (a little smaller). */
+function HarnessCell({ harnesses }: { harnesses: string[] }) {
+  const many = harnesses.length > 1
+  return (
+    <div
+      className={cn('flex shrink-0 items-start gap-0.5 pl-2', many ? 'pt-[6px]' : 'pt-[5px]')}
+      style={{ width: HARNESS_W }}
+    >
+      {harnesses.map((h) => (
+        <HarnessIcon key={h} harness={h} size={many ? 12 : 14} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A row: the harness column, the first column (flat table only) and the cell with the text line and the
+ * graph. The row's hover is CSS, so that moving the pointer does not render it; `data-group` lets the
+ * table find the group a hovered row belongs to.
+ */
 function Frame({
+  group,
+  isGroup,
+  harnesses,
   gutter,
   first,
   tint,
   children,
 }: {
+  group: string
+  isGroup?: boolean
+  harnesses: string[]
   gutter: number
   first?: ReactNode
   tint?: boolean
   children: ReactNode
 }) {
   return (
-    <div className={cn('flex border-line border-t first:border-t-0', tint && 'bg-surface-2')}>
+    <div
+      data-group={group}
+      data-grow={isGroup ? '' : undefined}
+      className={cn('flex border-line border-t first:border-t-0', tint ? `bg-surface-2 ${HOVER_TINT}` : HOVER)}
+    >
+      <HarnessCell harnesses={harnesses} />
       {gutter > 0 && (
-        <div className="min-w-0 shrink-0 truncate pt-1 pr-1 pl-3 text-muted text-sec" style={{ width: gutter }}>
+        <div className="min-w-0 shrink-0 truncate pt-1 pr-1 text-muted text-sec" style={{ width: gutter }}>
           {first}
         </div>
       )}
@@ -328,7 +388,7 @@ function Frame({
   )
 }
 
-function SessionRow({
+const SessionRow = memo(function SessionRow({
   l,
   nested,
   groupName,
@@ -343,7 +403,12 @@ function SessionRow({
 }) {
   const head = laneHead(l)
   return (
-    <Frame gutter={gutter} first={<span title={groupName || 'no value'}>{groupName || 'no value'}</span>}>
+    <Frame
+      group={l.group}
+      harnesses={[l.harness]}
+      gutter={gutter}
+      first={<span title={groupName || 'no value'}>{groupName || 'no value'}</span>}
+    >
       <TextLine
         head={
           <Link
@@ -364,11 +429,12 @@ function SessionRow({
       <RowGraph data={laneData(l)} shared={shared} />
     </Frame>
   )
-}
+})
 
-function GroupRow({
+const GroupRow = memo(function GroupRow({
   g,
   lanes,
+  shown,
   priciestHead,
   gutter,
   tint,
@@ -377,17 +443,20 @@ function GroupRow({
   g: OverviewGroup
   priciestHead?: string
   lanes: OverviewLane[]
+  /** The group's sessions that match the search (undefined: no search). */
+  shown?: number
   gutter: number
   tint: boolean
   shared: Shared
 }) {
   const name = g.name || 'no value'
+  const harnesses = useMemo(() => groupHarnesses(lanes), [lanes])
   return (
-    <Frame gutter={gutter} tint={tint}>
+    <Frame group={g.key} isGroup harnesses={harnesses} gutter={gutter} tint={tint}>
       <TextLine
         head={<span className="font-semibold text-fg">{name}</span>}
         headText={name}
-        desc={groupDescription(g, priciestHead)}
+        desc={groupDescription(g, priciestHead, shown)}
         turns={g.turns}
         agents={g.agents}
         usd={g.usd}
@@ -396,11 +465,11 @@ function GroupRow({
       <RowGraph data={groupData(g, lanes)} shared={shared} />
     </Frame>
   )
-}
+})
 
 function ScriptedRow({ o, gutter }: { o: Overview; gutter: number }) {
   return (
-    <Frame gutter={gutter}>
+    <Frame group="" harnesses={[]} gutter={gutter}>
       <TextLine
         head={`${plural(o.scripted.sessions, 'scripted run')}`}
         headText={`${plural(o.scripted.sessions, 'scripted run')}`}
@@ -420,6 +489,7 @@ function Th({
   sort,
   onSort,
   title,
+  rule,
 }: {
   col: SortKey
   label: string
@@ -427,6 +497,8 @@ function Th({
   sort: Sort
   onSort: (k: SortKey) => void
   title: string
+  /** A tiny rule on the cell's left edge (every cell but the first). */
+  rule?: boolean
 }) {
   const on = sort.key === col
   const Arrow = sort.desc ? ArrowDown : ArrowUp
@@ -437,8 +509,9 @@ function Th({
       title={title}
       aria-label={`Sort by ${label.toLowerCase()}`}
       className={cn(
-        'inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-meta uppercase tracking-wide hover:text-fg',
+        'relative inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap py-1.5 text-meta uppercase tracking-wide hover:text-fg',
         w === undefined ? 'min-w-0 flex-1 justify-start' : 'justify-end',
+        rule && RULE,
         on ? 'text-fg' : 'text-faint',
       )}
       style={w === undefined ? undefined : { width: w }}
@@ -450,37 +523,61 @@ function Th({
   )
 }
 
+/** The light band behind a column under the pointer. */
+function ColumnBand({ boxes, col, skip }: { boxes: ColumnBox[]; col: Column | null; skip?: Column[] }) {
+  const b = col && !skip?.includes(col) ? boxes.find((x) => x.col === col) : undefined
+  if (!b) return null
+  return (
+    <div className={cn('pointer-events-none absolute inset-y-0', HOT)} style={{ left: b.x, width: b.w }} aria-hidden />
+  )
+}
+
 function Header({
   gutter,
   byLabel,
+  byTitle,
   sort,
   onSort,
   padRight,
+  boxes,
+  hotCol,
 }: {
   gutter: number
   byLabel: string
+  byTitle?: string
   sort: Sort
   onSort: (k: SortKey) => void
   padRight: number
+  boxes: ColumnBox[]
+  hotCol: Column | null
 }) {
   const th = { sort, onSort }
   return (
-    <div className="shrink-0 border-line border-y bg-surface" style={{ paddingRight: padRight }}>
-      <div className="flex py-1">
+    <div className="shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
+      <div className="relative flex items-stretch">
+        <ColumnBand boxes={boxes} col={hotCol} />
+        <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
         {gutter > 0 && (
           <div
-            className="shrink-0 truncate pl-3 text-faint text-meta uppercase tracking-wide"
+            className="relative shrink-0 truncate py-1.5 text-faint text-meta uppercase tracking-wide"
             style={{ width: gutter }}
+            title={byTitle}
           >
             {byLabel}
           </div>
         )}
-        <div className="flex min-w-0 flex-1 items-baseline gap-2" style={{ paddingInline: CELL_PAD }}>
-          <Th {...th} col="session" label="Session" title="Sort by start time (group rows: by number of sessions)" />
-          <Th {...th} col="turns" label="Turns" w={COLS.turns} title="Sort by turns" />
-          <Th {...th} col="agents" label="Agents" w={COLS.agents} title="Sort by agents launched" />
-          <Th {...th} col="spend" label="Spend" w={COLS.spend} title="Sort by spend" />
-          <Th {...th} col="last" label="Last" w={COLS.last} title="Sort by last activity" />
+        <div className="flex min-w-0 flex-1 items-stretch" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
+          <Th
+            {...th}
+            col="session"
+            label="Session"
+            rule={gutter > 0}
+            title="Sort by start time (group rows: by number of sessions)"
+          />
+          <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
+          <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
+          <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
+          <Th {...th} col="last" label="Last" w={COLS.last} rule title="Sort by last activity" />
         </div>
       </div>
     </div>
@@ -489,19 +586,37 @@ function Header({
 
 // ---- the sticky footer: date axis and totals ---------------------------------
 
-function AxisRow({ axis, gutter, padRight }: { axis: Axis; gutter: number; padRight: number }) {
+function AxisRow({
+  axis,
+  lead,
+  padRight,
+  band,
+}: {
+  axis: Axis
+  lead: number
+  padRight: number
+  /** The stretch of the axis under the pointer: a light band, its label in the body colour. */
+  band: Band | null
+}) {
   const ticks = fitLabels(axisTicks(axis), axis.width)
+  const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
   return (
     <div className="border-line border-t" style={{ paddingRight: padRight }}>
       <div className="flex">
-        <div className="shrink-0" style={{ width: gutter }} />
-        <div className="min-w-0 flex-1" style={{ paddingInline: CELL_PAD }}>
+        <div className="shrink-0" style={{ width: lead }} />
+        <div className="min-w-0 flex-1 overflow-hidden" style={{ paddingInline: CELL_PAD }}>
           <svg width={axis.width} height={20} className="block" role="img" aria-label="Time axis">
+            {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={20} fill="var(--surface-2)" />}
             {ticks.map((t) => (
               <g key={t.x}>
                 <line x1={t.x} x2={t.x} y1={0} y2={t.day ? 6 : t.labelled ? 4 : 3} stroke="var(--line)" />
                 {t.labelled && (
-                  <text x={t.x + 3} y={16} fontSize={11} fill={t.day ? 'var(--muted)' : 'var(--faint)'}>
+                  <text
+                    x={t.x + 3}
+                    y={16}
+                    fontSize={11}
+                    fill={inBand(t.x) ? 'var(--text)' : t.day ? 'var(--muted)' : 'var(--faint)'}
+                  >
                     {t.label}
                   </text>
                 )}
@@ -514,26 +629,139 @@ function AxisRow({ axis, gutter, padRight }: { axis: Axis; gutter: number; padRi
   )
 }
 
-function Totals({ o, gutter, padRight }: { o: Overview; gutter: number; padRight: number }) {
-  const sum = (f: (g: OverviewGroup) => number) => o.groups.reduce((a, g) => a + f(g), 0)
-  const n = sum((g) => g.sessions)
+function Totals({
+  f,
+  term,
+  lead,
+  padRight,
+  boxes,
+  hotCol,
+}: {
+  f: Filtered
+  term: string
+  lead: number
+  padRight: number
+  boxes: ColumnBox[]
+  hotCol: Column | null
+}) {
+  // under a search the totals are those of the matching sessions
+  const sum = (a: (g: OverviewGroup) => number, b: (l: OverviewLane) => number) =>
+    term ? f.lanes.reduce((n, l) => n + b(l), 0) : f.groups.reduce((n, g) => n + a(g), 0)
+  const n = term ? f.lanes.length : f.groups.reduce((a, g) => a + g.sessions, 0)
   return (
     <div className="border-line border-t" style={{ paddingRight: padRight }}>
-      <div className="flex">
-        <div className="shrink-0" style={{ width: gutter }} />
-        <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
-          <TextLine
-            className="font-medium"
-            head={<span className="text-fg">Total</span>}
-            headText="Total"
-            desc={plural(n, 'session')}
-            turns={sum((g) => g.turns)}
-            agents={sum((g) => g.agents)}
-            usd={sum((g) => g.usd)}
-          />
+      <div className="relative">
+        <ColumnBand boxes={boxes} col={hotCol} skip={['harness', 'first']} />
+        <div className="relative flex">
+          <div className="shrink-0" style={{ width: lead }} />
+          <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
+            <TextLine
+              className="font-medium"
+              head={
+                <span className="text-fg" title={term ? 'Totals of the matching sessions' : 'Totals of the range'}>
+                  Total
+                </span>
+              }
+              headText={term ? 'Totals of the matching sessions' : 'Totals'}
+              desc={term ? `${plural(n, 'matching session')}` : plural(n, 'session')}
+              turns={sum(
+                (g) => g.turns,
+                (l) => l.turns,
+              )}
+              agents={sum(
+                (g) => g.agents,
+                (l) => l.agents,
+              )}
+              usd={sum(
+                (g) => g.usd,
+                (l) => l.usd,
+              )}
+            />
+          </div>
         </div>
       </div>
     </div>
+  )
+}
+
+// ---- the index beside the rows -----------------------------------------------------------
+
+interface IndexItem {
+  key: string
+  name: string
+  count: number
+  usd: number
+}
+
+/**
+ * One item per group of the table, in its order: the name, the shown sessions and the spend. A click scrolls
+ * the group to the top of the rows; `current` is the group at the top of the rows now, `hover` the group of
+ * the row under the pointer. Its width goes to 0 when the table needs no index (the rows are the index).
+ */
+function Sidebar({
+  open,
+  label,
+  title,
+  items,
+  current,
+  hover,
+  onPick,
+}: {
+  open: boolean
+  label: string
+  title?: string
+  items: IndexItem[]
+  current: string | null
+  hover: string | null
+  onPick: (key: string) => void
+}) {
+  const listRef = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    if (!open || current === null) return
+    const li = [...(listRef.current?.children ?? [])].find((c) => (c as HTMLElement).dataset.key === current)
+    li?.scrollIntoView({ block: 'nearest' })
+  }, [current, open])
+  return (
+    <aside
+      aria-label={`${label} index`}
+      aria-hidden={!open}
+      inert={!open}
+      className="shrink-0 overflow-hidden border-line border-r transition-[width] duration-150 motion-reduce:transition-none"
+      style={{ width: open ? SIDEBAR_W : 0, borderRightWidth: open ? 1 : 0 }}
+    >
+      <div className="flex h-full flex-col" style={{ width: SIDEBAR_W - 1 }}>
+        <div
+          className="shrink-0 truncate border-line border-b px-3 py-1.5 text-faint text-meta uppercase tracking-wide"
+          title={title}
+        >
+          {label}
+        </div>
+        <ul ref={listRef} className="min-h-0 flex-1 space-y-px overflow-y-auto p-1.5">
+          {items.map((it) => {
+            const name = it.name || 'no value'
+            return (
+              <li key={it.key} data-key={it.key}>
+                <button
+                  type="button"
+                  onClick={() => onPick(it.key)}
+                  aria-current={current === it.key ? 'true' : undefined}
+                  title={name}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-card px-2 py-1 text-left text-body',
+                    hover === it.key && 'bg-surface-2',
+                    current === it.key && 'bg-accent-soft font-medium text-accent',
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate">{name}</span>
+                  <span className="w-7 shrink-0 text-right text-muted text-sec tabular-nums">{it.count}</span>
+                  <Money usd={it.usd} dim className="w-14 shrink-0 text-right text-sec" />
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </aside>
   )
 }
 
@@ -547,6 +775,7 @@ export function OverviewPage() {
   const show = parseShow(sp.get('show'))
   const sort = useMemo(() => parseSort(sp.get('sort'), sp.get('dir')), [sp])
   const flat = by === 'none'
+  const q = sp.get('q') ?? ''
 
   const set = (changes: Record<string, string | undefined>) => {
     const next = new URLSearchParams(sp)
@@ -557,12 +786,43 @@ export function OverviewPage() {
     setSp(next, { replace: true })
   }
 
+  // ---- search box: typing is local, the URL follows after 200 ms ----
+  const [draft, setDraft] = useState(q)
+  const debounced = useDebounced(draft, 200)
+  const written = useRef(q)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: write only when the debounced text changes
+  useEffect(() => {
+    if (debounced !== written.current) {
+      written.current = debounced
+      set({ q: debounced })
+    }
+  }, [debounced])
+  useEffect(() => {
+    // back / forward changed `q`: the box follows
+    if (q !== written.current) {
+      written.current = q
+      setDraft(q)
+    }
+  }, [q])
+  const inputRef = useRef<HTMLInputElement>(null)
+  useShortcut('/', () => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  })
+  const term = q.trim()
+  const search = useSearch(term)
+  const hits = useMemo(
+    () => (search.data ? new Set(search.data.hits.map((h) => sessionKey(h.session.harness, h.session.id))) : undefined),
+    [search.data],
+  )
+
   // The plot's width picks the slot (about one per pixel); the width is followed live, the slot only
   // once the width has held still, so a drag of the window does not refetch at every pixel.
-  const cardRef = useRef<HTMLDivElement>(null)
-  const cardW = useWidth(cardRef)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const pageW = useWidth(rootRef)
   const gutter = flat ? GUTTER_W : 0
-  const pagePlotW = Math.max(240, cardW - CARD_BORDER - SCROLLBAR - gutter - 2 * CELL_PAD)
+  const sbW = !flat && show === 'sessions' ? SIDEBAR_W : 0
+  const pagePlotW = Math.max(240, pageW - sbW - SCROLLBAR - HARNESS_W - gutter - 2 * CELL_PAD)
   const slot = chooseSlot(RANGES[range].ms, useDebounced(pagePlotW, 250))
 
   // "Ending now", rounded up so that the query key holds still between refreshes.
@@ -575,7 +835,7 @@ export function OverviewPage() {
     by: apiBy(by),
   })
 
-  // Group rows (total context) and session rows have a token scale each; the note names those on screen.
+  // Group rows (total context) and session rows have a token scale each.
   const scales = useMemo(
     () => ({
       groups: query.data ? groupScale(query.data.groups) : { maxTok: 0, pxPerTok: 0 },
@@ -583,88 +843,104 @@ export function OverviewPage() {
     }),
     [query.data],
   )
-  const notes = [
-    !flat && scales.groups.maxTok > 0 && `groups 15 px = ${formatTokens(scales.groups.maxTok)}`,
-    (flat || show === 'sessions') && scales.lanes.maxTok > 0 && `sessions 15 px = ${formatTokens(scales.lanes.maxTok)}`,
-  ].filter(Boolean)
+
+  // The page fills the window and scrolls inside: the document drops its reserved scrollbar gutter meanwhile.
+  useEffect(() => {
+    document.documentElement.dataset.fullbleed = ''
+    return () => {
+      delete document.documentElement.dataset.fullbleed
+    }
+  }, [])
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-44px)] w-full max-w-[2000px] flex-col px-4 py-3">
-      <div
-        ref={cardRef}
-        className="flex min-h-0 flex-1 flex-col overflow-clip rounded-card border border-line bg-surface"
-      >
-        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
-          <h1 className="mr-1 font-semibold text-title">Overview</h1>
-          <SegmentedControl<Range>
-            label="Range"
-            value={range}
+    <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-line border-b px-3 py-2">
+        <h1 className="mr-1 font-semibold text-title">Overview</h1>
+        <SegmentedControl<Range>
+          label="Range"
+          value={range}
+          options={[
+            { value: '1d', label: '1d', title: 'The last day' },
+            { value: '7d', label: '7d', title: 'The last week' },
+            { value: '30d', label: '30d', title: 'The last 30 days' },
+          ]}
+          onChange={(v) => set({ range: v === '7d' ? undefined : v })}
+        />
+        <div className="flex items-center gap-1.5 text-muted text-sec">
+          group
+          <SegmentedControl<By>
+            label="Group by"
+            value={by}
             options={[
-              { value: '1d', label: '1d', title: 'The last day' },
-              { value: '7d', label: '7d', title: 'The last week' },
-              { value: '30d', label: '30d', title: 'The last 30 days' },
+              { value: 'none', label: 'None', title: 'One row per session' },
+              { value: 'dir', label: 'Folder' },
+              { value: 'checkout', label: 'Worktree', title: 'Git worktree (checkout)' },
+              { value: 'repo', label: 'Repo', title: BY_TITLE.repo },
+              { value: 'remote', label: 'Remote', title: BY_TITLE.remote },
             ]}
-            onChange={(v) => set({ range: v === '7d' ? undefined : v })}
+            onChange={(v) => set({ by: v === 'dir' ? undefined : v })}
           />
+        </div>
+        {!flat && (
           <div className="flex items-center gap-1.5 text-muted text-sec">
-            group
-            <SegmentedControl<By>
-              label="Group by"
-              value={by}
+            show
+            <SegmentedControl<Show>
+              label="Show"
+              value={show}
               options={[
-                { value: 'none', label: 'None', title: 'One row per session' },
-                { value: 'dir', label: 'Project' },
-                { value: 'checkout', label: 'Checkout' },
-                { value: 'repo', label: 'Repo', title: 'Repository' },
-                { value: 'remote', label: 'Remote' },
+                { value: 'sessions', label: 'Sessions', title: 'Every group with all its sessions under it' },
+                {
+                  value: 'groups',
+                  label: 'Groups',
+                  title: 'The groups alone, each with the graph of all its sessions',
+                },
               ]}
-              onChange={(v) => set({ by: v === 'dir' ? undefined : v })}
+              onChange={(v) => set({ show: v === 'sessions' ? undefined : v })}
             />
           </div>
-          {!flat && (
-            <div className="flex items-center gap-1.5 text-muted text-sec">
-              show
-              <SegmentedControl<Show>
-                label="Show"
-                value={show}
-                options={[
-                  { value: 'sessions', label: 'Sessions', title: 'Every group with all its sessions under it' },
-                  {
-                    value: 'groups',
-                    label: 'Groups',
-                    title: 'The groups alone, each with the graph of all its sessions',
-                  },
-                ]}
-                onChange={(v) => set({ show: v === 'sessions' ? undefined : v })}
-              />
-            </div>
-          )}
-          {notes.length > 0 && (
-            <span className="ml-auto truncate text-faint text-meta">context: {notes.join(' · ')} tokens</span>
-          )}
+        )}
+        <div className="flex min-w-[220px] flex-1 justify-center">
+          <SearchInput
+            value={draft}
+            onChange={setDraft}
+            placeholder="Search sessions…"
+            hint="/"
+            inputRef={inputRef}
+            label="Search sessions"
+            className="w-full max-w-[420px]"
+          />
         </div>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <QueryBoundary
-            query={query}
-            isEmpty={(o) => o.groups.length === 0 && o.scripted.usd === 0}
-            empty={<div className="border-line border-t p-6 text-muted">Nothing ran in this range.</div>}
-            skeleton={<Skeleton className="m-3 h-64" />}
-          >
-            {(o) => (
-              <Table
-                o={o}
-                by={by}
-                show={show}
-                sort={sort}
-                scales={scales}
-                onSort={(k) => set(formatSort(nextSort(sort, k)))}
-              />
-            )}
-          </QueryBoundary>
-        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <QueryBoundary
+          query={query}
+          isEmpty={(o) => o.groups.length === 0 && o.scripted.usd === 0}
+          empty={<div className="p-6 text-muted">Nothing ran in this range.</div>}
+          skeleton={<Skeleton className="m-3 h-64" />}
+        >
+          {(o) => (
+            <Table
+              o={o}
+              by={by}
+              show={show}
+              sort={sort}
+              term={term}
+              hits={hits}
+              pageW={pageW}
+              scales={scales}
+              onSort={(k) => set(formatSort(nextSort(sort, k)))}
+            />
+          )}
+        </QueryBoundary>
       </div>
     </div>
   )
+}
+
+/** The pointer over the rows: x from the left of the rows (whole px) and the group of the row under it. */
+interface Hover {
+  x: number
+  group: string | null
 }
 
 function Table({
@@ -672,6 +948,9 @@ function Table({
   by,
   show,
   sort,
+  term,
+  hits,
+  pageW,
   scales,
   onSort,
 }: {
@@ -679,18 +958,27 @@ function Table({
   by: By
   show: Show
   sort: Sort
+  term: string
+  hits?: ReadonlySet<string>
+  pageW: number
   scales: { groups: { pxPerTok: number }; lanes: { pxPerTok: number } }
   onSort: (k: SortKey) => void
 }) {
-  const gutter = by === 'none' ? GUTTER_W : 0
+  const flat = by === 'none'
+  const gutter = flat ? GUTTER_W : 0
+  const lead = HARNESS_W + gutter
+  const indexOpen = !flat && show === 'sessions'
   // The rows scroll; header and footer do not. The scrollbar takes width from the rows only, so the
   // header and the footer give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
   const innerW = useWidth(innerRef)
-  const plotW = Math.max(240, innerW - gutter - 2 * CELL_PAD)
   const [padRight, setPadRight] = useState(0)
-  const rows = useMemo(() => buildRows(o, by, show, sort), [o, by, show, sort])
+  // the plot is sized for where the index will be, not for the width it has while it slides
+  const plotW = Math.max(240, pageW - (indexOpen ? SIDEBAR_W : 0) - padRight - lead - 2 * CELL_PAD)
+  const f = useMemo(() => filterOverview(o, term, hits), [o, term, hits])
+  const rows = useMemo(() => buildRows(f, by, show, sort), [f, by, show, sort])
+  const searching = term !== ''
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rows decide whether the scrollbar is there
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -707,46 +995,134 @@ function Table({
     () => makeAxis(Date.parse(o.from), Date.parse(o.to), o.slotMs, plotW),
     [o.from, o.to, o.slotMs, plotW],
   )
-  const shared: Shared = { axis, groupPx: scales.groups.pxPerTok, lanePx: scales.lanes.pxPerTok }
+  const shared: Shared = useMemo(
+    () => ({ axis, groupPx: scales.groups.pxPerTok, lanePx: scales.lanes.pxPerTok }),
+    [axis, scales.groups.pxPerTok, scales.lanes.pxPerTok],
+  )
   const byGroup = useMemo(() => lanesByGroup(o.lanes), [o.lanes])
   const priciest = useMemo(() => {
     const m = new Map(o.lanes.map((l) => [`${l.harness}/${l.id}`, laneHead(l)]))
     return (g: OverviewGroup) => (g.priciest ? m.get(`${g.priciest.harness}/${g.priciest.id}`) : undefined)
   }, [o.lanes])
 
+  // ---- hover: one state, the pointer's x and the group under it ----
+  const [hover, setHover] = useState<Hover | null>(null)
+  const boxes = useMemo(() => columnBoxes(innerW, { ...LAYOUT, gutter }), [innerW, gutter])
+  const hx = hover ? hover.x : null
+  const hotCol = hx === null ? null : columnAt(boxes, hx)
+  const band = hx === null ? null : bandAt(axis, hx - lead - CELL_PAD)
+  const onMove = (e: React.MouseEvent) => {
+    const left = innerRef.current?.getBoundingClientRect().left ?? 0
+    const x = Math.floor(e.clientX - left)
+    const group = (e.target as Element).closest('[data-group]')?.getAttribute('data-group') ?? null
+    setHover((h) => (h && h.x === x && h.group === group ? h : { x, group }))
+  }
+
+  // ---- the index: groups in the table's order, the one at the top, a click to scroll there ----
+  const items: IndexItem[] = useMemo(
+    () =>
+      rows.flatMap((r) =>
+        r.kind === 'group' ? [{ key: r.g.key, name: r.g.name, count: f.shown.get(r.g.key) ?? 0, usd: r.g.usd }] : [],
+      ),
+    [rows, f.shown],
+  )
+  const [current, setCurrent] = useState<string | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rows change what is at the top
+  useEffect(() => {
+    const el = scrollRef.current
+    const inner = innerRef.current
+    if (!el || !inner) return
+    let raf = 0
+    const update = () => {
+      raf = 0
+      let cur: string | null = null
+      for (const n of inner.querySelectorAll<HTMLElement>('[data-grow]')) {
+        if (n.offsetTop > el.scrollTop + 2) break
+        cur = n.dataset.group ?? null
+      }
+      setCurrent(cur)
+    }
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update)
+    }
+    update()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [rows])
+  const pick = (key: string) => {
+    const el = scrollRef.current
+    const n = [...(innerRef.current?.querySelectorAll<HTMLElement>('[data-grow]') ?? [])].find(
+      (x) => x.dataset.group === key,
+    )
+    if (!el || !n) return
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    el.scrollTo({ top: n.offsetTop, behavior: calm ? 'auto' : 'smooth' })
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <Header gutter={gutter} byLabel={BY_LABEL[by]} sort={sort} onSort={onSort} padRight={padRight} />
-      <div ref={scrollRef} id="overview-rows" className="min-h-0 flex-1 overflow-y-auto">
-        <div ref={innerRef}>
-          {rows.map((r: Row) =>
-            r.kind === 'group' ? (
-              <GroupRow
-                key={r.key}
-                g={r.g}
-                lanes={byGroup.get(r.g.key) ?? []}
-                priciestHead={priciest(r.g)}
-                gutter={gutter}
-                tint={show === 'sessions'}
-                shared={shared}
-              />
-            ) : (
-              <SessionRow
-                key={r.key}
-                l={r.l}
-                nested={r.nested}
-                groupName={r.groupName}
-                gutter={gutter}
-                shared={shared}
-              />
-            ),
-          )}
-          {o.scripted.usd > 0 && <ScriptedRow o={o} gutter={gutter} />}
+    <div className="flex min-h-0 flex-1">
+      <Sidebar
+        open={indexOpen}
+        label={BY_LABEL[by]}
+        title={BY_TITLE[by]}
+        items={items}
+        current={indexOpen ? current : null}
+        hover={indexOpen && hover ? hover.group : null}
+        onPick={pick}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Header
+          gutter={gutter}
+          byLabel={BY_LABEL[by]}
+          byTitle={BY_TITLE[by]}
+          sort={sort}
+          onSort={onSort}
+          padRight={padRight}
+          boxes={boxes}
+          hotCol={hotCol}
+        />
+        <div
+          ref={scrollRef}
+          id="overview-rows"
+          className="min-h-0 flex-1 overflow-y-auto"
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+        >
+          <div ref={innerRef} className="relative">
+            {rows.map((r: Row) =>
+              r.kind === 'group' ? (
+                <GroupRow
+                  key={r.key}
+                  g={r.g}
+                  lanes={byGroup.get(r.g.key) ?? []}
+                  shown={searching ? f.shown.get(r.g.key) : undefined}
+                  priciestHead={priciest(r.g)}
+                  gutter={gutter}
+                  tint={show === 'sessions'}
+                  shared={shared}
+                />
+              ) : (
+                <SessionRow
+                  key={r.key}
+                  l={r.l}
+                  nested={r.nested}
+                  groupName={r.groupName}
+                  gutter={gutter}
+                  shared={shared}
+                />
+              ),
+            )}
+            {!searching && o.scripted.usd > 0 && <ScriptedRow o={o} gutter={gutter} />}
+            {searching && rows.length === 0 && <div className="p-6 text-muted">No sessions match “{term}”.</div>}
+          </div>
         </div>
-      </div>
-      <div className="shrink-0 bg-surface">
-        <AxisRow axis={axis} gutter={gutter} padRight={padRight} />
-        <Totals o={o} gutter={gutter} padRight={padRight} />
+        <div className="shrink-0 bg-surface">
+          <AxisRow axis={axis} lead={lead} padRight={padRight} band={band} />
+          <Totals f={f} term={term} lead={lead} padRight={padRight} boxes={boxes} hotCol={hotCol} />
+        </div>
       </div>
     </div>
   )

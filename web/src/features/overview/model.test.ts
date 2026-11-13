@@ -4,16 +4,23 @@ import {
   activityRuns,
   apiBy,
   axisTicks,
+  bandAt,
   buildRows,
   CTX_MAX,
   chooseSlot,
+  columnAt,
+  columnBoxes,
+  filterOverview,
   fitLabels,
   formatSort,
   groupDescription,
+  groupHarnesses,
   groupScale,
   heldContext,
+  type Layout,
   laneDescription,
   laneHead,
+  laneMatches,
   laneScale,
   lanesByGroup,
   lastLabel,
@@ -540,5 +547,121 @@ describe('lastLabel', () => {
     expect(lastLabel(new Date(2026, 10, 11, 9, 0).toISOString(), now)).toBe('yesterday')
     expect(lastLabel(new Date(2026, 10, 9, 9, 0).toISOString(), now)).toBe('9 Nov')
     expect(lastLabel(undefined, now)).toBe('–')
+  })
+})
+
+describe('search', () => {
+  const g1 = group({ key: 'a', name: 'payments', sessions: 2 })
+  const g2 = group({ key: 'b', name: 'website', sessions: 1 })
+  const l1 = lane({
+    id: 'aaaa1111',
+    group: 'a',
+    title: 'Fix the retry loop',
+    recap: { text: 'Working on BACKOFF' } as never,
+  })
+  const l2 = lane({ id: 'bbbb2222', group: 'a', name: 'migration' })
+  const l3 = lane({
+    id: 'cccc3333',
+    group: 'b',
+    harness: 'codex',
+    firstPrompt: { text: 'Make the header sticky' } as never,
+  })
+  const o = { groups: [g1, g2], lanes: [l1, l2, l3] }
+
+  test('matches head, description and group name, case-insensitively', () => {
+    expect(laneMatches(l1, 'payments', 'retry')).toBe(true)
+    expect(laneMatches(l1, 'payments', 'backoff')).toBe(true)
+    expect(laneMatches(l3, 'website', 'sticky')).toBe(true)
+    expect(laneMatches(l2, 'payments', 'bbbb')).toBe(true)
+    expect(laneMatches(l2, 'payments', 'PAYM'.toLowerCase())).toBe(true)
+    expect(laneMatches(l2, 'payments', 'sticky')).toBe(false)
+  })
+
+  test('server hits count for terms of two characters or more', () => {
+    const hits = new Set(['claude/bbbb2222'])
+    expect(laneMatches(l2, 'payments', 'zz', hits)).toBe(true)
+    expect(laneMatches(l2, 'payments', 'z', hits)).toBe(false)
+    expect(laneMatches(l1, 'payments', 'zz', hits)).toBe(false)
+  })
+
+  test('an empty term keeps everything', () => {
+    const f = filterOverview(o, '  ')
+    expect(f.groups).toHaveLength(2)
+    expect(f.lanes).toHaveLength(3)
+    expect(f.shown.get('a')).toBe(2)
+  })
+
+  test('only groups with a match remain, with only matching sessions', () => {
+    const f = filterOverview(o, 'sticky')
+    expect(f.groups.map((g) => g.key)).toEqual(['b'])
+    expect(f.lanes.map((l) => l.id)).toEqual(['cccc3333'])
+    expect(f.shown.get('b')).toBe(1)
+  })
+
+  test('a group whose name matches counts all its sessions', () => {
+    const f = filterOverview(o, 'Payments')
+    expect(f.groups.map((g) => g.key)).toEqual(['a'])
+    expect(f.shown.get('a')).toBe(2)
+  })
+
+  test('nothing matches: empty', () => {
+    const f = filterOverview(o, 'nope')
+    expect(f.groups).toEqual([])
+    expect(f.lanes).toEqual([])
+  })
+
+  test('the group description says how many sessions match', () => {
+    const g = group({ key: 'k', sessions: 18 })
+    expect(groupDescription(g, undefined, 3)).toBe('3 of 18 sessions match')
+    expect(groupDescription(g, undefined, 18)).toBe('18 sessions')
+  })
+})
+
+describe('group harnesses', () => {
+  test('distinct, most sessions first, at most three', () => {
+    const ls = ['codex', 'claude', 'pi', 'codex', 'claude', 'claude', 'x'].map((harness) => ({ harness }))
+    expect(groupHarnesses(ls)).toEqual(['claude', 'codex', 'pi'])
+    expect(groupHarnesses([])).toEqual([])
+  })
+})
+
+describe('hover geometry', () => {
+  const L: Layout = { harness: 48, gutter: 0, pad: 12, turns: 52, agents: 56, spend: 84, last: 64, gap: 8 }
+
+  test('columns from the right edge', () => {
+    const boxes = columnBoxes(1000, L)
+    expect(boxes.map((b) => b.col)).toEqual(['harness', 'session', 'turns', 'agents', 'spend', 'last'])
+    expect(columnAt(boxes, 10)).toBe('harness')
+    expect(columnAt(boxes, 100)).toBe('session')
+    expect(columnAt(boxes, 1000 - 12 - 30)).toBe('last')
+    expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 40)).toBe('spend')
+    expect(columnAt(boxes, 1000 - 12 - 64 - 8 - 84 - 8 - 20)).toBe('agents')
+    expect(columnAt(boxes, 999)).toBe('last')
+    expect(columnAt(boxes, 1000)).toBeNull()
+    expect(columnAt(boxes, -1)).toBeNull()
+  })
+
+  test('a flat table has the first column too', () => {
+    const boxes = columnBoxes(1000, { ...L, gutter: 140 })
+    expect(columnAt(boxes, 100)).toBe('first')
+    expect(columnAt(boxes, 200)).toBe('session')
+    const total = boxes.reduce((n, b) => n + b.w, 0)
+    expect(total).toBe(1000)
+  })
+
+  test('the day under x, clipped to the plot; the hour in a short range', () => {
+    const axis = makeAxis(T0 + 6 * HOUR, T0 + 6 * HOUR + 7 * DAY, 10 * MIN, 1008)
+    const b = bandAt(axis, 100)
+    expect(b).not.toBeNull()
+    // the first day starts before the axis: clipped at 0, ends at midnight
+    expect(b?.x0).toBe(0)
+    expect(b?.x1).toBeCloseTo(xOf(axis, T0 + DAY), 5)
+    const c = bandAt(axis, 500)
+    expect((c?.x1 ?? 0) - (c?.x0 ?? 0)).toBeCloseTo(144, 5)
+    expect(bandAt(axis, -1)).toBeNull()
+    expect(bandAt(axis, 1009)).toBeNull()
+    const day = makeAxis(T0, T0 + DAY, MIN, 960)
+    const h = bandAt(day, 100)
+    expect((h?.x1 ?? 0) - (h?.x0 ?? 0)).toBeCloseTo(40, 5)
   })
 })
