@@ -590,6 +590,20 @@ describe('the key column', () => {
     ])
   })
 
+  test('sessions sort by the folder they ran in, falling back to their group', () => {
+    const ls = [
+      lane({ id: 'a', group: gC.key, dir: '/Users/a/work/yimple', usd: 1 }),
+      lane({ id: 'b', group: gC.key, dir: '/Users/a/work/merlin/web', usd: 1 }),
+      lane({ id: 'c', group: gC.key, dir: '/Users/a/work/merlin', usd: 1 }),
+      lane({ id: 'd', group: gC.key, usd: 9 }),
+    ]
+    const lanePlaceOf = (l: OverviewLane) => (l.dir ? placeSegs(l.dir, 'dir', home) : placeOf(l.group))
+    const order = (desc: boolean) => sortLanes(ls, { key: 'key', desc }, { placeOf, lanePlaceOf }).map((l) => l.id)
+    // the group's own place ~/work comes first
+    expect(order(false)).toEqual(['d', 'c', 'b', 'a'])
+    expect(order(true)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
   test('the place and the text of a key', () => {
     expect(placeSegs('/Users/a/work/merlin', 'dir', home)).toEqual(['~', 'work', 'merlin'])
     expect(placeSegs('', 'dir', home)).toBeNull()

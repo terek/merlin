@@ -115,10 +115,12 @@ type OverviewScripted struct {
 // the first slot where any of them is non-zero, and end at the last such slot; Turns counts the
 // session's own turns that started in the range, Agents the agent spans that started in it.
 type OverviewLane struct {
-	Harness        string         `json:"harness"`
-	ID             string         `json:"id"`
-	Title          string         `json:"title,omitempty"`
-	Group          string         `json:"group"`
+	Harness string `json:"harness"`
+	ID      string `json:"id"`
+	Title   string `json:"title,omitempty"`
+	Group   string `json:"group"`
+	// Dir is the session's start directory, the value the dir grouping keys on ("" when unknown).
+	Dir            string         `json:"dir,omitempty"`
 	StartedAt      time.Time      `json:"startedAt,omitzero"`
 	LastActivityAt time.Time      `json:"lastActivityAt,omitzero"`
 	USD            float64        `json:"usd"`
@@ -371,7 +373,7 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		if hi < 0 {
 			lo, hi = 0, -1
 		}
-		out.Lanes = append(out.Lanes, OverviewLane{Harness: o.s.key.Harness, ID: o.s.key.ID, Title: o.s.info.Title, Group: o.key,
+		out.Lanes = append(out.Lanes, OverviewLane{Harness: o.s.key.Harness, ID: o.s.key.ID, Title: o.s.info.Title, Group: o.key, Dir: o.s.project,
 			StartedAt: d.StartedAt.UTC(), LastActivityAt: d.LastActivityAt.UTC(), USD: o.total, Turns: o.turns, Agents: o.agents,
 			Slot0: lo, USDSlots: o.usd[lo : hi+1], Context: o.ctx[lo : hi+1], Idle: o.idle[lo : hi+1], Active: active[lo : hi+1],
 			Spans: sortedSpans(o.spans)})

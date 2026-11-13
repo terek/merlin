@@ -328,6 +328,8 @@ const splitKey: PlaceOf = (k) => (k ? splitPath(k) : null)
 export interface SortOpts {
   /** The place of a group key, for the key column (default: the key's path segments). */
   placeOf?: PlaceOf
+  /** The place of a session, for the key column: where it ran (default: its group's place). */
+  lanePlaceOf?: (l: OverviewLane) => string[] | null
   /** The sessions of each group, for a group's start time. */
   lanes?: Map<string, OverviewLane[]>
 }
@@ -376,9 +378,10 @@ export function sortGroups(groups: OverviewGroup[], s: Sort, opts: SortOpts = {}
   )
 }
 
-/** Sessions by the sort's column (key: their group's place); ties by spend, then id. */
+/** Sessions by the sort's column (key: where they ran); ties by spend, then id. */
 export function sortLanes(lanes: OverviewLane[], s: Sort, opts: SortOpts = {}): OverviewLane[] {
   const placeOf = opts.placeOf ?? splitKey
+  const lanePlace = opts.lanePlaceOf ?? ((l: OverviewLane) => placeOf(l.group))
   const val = (l: OverviewLane): number | string =>
     s.key === 'start'
       ? (l.startedAt ?? '')
@@ -393,7 +396,7 @@ export function sortLanes(lanes: OverviewLane[], s: Sort, opts: SortOpts = {}): 
               : l.usd
   return [...lanes].sort((a, b) =>
     s.key === 'key'
-      ? byPlace(placeOf(a.group), placeOf(b.group), s.desc) || cmp(b.usd, a.usd) || cmp(a.id, b.id)
+      ? byPlace(lanePlace(a), lanePlace(b), s.desc) || cmp(b.usd, a.usd) || cmp(a.id, b.id)
       : (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.id, b.id),
   )
 }

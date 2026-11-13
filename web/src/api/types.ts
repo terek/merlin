@@ -1227,6 +1227,8 @@ export interface OverviewLane {
   lastPrompt?: PromptPreview
   /** The group key of the session ('' for none). */
   group: string
+  /** The session's start directory (the `dir` grouping's key, whatever `by` is); absent when unknown. */
+  dir?: string
   startedAt?: string
   lastActivityAt?: string
   usd: number

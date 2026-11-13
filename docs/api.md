@@ -1053,7 +1053,7 @@ when known, is the agent's description or name, or the branched session's title.
   "lanes": [
     {
       "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
-      "group": "/home/dev/merlin",
+      "group": "/home/dev/merlin", "dir": "/home/dev/merlin/web",
       "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
       "name": "the big one",
       "recap": { "at": "2026-11-10T21:00:00Z", "text": "Moved the parser to …", "truncated": false },
@@ -1078,7 +1078,9 @@ when known, is the agent's description or name, or the branched session's title.
 - `lanes` is always present (empty when nothing ran): one per non-scripted session with an owned
   message in the range, whatever `group` says (with `group`, only that group's). They are ordered
   by the order of their group in `groups`, then `usd` descending, then id. `group` is the session's
-  group key, `""` for no value, and is always written.
+  group key, `""` for no value, and is always written. `dir` is the session's start directory (the
+  value the `dir` grouping keys on, whatever `by` is), omitted when unknown: the table shows it, so a
+  group of a repository or a remote tells where each of its sessions ran.
 - A lane's arrays (`usdSlots`, `context`, `idle`, `active`) are **trimmed**: they all have the same
   length, start at `slot0`, the first slot where any of them is non-zero, and end at the last such
   slot; element `k` is slot `slot0 + k`. Outside them everything is 0. `spans` has the same shape

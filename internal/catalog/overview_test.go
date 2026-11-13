@@ -508,6 +508,9 @@ func TestOverviewGroupsOrderAndLanes(t *testing.T) {
 		t.Fatalf("lanes = %+v, want b then a (by usd)", o.Lanes)
 	}
 	l := o.Lanes[0]
+	if l.Dir != "/w" {
+		t.Errorf("lane dir = %q, want the session's start directory /w", l.Dir)
+	}
 	wantNear(t, "lane usd", l.USD, 2)
 	if len(l.USDSlots) != 1 || len(l.Context) != 1 || len(l.Active) != 1 || len(l.Idle) != 1 || l.Spans == nil || l.Title == "" || l.StartedAt.IsZero() {
 		t.Errorf("lane = %+v", l)
@@ -519,6 +522,12 @@ func TestOverviewGroupsOrderAndLanes(t *testing.T) {
 	o, _ = cat.Overview(q)
 	if len(o.Groups) != 1 || o.Groups[0].Key != "" || o.Groups[0].Name != "(no repository)" || len(o.Lanes) != 4 || o.Lanes[0].Group != "" {
 		t.Errorf("by repo: groups %+v, %d lanes", o.Groups, len(o.Lanes))
+	}
+	// the lane's dir does not follow the grouping: it is the start directory whatever the key
+	for _, l := range o.Lanes {
+		if l.Dir == "" || l.Dir[0] != '/' {
+			t.Errorf("by repo: lane %s has dir %q", l.ID, l.Dir)
+		}
 	}
 	other := "/nowhere"
 	q.Group = &other

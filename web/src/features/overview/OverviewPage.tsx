@@ -146,11 +146,6 @@ const BY_LABEL: Record<By, string> = {
   remote: 'Remote',
 }
 
-const BY_TITLE: Partial<Record<By, string>> = {
-  repo: 'Repository: worktrees of one clone merge',
-  remote: 'Origin URL: clones of one remote merge',
-}
-
 /** The colour a span is drawn in: the Session page's, by kind; a branched session is the main colour. */
 const spanColor = (k: OverviewSpan['kind']): string =>
   k === 'session-fork' || k === 'continuation'
@@ -533,6 +528,7 @@ const GroupRow = memo(function GroupRow({
   shown,
   priciestHead,
   place,
+  faint,
   note,
   tint,
   shared,
@@ -544,8 +540,9 @@ const GroupRow = memo(function GroupRow({
   lanes: OverviewLane[]
   /** The group's sessions that match the search (undefined: no search). */
   shown?: number
-  /** The group's own place. */
+  /** The group's own place: its folder (a remote's host/owner/repo: there is no one folder, so a step fainter). */
   place: string
+  faint: boolean
   note: string
   tint: boolean
   shared: Shared
@@ -572,7 +569,7 @@ const GroupRow = memo(function GroupRow({
         </>
       }
       figures={<BlockFigures harnesses={harnesses} turns={g.turns} agents={g.agents} usd={g.usd} />}
-      keyCell={<KeyCell text={place} title={g.key || 'no value'} dim={place === '(none)'} />}
+      keyCell={<KeyCell text={place} title={g.key || 'no value'} dim={faint || place === '(none)'} />}
     />
   )
 })
@@ -664,25 +661,40 @@ function Th({
   )
 }
 
-/** The pictogram's size (px): about 240 wide, the height of a header line. */
-const PICTO_W = 240
-const PICTO_H = 30
-/** Where the drawn session starts and ends, and its baseline. */
-const PICTO_X0 = 50
-const PICTO_X1 = 196
-const PICTO_BASE = 15
-/** The faint axis under it (the ticks stand on it). */
-const PICTO_AXIS = 25
+/** The pictogram's design size (px): it shrinks to the header cell when that is narrower. */
+const PICTO_W = 340
+const PICTO_H = 42
+/** Where the drawn session starts and ends, its baseline, the spine lane under it and the faint axis. */
+const PICTO_X0 = 64
+const PICTO_X1 = 276
+const PICTO_BASE = 22
+const PICTO_LANE = PICTO_BASE + LANE_DEPTH
+const PICTO_AXIS = 38
+/** The context in steps (px of height) the session rises and falls through, and where it rests (idle). */
+const PICTO_STEP = 11
+const PICTO_CTX = [3, 5, 4, 8, 6, 10, 13, 9, 7, 0, 0, 0, 0, 0, 0, 8, 12, 9, 4]
+const PICTO_IDLE = [0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 7, 6, 6, 5, 0, 0, 0, 0]
+/** The session line: runs of steps with a weight (the row graph's `ACTIVE_W`). */
+const PICTO_RUNS: [number, number, 1 | 2 | 3][] = [
+  [0, 5, 2],
+  [5, 8, 3],
+  [8, 9, 1],
+  [15, 18, 2],
+  [18, 19, 1],
+]
 
 /**
- * The Session header's second line: a small abstract timeline, not data (a faint axis with a few ticks and a
- * short session drawn like a row's graph: context humps, a pale idle stretch, the session line) and three
- * sort buttons over it: START at the session's left end, END at its right end and LENGTH (time with a call
- * running) in the middle, knocked out of the drawing so that it reads.
+ * The Session header's second line, a pictogram of a session (not data), in the row graph's own vocabulary
+ * and constants: context rising and falling in steps, a pale idle stretch in the middle, the session line,
+ * and under it the spine lane with a few spawns (thin verticals, mirrored-J runs in the kinds' colours), over
+ * a faint axis with ticks. Three sort buttons: START just before the session's left end, END just after its
+ * right end and LENGTH (time with a call running) in the middle, knocked out of the drawing so that it reads.
+ * It is centred in the header cell and shrinks (horizontally) when the cell is narrower than its design.
  */
 function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => void }) {
   const mid = (PICTO_X0 + PICTO_X1) / 2
-  const btn = (col: SortKey, label: string, title: string, at: { left?: number; right?: number }, shift: string) => {
+  const pct = (x: number) => `${(x / PICTO_W) * 100}%`
+  const btn = (col: SortKey, label: string, title: string, at: { left?: string; right?: string }, shift: string) => {
     const on = sort.key === col
     return (
       <button
@@ -703,76 +715,111 @@ function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => vo
       </button>
     )
   }
-  const humps = [
-    [PICTO_X0 + 2, PICTO_X0 + 26, 5],
-    [PICTO_X0 + 28, PICTO_X0 + 52, 7],
-    [PICTO_X0 + 54, PICTO_X0 + 70, 4],
-    [PICTO_X0 + 100, PICTO_X0 + 124, 6],
-    [PICTO_X0 + 126, PICTO_X0 + 144, 3],
+  const axis = makeAxis(0, PICTO_CTX.length * 60_000, 60_000, PICTO_CTX.length * PICTO_STEP)
+  const stepX = (i: number) => PICTO_X0 + 2 + i * PICTO_STEP
+  const nonScaling = { vectorEffect: 'non-scaling-stroke' } as const
+  // the spine lane: [kind colour, x of the first spawn, end of the run (undefined: a lone tick)]
+  const spawns: [string, number, number | undefined][] = [
+    [COLOR.subagent, PICTO_X0 + 34, PICTO_X0 + 92],
+    [COLOR.subagent, PICTO_X0 + 66, undefined],
+    [COLOR.fork, PICTO_X0 + 118, PICTO_X0 + 146],
+    [COLOR.addressable, PICTO_X0 + 160, PICTO_X0 + 200],
   ]
   return (
-    <div className="relative shrink-0" style={{ width: PICTO_W, height: PICTO_H }}>
+    <div className="relative mx-auto" style={{ width: `min(100%, ${PICTO_W}px)`, height: PICTO_H }}>
       {/* biome-ignore lint/a11y/noSvgWithoutTitle: a pictogram; the buttons are the content */}
-      <svg width={PICTO_W} height={PICTO_H} className="pointer-events-none absolute inset-0" aria-hidden>
-        <line x1={0} x2={PICTO_W} y1={PICTO_AXIS} y2={PICTO_AXIS} stroke="var(--line)" />
-        {[22, 90, 158, 226].map((x) => (
-          <line key={x} x1={x} x2={x} y1={PICTO_AXIS - 3} y2={PICTO_AXIS} stroke="var(--faint)" opacity={0.7} />
-        ))}
-        <rect x={PICTO_X0 + 72} y={PICTO_BASE - 4} width={28} height={4} fill={COLOR.main} fillOpacity={IDLE_FILL} />
-        {humps.map(([x0, x1, h]) => (
-          <rect
-            key={x0}
-            x={x0}
-            y={PICTO_BASE - h}
-            width={x1 - x0}
-            height={h}
-            fill={COLOR.main}
-            fillOpacity={CTX_FILL}
+      <svg
+        width="100%"
+        height={PICTO_H}
+        viewBox={`0 0 ${PICTO_W} ${PICTO_H}`}
+        preserveAspectRatio="none"
+        className="pointer-events-none absolute inset-0"
+        aria-hidden
+      >
+        <line x1={0} x2={PICTO_W} y1={PICTO_AXIS} y2={PICTO_AXIS} stroke="var(--line)" {...nonScaling} />
+        {[18, 92, 166, 240, 314].map((x) => (
+          <line
+            key={x}
+            x1={x}
+            x2={x}
+            y1={PICTO_AXIS - 3}
+            y2={PICTO_AXIS}
+            stroke="var(--faint)"
+            opacity={0.7}
+            {...nonScaling}
           />
         ))}
-        <line x1={PICTO_X0} x2={PICTO_X1} y1={PICTO_BASE} y2={PICTO_BASE} stroke="var(--line)" />
-        <line
-          x1={PICTO_X0 + 2}
-          x2={PICTO_X0 + 70}
-          y1={PICTO_BASE}
-          y2={PICTO_BASE}
-          stroke={COLOR.main}
-          strokeWidth={2}
-        />
-        <line
-          x1={PICTO_X0 + 100}
-          x2={PICTO_X0 + 146}
-          y1={PICTO_BASE}
-          y2={PICTO_BASE}
-          stroke={COLOR.main}
-          strokeWidth={2}
-        />
+        <g transform={`translate(${PICTO_X0 + 2} 0)`}>
+          <path d={stepAreaPath(PICTO_IDLE, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={IDLE_FILL} />
+          <path d={stepAreaPath(PICTO_CTX, axis, PICTO_BASE, 1)} fill={COLOR.main} fillOpacity={CTX_FILL} />
+        </g>
+        <line x1={PICTO_X0} x2={PICTO_X1} y1={PICTO_BASE} y2={PICTO_BASE} stroke="var(--line)" {...nonScaling} />
+        {PICTO_RUNS.map(([a, b, w]) => (
+          <line
+            key={a}
+            x1={stepX(a)}
+            x2={stepX(b)}
+            y1={PICTO_BASE}
+            y2={PICTO_BASE}
+            stroke={COLOR.main}
+            strokeWidth={ACTIVE_W[w]}
+            {...nonScaling}
+          />
+        ))}
+        {spawns.map(([color, x, end]) =>
+          end === undefined ? (
+            <path
+              key={x}
+              d={`M${x},${PICTO_BASE}V${PICTO_LANE}`}
+              stroke={color}
+              strokeWidth={TICK_W}
+              opacity={TICK_OPACITY}
+              fill="none"
+              {...nonScaling}
+            />
+          ) : (
+            <g key={x}>
+              <path
+                d={elbowPath(x, PICTO_BASE, PICTO_LANE)}
+                fill="none"
+                stroke={color}
+                strokeWidth={RUN_W - 0.5}
+                strokeLinecap="round"
+                opacity={0.85}
+                {...nonScaling}
+              />
+              <line
+                x1={x + Math.min(6, LANE_DEPTH)}
+                x2={end}
+                y1={PICTO_LANE}
+                y2={PICTO_LANE}
+                stroke={color}
+                strokeWidth={RUN_W}
+                {...nonScaling}
+              />
+            </g>
+          ),
+        )}
       </svg>
-      {btn('start', 'Start', 'Sort by when the session started', { right: PICTO_W - PICTO_X0 + 2 }, '')}
-      {btn('last', 'End', 'Sort by its last activity', { left: PICTO_X1 + 2 }, '')}
-      {btn('active', 'Length', 'Sort by time with a call running (in this range)', { left: mid }, 'translateX(-50%)')}
+      {btn('start', 'Start', 'Sort by when the session started', { right: pct(PICTO_W - PICTO_X0 + 3) }, '')}
+      {btn('last', 'End', 'Sort by its last activity', { left: pct(PICTO_X1 + 3) }, '')}
+      {btn(
+        'active',
+        'Length',
+        'Sort by time with a call running (in this range)',
+        { left: pct(mid) },
+        'translateX(-50%)',
+      )}
     </div>
   )
 }
 
-function Header({
-  byLabel,
-  byTitle,
-  sort,
-  onSort,
-  padRight,
-}: {
-  byLabel: string
-  byTitle?: string
-  sort: Sort
-  onSort: (k: SortKey) => void
-  padRight: number
-}) {
+function Header({ sort, onSort, padRight }: { sort: Sort; onSort: (k: SortKey) => void; padRight: number }) {
   const th = { sort, onSort }
   return (
     <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
       <div className="flex min-w-0 flex-1 flex-col" style={{ paddingInline: CELL_PAD }}>
-        <div className="py-1.5 text-faint text-meta uppercase tracking-wide">Session</div>
+        <div className="py-1.5 text-center text-faint text-meta uppercase tracking-wide">Session</div>
         <TimelineSort {...th} />
       </div>
       <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W }}>
@@ -783,12 +830,7 @@ function Header({
           <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
         </div>
         <div className="flex items-center" style={{ paddingInline: CELL_PAD, minHeight: PICTO_H }}>
-          <Th
-            {...th}
-            col="key"
-            label={byLabel}
-            title={`Sort by ${byLabel.toLowerCase()}, in the index's order${byTitle ? ` (${byTitle})` : ''}`}
-          />
+          <Th {...th} col="key" label="Folder" title="Sort by folder, in the order of the folder tree" />
         </div>
       </div>
     </div>
@@ -950,11 +992,10 @@ const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
 const ITEM = 'flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left text-body'
 const SELECTED = 'bg-accent-soft font-medium text-accent'
 
-/** The faint vertical guides of the levels above an item at `depth`. */
+/** The faint vertical guides of the levels above an item at `depth`, but not of the outermost one. */
 function Guides({ depth }: { depth: number }) {
-  return Array.from({ length: depth }, (_, i) => (
+  return Array.from({ length: Math.max(0, depth - 1) }, (_, j) => j + 1).map((i) => (
     <span
-      // biome-ignore lint/suspicious/noArrayIndexKey: one guide per level
       key={i}
       aria-hidden
       className="absolute inset-y-0 w-px bg-[color-mix(in_srgb,var(--text)_13%,transparent)]"
@@ -1031,6 +1072,9 @@ function Sidebar({
   }
   const pick = (path: string) => onSelect(sel === path ? null : path)
   const none = tree.none
+  // with a group of no value the places hang under an All root, so that (none) is their sibling; without one the
+  // places are the top level and nothing else is added
+  const rooted = !!none
   const noneOn = sel === NONE_SEL
   return (
     <aside
@@ -1065,26 +1109,28 @@ function Sidebar({
           </IconButton>
         </div>
         <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onKeyDown}>
-          <li
-            className={cn('flex items-center rounded-card', sel === null && SELECTED)}
-            style={{ paddingLeft: TREE_GUTTER }}
-          >
-            <span className="size-4 shrink-0" aria-hidden />
-            <button
-              type="button"
-              data-nav
-              onClick={() => onSelect(null)}
-              aria-current={sel === null ? 'true' : undefined}
-              title="Every place"
-              className={cn(ITEM, 'pl-0.5')}
+          {rooted && (
+            <li
+              className={cn('flex items-center rounded-card', sel === null && SELECTED)}
+              style={{ paddingLeft: TREE_GUTTER }}
             >
-              <HardDrive size={14} aria-hidden className="shrink-0 text-muted" />
-              <span className="min-w-0 flex-1 truncate">All</span>
-              <Figures count={total.count} usd={total.usd} />
-            </button>
-          </li>
+              <span className="size-4 shrink-0" aria-hidden />
+              <button
+                type="button"
+                data-nav
+                onClick={() => onSelect(null)}
+                aria-current={sel === null ? 'true' : undefined}
+                title="Every place"
+                className={cn(ITEM, 'pl-0.5')}
+              >
+                <HardDrive size={14} aria-hidden className="shrink-0 text-muted" />
+                <span className="min-w-0 flex-1 truncate">All</span>
+                <Figures count={total.count} usd={total.usd} />
+              </button>
+            </li>
+          )}
           {rows.map(({ node: n, depth: d }) => {
-            const depth = d + 1
+            const depth = d + (rooted ? 1 : 0)
             const folder = n.children.length > 0
             const isOpen = folder && !closed.has(n.id)
             const Icon = folderIcon(n, by, isOpen)
@@ -1408,9 +1454,26 @@ function Table({
       ),
     [o.groups, o.by],
   )
-  const placeOf = useMemo(() => (k: string) => placeSegs(k, o.by, home), [o.by, home])
-  const rows = useMemo(() => buildRows(f, show, sort, { placeOf }), [f, show, sort, placeOf])
+  // the key line's home: the groups' (they are the folders), or for remotes the sessions' directories
+  const keyHome = useMemo(() => {
+    const dirHome = groupsHome(
+      o.lanes.flatMap((l) => (l.dir ? [l.dir] : [])),
+      'dir',
+    )
+    return o.by === 'remote' ? dirHome : (home ?? dirHome)
+  }, [o.lanes, o.by, home])
+  const placeOf = useMemo(() => (k: string) => placeSegs(k, o.by, keyHome), [o.by, keyHome])
+  const lanePlaceOf = useMemo(
+    () => (l: OverviewLane) => (l.dir ? placeSegs(l.dir, 'dir', keyHome) : placeOf(l.group)),
+    [keyHome, placeOf],
+  )
+  const rows = useMemo(() => buildRows(f, show, sort, { placeOf, lanePlaceOf }), [f, show, sort, placeOf, lanePlaceOf])
   const searching = term !== ''
+  // a session's folder; under its group row it is left out when that row already says it
+  const sessionPlace = (l: OverviewLane, nested: boolean): string => {
+    const own = l.dir ? keyText(l.dir, 'dir', keyHome) : o.by === 'remote' ? '' : keyText(l.group, o.by, keyHome)
+    return nested && own === keyText(l.group, o.by, keyHome) ? '' : own
+  }
   // biome-ignore lint/correctness/useExhaustiveDependencies: the rows decide whether the scrollbar is there
   useLayoutEffect(() => {
     const el = scrollRef.current
@@ -1484,7 +1547,7 @@ function Table({
         onSelect={onSelect}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header byLabel={BY_LABEL[by]} byTitle={BY_TITLE[by]} sort={sort} onSort={onSort} padRight={padRight} />
+        <Header sort={sort} onSort={onSort} padRight={padRight} />
         <div
           ref={scrollRef}
           id="overview-rows"
@@ -1502,7 +1565,8 @@ function Table({
                   lanes={byGroup.get(r.g.key) ?? []}
                   shown={searching ? found.shown.get(r.g.key) : undefined}
                   priciestHead={priciest(r.g)}
-                  place={keyText(r.g.key, o.by, home)}
+                  place={keyText(r.g.key, o.by, keyHome)}
+                  faint={o.by === 'remote'}
                   note={groupNote(r.g, sort.key, o.slotMs, startOf.get(r.g.key))}
                   tint={show === 'grouped'}
                   shared={shared}
@@ -1512,8 +1576,8 @@ function Table({
                   key={r.key}
                   l={r.l}
                   nested={r.nested}
-                  place={r.nested ? '' : keyText(r.l.group, o.by, home)}
-                  placeTitle={r.l.group || 'no value'}
+                  place={sessionPlace(r.l, r.nested)}
+                  placeTitle={r.l.dir || r.l.group || 'no value'}
                   note={laneNote(r.l, sort.key, o.slotMs)}
                   shared={shared}
                 />

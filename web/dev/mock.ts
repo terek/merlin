@@ -954,6 +954,7 @@ function overview(u: URL): Overview {
       title: s.summary.title,
       ...overviewText(sid.id),
       group: key,
+      dir: s.summary.project || undefined,
       startedAt: new Date(os.msgs[0].at).toISOString(),
       lastActivityAt: lastIso,
       usd: r2(total),
