@@ -35,7 +35,7 @@ import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { resumeCommand, sessionPath } from '../../lib/paths'
 import { useShortcut } from '../../shell/useShortcut'
 import { copyText, HarnessIcon, IconButton, Money, QueryBoundary, SearchInput, Select, Skeleton } from '../../ui'
-import { COLOR, CTX_FILL, elbowPath, SPEND_COLOR, WORKFLOW_DASH } from '../spend/TimeView'
+import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
   type Axis,
@@ -1328,7 +1328,7 @@ function Locator({
       aria-valuemax={strip.days - 1}
       aria-valuenow={brush.lo}
       onKeyDown={onKey}
-      className="min-w-0 flex-1 rounded-badge"
+      className="ml-1.5 min-w-0 flex-1 rounded-badge"
     >
       <svg
         width={width}
@@ -1342,8 +1342,16 @@ function Locator({
         onPointerUp={onUp}
         onPointerCancel={onUp}
       >
-        {/* the brush's days are lit (the page colour) on the grey box; outside it the box shows */}
-        <rect x={x0} y={0} width={Math.max(2, x1 - x0)} height={LOC_BAR + 2} fill="var(--surface)" rx={2} />
+        {/* the brush's days are lit with the accent on the white pill */}
+        <rect
+          x={x0}
+          y={0}
+          width={Math.max(2, x1 - x0)}
+          height={LOC_BAR + 2}
+          fill="var(--accent)"
+          fillOpacity={0.12}
+          rx={2}
+        />
         {spend.map((v, i) =>
           v > 0 ? (
             <rect
@@ -1353,7 +1361,7 @@ function Locator({
               y={LOC_BAR + 1 - Math.max(1, (v / peak) * LOC_BAR)}
               width={Math.max(1, dw * 0.7)}
               height={Math.max(1, (v / peak) * LOC_BAR)}
-              fill={SPEND_COLOR}
+              fill="var(--faint)"
             />
           ) : null,
         )}
@@ -1553,12 +1561,15 @@ export function OverviewPage() {
               </button>
             )
           })}
-          {/* Custom: its label, and inside the same segment the button that opens the locator */}
+          {/* Custom: one unit, a pill (white when pressed, on the grey when not) holding the label, the strip when
+              the locator is open, and the button at its right end: » closed, « open, the same slot either way */}
           <span
             className={cn(
-              'inline-flex h-full shrink-0 items-center rounded-badge',
+              'inline-flex h-full min-w-0 items-center rounded-badge',
+              grow,
               shown || locOpen ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted',
             )}
+            style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 'auto' }}
           >
             <button
               type="button"
@@ -1569,44 +1580,16 @@ export function OverviewPage() {
                 openLocator(false)
                 set({ range: undefined, ...formatCustom(remembered) })
               }}
-              className={cn('h-full whitespace-nowrap pl-2.5 text-sec hover:text-fg', locOpen ? 'pr-2.5' : 'pr-1')}
+              className="h-full shrink-0 whitespace-nowrap pr-1 pl-2.5 text-left text-sec hover:text-fg"
             >
-              {/* a fixed width, so that the label changing length under a drag does not shift the strip beside it */}
-              {(() => {
-                const text = label ? customLabel(label, now) : 'Custom'
-                if (!locOpen) return text
-                return (
-                  <span
-                    className={cn('inline-block text-center', text.includes(',') ? 'min-w-[20ch]' : 'min-w-[14ch]')}
-                  >
-                    {text}
-                  </span>
-                )
-              })()}
+              {/* one width for a range label, open or closed, so that nothing shifts under a drag */}
+              {label ? <span className="inline-block min-w-[13ch]">{customLabel(label, now)}</span> : 'Custom'}
             </button>
-            {!locOpen && (
-              <button
-                type="button"
-                title="Pick a range on the timeline"
-                aria-label="Pick a range on the timeline"
-                onClick={() => {
-                  // a preset is on and a range is remembered: bring it back, so the brush and the label agree
-                  if (!custom && remembered) set({ range: undefined, ...formatCustom(remembered) })
-                  openLocator(true)
-                }}
-                className="inline-flex h-full items-center pr-1.5 pl-0.5 text-muted hover:text-fg"
-              >
-                <ChevronsRight size={12} aria-hidden />
-              </button>
-            )}
-          </span>
-          {/* the locator: the strip inside the grey box, to the right of the segments, and the button that folds it */}
-          <div
-            className="flex min-w-0 items-center overflow-hidden"
-            style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 0 }}
-            inert={!locOpen}
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-1 pl-2">
+            <div
+              className="flex min-w-0 items-center overflow-hidden"
+              style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 0 }}
+              inert={!locOpen}
+            >
               {locSeen && (
                 <Locator
                   value={custom ?? remembered ?? presetRange(range, now)}
@@ -1615,17 +1598,22 @@ export function OverviewPage() {
                   onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
                 />
               )}
-              <button
-                type="button"
-                title="Close the timeline"
-                aria-label="Close the timeline"
-                onClick={() => openLocator(false)}
-                className="inline-flex size-6 shrink-0 items-center justify-center rounded-badge text-muted hover:text-fg"
-              >
-                <ChevronsLeft size={14} aria-hidden />
-              </button>
             </div>
-          </div>
+            <button
+              type="button"
+              title={locOpen ? 'Close the timeline' : 'Pick a range on the timeline'}
+              aria-label={locOpen ? 'Close the timeline' : 'Pick a range on the timeline'}
+              onClick={() => {
+                if (locOpen) return openLocator(false)
+                // a preset is on and a range is remembered: bring it back, so the brush and the label agree
+                if (!custom && remembered) set({ range: undefined, ...formatCustom(remembered) })
+                openLocator(true)
+              }}
+              className="inline-flex h-full shrink-0 items-center px-1.5 text-muted hover:text-fg"
+            >
+              {locOpen ? <ChevronsLeft size={12} aria-hidden /> : <ChevronsRight size={12} aria-hidden />}
+            </button>
+          </span>
         </fieldset>
         <div
           className={cn('flex items-center justify-center gap-2 overflow-hidden', grow, locOpen && 'opacity-0')}

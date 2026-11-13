@@ -762,19 +762,23 @@ The table only ever lists sessions.
   segments; a click on its label applies the range (`from`, `to`) without opening the locator
   (`customAction`), and a click on the label while Custom is active toggles the locator. With nothing
   remembered it reads `Custom` and a click on the label opens the locator. The control is a grey box
-  (`bg-surface-2`, 32 px high) built in the feature from the shared segmented control's classes; inside the
-  Custom segment, after its label, stands a small **>>** button (`ChevronsRight`, 12 px, muted, title "Pick a
-  range on the timeline"), always there: it is the visible way into the locator.
-- **Locator.** A click on **>>** (or on the label when nothing is remembered) opens the locator **inside the
-  grey box**: the box grows (150 ms) to the toolbar's full width over the search box and the `in` chip, which
-  are hidden meanwhile, and the strip sits in it to the right of the segments:
-  `[1d 7d 30d | Oct 20 → 10d] [strip ………] [<<]`. Custom is the pressed segment while it is open, with its label
-  at a fixed width so that nothing shifts under a drag. The >> becomes **<<** (`ChevronsLeft`) at the box's
-  right end and folds the box back to its normal width; Escape does too, and the range stays. The toolbar is
-  48 px high open or closed. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
+  (`bg-surface-2`, 32 px high) built in the feature from the shared segmented control's classes. **Custom is one
+  unit, a pill**: pressed it is white (`bg-surface`, `outline-line`), unpressed it sits on the grey, and either
+  way it holds its label, the strip when the locator is open, and at its right end one small button in a fixed
+  slot (same size and padding either way): **>>** (`ChevronsRight`, 12 px, muted, title "Pick a range on the
+  timeline") right after the label when closed, **<<** (`ChevronsLeft`) at the far right when open. A range label
+  has one width, open or closed (`min-width` 13ch, left-aligned; a year makes it wider), so the label's box does
+  not move or resize when the locator opens or closes, nor under a drag; "Custom" without a range is its natural
+  width.
+- **Locator.** A click on **>>** (with a preset on and a range remembered it applies that range first), or on the
+  label when nothing is remembered, opens the locator **inside the Custom pill**: the pill widens (150 ms) to the
+  toolbar's right edge over the search box and the `in` chip, which are hidden meanwhile, and the grey box, which
+  hugs `1d 7d 30d` and the pill, ends where the pill ends: `[1d 7d 30d | Oct 20 → 10d [strip ………] <<]`. Custom is
+  the pressed segment while it is open. << folds the pill back to its normal width; Escape does too, and the
+  range stays. The toolbar is 48 px high open or closed. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
   as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
-  thin bars on the grey, a light month axis under it (day numbers too when a day is 16 px wide), the **brush**
-  lit in the page colour with an accent outline and its two handles. Drag on the strip to draw a range, drag the brush to move it, drag its edges
+  thin bars in the faint colour on the white pill, a light month axis under it (day numbers too when a day is 16
+  px wide), the **brush** lit with the accent (a light fill, an outline and its two handles). Drag on the strip to draw a range, drag the brush to move it, drag its edges
   to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day; a click on a **month's name** on the axis (pointer, underlined on hover, title "Show May 2026") applies exactly that calendar month at once (`monthRange`: its first to its last day, the current month ending today, clipped to the strip's first day), updating the URL and the remembered range, with the locator staying open and the brush on that month. The
   brush snaps to whole days, one at least. It starts on the current range (the preset's days when no custom
   range is set). The Custom label follows the drag live; the page applies the range (`from`, `to`) only when
