@@ -1343,15 +1343,7 @@ function Locator({
         onPointerCancel={onUp}
       >
         {/* the brush's days are lit with the accent on the white pill */}
-        <rect
-          x={x0}
-          y={0}
-          width={Math.max(2, x1 - x0)}
-          height={LOC_BAR + 2}
-          fill="var(--accent)"
-          fillOpacity={0.12}
-          rx={2}
-        />
+        <rect x={x0} y={0} width={Math.max(2, x1 - x0)} height={LOC_H} fill="var(--accent)" fillOpacity={0.12} rx={2} />
         {spend.map((v, i) =>
           v > 0 ? (
             <rect
@@ -1388,7 +1380,7 @@ function Locator({
             x={x0}
             y={0.75}
             width={Math.max(2, x1 - x0)}
-            height={LOC_BAR + 0.5}
+            height={LOC_H - 1.5}
             fill="none"
             stroke="var(--accent)"
             strokeWidth={1.5}
@@ -1398,9 +1390,9 @@ function Locator({
             <rect
               key={i === 0 ? 'lo' : 'hi'}
               x={x - 2}
-              y={LOC_BAR / 2 - 4}
+              y={LOC_H / 2 - 5}
               width={4}
-              height={LOC_BAR / 2 + 2}
+              height={10}
               rx={2}
               fill="var(--accent)"
             />
