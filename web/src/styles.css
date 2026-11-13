@@ -33,7 +33,6 @@
   --series-other: #aab1bd;
   /* harness marks (ui/harness.tsx) */
   --harness-claude: #d97757;
-  --harness-pi: #7c6bc4;
   /* derived */
   --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));
   --ok-soft: color-mix(in srgb, var(--ok) 13%, var(--surface));
@@ -70,7 +69,6 @@
     --series-5: #e872a5;
     --series-other: #5b6372;
     --harness-claude: #e58c6d;
-    --harness-pi: #a595e6;
     --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
     --ok-soft: color-mix(in srgb, var(--ok) 16%, var(--surface));
     --warn-soft: color-mix(in srgb, var(--warn) 16%, var(--surface));
@@ -106,7 +104,6 @@
   --series-5: #e872a5;
   --series-other: #5b6372;
   --harness-claude: #e58c6d;
-  --harness-pi: #a595e6;
   --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
   --ok-soft: color-mix(in srgb, var(--ok) 16%, var(--surface));
   --warn-soft: color-mix(in srgb, var(--warn) 16%, var(--surface));

@@ -5,6 +5,7 @@ import {
   apiBy,
   axisTicks,
   bandAt,
+  buildPlaceTree,
   buildRows,
   CTX_MAX,
   chooseSlot,
@@ -17,6 +18,8 @@ import {
   groupHarnesses,
   groupScale,
   heldContext,
+  type IndexItem,
+  inferHome,
   type Layout,
   laneDescription,
   laneHead,
@@ -28,8 +31,10 @@ import {
   MERGE_GAP,
   MIN_SPINE,
   makeAxis,
+  markedNode,
   midnights,
   nextSort,
+  type PlaceNode,
   parseBy,
   parseShow,
   parseSort,
@@ -41,6 +46,7 @@ import {
   sortLanes,
   spineLanes,
   stepAreaPath,
+  visibleRows,
   xOf,
 } from './model'
 
@@ -663,5 +669,94 @@ describe('hover geometry', () => {
     const day = makeAxis(T0, T0 + DAY, MIN, 960)
     const h = bandAt(day, 100)
     expect((h?.x1 ?? 0) - (h?.x0 ?? 0)).toBeCloseTo(40, 5)
+  })
+})
+
+describe('the place tree', () => {
+  const item = (key: string, count = 1, usd = 1): IndexItem => ({ key, name: key.split('/').pop() ?? key, count, usd })
+  const shape = (ns: PlaceNode[]): unknown[] =>
+    ns.map((n) => (n.children.length ? [n.label, shape(n.children)] : n.label))
+
+  test('infers the home from the paths that share one', () => {
+    expect(inferHome(['/Users/ann/a', '/Users/ann/b/c', '/tmp/x'])).toBe('/Users/ann')
+    expect(inferHome(['/home/bob', '/home/bob/x'])).toBe('/home/bob')
+    expect(inferHome(['/srv/a', '/tmp/b'])).toBeUndefined()
+    expect(inferHome([])).toBeUndefined()
+  })
+
+  test('dirs: the home is ~, a lone chain is compacted, children are ordered by name', () => {
+    const t = buildPlaceTree(
+      [
+        item('/Users/ann/work/merlin'),
+        item('/Users/ann/work/merlin/web'),
+        item('/Users/ann/old/Merlin'),
+        item('/Users/ann/src/github.com/acme/api'),
+        item('/tmp/scratch'),
+      ],
+      'dir',
+    )
+    expect(shape(t.nodes)).toEqual([
+      '/tmp/scratch',
+      ['~', ['old/Merlin', 'src/github.com/acme/api', ['work/merlin', ['web']]]],
+    ])
+  })
+
+  test('a group that has children is both: its figures are the subtree sums', () => {
+    const t = buildPlaceTree([item('/Users/a/x', 2, 10), item('/Users/a/x/web', 3, 5), item('/Users/a/y', 1, 1)], 'dir')
+    const [home] = t.nodes
+    expect(home.label).toBe('~')
+    const x = home.children.find((n) => n.label === 'x')
+    expect(x?.group?.key).toBe('/Users/a/x')
+    expect(x?.count).toBe(5)
+    expect(x?.usd).toBe(15)
+    expect(home.count).toBe(6)
+    expect(home.usd).toBe(16)
+  })
+
+  test('a repository sits at its working directory, a bare container too', () => {
+    const t = buildPlaceTree(
+      [item('/Users/a/w/merlin/.bare'), item('/Users/a/o/merlin/.git'), item('/Users/a/merlin/.git')],
+      'repo',
+    )
+    expect(shape(t.nodes)).toEqual([['~', ['merlin', 'o/merlin', 'w/merlin']]])
+    expect(t.nodes[0].children[0].group?.key).toBe('/Users/a/merlin/.git')
+  })
+
+  test('remotes split into host, owner and name; local paths stay paths', () => {
+    const t = buildPlaceTree(
+      [item('github.com/acme/api'), item('github.com/acme/web'), item('git.example.test/x/y'), item('/srv/git/app')],
+      'remote',
+    )
+    expect(shape(t.nodes)).toEqual(['/srv/git/app', 'git.example.test/x/y', ['github.com/acme', ['api', 'web']]])
+    expect(t.nodes.map((n) => !!n.host)).toEqual([false, true, true])
+  })
+
+  test('the group with no value is apart, not in the tree', () => {
+    const t = buildPlaceTree([item('', 4, 2), item('/tmp/a')], 'dir')
+    expect(t.none?.count).toBe(4)
+    expect(shape(t.nodes)).toEqual(['/tmp/a'])
+    expect(t.nodes[0].count).toBe(1)
+  })
+
+  test('paths with no shared home stay absolute', () => {
+    expect(shape(buildPlaceTree([item('/srv/a/x'), item('/srv/a/y')], 'dir').nodes)).toEqual([['/srv/a', ['x', 'y']]])
+  })
+
+  test('visible rows follow the open state; a hidden group is marked by its closed folder', () => {
+    const t = buildPlaceTree([item('/Users/a/x'), item('/Users/a/x/web'), item('/Users/a/y')], 'dir')
+    const all = visibleRows(t.nodes, new Set())
+    expect(all.map((r) => [r.node.label, r.depth])).toEqual([
+      ['~', 0],
+      ['x', 1],
+      ['web', 2],
+      ['y', 1],
+    ])
+    const x = t.nodes[0].children[0]
+    const closed = new Set([x.id])
+    expect(visibleRows(t.nodes, closed).map((r) => r.node.label)).toEqual(['~', 'x', 'y'])
+    expect(markedNode(t.nodes, '/Users/a/x/web', new Set())).toBe(x.children[0].id)
+    expect(markedNode(t.nodes, '/Users/a/x/web', closed)).toBe(x.id)
+    expect(markedNode(t.nodes, '/Users/a/x', closed)).toBe(x.id)
+    expect(markedNode(t.nodes, '/nope', closed)).toBeNull()
   })
 })

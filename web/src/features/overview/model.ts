@@ -4,6 +4,7 @@
 
 import type { GroupDim, OverviewGroup, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
 import { formatMoney } from '../../lib/format'
+import { homeOf } from '../../lib/places'
 import { HOLD_MS } from '../spend/timeline'
 
 const MIN = 60_000
@@ -688,4 +689,154 @@ export function bandAt(axis: Axis, x: number): Band | null {
   if (hourly) e.setHours(e.getHours() + 1)
   else e.setDate(e.getDate() + 1)
   return { x0: Math.max(0, xOf(axis, a)), x1: Math.min(axis.width, xOf(axis, e.getTime())) }
+}
+
+// ---- the index as a file tree -------------------------------------------------------------
+
+/** What the index lists: a group of the table, its sessions shown and its spend. */
+export interface IndexItem {
+  key: string
+  name: string
+  count: number
+  usd: number
+}
+
+/** One line of the tree: a group of the table, a folder, or both. */
+export interface PlaceNode {
+  /** Where it sits, as shown (`~/work/app`, `github.com/acme`): unique in a tree, and what the open state is keyed by. */
+  id: string
+  /** The segments it stands for, joined (compact folders: `work/merlin`). */
+  label: string
+  /** The group this node is, when it is one: the table row to scroll to. */
+  group?: IndexItem
+  /** A host at the top of a remote tree. */
+  host?: boolean
+  children: PlaceNode[]
+  /** Sessions shown and spend, summed over the groups at or under it. */
+  count: number
+  usd: number
+}
+
+export interface PlaceTree {
+  nodes: PlaceNode[]
+  /** The group of the sessions with no value, listed apart below the tree. */
+  none?: IndexItem
+}
+
+const HOME = /^\/(?:Users|home)\/[^/]+/
+
+/** The home directory the paths share, if they do: the most common `/Users/<u>` or `/home/<u>` prefix. */
+export function inferHome(paths: readonly string[]): string | undefined {
+  const n = new Map<string, number>()
+  for (const p of paths) {
+    const m = HOME.exec(p)
+    if (m && (p.length === m[0].length || p[m[0].length] === '/')) n.set(m[0], (n.get(m[0]) ?? 0) + 1)
+  }
+  let best: string | undefined
+  for (const [h, c] of [...n].sort((a, b) => (a[0] < b[0] ? -1 : 1))) if (c > (n.get(best ?? '') ?? 0)) best = h
+  return best
+}
+
+interface Trie {
+  seg: string
+  children: Map<string, Trie>
+  group?: IndexItem
+  host?: boolean
+}
+
+/** The segments of a group's place: `~` for the home, a leading `/` on the first segment of an absolute path. */
+function placeSegments(key: string, by: By, home: string | undefined): { segs: string[]; host: boolean } {
+  const isPath = key.startsWith('/') || /^[A-Za-z]:[\\/]/.test(key)
+  const parts = by === 'repo' ? homeOf(key) : key.split(/[\\/]+/).filter(Boolean)
+  if (by === 'remote' && !isPath) return { segs: parts, host: true }
+  if (home && (key === home || key.startsWith(`${home}/`))) {
+    const rest = parts.slice(home.split('/').filter(Boolean).length)
+    return { segs: ['~', ...rest], host: false }
+  }
+  return { segs: parts.length ? [key.startsWith('/') ? `/${parts[0]}` : parts[0], ...parts.slice(1)] : [], host: false }
+}
+
+/**
+ * The groups of the table laid out as the filesystem the user knows (docs/ui.md section 10b): a repository
+ * at its working directory, a remote as host / owner / name, the home as `~`. A folder that is no group and
+ * has one child is merged into it (`~/work`, `work/merlin`); children are ordered by name, like Finder.
+ * Counts and spend are summed up the tree. The group with no value is returned apart.
+ */
+export function buildPlaceTree(items: readonly IndexItem[], by: By): PlaceTree {
+  const root: Trie = { seg: '', children: new Map() }
+  let none: IndexItem | undefined
+  const where = (k: string) => (by === 'repo' ? `/${homeOf(k).join('/')}` : k)
+  const home = inferHome(items.filter((i) => i.key.startsWith('/')).map((i) => where(i.key)))
+  for (const it of items) {
+    if (!it.key) {
+      none = it
+      continue
+    }
+    const { segs, host } = placeSegments(it.key, by, home)
+    let at = root
+    segs.forEach((seg, d) => {
+      let next = at.children.get(seg)
+      if (!next) {
+        next = { seg, children: new Map(), host: host && d === 0 ? true : undefined }
+        at.children.set(seg, next)
+      }
+      at = next
+    })
+    if (segs.length) at.group = it
+  }
+  const make = (t: Trie, trail: string[]): PlaceNode => {
+    const path = [...trail, t.seg]
+    const kids = [...t.children.values()].map((c) => make(c, path))
+    const own = t.group
+    const node: PlaceNode = {
+      id: path.join('/'),
+      label: t.seg,
+      group: own,
+      host: t.host,
+      children: kids,
+      count: (own?.count ?? 0) + kids.reduce((n, k) => n + k.count, 0),
+      usd: (own?.usd ?? 0) + kids.reduce((n, k) => n + k.usd, 0),
+    }
+    // compact: a folder that is no group and has one child is that child, its label the joined segments
+    if (!own && kids.length === 1) {
+      const [only] = kids
+      return { ...only, label: `${t.seg}/${only.label}`, host: t.host || undefined }
+    }
+    return node
+  }
+  const byName = (a: PlaceNode, b: PlaceNode) =>
+    a.label.toLowerCase().localeCompare(b.label.toLowerCase()) || (a.id < b.id ? -1 : 1)
+  const sortTree = (ns: PlaceNode[]): PlaceNode[] => {
+    for (const n of ns) sortTree(n.children)
+    return ns.sort(byName)
+  }
+  return { nodes: sortTree([...root.children.values()].map((c) => make(c, []))), none }
+}
+
+/** A node of the tree as drawn: how deep it sits. */
+export interface TreeRow {
+  node: PlaceNode
+  depth: number
+}
+
+/** The lines to draw: every node whose ancestors are all open (`closed` holds the ids of the closed folders). */
+export function visibleRows(nodes: readonly PlaceNode[], closed: ReadonlySet<string>, depth = 0): TreeRow[] {
+  return nodes.flatMap((node) => [
+    { node, depth },
+    ...(closed.has(node.id) ? [] : visibleRows(node.children, closed, depth + 1)),
+  ])
+}
+
+/** The id of the line that stands for a group: its own, or when a closed folder hides it, the outermost closed one. */
+export function markedNode(nodes: readonly PlaceNode[], key: string, closed: ReadonlySet<string>): string | null {
+  const walk = (ns: readonly PlaceNode[], hidden: string | null): string | null => {
+    for (const n of ns) {
+      const at = hidden ?? (closed.has(n.id) ? n.id : null)
+      if (n.group?.key === key) return hidden ?? n.id
+      const r = walk(n.children, at)
+      if (r) return r
+    }
+    return null
+  }
+  return walk(nodes, null)
 }

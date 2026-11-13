@@ -22,7 +22,7 @@ const ALIAS: Record<string, string> = { [OPUS]: 'opus', [FABLE]: 'fable', [SONNE
 
 export const SHOWCASE_TITLE = 'showcase: orchestrator with workers, teammates and forks'
 export const SHOWCASE_FORK_TITLE = 'showcase: fork that tries the batched writer'
-const PROJECT = '/home/dev/acme/api'
+const PROJECT = '/Users/dev/acme/api'
 
 // ---- the script -----------------------------------------------------------------------
 

@@ -22,7 +22,7 @@ export function repoName(key: string): string {
 }
 
 /** The key's directories with a trailing `.git` / `.bare` left out: where the named thing lives. */
-function homeOf(key: string): string[] {
+export function homeOf(key: string): string[] {
   const parts = segments(key)
   const last = parts[parts.length - 1]
   return last === '.git' || last === '.bare' ? parts.slice(0, -1) : parts

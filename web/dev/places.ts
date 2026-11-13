@@ -39,49 +39,61 @@ interface Checkout {
 }
 
 const R = {
-  web: { key: '/home/dev/acme/web/.git', remote: 'git.example.test/acme/web' },
-  api: { key: '/home/dev/acme/api/.bare', remote: 'git.example.test/acme/api' },
-  infra: { key: '/home/dev/ops/infra/.bare', remote: 'git.example.test/acme/infra' },
+  web: { key: '/Users/dev/acme/web/.git', remote: 'git.example.test/acme/web' },
+  api: { key: '/Users/dev/acme/api/.bare', remote: 'git.example.test/acme/api' },
+  infra: { key: '/Users/dev/ops/infra/.bare', remote: 'git.example.test/acme/infra' },
   // the same path on another host: its remote label keeps the host
-  merlin: { key: '/home/dev/merlin/.git', remote: 'mirror.example.test/acme/web' },
-  ray: { key: '/home/dev/labs/ray-tracer/.git', remote: 'git.example.test/labs/ray-tracer' },
-  compiler: { key: '/home/dev/labs/compiler/.git', remote: 'git.example.test/labs/compiler', gone: true },
-  parser: { key: '/home/dev/oss/parser/.git', remote: 'git.example.test/oss/parser' },
-  kitA: { key: '/home/dev/oss/cli-kit/.git', remote: 'git.example.test/oss/cli-kit' },
-  kitB: { key: '/home/dev/work/cli-kit/.git', remote: 'git.example.test/oss/cli-kit' },
-  portal: { key: '/home/dev/client/portal/.git', remote: 'git.example.test/client/portal' },
-  clientWeb: { key: '/home/dev/client/web/.git', remote: 'git.example.test/client/web' },
+  merlin: { key: '/Users/dev/merlin/.git', remote: 'mirror.example.test/acme/merlin' },
+  // three repositories named merlin: a bare container, a clone of the same remote, a mirror at home
+  merlinWork: { key: '/Users/dev/work/merlin/.bare', remote: 'git.example.test/acme/merlin' },
+  merlinOld: { key: '/Users/dev/old/merlin/.git', remote: 'git.example.test/acme/merlin' },
+  apiSrc: { key: '/Users/dev/src/github.com/acme/api/.git', remote: 'github.com/acme/api' },
+  ray: { key: '/Users/dev/labs/ray-tracer/.git', remote: 'git.example.test/labs/ray-tracer' },
+  compiler: { key: '/Users/dev/labs/compiler/.git', remote: '/srv/git/compiler', gone: true },
+  parser: { key: '/Users/dev/oss/parser/.git', remote: 'git.example.test/oss/parser' },
+  kitA: { key: '/Users/dev/oss/cli-kit/.git', remote: 'git.example.test/oss/cli-kit' },
+  kitB: { key: '/Users/dev/work/cli-kit/.git', remote: 'git.example.test/oss/cli-kit' },
+  portal: { key: '/Users/dev/client/portal/.git', remote: 'git.example.test/client/portal' },
+  clientWeb: { key: '/Users/dev/client/web/.git', remote: 'git.example.test/client/web' },
 } satisfies Record<string, Repo>
 
 const C = {
-  web: { path: '/home/dev/acme/web' },
-  webFeature: { path: '/home/dev/acme/web-feature', worktree: true },
-  webOld: { path: '/home/dev/acme/web-old', worktree: true, gone: true },
-  apiMain: { path: '/home/dev/acme/api/main' },
-  apiFeature: { path: '/home/dev/acme/api/feature' },
-  infraMain: { path: '/home/dev/ops/infra/main' },
-  infraFeature: { path: '/home/dev/ops/infra/feature' },
-  merlin: { path: '/home/dev/merlin' },
-  ray: { path: '/home/dev/labs/ray-tracer' },
-  compiler: { path: '/home/dev/labs/compiler' },
-  parser: { path: '/home/dev/oss/parser' },
-  kitA: { path: '/home/dev/oss/cli-kit' },
-  kitB: { path: '/home/dev/work/cli-kit' },
-  portal: { path: '/home/dev/client/portal' },
-  clientWeb: { path: '/home/dev/client/web' },
+  web: { path: '/Users/dev/acme/web' },
+  webFeature: { path: '/Users/dev/acme/web-feature', worktree: true },
+  webOld: { path: '/Users/dev/acme/web-old', worktree: true, gone: true },
+  apiMain: { path: '/Users/dev/acme/api/main' },
+  apiFeature: { path: '/Users/dev/acme/api/feature' },
+  infraMain: { path: '/Users/dev/ops/infra/main' },
+  infraFeature: { path: '/Users/dev/ops/infra/feature' },
+  merlin: { path: '/Users/dev/merlin' },
+  merlinMain: { path: '/Users/dev/work/merlin/main' },
+  merlinTree: { path: '/Users/dev/work/merlin/prosper', worktree: true },
+  merlinOld: { path: '/Users/dev/old/merlin' },
+  apiSrc: { path: '/Users/dev/src/github.com/acme/api' },
+  ray: { path: '/Users/dev/labs/ray-tracer' },
+  compiler: { path: '/Users/dev/labs/compiler' },
+  parser: { path: '/Users/dev/oss/parser' },
+  kitA: { path: '/Users/dev/oss/cli-kit' },
+  kitB: { path: '/Users/dev/work/cli-kit' },
+  portal: { path: '/Users/dev/client/portal' },
+  clientWeb: { path: '/Users/dev/client/web' },
 } satisfies Record<string, Checkout>
 
 /** Where the sessions of a start directory worked, in turn (null: no checkout, as at a bare root). */
 const LAYOUT: Record<string, { repo: Repo; checkouts: (Checkout | null)[] }> = {
-  '/home/dev/acme/web': { repo: R.web, checkouts: [C.web, C.web, C.web, C.webFeature, C.webOld] },
-  '/home/dev/acme/api': { repo: R.api, checkouts: [C.apiMain, C.apiMain, C.apiFeature, null] },
-  '/home/dev/acme/infra': { repo: R.infra, checkouts: [C.infraMain, C.infraFeature, C.infraMain] },
-  '/home/dev/merlin': { repo: R.merlin, checkouts: [C.merlin] },
-  '/home/dev/labs/ray-tracer': { repo: R.ray, checkouts: [C.ray] },
-  '/home/dev/labs/compiler': { repo: R.compiler, checkouts: [C.compiler] },
-  '/home/dev/oss/parser': { repo: R.parser, checkouts: [C.parser] },
-  '/home/dev/client/portal': { repo: R.portal, checkouts: [C.portal] },
-  '/home/dev/client/billing': { repo: R.clientWeb, checkouts: [C.clientWeb] },
+  '/Users/dev/acme/web': { repo: R.web, checkouts: [C.web, C.web, C.web, C.webFeature, C.webOld] },
+  '/Users/dev/acme/api': { repo: R.api, checkouts: [C.apiMain, C.apiMain, C.apiFeature, null] },
+  '/Users/dev/acme/infra': { repo: R.infra, checkouts: [C.infraMain, C.infraFeature, C.infraMain] },
+  '/Users/dev/merlin': { repo: R.merlin, checkouts: [C.merlin] },
+  '/Users/dev/work/merlin': { repo: R.merlinWork, checkouts: [C.merlinMain, C.merlinTree, null] },
+  '/Users/dev/work/merlin/web': { repo: R.merlinWork, checkouts: [C.merlinMain, C.merlinTree] },
+  '/Users/dev/old/merlin': { repo: R.merlinOld, checkouts: [C.merlinOld] },
+  '/Users/dev/src/github.com/acme/api': { repo: R.apiSrc, checkouts: [C.apiSrc] },
+  '/Users/dev/labs/ray-tracer': { repo: R.ray, checkouts: [C.ray] },
+  '/Users/dev/labs/compiler': { repo: R.compiler, checkouts: [C.compiler] },
+  '/Users/dev/oss/parser': { repo: R.parser, checkouts: [C.parser] },
+  '/Users/dev/client/portal': { repo: R.portal, checkouts: [C.portal] },
+  '/Users/dev/client/billing': { repo: R.clientWeb, checkouts: [C.clientWeb] },
 }
 /** Two clones of one remote: sessions alternate between them. */
 const CLONES = [
@@ -125,7 +137,7 @@ export function assignPlaces(sessions: Sess[]): void {
     seen.set(sum.project, i + 1)
     let repo: Repo | undefined
     let checkout: Checkout | undefined
-    if (sum.project === '/home/dev/oss/cli-kit') {
+    if (sum.project === '/Users/dev/oss/cli-kit') {
       const clone = CLONES[i % CLONES.length]
       repo = clone.repo
       checkout = clone.checkout

@@ -5,7 +5,7 @@
 // head, description, turns, agents, spend, last activity) and under it a merged cell with the row's graph
 // on one shared linear time axis.
 
-import { ArrowDown, ArrowUp } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronRight, Folder, FolderGit2, FolderOpen, Globe } from 'lucide-react'
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useOverview, useSearch } from '../../api/queries'
@@ -13,6 +13,7 @@ import type { Overview, OverviewGroup, OverviewLane, OverviewSpan } from '../../
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
+import { placeLabels } from '../../lib/places'
 import { useShortcut } from '../../shell/useShortcut'
 import { HarnessIcon, Money, QueryBoundary, SearchInput, SegmentedControl, Skeleton } from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
@@ -25,6 +26,7 @@ import {
   type Band,
   type By,
   bandAt,
+  buildPlaceTree,
   buildRows,
   type Column,
   type ColumnBox,
@@ -38,6 +40,7 @@ import {
   groupDescription,
   groupHarnesses,
   groupScale,
+  type IndexItem,
   isBranch,
   LANE_DEPTH,
   type Layout,
@@ -48,9 +51,11 @@ import {
   lastLabel,
   lifeSpan,
   makeAxis,
+  markedNode,
   midnightXs,
   nextSort,
   oneLine,
+  type PlaceNode,
   parseBy,
   parseShow,
   parseSort,
@@ -64,6 +69,7 @@ import {
   slotX,
   spineLanes,
   stepAreaPath,
+  visibleRows,
 } from './model'
 import { useDebounced, useWidth } from './useWidth'
 
@@ -74,7 +80,7 @@ const COLS = { turns: 52, agents: 56, spend: 84, last: 64 }
 const CELL_PAD = 12
 const GAP = 8
 /** The index beside the rows (px, its right border included). */
-const SIDEBAR_W = 220
+const SIDEBAR_W = 260
 const LAYOUT: Omit<Layout, 'gutter'> = { harness: HARNESS_W, pad: CELL_PAD, gap: GAP, ...COLS }
 /** The hovered row's background: the text colour, faintly, over the row's own. */
 const HOVER = 'hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
@@ -433,6 +439,7 @@ const SessionRow = memo(function SessionRow({
 
 const GroupRow = memo(function GroupRow({
   g,
+  label,
   lanes,
   shown,
   priciestHead,
@@ -441,6 +448,8 @@ const GroupRow = memo(function GroupRow({
   shared,
 }: {
   g: OverviewGroup
+  /** The name shown: with enough of the path when groups share a name. */
+  label: string
   priciestHead?: string
   lanes: OverviewLane[]
   /** The group's sessions that match the search (undefined: no search). */
@@ -449,12 +458,16 @@ const GroupRow = memo(function GroupRow({
   tint: boolean
   shared: Shared
 }) {
-  const name = g.name || 'no value'
+  const name = label || 'no value'
   const harnesses = useMemo(() => groupHarnesses(lanes), [lanes])
   return (
     <Frame group={g.key} isGroup harnesses={harnesses} gutter={gutter} tint={tint}>
       <TextLine
-        head={<span className="font-semibold text-fg">{name}</span>}
+        head={
+          <span className="font-semibold text-fg" title={g.key || name}>
+            {name}
+          </span>
+        }
         headText={name}
         desc={groupDescription(g, priciestHead, shown)}
         turns={g.turns}
@@ -686,20 +699,53 @@ function Totals({
 
 // ---- the index beside the rows -----------------------------------------------------------
 
-interface IndexItem {
-  key: string
-  name: string
-  count: number
-  usd: number
+const TREE_INDENT = 12
+const TREE_GUTTER = 8
+
+/** The ids of the folders the user closed in this grouping: kept per grouping, and fine without storage. */
+function useClosed(by: By): [ReadonlySet<string>, (id: string) => void] {
+  const storeKey = `overview.tree.${by}`
+  const read = (): Set<string> => {
+    try {
+      const v: unknown = JSON.parse(localStorage.getItem(storeKey) ?? '[]')
+      return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  }
+  const [state, setState] = useState(() => ({ storeKey, closed: read() }))
+  // the grouping changed: its own closed folders
+  const closed = state.storeKey === storeKey ? state.closed : read()
+  if (state.storeKey !== storeKey) setState({ storeKey, closed })
+  const toggle = (id: string) => {
+    const next = new Set(closed)
+    if (!next.delete(id)) next.add(id)
+    setState({ storeKey, closed: next })
+    try {
+      localStorage.setItem(storeKey, JSON.stringify([...next]))
+    } catch {
+      // no storage: the state lives for this page only
+    }
+  }
+  return [closed, toggle]
+}
+
+const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
+  if (n.host) return Globe
+  if (n.group && (by === 'repo' || by === 'checkout' || by === 'remote')) return FolderGit2
+  return open ? FolderOpen : Folder
 }
 
 /**
- * One item per group of the table, in its order: the name, the shown sessions and the spend. A click scrolls
- * the group to the top of the rows; `current` is the group at the top of the rows now, `hover` the group of
- * the row under the pointer. Its width goes to 0 when the table needs no index (the rows are the index).
+ * The index as a file explorer: the groups of the table where they sit in the filesystem (a repository at its
+ * working directory, a remote as host / owner / name), compact folders, the home as `~`. A click on a group
+ * scrolls the table to it, on a plain folder or any chevron opens or closes it; `current` is the group at the
+ * top of the rows now, `hover` the group of the row under the pointer (when a closed folder hides it, the
+ * folder is marked). Its width goes to 0 when the table needs no index (the rows are the index).
  */
 function Sidebar({
   open,
+  by,
   label,
   title,
   items,
@@ -708,6 +754,7 @@ function Sidebar({
   onPick,
 }: {
   open: boolean
+  by: By
   label: string
   title?: string
   items: IndexItem[]
@@ -716,11 +763,25 @@ function Sidebar({
   onPick: (key: string) => void
 }) {
   const listRef = useRef<HTMLUListElement>(null)
+  const tree = useMemo(() => buildPlaceTree(items, by), [items, by])
+  const [closed, toggle] = useClosed(by)
+  const rows = useMemo(() => visibleRows(tree.nodes, closed), [tree.nodes, closed])
+  const cur = current === null ? null : markedNode(tree.nodes, current, closed)
+  const hot = hover === null ? null : markedNode(tree.nodes, hover, closed)
   useEffect(() => {
-    if (!open || current === null) return
-    const li = [...(listRef.current?.children ?? [])].find((c) => (c as HTMLElement).dataset.key === current)
+    if (!open || cur === null) return
+    const li = [...(listRef.current?.children ?? [])].find((c) => (c as HTMLElement).dataset.node === cur)
     li?.scrollIntoView({ block: 'nearest' })
-  }, [current, open])
+  }, [cur, open])
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    const all = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-nav]') ?? [])]
+    const i = all.indexOf(document.activeElement as HTMLElement)
+    if (i < 0) return
+    e.preventDefault()
+    all[Math.max(0, Math.min(all.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]?.focus()
+  }
+  const none = tree.none
   return (
     <aside
       aria-label={`${label} index`}
@@ -736,29 +797,88 @@ function Sidebar({
         >
           {label}
         </div>
-        <ul ref={listRef} className="min-h-0 flex-1 space-y-px overflow-y-auto p-1.5">
-          {items.map((it) => {
-            const name = it.name || 'no value'
+        <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onKeyDown}>
+          {rows.map(({ node: n, depth }) => {
+            const folder = n.children.length > 0
+            const isOpen = folder && !closed.has(n.id)
+            const Icon = folderIcon(n, by, isOpen)
+            const g = n.group
+            const path = n.id
             return (
-              <li key={it.key} data-key={it.key}>
+              <li
+                key={n.id}
+                data-node={n.id}
+                data-key={g?.key}
+                className={cn(
+                  'relative flex items-center rounded-card',
+                  hot === n.id && 'bg-surface-2',
+                  cur === n.id && 'bg-accent-soft font-medium text-accent',
+                )}
+                style={{ paddingLeft: TREE_GUTTER + depth * TREE_INDENT }}
+              >
+                {Array.from({ length: depth }, (_, i) => (
+                  <span
+                    // biome-ignore lint/suspicious/noArrayIndexKey: one guide per level
+                    key={i}
+                    aria-hidden
+                    className="absolute inset-y-0 w-px bg-[color-mix(in_srgb,var(--text)_13%,transparent)]"
+                    style={{ left: TREE_GUTTER + i * TREE_INDENT + 7 }}
+                  />
+                ))}
+                {folder ? (
+                  <button
+                    type="button"
+                    data-nav
+                    onClick={() => toggle(n.id)}
+                    aria-expanded={isOpen}
+                    aria-label={`${isOpen ? 'Close' : 'Open'} ${n.label}`}
+                    className="flex size-4 shrink-0 items-center justify-center text-muted hover:text-fg"
+                  >
+                    <ChevronRight size={12} aria-hidden className={cn('transition-transform', isOpen && 'rotate-90')} />
+                  </button>
+                ) : (
+                  <span className="size-4 shrink-0" aria-hidden />
+                )}
                 <button
                   type="button"
-                  onClick={() => onPick(it.key)}
-                  aria-current={current === it.key ? 'true' : undefined}
-                  title={name}
-                  className={cn(
-                    'flex w-full items-center gap-2 rounded-card px-2 py-1 text-left text-body',
-                    hover === it.key && 'bg-surface-2',
-                    current === it.key && 'bg-accent-soft font-medium text-accent',
-                  )}
+                  data-nav
+                  onClick={() => (g ? onPick(g.key) : toggle(n.id))}
+                  aria-current={cur === n.id ? 'true' : undefined}
+                  title={path}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 pl-0.5 text-left text-body"
                 >
-                  <span className="min-w-0 flex-1 truncate">{name}</span>
-                  <span className="w-7 shrink-0 text-right text-muted text-sec tabular-nums">{it.count}</span>
-                  <Money usd={it.usd} dim className="w-14 shrink-0 text-right text-sec" />
+                  <Icon size={14} aria-hidden className="shrink-0 text-muted" />
+                  <span className="min-w-0 flex-1 truncate">{n.label}</span>
+                  <span className="w-6 shrink-0 text-right text-muted text-sec tabular-nums">{n.count}</span>
+                  <Money usd={n.usd} dim className="w-12 shrink-0 text-right text-sec" />
                 </button>
               </li>
             )
           })}
+          {none && (
+            <li
+              data-node=""
+              data-key=""
+              className={cn(
+                'mt-1 flex items-center rounded-card border-line border-t pt-1',
+                hover === '' && 'bg-surface-2',
+                current === '' && 'bg-accent-soft font-medium text-accent',
+              )}
+            >
+              <button
+                type="button"
+                data-nav
+                onClick={() => onPick('')}
+                aria-current={current === '' ? 'true' : undefined}
+                title={none.name || 'no value'}
+                className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-body"
+              >
+                <span className="min-w-0 flex-1 truncate text-muted">(none)</span>
+                <span className="w-6 shrink-0 text-right text-muted text-sec tabular-nums">{none.count}</span>
+                <Money usd={none.usd} dim className="w-12 shrink-0 text-right text-sec" />
+              </button>
+            </li>
+          )}
         </ul>
       </div>
     </aside>
@@ -1019,6 +1139,11 @@ function Table({
   }
 
   // ---- the index: groups in the table's order, the one at the top, a click to scroll there ----
+  // groups that share a name are told apart by the fewest trailing directories that differ
+  const labelOf = useMemo(() => {
+    const ls = placeLabels(o.groups.map((g) => ({ key: g.key, name: g.name })))
+    return new Map(o.groups.map((g, i) => [g.key, ls[i]]))
+  }, [o.groups])
   const items: IndexItem[] = useMemo(
     () =>
       rows.flatMap((r) =>
@@ -1066,6 +1191,7 @@ function Table({
     <div className="flex min-h-0 flex-1">
       <Sidebar
         open={indexOpen}
+        by={by}
         label={BY_LABEL[by]}
         title={BY_TITLE[by]}
         items={items}
@@ -1097,6 +1223,7 @@ function Table({
                 <GroupRow
                   key={r.key}
                   g={r.g}
+                  label={labelOf.get(r.g.key) ?? r.g.name}
                   lanes={byGroup.get(r.g.key) ?? []}
                   shown={searching ? f.shown.get(r.g.key) : undefined}
                   priciestHead={priciest(r.g)}
@@ -1109,7 +1236,7 @@ function Table({
                   key={r.key}
                   l={r.l}
                   nested={r.nested}
-                  groupName={r.groupName}
+                  groupName={labelOf.get(r.l.group) ?? r.groupName}
                   gutter={gutter}
                   shared={shared}
                 />

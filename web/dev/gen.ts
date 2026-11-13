@@ -54,18 +54,22 @@ export type Rng = ReturnType<typeof makeRng>
 // ---- vocabulary (invented) ------------------------------------------------------------
 
 export const PROJECTS = [
-  '/home/dev/acme/web',
-  '/home/dev/acme/api',
-  '/home/dev/acme/infra',
-  '/home/dev/merlin',
-  '/home/dev/notes',
-  '/home/dev/labs/ray-tracer',
-  '/home/dev/labs/compiler',
-  '/home/dev/oss/parser',
-  '/home/dev/oss/cli-kit',
-  '/home/dev/client/portal',
-  '/home/dev/client/billing',
-  '/home/dev/scratch',
+  '/Users/dev/acme/web',
+  '/Users/dev/acme/api',
+  '/Users/dev/acme/infra',
+  '/Users/dev/merlin',
+  '/Users/dev/work/merlin',
+  '/Users/dev/work/merlin/web',
+  '/Users/dev/old/merlin',
+  '/Users/dev/src/github.com/acme/api',
+  '/Users/dev/notes',
+  '/Users/dev/labs/ray-tracer',
+  '/Users/dev/labs/compiler',
+  '/Users/dev/oss/parser',
+  '/Users/dev/oss/cli-kit',
+  '/Users/dev/client/portal',
+  '/Users/dev/client/billing',
+  '/tmp/scratch',
 ]
 
 const VERBS = [
@@ -1003,7 +1007,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   }
   const big = special({
     id: r.uuid(),
-    project: '/home/dev/merlin',
+    project: '/Users/dev/merlin',
     kind: 'interactive',
     start: now - 5 * DAY,
     turns: 600,
@@ -1019,7 +1023,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   })
   special({
     id: r.uuid(),
-    project: '/home/dev/acme/web',
+    project: '/Users/dev/acme/web',
     kind: 'interactive',
     start: now - 2 * DAY,
     turns: 6,
@@ -1030,7 +1034,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   })
   special({
     id: r.uuid(),
-    project: '/home/dev/acme/api',
+    project: '/Users/dev/acme/api',
     kind: 'interactive',
     start: now - 3 * DAY,
     turns: 5,
@@ -1041,7 +1045,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   })
   special({
     id: r.uuid(),
-    project: '/home/dev/acme/web',
+    project: '/Users/dev/acme/web',
     kind: 'interactive',
     start: now - 4 * DAY,
     turns: 24,
@@ -1052,7 +1056,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   })
   special({
     id: r.uuid(),
-    project: '/home/dev/acme/web',
+    project: '/Users/dev/acme/web',
     kind: 'interactive',
     start: now - 50 * MIN - 6 * 3600_000,
     turns: 9,
@@ -1064,7 +1068,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   })
   special({
     id: r.uuid(),
-    project: '/home/dev/oss/parser',
+    project: '/Users/dev/oss/parser',
     kind: 'interactive',
     start: now - 30 * MIN,
     turns: 4,
@@ -1194,7 +1198,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
     zr,
     {
       id: zr.uuid(),
-      project: '/home/dev/merlin',
+      project: '/Users/dev/merlin',
       kind: 'interactive',
       start: now - 36 * 3600_000,
       turns: 20,

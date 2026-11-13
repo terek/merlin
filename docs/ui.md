@@ -743,6 +743,9 @@ Round 6 (2026-11-13, feedback on round 5): the page is full bleed (it will repla
 tab); an index of the groups beside the rows; a hover that reads the table; search in the toolbar; a
 harness column; the grouping is renamed (below). Sections that say otherwise are superseded.
 
+Round 7 (2026-11-13): the index is a file explorer tree in the filesystem's hierarchy; groups that share
+a name are told apart in the table; the harness marks are the real logos.
+
 ```
  Overview [1d 7d 30d]  group [None|Folder|Worktree|Repo|Remote]  show [Sessions|Groups]    ( Search sessions...   / )   (sticky)
  FOLDER       SESSION                                    TURNS  AGENTS    SPEND v   LAST     (sticky)
@@ -797,21 +800,47 @@ harness column; the grouping is renamed (below). Sections that say otherwise are
   (`session`, `turns`, `agents`, `spend`, `last`; absent = spend) and `dir=asc` (absent = descending).
 - **Harness column**: 48 px, before everything else, header empty (title "Harness"), not sortable. A
   session row has the mark of its harness; a group row the distinct harnesses of all its sessions (up to 3,
-  most sessions first, overlapping by 4 px). The mark is the shared `HarnessIcon` (`ui/harness.tsx`,
-  hand-drawn inline SVG, 14 px; colours are the tokens `--harness-claude` and `--harness-pi`): an eight-ray
-  sparkle in clay orange for Claude Code, a rounded square with a `>_` prompt in the body colour for Codex,
-  a drawn pi in violet for Pi, the first letter in a circle for any other. Its title is the product name
-  from `/api/harnesses`.
-- **Index** (group is not None and show is Sessions): a 220 px column left of the table under the toolbar
+  most sessions first, overlapping by 4 px). The mark is the shared `HarnessIcon` (`ui/harness.tsx`, 14 px)
+  and it is the product's real logo, its path data inline (no file, no fetch): Claude and OpenAI from
+  Simple Icons (CC0), Pi from pi.dev; the marks are the products' trademarks, used to name them. Claude's
+  is filled with the token `--harness-claude` (clay orange), Codex's (OpenAI) with the body colour, Pi's
+  keeps its own three colours; any other harness gets its first letter in a circle. Its title is the
+  product name from `/api/harnesses`.
+- **Index** (group is not None and show is Sessions): a 260 px column left of the table under the toolbar
   (its own scroll, right border), headed by the grouping's label in the height of the column headers so
-  that the two rows line up. One item per group of the table, in the table's order (the sort and the
-  search apply): the name (the whole in `title`), the shown sessions and the spend, muted, right-aligned.
-  A click scrolls that group's row to the top of the rows (smooth; instant under reduced motion), with no
-  URL change. The group at the top of the rows is marked current (`aria-current`, the Sessions rail's
-  active style; computed from row offsets on scroll, rAF-throttled); the group of the row under the
-  pointer has the light hover background. When show is Groups or group is None the index is not needed (the
-  rows are the index): its width animates to 0 in 150 ms (instantly under reduced motion). The plot is
-  sized for the final layout, so the graphs do not recompute while it slides.
+  that the two rows line up. It is a **file explorer tree** of the groups of the table (the search
+  applies), placed in the filesystem hierarchy (`buildPlaceTree` in `model.ts`):
+  - **Path of a group**: dir and worktree: the key; repo: the key without its trailing `.git` / `.bare`
+    (`homeOf` of `lib/places.ts`), so a repository sits at its working directory; remote: the normalised
+    URL split into host / owner / name (a local-path remote stays a path). The group with no value is
+    not in the tree: one muted "(none)" item under it.
+  - **Home as `~`**: the API has none, so it is inferred: the most common `/Users/<u>` or `/home/<u>`
+    prefix among the paths. Other paths stay absolute (`/tmp/scratch`).
+  - **Compact folders**: a node that is no group and has one child merges into it, its label the joined
+    segments (`~/work`, `old/merlin`). A node can be a group and a folder (`~/work/app` and
+    `~/work/app/web` both started sessions). Children are ordered by name, case-insensitive, folders and
+    leaves mixed, like Finder, not by spend.
+  - **Figures**: shown sessions and spend, summed over the groups at or under the node (a group that has
+    children shows its subtree on the folder line; its own are in the table). Muted, right-aligned.
+  - **Lines**: 12 px of indent per level with faint guide lines; a chevron (rotated when open) for a
+    node with children; lucide `Folder` / `FolderOpen`, `FolderGit2` for a group in repo, worktree or
+    remote mode, `Globe` for a host. The label truncates; `title` is the full path (with `~`).
+  - **Click**: a group's label scrolls that group's row to the top of the rows (smooth; instant under
+    reduced motion), with no URL change; a plain folder's label and any chevron open or close it. Open
+    by default; the closed folders are kept per grouping in `localStorage` (`overview.tree.<by>`; every
+    access in try/catch, it works without). Up / Down move between the buttons.
+  - **Current and hover**: the group at the top of the rows is marked current (`aria-current`, the
+    Sessions rail's active style; computed from row offsets on scroll, rAF-throttled); the group of the
+    row under the pointer has the light hover background. When a closed folder hides the group, the
+    outermost closed folder is marked instead (`markedNode`).
+
+  When show is Groups or group is None the index is not needed (the rows are the index): its width
+  animates to 0 in 150 ms (instantly under reduced motion). The plot is sized for the final layout, so
+  the graphs do not recompute while it slides.
+- **Same names**: groups that share a name (three repositories called `merlin`) are named in the table
+  with `placeLabels` of `lib/places.ts`: the fewest trailing directories that tell them apart
+  (`work/merlin`, `old/merlin`), in the group rows' bold head (its `title` is the full key) and in the
+  first column of the flat table.
 - **Row text**, one line, an ellipsis where it ends, the whole text in the `title`. A session: its **bold
   head** (its own name from /rename, else its title, else the first 8 characters of its id; a link to the
   Session page) and in muted text the latest recap, else the first prompt, else the last prompt. A
