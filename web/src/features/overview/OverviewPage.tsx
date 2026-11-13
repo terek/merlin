@@ -10,6 +10,8 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Circle,
   CircleCheck,
   Folder,
@@ -32,17 +34,7 @@ import { formatDuration, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { resumeCommand, sessionPath } from '../../lib/paths'
 import { useShortcut } from '../../shell/useShortcut'
-import {
-  copyText,
-  HarnessIcon,
-  IconButton,
-  Money,
-  QueryBoundary,
-  SearchInput,
-  SegmentedControl,
-  Select,
-  Skeleton,
-} from '../../ui'
+import { copyText, HarnessIcon, IconButton, Money, QueryBoundary, SearchInput, Select, Skeleton } from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, SPEND_COLOR, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
@@ -92,6 +84,7 @@ import {
   makeAxis,
   markedNode,
   midnightXs,
+  monthRange,
   moveBrush,
   NONE_SEL,
   nextSort,
@@ -158,6 +151,8 @@ const TICK_W = 0.75
 const TICK_OPACITY = 0.6
 const RUN_W = 2
 const PAD_TOP = 1
+
+const RANGE_TITLE = { '1d': 'The last day', '7d': 'The last week', '30d': 'The last 30 days' } as const
 
 const BY_LABEL: Record<By, string> = {
   dir: 'Folder',
@@ -1209,7 +1204,7 @@ function Sidebar({
 // ---- the locator: an arbitrary range on the whole history ---------------------------------
 
 /** The locator's height (px): the day bars over the light axis. */
-const LOC_H = 29
+const LOC_H = 28
 const LOC_BAR = 15
 /** How close to an edge of the brush (px) the pointer grabs it. */
 const LOC_GRAB = 6
@@ -1269,6 +1264,12 @@ function Locator({
 
   const onDown = (e: React.PointerEvent<SVGSVGElement>) => {
     e.preventDefault()
+    // a click on a month's name selects that month
+    const month = (e.target as Element).getAttribute('data-month')
+    if (month !== null) {
+      finish(rangeBrush(strip, monthRange(strip, Number(month), now)))
+      return
+    }
     const x = at(e)
     const z = zoneAt(x)
     const day = dayIndexAt(strip, width, x)
@@ -1341,7 +1342,8 @@ function Locator({
         onPointerUp={onUp}
         onPointerCancel={onUp}
       >
-        <rect x={0} y={0} width={width} height={LOC_BAR + 2} fill="var(--surface-2)" opacity={0.5} rx={3} />
+        {/* the brush's days are lit (the page colour) on the grey box; outside it the box shows */}
+        <rect x={x0} y={0} width={Math.max(2, x1 - x0)} height={LOC_BAR + 2} fill="var(--surface)" rx={2} />
         {spend.map((v, i) =>
           v > 0 ? (
             <rect
@@ -1359,28 +1361,27 @@ function Locator({
         {ticks.map((t) => (
           <g key={t.x}>
             <line x1={t.x} x2={t.x} y1={LOC_BAR + 2.5} y2={LOC_BAR + (t.month ? 6 : 5)} stroke="var(--line)" />
-            <text x={t.x + 2} y={LOC_H - 2} fontSize={10} fill={t.month ? 'var(--muted)' : 'var(--faint)'}>
+            <text
+              x={t.x + 2}
+              y={LOC_H - 2}
+              fontSize={10}
+              fill={t.month ? 'var(--muted)' : 'var(--faint)'}
+              data-month={t.month ? t.day : undefined}
+              className={t.month ? 'cursor-pointer hover:underline' : undefined}
+              style={t.month ? { cursor: 'pointer' } : undefined}
+            >
+              {t.title && <title>{t.title}</title>}
               {t.label}
             </text>
           </g>
         ))}
         <g pointerEvents="none">
-          <rect x={0} y={0} width={x0} height={LOC_BAR + 2} fill="var(--surface)" opacity={0.55} />
-          <rect
-            x={x1}
-            y={0}
-            width={Math.max(0, width - x1)}
-            height={LOC_BAR + 2}
-            fill="var(--surface)"
-            opacity={0.55}
-          />
           <rect
             x={x0}
             y={0.75}
             width={Math.max(2, x1 - x0)}
             height={LOC_BAR + 0.5}
-            fill="var(--accent)"
-            fillOpacity={0.08}
+            fill="none"
             stroke="var(--accent)"
             strokeWidth={1.5}
             rx={2}
@@ -1522,21 +1523,58 @@ export function OverviewPage() {
   const grow = 'transition-[flex-grow,min-width] duration-150 motion-reduce:transition-none'
   return (
     <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
-      <div className="flex min-h-[46px] shrink-0 items-center border-line border-b px-3 py-2">
-        <SegmentedControl<Range | 'custom'>
-          label="Range"
-          value={shown ? 'custom' : range}
-          options={[
-            { value: '1d', label: '1d', title: 'The last day' },
-            { value: '7d', label: '7d', title: 'The last week' },
-            { value: '30d', label: '30d', title: 'The last 30 days' },
-            {
-              value: 'custom',
-              // a fixed width while the locator is open or a range is shown, so the label changing
-              // length under a drag ("Feb 9 → 8d", "Feb 19 → 18d") does not shift the strip beside it
-              label: (() => {
+      <div className="flex h-12 shrink-0 items-center border-line border-b px-3">
+        <fieldset
+          aria-label="Range"
+          className={cn(
+            'm-0 inline-flex h-8 min-w-0 items-center rounded-card border border-line bg-surface-2 p-0.5',
+            grow,
+          )}
+          style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 'auto' }}
+        >
+          {(['1d', '7d', '30d'] as const).map((v) => {
+            const on = !shown && !locOpen && range === v
+            return (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={on}
+                title={RANGE_TITLE[v]}
+                onClick={() => {
+                  openLocator(false)
+                  set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
+                }}
+                className={cn(
+                  'h-full shrink-0 whitespace-nowrap rounded-badge px-2.5 text-sec',
+                  on ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted hover:text-fg',
+                )}
+              >
+                {v}
+              </button>
+            )
+          })}
+          {/* Custom: its label, and inside the same segment the button that opens the locator */}
+          <span
+            className={cn(
+              'inline-flex h-full shrink-0 items-center rounded-badge',
+              shown || locOpen ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted',
+            )}
+          >
+            <button
+              type="button"
+              aria-pressed={!!shown || locOpen}
+              title="Pick any range of days on the whole history"
+              onClick={() => {
+                if (customAction(shown !== null, remembered) === 'toggle') return openLocator(!locOpen)
+                openLocator(false)
+                set({ range: undefined, ...formatCustom(remembered) })
+              }}
+              className={cn('h-full whitespace-nowrap pl-2.5 text-sec hover:text-fg', locOpen ? 'pr-2.5' : 'pr-1')}
+            >
+              {/* a fixed width, so that the label changing length under a drag does not shift the strip beside it */}
+              {(() => {
                 const text = label ? customLabel(label, now) : 'Custom'
-                if (!label && !locOpen) return text
+                if (!locOpen) return text
                 return (
                   <span
                     className={cn('inline-block text-center', text.includes(',') ? 'min-w-[20ch]' : 'min-w-[14ch]')}
@@ -1544,20 +1582,51 @@ export function OverviewPage() {
                     {text}
                   </span>
                 )
-              })(),
-              title: 'Pick any range of days on the whole history',
-            },
-          ]}
-          onChange={(v) => {
-            if (v === 'custom') {
-              if (customAction(shown !== null, remembered) === 'toggle') return openLocator(!locOpen)
-              openLocator(false)
-              return set({ range: undefined, ...formatCustom(remembered) })
-            }
-            openLocator(false)
-            set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
-          }}
-        />
+              })()}
+            </button>
+            {!locOpen && (
+              <button
+                type="button"
+                title="Pick a range on the timeline"
+                aria-label="Pick a range on the timeline"
+                onClick={() => {
+                  // a preset is on and a range is remembered: bring it back, so the brush and the label agree
+                  if (!custom && remembered) set({ range: undefined, ...formatCustom(remembered) })
+                  openLocator(true)
+                }}
+                className="inline-flex h-full items-center pr-1.5 pl-0.5 text-muted hover:text-fg"
+              >
+                <ChevronsRight size={12} aria-hidden />
+              </button>
+            )}
+          </span>
+          {/* the locator: the strip inside the grey box, to the right of the segments, and the button that folds it */}
+          <div
+            className="flex min-w-0 items-center overflow-hidden"
+            style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 0 }}
+            inert={!locOpen}
+          >
+            <div className="flex min-w-0 flex-1 items-center gap-1 pl-2">
+              {locSeen && (
+                <Locator
+                  value={custom ?? remembered ?? presetRange(range, now)}
+                  now={now}
+                  onLive={setLive}
+                  onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
+                />
+              )}
+              <button
+                type="button"
+                title="Close the timeline"
+                aria-label="Close the timeline"
+                onClick={() => openLocator(false)}
+                className="inline-flex size-6 shrink-0 items-center justify-center rounded-badge text-muted hover:text-fg"
+              >
+                <ChevronsLeft size={14} aria-hidden />
+              </button>
+            </div>
+          </div>
+        </fieldset>
         <div
           className={cn('flex items-center justify-center gap-2 overflow-hidden', grow, locOpen && 'opacity-0')}
           style={{ flexGrow: locOpen ? 0 : 1, flexBasis: 0, minWidth: locOpen ? 0 : 220 }}
@@ -1596,25 +1665,6 @@ export function OverviewPage() {
               </button>
             </span>
           )}
-        </div>
-        <div
-          className={cn('overflow-hidden', grow)}
-          style={{ flexGrow: locOpen ? 1 : 0, flexBasis: 0, minWidth: 0 }}
-          inert={!locOpen}
-        >
-          <div className="flex items-center gap-2 pl-4">
-            {locSeen && (
-              <Locator
-                value={custom ?? presetRange(range, now)}
-                now={now}
-                onLive={setLive}
-                onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
-              />
-            )}
-            <IconButton label="Close the locator" onClick={() => openLocator(false)}>
-              <X size={15} />
-            </IconButton>
-          </div>
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">

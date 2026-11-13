@@ -1168,6 +1168,10 @@ export interface StripTick {
   x: number
   label: string
   month: boolean
+  /** The day's index on the strip (what `monthRange` takes for a month's tick). */
+  day: number
+  /** What a click on a month's name does: "Show May 2026". */
+  title?: string
 }
 
 /**
@@ -1190,7 +1194,28 @@ export function stripTicks(s: Strip, width: number, charW = 6): StripTick[] {
     const x = i * dw
     if (x < end + 4 || x + 2 + label.length * charW > width) continue
     end = x + 2 + label.length * charW
-    out.push({ x, label, month: first })
+    out.push({
+      x,
+      label,
+      month: first,
+      day: i,
+      title: first ? `Show ${MONTHS[d.getMonth()]} ${d.getFullYear()}` : undefined,
+    })
   }
   return out
+}
+
+/**
+ * The calendar month the day at `dayIndex` of the strip is in, as a custom range: its first to its last day in
+ * local time, clipped to the strip (its first day, and its last: today) and, for the current month, ending
+ * today.
+ */
+export function monthRange(s: Strip, dayIndex: number, today: Date): CustomRange {
+  const d = new Date(addDays(s.first, dayIndex))
+  const first = Math.max(new Date(d.getFullYear(), d.getMonth(), 1).getTime(), s.first)
+  const lastOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getTime()
+  const stripLast = addDays(s.first, s.days - 1)
+  const todayMs = dayStart(localDay(today)).getTime()
+  const last = Math.max(first, Math.min(lastOfMonth, stripLast, todayMs))
+  return { from: localDay(new Date(first)), to: localDay(new Date(last)) }
 }

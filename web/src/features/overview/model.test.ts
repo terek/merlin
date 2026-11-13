@@ -51,6 +51,7 @@ import {
   makeAxis,
   markedNode,
   midnights,
+  monthRange,
   moveBrush,
   NONE_SEL,
   nextSort,
@@ -1196,5 +1197,37 @@ describe('the bead key', () => {
     expect(asc).toEqual(['s3', 's2', 's5', 's1', 's4'])
     const desc = sortLanes(lanes, { key: 'key', desc: true }, undefined, { by: 'bead', beads }).map((x) => x.id)
     expect(desc).toEqual(['s1', 's5', 's2', 's3', 's4'])
+  })
+})
+
+describe('a month on the locator', () => {
+  const today = new Date(2026, 10, 13, 15, 30)
+  const strip = stripOf('2026-09-12', today, null)
+  const dayOf = (day: string) => Math.round((new Date(day + 'T00:00:00').getTime() - strip.first) / DAY)
+
+  test('the whole month, first to last day', () => {
+    expect(monthRange(strip, dayOf('2026-10-01'), today)).toEqual({ from: '2026-10-01', to: '2026-10-31' })
+    // 28 days, and the days of a leap February
+    const feb = stripOf('2028-01-10', new Date(2028, 3, 2), null)
+    expect(
+      monthRange(feb, Math.round((new Date(2028, 1, 1).getTime() - feb.first) / DAY), new Date(2028, 3, 2)),
+    ).toEqual({
+      from: '2028-02-01',
+      to: '2028-02-29',
+    })
+  })
+
+  test('the current month ends today', () => {
+    expect(monthRange(strip, dayOf('2026-11-01'), today)).toEqual({ from: '2026-11-01', to: '2026-11-13' })
+  })
+
+  test('a month that starts before the strip is clipped to its first day', () => {
+    expect(monthRange(strip, 0, today)).toEqual({ from: '2026-09-12', to: '2026-09-30' })
+  })
+
+  test('the month ticks carry their day and title', () => {
+    const t = stripTicks(strip, 440).filter((x) => x.month)
+    expect(t.map((x) => x.title)).toEqual(['Show Oct 2026', 'Show Nov 2026'])
+    expect(t.map((x) => monthRange(strip, x.day, today).from)).toEqual(['2026-10-01', '2026-11-01'])
   })
 })

@@ -759,16 +759,23 @@ The table only ever lists sessions.
   The last custom range applied (a locator drag or a URL with `from` and `to`) is **remembered** in
   `localStorage` (`overview.custom`, `{from, to}`, try/catch; the URL stays the truth for what is shown). While
   a preset is active the Custom segment still reads that range, unpressed and muted like the other unpressed
-  segments; a click on it applies the range (`from`, `to`) without opening the locator (`customAction`), and a
-  click while Custom is active toggles the locator. With nothing remembered it reads `Custom` and a click opens
-  the locator.
-- **Locator.** A click on Custom opens the locator: it grows (150 ms) from the range control to the toolbar's
-  right edge over the search box and the `in` chip, with a `x` at the very right; Escape and `x` close it, the
-  range stays. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
+  segments; a click on its label applies the range (`from`, `to`) without opening the locator
+  (`customAction`), and a click on the label while Custom is active toggles the locator. With nothing
+  remembered it reads `Custom` and a click on the label opens the locator. The control is a grey box
+  (`bg-surface-2`, 32 px high) built in the feature from the shared segmented control's classes; inside the
+  Custom segment, after its label, stands a small **>>** button (`ChevronsRight`, 12 px, muted, title "Pick a
+  range on the timeline"), always there: it is the visible way into the locator.
+- **Locator.** A click on **>>** (or on the label when nothing is remembered) opens the locator **inside the
+  grey box**: the box grows (150 ms) to the toolbar's full width over the search box and the `in` chip, which
+  are hidden meanwhile, and the strip sits in it to the right of the segments:
+  `[1d 7d 30d | Oct 20 → 10d] [strip ………] [<<]`. Custom is the pressed segment while it is open, with its label
+  at a fixed width so that nothing shifts under a drag. The >> becomes **<<** (`ChevronsLeft`) at the box's
+  right end and folds the box back to its normal width; Escape does too, and the range stays. The toolbar is
+  48 px high open or closed. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
   as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
-  thin bars, a light month axis under it (day numbers too when a day is 16 px wide), the shading outside the
-  **brush** and its two handles. Drag on the strip to draw a range, drag the brush to move it, drag its edges
-  to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day. The
+  thin bars on the grey, a light month axis under it (day numbers too when a day is 16 px wide), the **brush**
+  lit in the page colour with an accent outline and its two handles. Drag on the strip to draw a range, drag the brush to move it, drag its edges
+  to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day; a click on a **month's name** on the axis (pointer, underlined on hover, title "Show May 2026") applies exactly that calendar month at once (`monthRange`: its first to its last day, the current month ending today, clipped to the strip's first day), updating the URL and the remembered range, with the locator staying open and the brush on that month. The
   brush snaps to whole days, one at least. It starts on the current range (the preset's days when no custom
   range is set). The Custom label follows the drag live; the page applies the range (`from`, `to`) only when
   the drag ends, so a drag does not refetch.
