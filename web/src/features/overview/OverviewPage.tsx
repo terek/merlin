@@ -343,7 +343,7 @@ function SessionText({
   return (
     <div className="flex items-baseline gap-3 pt-1 text-sec">
       <div className="flex min-w-0 flex-[1_1_0%] items-baseline gap-1.5">
-        <span className="shrink-0 self-center">{mark}</span>
+        <span className="flex h-[1.5em] shrink-0 items-center self-start pt-px">{mark}</span>
         <div className="min-w-0 flex-1 truncate" title={note ? `${title}\n${note}` : title}>
           {head}
           {text && <span className="ml-2 text-muted">{text}</span>}
