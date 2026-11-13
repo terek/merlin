@@ -12,8 +12,6 @@ import {
   buildRows,
   CTX_MAX,
   chooseSlot,
-  columnAt,
-  columnBoxes,
   comparePlace,
   displayPath,
   earliestStart,
@@ -808,36 +806,11 @@ describe('group harnesses', () => {
 })
 
 describe('hover geometry', () => {
-  const L: Layout = { harness: 44, pad: 12, turns: 52, agents: 56, spend: 84, gap: 8 }
-  const BLOCK = 1 + 24 + 44 + 52 + 56 + 84 + 24
+  const L: Layout = { harness: 44, pad: 12, turns: 64, agents: 70, spend: 84, gap: 8 }
+  const BLOCK = 1 + 24 + 44 + 64 + 70 + 84 + 24
 
-  test('the block takes its width from the right edge, Session what is left', () => {
+  test('the block is the rule, the padding and four columns with their gaps', () => {
     expect(blockWidth(L)).toBe(BLOCK)
-    const boxes = columnBoxes(1000, L)
-    expect(boxes.map((b) => b.col)).toEqual(['session', 'harness', 'turns', 'agents', 'spend', 'key'])
-    expect(columnAt(boxes, 10)).toBe('session')
-    expect(columnAt(boxes, 1000 - BLOCK - 1)).toBe('session')
-    expect(columnAt(boxes, 1000 - BLOCK)).toBe('harness')
-    expect(columnAt(boxes, 1000 - 12 - 84 - 8 - 56 - 8 - 52 - 8 - 20)).toBe('harness')
-    expect(columnAt(boxes, 1000 - 12 - 40)).toBe('spend')
-    expect(columnAt(boxes, 1000 - 12 - 84 - 8 - 20)).toBe('agents')
-    expect(columnAt(boxes, 999)).toBe('spend')
-    expect(columnAt(boxes, 1000)).toBeNull()
-    expect(columnAt(boxes, -1)).toBeNull()
-  })
-
-  test('the boxes tile the row; the key box is the whole block', () => {
-    const boxes = columnBoxes(1000, L)
-    expect(boxes.filter((b) => b.col !== 'key').reduce((n, b) => n + b.w, 0)).toBe(1000)
-    expect(boxes.find((b) => b.col === 'key')).toEqual({ col: 'key', x: 1000 - BLOCK, w: BLOCK })
-  })
-
-  test('on the key line the block is the key column, the session column still Session', () => {
-    const boxes = columnBoxes(1000, L)
-    expect(columnAt(boxes, 900, true)).toBe('key')
-    expect(columnAt(boxes, 1000 - BLOCK, true)).toBe('key')
-    expect(columnAt(boxes, 100, true)).toBe('session')
-    expect(columnAt(boxes, 1000, true)).toBeNull()
   })
 
   test('the day under x, clipped to the plot; the hour in a short range', () => {

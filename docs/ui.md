@@ -762,15 +762,15 @@ supersedes the sections below.
 
 ```
  Overview [1d 7d 30d]  show [Sessions|Grouped|Groups]     ( Search sessions...  / ) [in ~/work x]   (sticky)
- ORGANISE BY [Folder v] [<]| SESSION                                     | (logo) TURNS AGENTS  SPEND v  (sticky)
- All          102  $354    | STARTED | LAST ACTIVE | ACTIVE              | FOLDER ^
- v ~           95  $342    |-------------------------------------------|---------------------------------
-    work/merlin 22  $48    | bold head  muted description...           |   *     22     14   $96.20      (scrolls)
- (none)        15   $27    | ..-=#=-..    ..=#=#=..  graph, this column |  ~/work/merlin
+ ORGANISE BY [Folder v] [<]| SESSION                                   |   TURNS   AGENTS   SPEND    (sticky)
+ [] All          102  $354 | START [..-=#=-..] END  (LENGTH over it)   |  ^ FOLDER ^
+   v ~            95  $342 |-------------------------------------------|---------------------------------
+      work/merlin 22  $48  | bold head  muted description...           |   *     22     14   $96.20      (scrolls)
+   x (none)       15   $27 | ..-=#=-..    ..=#=#=..  graph, this column |  ~/work/merlin
                            |-------------------------------------------|---------------------------------
-                           | Sat 7     Sun 8     Mon 9  ... axis       | TOTAL  708  1,139   $353       (sticky)
-                           |                                           | 102 sessions
+                           | Sat 7     Sun 8     Mon 9  ... axis       | 102 sessions  708  1,139   $353  (sticky)
 ```
+
 
 - **Toolbar** (state in the URL): range `1d`, `7d` (default), `30d`, ending now; **show** `Sessions`,
   `Grouped` (default), `Groups` (`show`); and, centred in the space that is left, a **search box**
@@ -808,7 +808,7 @@ supersedes the sections below.
   toolbar and the two-line column header. **Middle, scrolls**: the rows (and the scripted-runs line).
   **Bottom, fixed**: one footer row. Every part has the same two blocks: the **session column** (takes the
   width that is left; the plot is exactly its inner width, 12 px of padding each side) and the **structured
-  block** (357 px: a 1 px rule on its left, 12 px padding, then harness 44, Turns 52, Agents 56, Spend 84, 8 px
+  block** (a 1 px rule on its left, 12 px padding, then harness 44, Turns 64, Agents 70, Spend 84, 8 px
   between). The scrollbar of the middle takes width from the rows only, so the header and the footer give up as
   much as it measures (padding right) and the columns and the axis stay exactly above and below the rows.
 - **Row.** Session column: the text line on top, the graph under it. Structured block: the figures on the upper
@@ -818,20 +818,29 @@ supersedes the sections below.
   group row its own (its bold head is the short same-names label). When the place is too long its **start**
   is cut and the end stays (`…/work/merlin/web`, cut at a `/` where possible): `fitTail` in `model.ts` measures
   with the cell's own font on a canvas (no `direction: rtl`).
-- **Header, two lines across the table.** Left: line 1 `SESSION` (a label); line 2 the timeline sorts
-  **Started** (`sort=start`: the session's start; a group: the earliest start of its sessions),
-  **Last active** (`sort=last`: last activity; a group: the latest of its sessions) and **Active**
-  (`sort=active`: time actually working in the range, the slots with at least one call running times the slot,
-  from the lane's `active` array; a group: the same over its dense array, the union of its sessions' running
-  time; title "Time with at least one call running, in this range"). All three start descending (newest, most
-  recent, longest first). Right: line 1 the harness spacer and **Turns**, **Agents**, **Spend**; line 2 the
-  merged key header (**Folder** / **Worktree** / **Repo** / **Remote**).
-- **Footer, one row.** The session column holds the date axis (the same x as the graphs); the block's upper
-  line the totals (turns, agents, spend of the range's groups, under a search or a selection those of the
-  rows shown) under a `TOTAL` label in the harness slot, the lower line what they count ("102 sessions",
-  "25 matching sessions", "16 sessions in ~/acme").
-- **Sorting is the column headers.** Every sortable header reserves a fixed slot for the arrow (invisible
-  when the column is not the sorted one), so no label moves when the sort changes. A click sorts by that
+- **Header, two lines across the table.** Left: line 1 `SESSION` (a label); line 2 a small **legend-like
+  control**, 240 px wide, the height of a header line (`TimelineSort`): an abstract inline SVG, aria-hidden and
+  not data (a faint axis with a few tick marks and a short session drawn like a row's graph: context humps,
+  a pale idle stretch, the session line) with three sort buttons: **START** just before the drawn session's left
+  end (`sort=start`: the session's start; a group: the earliest start of its sessions, titled "Sort by when the
+  session started"), **END** just after its right end (`sort=last`: last activity, a group's the latest of its
+  sessions; "Sort by its last activity") and **LENGTH** in the middle, knocked out of the drawing with a
+  header-coloured pill so that it reads (`sort=active`: time actually working in the range, the slots with at
+  least one call running times the slot, from the lane's `active` array; a group: the same over its dense
+  array, the union of its sessions' running time; "Sort by time with a call running (in this range)"). The
+  active one has its colour and the arrow; all three start descending (newest, most recent, longest first).
+  Right: line 1 the harness spacer and **Turns**, **Agents**, **Spend**; line 2 the merged key header
+  (**Folder** / **Worktree** / **Repo** / **Remote**). Every sortable header of the block is **centred** in its
+  cell with an arrow slot of the same width (12 px) on both sides; the arrow draws in the left one, the other
+  stays empty, so a label sits in the exact centre whether or not it is the active sort.
+- **Footer, one row.** The session column holds the date axis (the same x as the graphs); the structured block
+  the session count where the harness column is ("102 sessions", at the block's left padding and running on
+  into the room Turns leaves; the short "102 sess." only when the Turns total is so long that it would
+  collide), then the totals (turns, agents, spend of the range's groups; under a search or a selection those
+  of the rows shown). The count's `title` carries the qualifiers ("25 matching sessions", "16 sessions in
+  ~/acme").
+- **Sorting is the column headers.** Every sortable header reserves its arrow slots (above), so
+  no label moves when the sort changes. A click sorts by that
   column in its own first direction; a click on the active column flips it; an arrow marks it. A tiny rule
   (1 px, `border-line`, 55 % of the header's height, centred) stands between adjacent header cells. In the
   grouped modes the sort orders the groups by their aggregate and the sessions inside each group by the same
@@ -846,7 +855,7 @@ supersedes the sections below.
 - The title of a row's text line also carries the value of the active timeline sort (start, last activity or
   running time), since the table has no column for it.
 - **Harness column**: 44 px, the first of the structured block, header empty (title "Harness"), not
-  sortable, in the header's column hover too. A
+  sortable. A
   session row has the mark of its harness; a group row the distinct harnesses of all its sessions (up to 3,
   most sessions first, side by side at 12 px). The mark is the shared `HarnessIcon` (`ui/harness.tsx`, 14 px)
   and it is the product's real logo, its path data inline (no file, no fetch): Claude and OpenAI from
@@ -860,9 +869,11 @@ supersedes the sections below.
   `PanelLeftOpen`, the shared `IconButton`); collapsed it is a 37 px strip holding the open button. The
   width animates in 150 ms (instantly under reduced motion); the choice is kept in `localStorage`
   (`overview.sidebar`: `open` / `closed`, try/catch; open by default). The plot is sized for the final
-  layout, so the graphs do not recompute while it slides. Below the heading: an **All** item (sessions
-  and spend of everything the search leaves), the **file explorer tree** of the groups, and "(none)" at
-  the bottom (the group with no value, apart from the tree). The tree is placed in the filesystem
+  layout, so the graphs do not recompute while it slides. Below the heading: the tree's **root**,
+  **All** (lucide `HardDrive`, title "Every place", the sessions and spend of everything the search
+  leaves; selecting it clears the selection), and under it, one level in with the same indent guides, the
+  **file explorer tree** of the groups and, as the root's last child with no separator, "(none)" (muted,
+  lucide `FolderX`, the title the API's name for the empty group: the group with no value). The tree is placed in the filesystem
   hierarchy (`buildPlaceTree` in `model.ts`):
   - **Path of a group**: dir and worktree: the key; repo: the key without its trailing `.git` / `.bare`
     (`homeOf` of `lib/places.ts`), so a repository sits at its working directory; remote: the normalised
@@ -944,15 +955,13 @@ supersedes the sections below.
 - **Hover** reads the table; the graphs stay `aria-hidden` and `pointer-events: none`, no readout.
   - **Row**: the hovered row (its text line and graph cell as one) takes a light background (the text
     colour at 5 % over the row's own, CSS `:hover`, so the rows do not render as the pointer moves).
-  - **Columns**: the pointer's x over the rows picks the column under it: the structured block's
-    (harness, Turns, Agents, Spend; their header cell and footer total get the same light band), the **key**
-    when the pointer is on a key cell (the key header and the footer's count line, as one column), or
-    Session (the whole session header cell). The x over the plot also picks the **day** under it (the
-    **hour** when the range is two days or less) and the date axis gets a light band for it with its
-    label in the body colour. There is no guide line through the rows.
+  - **Day**: the pointer's x over the plot picks the **day** under it (the **hour** when the range is two
+    days or less) and the date axis in the footer gets a light band for it with its label in the body
+    colour. That is the only thing lit besides the row: no header cell and no total is highlighted (it
+    flickered as the pointer moved). There is no guide line through the rows.
   - **Index**: the hovered row's group is lit in the index.
-  - One state (x, group, key line) at table level; rows are memoised and take no hover props. Leaving the rows
-    clears it. Pure helpers in `model.ts`: `columnBoxes`, `columnAt`, `bandAt`, `blockWidth`.
+  - One state (x, group) at table level; rows are memoised and take no hover props. Leaving the rows
+    clears it. Pure helpers in `model.ts`: `bandAt`, `blockWidth`.
 
 ## 11. As built
 

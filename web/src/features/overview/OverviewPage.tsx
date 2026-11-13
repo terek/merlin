@@ -13,7 +13,9 @@ import {
   Folder,
   FolderGit2,
   FolderOpen,
+  FolderX,
   Globe,
+  HardDrive,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -52,11 +54,7 @@ import {
   blockWidth,
   buildPlaceTree,
   buildRows,
-  type Column,
-  type ColumnBox,
   chooseSlot,
-  columnAt,
-  columnBoxes,
   displayPath,
   earliestStart,
   type Filtered,
@@ -112,7 +110,7 @@ import { useDebounced, useWidth } from './useWidth'
 
 /** The structured block's columns (px: harness, then the numbers) and the cell padding the graph sits in. */
 const HARNESS_W = 44
-const COLS = { turns: 52, agents: 56, spend: 84 }
+const COLS = { turns: 64, agents: 70, spend: 84 }
 const CELL_PAD = 12
 const GAP = 8
 /** The index beside the rows (px, its right border included), and the strip it folds to. */
@@ -124,7 +122,6 @@ const BLOCK_W = blockWidth(LAYOUT)
 /** The hovered row's background: the text colour, faintly, over the row's own. */
 const HOVER = 'hover:bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
 const HOVER_TINT = 'hover:bg-[color-mix(in_srgb,var(--text)_6%,var(--surface-2))]'
-const HOT = 'bg-[color-mix(in_srgb,var(--text)_5%,var(--surface))]'
 /** A header cell's rule on its left: tiny, between the sort arrows. */
 const RULE =
   'before:absolute before:top-1/2 before:left-[-4px] before:h-[55%] before:w-px before:-translate-y-1/2 before:bg-line'
@@ -365,6 +362,7 @@ function SessionText({
 function BlockFigures({
   harnesses,
   label,
+  labelTitle,
   turns,
   agents,
   usd,
@@ -372,8 +370,9 @@ function BlockFigures({
 }: {
   /** The marks of the harness column (none: the column stays empty). */
   harnesses?: string[]
-  /** Text for the harness column instead (the footer's "Total"). */
+  /** Text for the harness column instead (the footer's session count); it may run on into Turns' room. */
   label?: string
+  labelTitle?: string
   turns?: number
   agents?: number
   usd?: number
@@ -384,7 +383,11 @@ function BlockFigures({
   return (
     <div className={cn('flex items-baseline pt-1 text-sec', className)} style={{ columnGap: GAP }}>
       {label ? (
-        <span className="shrink-0 text-faint text-meta uppercase tracking-wide" style={{ width: HARNESS_W }}>
+        <span
+          className="shrink-0 whitespace-nowrap text-meta text-muted"
+          style={{ width: HARNESS_W }}
+          title={labelTitle}
+        >
           {label}
         </span>
       ) : (
@@ -433,7 +436,6 @@ function KeyCell({ text, title, dim }: { text: string; title?: string; dim?: boo
   return (
     <div
       ref={ref}
-      data-keycell=""
       title={title ?? text}
       className={cn(
         'min-w-0 flex-1 overflow-hidden whitespace-nowrap pb-1 text-meta',
@@ -604,6 +606,23 @@ function groupNote(g: OverviewGroup, key: SortKey, slotMs: number, start?: strin
 
 // ---- the sticky top: column headers ------------------------------------------------------
 
+/** The room the sort arrow takes on each side of a header's label (the same on both, so the label is centred). */
+const ARROW_SLOT = 12
+
+/** A sort arrow in its slot: only the active header draws it, the slot is there either way. */
+function ArrowSlot({ on, desc, show = true }: { on: boolean; desc: boolean; show?: boolean }) {
+  const Arrow = desc ? ArrowDown : ArrowUp
+  return (
+    <span className="inline-flex shrink-0 items-center justify-center" style={{ width: ARROW_SLOT }} aria-hidden>
+      {on && show && <Arrow size={11} />}
+    </span>
+  )
+}
+
+/**
+ * A sortable header cell: the label is centred, with a slot of the same width on both sides; the arrow of
+ * the active sort sits in the left one, so the label does not move when the sort changes.
+ */
 function Th({
   col,
   label,
@@ -612,13 +631,11 @@ function Th({
   onSort,
   title,
   rule,
-  grow = true,
 }: {
   col: SortKey
   label: string
+  /** The cell's width; without it the cell fills the line. */
   w?: number
-  /** Without a width: fills the line (the key header) or only its own width (the timeline sorts). */
-  grow?: boolean
   sort: Sort
   onSort: (k: SortKey) => void
   title: string
@@ -626,7 +643,6 @@ function Th({
   rule?: boolean
 }) {
   const on = sort.key === col
-  const Arrow = sort.desc ? ArrowDown : ArrowUp
   return (
     <button
       type="button"
@@ -634,52 +650,107 @@ function Th({
       title={title}
       aria-label={`Sort by ${label.toLowerCase()}`}
       className={cn(
-        'relative inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap py-1.5 text-meta uppercase tracking-wide hover:text-fg',
-        w === undefined ? cn('justify-start', grow && 'min-w-0 flex-1') : 'justify-end',
+        'relative inline-flex items-center justify-center whitespace-nowrap py-1.5 text-meta uppercase tracking-wide hover:text-fg',
+        w === undefined ? 'min-w-0 flex-1' : 'shrink-0',
         rule && RULE,
         on ? 'text-fg' : 'text-faint',
       )}
       style={w === undefined ? undefined : { width: w }}
     >
-      {w !== undefined && <Arrow size={11} aria-hidden className={cn('shrink-0', !on && 'invisible')} />}
-      {label}
-      {w === undefined && <Arrow size={11} aria-hidden className={cn('shrink-0', !on && 'invisible')} />}
+      <ArrowSlot on={on} desc={sort.desc} />
+      <span className="min-w-0 truncate">{label}</span>
+      <ArrowSlot on={false} desc={sort.desc} />
     </button>
   )
 }
 
+/** The pictogram's size (px): about 240 wide, the height of a header line. */
+const PICTO_W = 240
+const PICTO_H = 30
+/** Where the drawn session starts and ends, and its baseline. */
+const PICTO_X0 = 50
+const PICTO_X1 = 196
+const PICTO_BASE = 15
+/** The faint axis under it (the ticks stand on it). */
+const PICTO_AXIS = 25
+
 /**
- * One line of the structured block (the figures' line, or the key's), with the light band behind the column
- * under the pointer: `line` is the one this is, and `origin` the x of its left edge, in the boxes' px. The
- * block's columns are lit on the first line, the key on the second.
+ * The Session header's second line: a small abstract timeline, not data (a faint axis with a few ticks and a
+ * short session drawn like a row's graph: context humps, a pale idle stretch, the session line) and three
+ * sort buttons over it: START at the session's left end, END at its right end and LENGTH (time with a call
+ * running) in the middle, knocked out of the drawing so that it reads.
  */
-function BlockLine({
-  line,
-  boxes,
-  col,
-  origin,
-  className,
-  children,
-}: {
-  line: 'figures' | 'key'
-  boxes: ColumnBox[]
-  col: Column | null
-  origin: number
-  className?: string
-  children: ReactNode
-}) {
-  const mine = line === 'key' ? col === 'key' : col !== null && col !== 'key' && col !== 'session'
-  const b = mine ? boxes.find((x) => x.col === col) : undefined
+function TimelineSort({ sort, onSort }: { sort: Sort; onSort: (k: SortKey) => void }) {
+  const mid = (PICTO_X0 + PICTO_X1) / 2
+  const btn = (col: SortKey, label: string, title: string, at: { left?: number; right?: number }, shift: string) => {
+    const on = sort.key === col
+    return (
+      <button
+        key={col}
+        type="button"
+        onClick={() => onSort(col)}
+        title={title}
+        aria-label={title}
+        className={cn(
+          'absolute inline-flex items-center whitespace-nowrap bg-surface px-[3px] text-meta uppercase leading-none tracking-wide hover:text-fg',
+          on ? 'text-fg' : 'text-faint',
+        )}
+        style={{ ...at, top: PICTO_BASE, transform: `translateY(-50%) ${shift}` }}
+      >
+        <ArrowSlot on={on} desc={sort.desc} />
+        {label}
+        <ArrowSlot on={false} desc={sort.desc} />
+      </button>
+    )
+  }
+  const humps = [
+    [PICTO_X0 + 2, PICTO_X0 + 26, 5],
+    [PICTO_X0 + 28, PICTO_X0 + 52, 7],
+    [PICTO_X0 + 54, PICTO_X0 + 70, 4],
+    [PICTO_X0 + 100, PICTO_X0 + 124, 6],
+    [PICTO_X0 + 126, PICTO_X0 + 144, 3],
+  ]
   return (
-    <div className={cn('relative', className)} style={{ paddingInline: CELL_PAD }}>
-      {b && (
-        <div
-          className={cn('pointer-events-none absolute inset-y-0', HOT)}
-          style={{ left: b.x - origin, width: b.w }}
-          aria-hidden
+    <div className="relative shrink-0" style={{ width: PICTO_W, height: PICTO_H }}>
+      {/* biome-ignore lint/a11y/noSvgWithoutTitle: a pictogram; the buttons are the content */}
+      <svg width={PICTO_W} height={PICTO_H} className="pointer-events-none absolute inset-0" aria-hidden>
+        <line x1={0} x2={PICTO_W} y1={PICTO_AXIS} y2={PICTO_AXIS} stroke="var(--line)" />
+        {[22, 90, 158, 226].map((x) => (
+          <line key={x} x1={x} x2={x} y1={PICTO_AXIS - 3} y2={PICTO_AXIS} stroke="var(--faint)" opacity={0.7} />
+        ))}
+        <rect x={PICTO_X0 + 72} y={PICTO_BASE - 4} width={28} height={4} fill={COLOR.main} fillOpacity={IDLE_FILL} />
+        {humps.map(([x0, x1, h]) => (
+          <rect
+            key={x0}
+            x={x0}
+            y={PICTO_BASE - h}
+            width={x1 - x0}
+            height={h}
+            fill={COLOR.main}
+            fillOpacity={CTX_FILL}
+          />
+        ))}
+        <line x1={PICTO_X0} x2={PICTO_X1} y1={PICTO_BASE} y2={PICTO_BASE} stroke="var(--line)" />
+        <line
+          x1={PICTO_X0 + 2}
+          x2={PICTO_X0 + 70}
+          y1={PICTO_BASE}
+          y2={PICTO_BASE}
+          stroke={COLOR.main}
+          strokeWidth={2}
         />
-      )}
-      <div className="relative flex min-w-0 items-center">{children}</div>
+        <line
+          x1={PICTO_X0 + 100}
+          x2={PICTO_X0 + 146}
+          y1={PICTO_BASE}
+          y2={PICTO_BASE}
+          stroke={COLOR.main}
+          strokeWidth={2}
+        />
+      </svg>
+      {btn('start', 'Start', 'Sort by when the session started', { right: PICTO_W - PICTO_X0 + 2 }, '')}
+      {btn('last', 'End', 'Sort by its last activity', { left: PICTO_X1 + 2 }, '')}
+      {btn('active', 'Length', 'Sort by time with a call running (in this range)', { left: mid }, 'translateX(-50%)')}
     </div>
   )
 }
@@ -690,64 +761,35 @@ function Header({
   sort,
   onSort,
   padRight,
-  boxes,
-  origin,
-  hotCol,
 }: {
   byLabel: string
   byTitle?: string
   sort: Sort
   onSort: (k: SortKey) => void
   padRight: number
-  boxes: ColumnBox[]
-  origin: number
-  hotCol: Column | null
 }) {
   const th = { sort, onSort }
   return (
     <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: padRight }}>
-      <div
-        className={cn('flex min-w-0 flex-1 flex-col', hotCol === 'session' && HOT)}
-        style={{ paddingInline: CELL_PAD }}
-      >
+      <div className="flex min-w-0 flex-1 flex-col" style={{ paddingInline: CELL_PAD }}>
         <div className="py-1.5 text-faint text-meta uppercase tracking-wide">Session</div>
-        <div className="flex items-stretch" style={{ columnGap: GAP }}>
-          <Th {...th} col="start" label="Started" grow={false} title="Sort by start time (newest first)" />
-          <Th
-            {...th}
-            col="last"
-            label="Last active"
-            grow={false}
-            rule
-            title="Sort by last activity (most recent first)"
-          />
-          <Th
-            {...th}
-            col="active"
-            label="Active"
-            grow={false}
-            rule
-            title="Time with at least one call running, in this range"
-          />
-        </div>
+        <TimelineSort {...th} />
       </div>
       <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W }}>
-        <BlockLine line="figures" boxes={boxes} col={hotCol} origin={origin}>
-          <div className="flex min-w-0 flex-1 items-stretch" style={{ columnGap: GAP }}>
-            <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
-            <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
-            <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
-            <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
-          </div>
-        </BlockLine>
-        <BlockLine line="key" boxes={boxes} col={hotCol} origin={origin}>
+        <div className="flex" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
+          <div className="shrink-0" style={{ width: HARNESS_W }} title="Harness" />
+          <Th {...th} col="turns" label="Turns" w={COLS.turns} rule title="Sort by turns" />
+          <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
+          <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
+        </div>
+        <div className="flex items-center" style={{ paddingInline: CELL_PAD, minHeight: PICTO_H }}>
           <Th
             {...th}
             col="key"
             label={byLabel}
             title={`Sort by ${byLabel.toLowerCase()}, in the index's order${byTitle ? ` (${byTitle})` : ''}`}
           />
-        </BlockLine>
+        </div>
       </div>
     </div>
   )
@@ -757,7 +799,8 @@ function Header({
 
 /**
  * The footer, one row of the same two blocks: the date axis under the session column (the same x as the
- * graphs), and in the structured block the totals and, under them, what they count.
+ * graphs), and in the structured block the number of sessions where the harness column is, then the totals.
+ * The only thing lit under the pointer is the day (or hour) on the axis.
  */
 function Footer({
   f,
@@ -766,9 +809,6 @@ function Footer({
   axis,
   band,
   padRight,
-  boxes,
-  origin,
-  hotCol,
 }: {
   f: Filtered
   term: string
@@ -778,9 +818,6 @@ function Footer({
   /** The stretch of the axis under the pointer: a light band, its label in the body colour. */
   band: Band | null
   padRight: number
-  boxes: ColumnBox[]
-  origin: number
-  hotCol: Column | null
 }) {
   const ticks = fitLabels(axisTicks(axis), axis.width)
   const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
@@ -788,12 +825,22 @@ function Footer({
   const sum = (a: (g: OverviewGroup) => number, b: (l: OverviewLane) => number) =>
     term ? f.lanes.reduce((n, l) => n + b(l), 0) : f.groups.reduce((n, g) => n + a(g), 0)
   const n = term ? f.lanes.length : f.groups.reduce((a, g) => a + g.sessions, 0)
-  const count = `${plural(n, term ? 'matching session' : 'session')}${scope ? ` in ${scope}` : ''}`
+  const turns = sum(
+    (g) => g.turns,
+    (l) => l.turns,
+  )
+  const title = `${plural(n, term ? 'matching session' : 'session')}${scope ? ` in ${scope}` : ''}: totals of the ${
+    term ? 'matching sessions' : 'range'
+  }`
+  // the count may run over the room of the turns figure; when it would reach it, the short form
+  const full = plural(n, 'session')
+  const room = HARNESS_W + GAP + COLS.turns - turns.toLocaleString('en-US').length * 7 - 4
+  const count = full.length * 6.2 <= room ? full : `${n} sess.`
   return (
     <div className="flex border-line border-t" style={{ paddingRight: padRight }}>
       <div className="min-w-0 flex-1 overflow-hidden" style={{ paddingInline: CELL_PAD }}>
-        <svg width={axis.width} height={20} className="block" role="img" aria-label="Time axis">
-          {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={20} fill="var(--surface-2)" />}
+        <svg width={axis.width} height={22} className="block" role="img" aria-label="Time axis">
+          {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={22} fill="var(--surface-2)" />}
           {ticks.map((t) => (
             <g key={t.x}>
               <line x1={t.x} x2={t.x} y1={0} y2={t.day ? 6 : t.labelled ? 4 : 3} stroke="var(--line)" />
@@ -811,33 +858,21 @@ function Footer({
           ))}
         </svg>
       </div>
-      <div className="flex shrink-0 flex-col border-line border-l" style={{ width: BLOCK_W }}>
-        <BlockLine line="figures" boxes={boxes} col={hotCol} origin={origin}>
-          <BlockFigures
-            className="min-w-0 flex-1 font-medium"
-            label="Total"
-            turns={sum(
-              (g) => g.turns,
-              (l) => l.turns,
-            )}
-            agents={sum(
-              (g) => g.agents,
-              (l) => l.agents,
-            )}
-            usd={sum(
-              (g) => g.usd,
-              (l) => l.usd,
-            )}
-          />
-        </BlockLine>
-        <BlockLine line="key" boxes={boxes} col={hotCol} origin={origin}>
-          <div
-            className="min-w-0 flex-1 truncate pb-1 text-meta text-muted"
-            title={term ? 'Totals of the matching sessions' : 'Totals of the range'}
-          >
-            {count}
-          </div>
-        </BlockLine>
+      <div className="shrink-0 border-line border-l" style={{ width: BLOCK_W, paddingInline: CELL_PAD }}>
+        <BlockFigures
+          className="font-medium"
+          label={count}
+          labelTitle={title}
+          turns={turns}
+          agents={sum(
+            (g) => g.agents,
+            (l) => l.agents,
+          )}
+          usd={sum(
+            (g) => g.usd,
+            (l) => l.usd,
+          )}
+        />
       </div>
     </div>
   )
@@ -914,6 +949,19 @@ const folderIcon = (n: PlaceNode, by: By, open: boolean) => {
 
 const ITEM = 'flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left text-body'
 const SELECTED = 'bg-accent-soft font-medium text-accent'
+
+/** The faint vertical guides of the levels above an item at `depth`. */
+function Guides({ depth }: { depth: number }) {
+  return Array.from({ length: depth }, (_, i) => (
+    <span
+      // biome-ignore lint/suspicious/noArrayIndexKey: one guide per level
+      key={i}
+      aria-hidden
+      className="absolute inset-y-0 w-px bg-[color-mix(in_srgb,var(--text)_13%,transparent)]"
+      style={{ left: TREE_GUTTER + i * TREE_INDENT + 7 }}
+    />
+  ))
+}
 
 /** The figures at the end of an item: sessions shown and spend. */
 function Figures({ count, usd }: { count: number; usd: number }) {
@@ -1017,20 +1065,26 @@ function Sidebar({
           </IconButton>
         </div>
         <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={onKeyDown}>
-          <li className={cn('mb-1 flex items-center rounded-card', sel === null && SELECTED)}>
+          <li
+            className={cn('flex items-center rounded-card', sel === null && SELECTED)}
+            style={{ paddingLeft: TREE_GUTTER }}
+          >
+            <span className="size-4 shrink-0" aria-hidden />
             <button
               type="button"
               data-nav
               onClick={() => onSelect(null)}
               aria-current={sel === null ? 'true' : undefined}
-              title="Everything in this range"
-              className={cn(ITEM, 'pl-2')}
+              title="Every place"
+              className={cn(ITEM, 'pl-0.5')}
             >
+              <HardDrive size={14} aria-hidden className="shrink-0 text-muted" />
               <span className="min-w-0 flex-1 truncate">All</span>
               <Figures count={total.count} usd={total.usd} />
             </button>
           </li>
-          {rows.map(({ node: n, depth }) => {
+          {rows.map(({ node: n, depth: d }) => {
+            const depth = d + 1
             const folder = n.children.length > 0
             const isOpen = folder && !closed.has(n.id)
             const Icon = folderIcon(n, by, isOpen)
@@ -1047,15 +1101,7 @@ function Sidebar({
                 )}
                 style={{ paddingLeft: TREE_GUTTER + depth * TREE_INDENT }}
               >
-                {Array.from({ length: depth }, (_, i) => (
-                  <span
-                    // biome-ignore lint/suspicious/noArrayIndexKey: one guide per level
-                    key={i}
-                    aria-hidden
-                    className="absolute inset-y-0 w-px bg-[color-mix(in_srgb,var(--text)_13%,transparent)]"
-                    style={{ left: TREE_GUTTER + i * TREE_INDENT + 7 }}
-                  />
-                ))}
+                <Guides depth={depth} />
                 {folder ? (
                   <button
                     type="button"
@@ -1090,20 +1136,24 @@ function Sidebar({
               data-node=""
               data-key=""
               className={cn(
-                'mt-1 flex items-center rounded-card border-line border-t pt-1',
+                'relative flex items-center rounded-card',
                 hover === '' && 'bg-surface-2',
                 noneOn && SELECTED,
               )}
+              style={{ paddingLeft: TREE_GUTTER + TREE_INDENT }}
             >
+              <Guides depth={1} />
+              <span className="size-4 shrink-0" aria-hidden />
               <button
                 type="button"
                 data-nav
                 onClick={() => pick(NONE_SEL)}
                 aria-current={noneOn ? 'true' : undefined}
                 title={none.name || 'no value'}
-                className={cn(ITEM, 'pl-2')}
+                className={cn(ITEM, 'pl-0.5', !noneOn && 'text-muted')}
               >
-                <span className={cn('min-w-0 flex-1 truncate', !noneOn && 'text-muted')}>(none)</span>
+                <FolderX size={14} aria-hidden className="shrink-0 text-muted" />
+                <span className="min-w-0 flex-1 truncate">(none)</span>
                 <Figures count={none.count} usd={none.usd} />
               </button>
             </li>
@@ -1302,12 +1352,10 @@ export function OverviewPage() {
   )
 }
 
-/** The pointer over the rows: x from the left of the rows (whole px), the group of the row under it and the line of the block. */
+/** The pointer over the rows: x from the left of the rows (whole px), and the group of the row under it. */
 interface Hover {
   x: number
   group: string | null
-  /** The pointer is on a key cell (the block's second line). */
-  keyLine: boolean
 }
 
 function Table({
@@ -1392,18 +1440,14 @@ function Table({
 
   // ---- hover: one state, the pointer's x and the group under it ----
   const [hover, setHover] = useState<Hover | null>(null)
-  const boxes = useMemo(() => columnBoxes(innerW, LAYOUT), [innerW])
-  // the block's left edge as the bands' origin (inside its rule)
-  const origin = innerW - BLOCK_W + 1
+  // the only thing the pointer lights besides its row: the day (the hour) on the footer's axis
   const hx = hover ? hover.x : null
-  const hotCol = hx === null || !hover ? null : columnAt(boxes, hx, hover.keyLine)
   const band = hx === null || hx >= innerW - BLOCK_W ? null : bandAt(axis, hx - CELL_PAD)
   const onMove = (e: React.MouseEvent) => {
     const left = innerRef.current?.getBoundingClientRect().left ?? 0
     const x = Math.floor(e.clientX - left)
     const group = (e.target as Element).closest('[data-group]')?.getAttribute('data-group') ?? null
-    const keyLine = !!(e.target as Element).closest('[data-keycell]')
-    setHover((h) => (h && h.x === x && h.group === group && h.keyLine === keyLine ? h : { x, group, keyLine }))
+    setHover((h) => (h && h.x === x && h.group === group ? h : { x, group }))
   }
 
   // ---- the index: the places of the groups the search leaves; a key that changed may drop the selection ----
@@ -1440,16 +1484,7 @@ function Table({
         onSelect={onSelect}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header
-          byLabel={BY_LABEL[by]}
-          byTitle={BY_TITLE[by]}
-          sort={sort}
-          onSort={onSort}
-          padRight={padRight}
-          boxes={boxes}
-          origin={origin}
-          hotCol={hotCol}
-        />
+        <Header byLabel={BY_LABEL[by]} byTitle={BY_TITLE[by]} sort={sort} onSort={onSort} padRight={padRight} />
         <div
           ref={scrollRef}
           id="overview-rows"
@@ -1507,9 +1542,6 @@ function Table({
             axis={axis}
             band={band}
             padRight={padRight}
-            boxes={boxes}
-            origin={origin}
-            hotCol={hotCol}
           />
         </div>
       </div>

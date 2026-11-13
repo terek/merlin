@@ -775,19 +775,6 @@ export function groupHarnesses(lanes: readonly { harness: string }[], max = 3): 
 
 // ---- what the pointer is over ------------------------------------------------------------
 
-/**
- * A column of the table the pointer can be over: Session (the wide column: text and graph), the structured
- * block's columns, and `key` (the block's second line: the folder, worktree, repo or remote).
- */
-export type Column = 'harness' | 'session' | 'turns' | 'agents' | 'spend' | 'key'
-
-export interface ColumnBox {
-  col: Column
-  /** Left edge and width, in px from the left of the rows. */
-  x: number
-  w: number
-}
-
 /** The widths the columns are laid out with (OverviewPage.tsx). */
 export interface Layout {
   /** The harness column: the first of the structured block. */
@@ -803,39 +790,6 @@ export interface Layout {
 
 /** The width of the structured block: its left rule, the padding and the four columns with their gaps. */
 export const blockWidth = (L: Layout): number => 1 + 2 * L.pad + L.harness + L.turns + L.agents + L.spend + 3 * L.gap
-
-/**
- * The columns' boxes for rows `width` px wide: Session takes what the block (at the right edge) leaves; in
- * the block the harness column, Turns, Agents and Spend. The boxes meet in the middle of the gap
- * between two columns; the harness box reaches the block's left edge and Spend the right edge. `key`
- * is the block's whole width and comes last: it is the second line, found with `columnAt`'s `line`.
- */
-export function columnBoxes(width: number, L: Layout): ColumnBox[] {
-  const blockX = width - blockWidth(L)
-  const right = width - L.pad
-  const spendX = right - L.spend
-  const agentsX = spendX - L.gap - L.agents
-  const turnsX = agentsX - L.gap - L.turns
-  const half = L.gap / 2
-  const cell = (col: Column, x: number, end: number): ColumnBox => ({ col, x, w: Math.max(0, end - x) })
-  return [
-    cell('session', 0, blockX),
-    cell('harness', blockX, turnsX - half),
-    cell('turns', turnsX - half, agentsX - half),
-    cell('agents', agentsX - half, spendX - half),
-    cell('spend', spendX - half, width),
-    cell('key', blockX, width),
-  ]
-}
-
-/**
- * The column under x (px from the left of the rows), or null outside them. With `keyLine` (the pointer is
- * on the block's second line) a point in the block is the `key` column.
- */
-export function columnAt(boxes: ColumnBox[], x: number, keyLine = false): Column | null {
-  const hit = boxes.find((c) => c.col !== 'key' && x >= c.x && x < c.x + c.w)
-  return hit && keyLine && hit.col !== 'session' ? 'key' : (hit?.col ?? null)
-}
 
 export interface Band {
   x0: number
