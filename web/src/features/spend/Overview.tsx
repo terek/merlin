@@ -41,6 +41,9 @@ const COL = 2
 const GRAB = 7
 /** The most breaks the strip makes: more idle stretches are squeezed together. */
 const STRIP_BREAKS = 16
+/** The window: a band BAND tall, centred on the line between the context area and the spend bars. */
+const AXIS = CTX_BASE + 0.5
+const BAND = 28
 
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
@@ -344,17 +347,7 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
               fill="var(--surface)"
               opacity={0.55}
             />
-            <rect
-              x={xlo}
-              y={LABEL_H + 0.75}
-              width={xhi - xlo}
-              height={H - LABEL_H - 1.5}
-              fill="var(--accent)"
-              fillOpacity={0.08}
-              stroke="var(--accent)"
-              strokeWidth={1.5}
-              rx={2}
-            />
+            <rect x={xlo} y={AXIS - BAND / 2} width={xhi - xlo} height={BAND} fill="var(--accent)" fillOpacity={0.16} />
             {/* a turn the window cuts runs on, and the plot shows it whole: a fainter continuation */}
             {(
               [
@@ -366,22 +359,11 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
                 <g key={side} data-testid={`overview-effective-${side}`}>
                   <rect
                     x={x0}
-                    y={LABEL_H + 0.75}
+                    y={AXIS - BAND / 2}
                     width={x1 - x0}
-                    height={H - LABEL_H - 1.5}
+                    height={BAND}
                     fill="var(--accent)"
-                    fillOpacity={0.04}
-                  />
-                  <path
-                    d={
-                      side === 'r'
-                        ? `M${x0} ${LABEL_H + 0.75}H${x1}V${H - 0.75}H${x0}`
-                        : `M${x1} ${LABEL_H + 0.75}H${x0}V${H - 0.75}H${x1}`
-                    }
-                    fill="none"
-                    stroke="var(--accent)"
-                    strokeWidth={1}
-                    strokeOpacity={0.4}
+                    fillOpacity={0.07}
                   />
                 </g>
               ) : null,
@@ -389,11 +371,11 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
             {[xlo, xhi].map((x, i) => (
               <rect
                 key={i === 0 ? 'lo' : 'hi'}
-                x={x - 2.5}
-                y={LABEL_H + 12}
-                width={5}
-                height={H - LABEL_H - 24}
-                rx={2}
+                x={x - 1.5}
+                y={AXIS - BAND / 2}
+                width={3}
+                height={BAND}
+                rx={1.5}
                 fill="var(--accent)"
               />
             ))}

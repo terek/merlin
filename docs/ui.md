@@ -361,7 +361,8 @@ From top to bottom:
     lanes, `contextEnvelope`), the spend as thin columns along the bottom, one grey with the cache miss in its colour like the plot
     (`spendDensity`), a faint tick at each midnight, the date of each day (from `splitDays`: the
     day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
-    marker. The **brush** is the window: a highlighted rectangle with a handle at each edge, the rest
+    marker. The **brush** is the window: a light accent band, no outline, centred on the line between the context area
+    and the spend bars, with an accent marker at each edge (as on the Overview's timeline); the rest
     dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
     strip kept (so over a break its time width changes); dragging a handle resizes it; a click outside the
     window centres it there; a click on a date, or a double-click inside a day, snaps to that day (its
