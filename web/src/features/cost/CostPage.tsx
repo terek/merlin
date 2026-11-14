@@ -27,6 +27,7 @@ import {
   keepSelection,
   placeItems,
   presetRange,
+  selectLanes,
   totalsOf,
 } from '../overview/model'
 import { ScopeSlot, useScope } from '../overview/ScopeSlot'
@@ -118,7 +119,10 @@ export function CostPage() {
   const all = useMemo(() => totalsOf(lanes ?? []), [lanes])
 
   const prevByModel = useMemo(() => new Map((prev.data?.rows ?? []).map((r) => [r.key, r.totalUSD])), [prev.data])
-  const conc = useMemo(() => concentration((lanes ?? []).map((l) => l.usd)), [lanes])
+  const conc = useMemo(
+    () => concentration(selectLanes(lanes ?? [], sel, by, beads).map((l) => l.usd)),
+    [lanes, sel, by, beads],
+  )
 
   if (!ready) return <Skeleton className="m-4 h-64" />
 
