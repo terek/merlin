@@ -451,10 +451,17 @@ export function ScopeSlot({
               type="button"
               aria-pressed={!!shown}
               aria-expanded={axisOpen}
-              title={axisOpen ? 'Close the timeline' : 'Pick any range of days on the timeline'}
+              title={
+                axisOpen
+                  ? 'Close the timeline'
+                  : !shown && remembered
+                    ? `Use ${customLabel(remembered, now)}`
+                    : 'Open the timeline'
+              }
               onClick={() => {
                 if (axisOpen) return openSearch()
-                if (!shown && remembered) set({ range: undefined, ...formatCustom(remembered) })
+                // the first click selects the remembered range; the next one opens the timeline
+                if (!shown && remembered) return set({ range: undefined, ...formatCustom(remembered) })
                 setAxisOpen(true)
               }}
               className="inline-flex h-full shrink-0 items-center gap-1 whitespace-nowrap pr-1.5 pl-2.5 text-left text-sec hover:text-fg"

@@ -806,9 +806,10 @@ The table only ever lists sessions.
 - **Range capsule**: always `1d | 7d | 30d | Custom`, the active one the white pill. Custom shows its range once
   one is set: `May 20 → 10d` (the first day, then the length in days; `May 20 → 1d` for one day; `May 20, 2025 →
   10d` when the year is not the current one) with a muted `»` that says it opens the timeline. A preset
-  applies and closes the axis. Custom, while collapsed, applies the remembered range (if there is one and it is
-  not active) and opens the axis, which fills the slot to the right of the segments (search shrinks to the
-  magnifier); Custom, while open, closes it, the range staying. A drag on the axis applies on drag end and keeps
+  applies and closes the axis. Custom, when it is not active and a range is remembered, only applies that range (the `»` says
+  "Use May 20 → 10d"); when it is active, or nothing is remembered, a click opens the axis, which fills the slot to
+  the right of the segments (search shrinks to the magnifier, or the room the search would have on Cost); a click while
+  it is open closes it, the range staying. A drag on the axis applies on drag end and keeps
   it open. A custom range asks the API for local midnight of `from` to the next local midnight after `to`,
   capped at now; the empty state reads "Nothing ran between May 20 and May 29." (`on May 20` for one day). The
   presets cover the days up to today. The last custom range applied (a drag or a URL with `from` and `to`) is
