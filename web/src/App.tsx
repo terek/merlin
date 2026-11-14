@@ -22,11 +22,35 @@ function OverviewRedirect() {
   return <Navigate replace to={`/${search}${hash}`} />
 }
 
+/** Params only the Sessions list reads: a `/` link carrying one was made for Sessions (it lived at `/`). */
+const SESSIONS_ONLY = [
+  'bead',
+  'branch',
+  'checkout',
+  'group',
+  'kind',
+  'project',
+  'remote',
+  'repo',
+  'since',
+  'state',
+  'touched',
+  'worktree',
+]
+
+/** `/`: the Overview, or Sessions when the link carries a Sessions-only param. */
+function Home() {
+  const { search, hash } = useLocation()
+  const params = new URLSearchParams(search)
+  if (SESSIONS_ONLY.some((k) => params.has(k))) return <Navigate replace to={`/sessions${search}${hash}`} />
+  return <OverviewPage />
+}
+
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<OverviewPage />} />
+        <Route index element={<Home />} />
         <Route path="sessions" element={<SessionsPage />} />
         <Route path="s/:harness/:id" element={<SessionPage />} />
         <Route path="bead/:id" element={<BeadPage />} />
