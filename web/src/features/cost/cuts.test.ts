@@ -13,20 +13,20 @@ describe('parseRepoCut', () => {
 
 describe('placePath', () => {
   test('rows count primary values: no touched', () => {
-    expect(placePath('repo', '/w/acme/.git')).toBe('/?group=repo&repo=%2Fw%2Facme%2F.git')
-    expect(placePath('checkout', '/w/acme/main')).toBe('/?group=checkout&checkout=%2Fw%2Facme%2Fmain')
-    expect(placePath('remote', 'h.example/acme')).toBe('/?group=remote&remote=h.example%2Facme')
+    expect(placePath('repo', '/w/acme/.git')).toBe('/sessions?group=repo&repo=%2Fw%2Facme%2F.git')
+    expect(placePath('checkout', '/w/acme/main')).toBe('/sessions?group=checkout&checkout=%2Fw%2Facme%2Fmain')
+    expect(placePath('remote', 'h.example/acme')).toBe('/sessions?group=remote&remote=h.example%2Facme')
   })
   test('the row of none is -', () => {
-    expect(placePath('repo', '')).toBe('/?group=repo&repo=-')
-    expect(placePath('checkout', '')).toBe('/?group=checkout&checkout=-')
-    expect(placePath('remote', '')).toBe('/?group=remote&remote=-')
+    expect(placePath('repo', '')).toBe('/sessions?group=repo&repo=-')
+    expect(placePath('checkout', '')).toBe('/sessions?group=checkout&checkout=-')
+    expect(placePath('remote', '')).toBe('/sessions?group=remote&remote=-')
   })
   test('branch rows split at the first #', () => {
-    expect(placePath('branch', '/w/a/.git#fix#1')).toBe('/?group=repo&repo=%2Fw%2Fa%2F.git&branch=fix%231')
-    expect(placePath('branch', '#main')).toBe('/?group=repo&repo=-&branch=main')
+    expect(placePath('branch', '/w/a/.git#fix#1')).toBe('/sessions?group=repo&repo=%2Fw%2Fa%2F.git&branch=fix%231')
+    expect(placePath('branch', '#main')).toBe('/sessions?group=repo&repo=-&branch=main')
   })
   test('beads', () => {
-    expect(placePath('bead', 'x-1')).toBe('/?group=bead&bead=x-1')
+    expect(placePath('bead', 'x-1')).toBe('/sessions?group=bead&bead=x-1')
   })
 })

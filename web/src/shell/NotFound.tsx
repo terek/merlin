@@ -6,7 +6,7 @@ export function NotFound() {
   useDocumentTitle('Not found')
   return (
     <EmptyState title="Page not found" className="py-24">
-      There is nothing at this address. <Link to="/">Go to Sessions</Link> or <Link to="/cost">Cost</Link>.
+      There is nothing at this address. <Link to="/">Go to Overview</Link> or <Link to="/cost">Cost</Link>.
     </EmptyState>
   )
 }

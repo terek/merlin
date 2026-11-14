@@ -989,11 +989,13 @@ function emit(name: string, data: unknown) {
   }
 }
 
+// MOCK_PENDING=<n> starts the stream mid-scan, with n sessions still to index (the top bar's progress line)
+const stillPending = Math.min(Number(process.env.MOCK_PENDING) || 0, ds.sessions.length)
 const idleProgress: ScanProgress = {
-  pending: 0,
+  pending: stillPending,
   seen: ds.sessions.length,
   processed: 0,
-  unchanged: ds.sessions.length,
+  unchanged: ds.sessions.length - stillPending,
   failed: 0,
   missing: 0,
 }

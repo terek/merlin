@@ -21,7 +21,6 @@ import {
   clipToActivity,
   comparePath,
   comparePlace,
-  customAction,
   customDays,
   customLabel,
   customPhrase,
@@ -1095,15 +1094,6 @@ describe('remembering the custom range', () => {
     expect(parseStoredCustom('{"from":"2026-05-29","to":"2026-05-20"}')).toBeNull()
     expect(parseStoredCustom('{"from":1,"to":2}')).toBeNull()
     expect(parseStoredCustom('[]')).toBeNull()
-  })
-  test('what a click on Custom does', () => {
-    // a preset is active and a range is remembered: apply it, no locator
-    expect(customAction(false, r)).toBe('apply')
-    // already active: the locator toggles
-    expect(customAction(true, r)).toBe('toggle')
-    // nothing remembered: the locator opens
-    expect(customAction(false, null)).toBe('toggle')
-    expect(customAction(true, null)).toBe('toggle')
   })
 })
 

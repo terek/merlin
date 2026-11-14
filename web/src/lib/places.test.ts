@@ -63,12 +63,12 @@ describe('placeLabels', () => {
 
 describe('placeLink', () => {
   test('one value, grouped by its key', () => {
-    expect(placeLink('remote', 'github.com/acme/app')).toBe('/?group=remote&remote=github.com%2Facme%2Fapp')
-    expect(placeLink('checkout', '/w/a/main', true)).toBe('/?group=checkout&checkout=%2Fw%2Fa%2Fmain&touched=1')
+    expect(placeLink('remote', 'github.com/acme/app')).toBe('/sessions?group=remote&remote=github.com%2Facme%2Fapp')
+    expect(placeLink('checkout', '/w/a/main', true)).toBe('/sessions?group=checkout&checkout=%2Fw%2Fa%2Fmain&touched=1')
   })
   test('none is - and never touched', () => {
-    expect(placeLink('repo', '')).toBe('/?group=repo&repo=-')
-    expect(placeLink('repo', '', true)).toBe('/?group=repo&repo=-')
+    expect(placeLink('repo', '')).toBe('/sessions?group=repo&repo=-')
+    expect(placeLink('repo', '', true)).toBe('/sessions?group=repo&repo=-')
   })
 })
 

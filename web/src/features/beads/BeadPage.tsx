@@ -23,7 +23,7 @@ export function BeadPage() {
     return (
       <EmptyState title="No such bead" className="py-24">
         <span className="font-mono">{id}</span> is not in any bead database Merlin knows and no session ran a bd call on
-        it. <Link to="/">Go to Sessions</Link> or <Link to="/cost">Cost</Link>.
+        it. <Link to="/">Go to Overview</Link> or <Link to="/cost">Cost</Link>.
       </EmptyState>
     )
   }

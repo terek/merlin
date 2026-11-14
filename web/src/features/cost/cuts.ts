@@ -27,5 +27,5 @@ export function placePath(cut: RepoCut | 'bead', key: string): string {
     p.set('repo', repo || '-')
     if (hash >= 0 && key.slice(hash + 1)) p.set('branch', key.slice(hash + 1))
   }
-  return `/?${p.toString()}`
+  return `/sessions?${p.toString()}`
 }

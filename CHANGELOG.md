@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The Overview is the start page (`/`; `/overview` still works). Sessions moved to `/sessions` (`g s`), and the old Sessions tab is gone.
+- One top bar: Merlin on the left, the page's own tools in the middle (on the Overview, a search capsule and a date-range capsule, one expanded at a time; on a session, a back link to the Overview and its title), the tabs on the right, then a single status button holding the connection, the version, an available update and the theme. Indexing shows as a thin line along the bar's bottom edge; the 7-day spend link is gone.
 - Pi sessions now count the lines written by Pi's `write` tool (a successful write adds the lines of its content to the session's lines added), not only the lines of its `edit` diffs. Pi records nothing about a file it overwrites, so for an overwrite the figure is an upper bound and no lines are counted as removed. Pi sessions are re-indexed once.
 - `merlin show` says whether an agent's own cost was billed by the provider per call, Pi's catalog estimate, or a mix.
 - `merlin scan` and the server no longer report an error on a machine without Claude Code (no `~/.claude/projects`); it simply has no Claude sessions, like a missing Codex or Pi directory.

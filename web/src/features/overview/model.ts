@@ -1033,13 +1033,6 @@ export function parseStoredCustom(raw: string | null): CustomRange | null {
   }
 }
 
-/**
- * What a click on the Custom segment does: `apply` the remembered range (a preset is active and one is
- * remembered), else `toggle` the locator (Custom is already active, or there is nothing to apply).
- */
-export const customAction = (pressed: boolean, remembered: CustomRange | null): 'apply' | 'toggle' =>
-  !pressed && remembered ? 'apply' : 'toggle'
-
 /** The days a preset covers, ending today: `1d` is today, `7d` today and the six days before. */
 export function presetRange(range: Range, today: Date): CustomRange {
   const n = Math.round(RANGES[range].ms / DAY)

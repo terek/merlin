@@ -82,12 +82,13 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 
 | Route | Page | State kept in the URL |
 |---|---|---|
-| `/` | Sessions | `project`, `state`, `kind`, `q` (search), `since` |
+| `/` | Overview (section 10b): one table of sessions over a day, week or month, each row with a text line and a small graph of its context and the agents it launched, scoped by a tree of their places, with a summary of the scope | `range`, `from`, `to`, `by` (`dir`, `checkout`, `repo`, `remote`, `bead`), `in` (the selected place), `q`, `sort`, `dir` |
+| `/overview` | Redirects to `/`, the query string kept | |
+| `/sessions` | Sessions (section 8) | `project`, `state`, `kind`, `q` (search), `since` |
 | `/s/:harness/:id` | Session | `#t<index>` pins a turn, `#a<agentId>` opens an agent's work, `#c<index>` pins a compaction's turn |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
-| `/overview` | Overview (experimental, section 10b): one table of sessions over a day, week or month, each row with a text line and a small graph of its context and the agents it launched, scoped by a tree of their places, with a summary of the scope | `range`, `by` (`dir`, `checkout`, `repo`, `remote`), `in` (the selected place), `q`, `sort`, `dir` |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -218,19 +219,31 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
 
 ## 7. Shell
 
-A top bar, 44px: the name "Explorer", the two destinations (Sessions, Cost), and on the right the
-update notices (nothing most of the time): "Merlin updated to X · Reload" once the daemon has
-replaced itself, and, quieter, a muted link "X available" to that release's page when the daemon
-found a newer release and did not install it (an `update` event; the tooltip says `merlin upgrade`
-installs it and `merlin autoupgrade` keeps Merlin up to date; hidden while the "updated" notice is
-up, and when X is the version the daemon runs), the
-scan indicator ("indexing 120 / 3,355" with a thin progress bar while `pending > 0`, otherwise
-nothing), the connection state (a dot: live, or "offline, retrying"), and the total spend of the
-last 7 days as a quiet link to Cost. `g s` and `g c` switch pages; `/` focuses search on Sessions.
+One bar, 44px, sticky: **brand, the page's slot, the tabs, the status button**.
 
-## 8. Sessions page (`/`)
+- **Left**: the logo and "Merlin", linking to `/`.
+- **Middle, the slot**: a flexible area the current page fills with its own tools (`ShellSlot`, a portal into the
+  bar; a page never imports the bar). Empty means empty space. The Overview puts its two capsules there
+  (section 10b); the Session page's slot is filled by the shell (`SessionSlot`): `← Overview`, linking to the last
+  Overview address visited in this tab (`pathname + search` in `sessionStorage`, `/` when there is none), then the
+  session's harness mark and title, muted, truncating, the whole title in the tooltip. Cost, Moments, Sessions and
+  Bead leave it empty and keep their toolbars in the page.
+- **Right**: the tabs **Overview** (`/`), **Cost**, **Moments**, in the underline style, their tooltips carrying
+  the shortcuts; Sessions has no tab (`g s`, or the links that lead to it). Just left of the tabs, only while it
+  applies, "Merlin updated to X · Reload" once the daemon has replaced itself. Then one **status button**: a
+  small icon whose look is the connection (live: quiet; connecting: faint; offline: the bad colour, tooltip
+  "offline, retrying"). Its popover (closes on an outside click and Escape) holds the connection, the running
+  version, "X available" (a link to that release's page; the tooltip says `merlin upgrade` installs it and
+  `merlin autoupgrade` keeps Merlin up to date; not while the "updated" notice is up, nor when X is the version
+  running) and the theme (System, Light, Dark).
+- **Indexing**: while `pending > 0`, a thin accent line along the bar's bottom edge, as wide as done / seen,
+  its tooltip "indexing 120 / 3,355 · n unchanged · n failed". Nothing otherwise.
+- **Shortcuts**: `g o` Overview, `g s` Sessions, `g c` Cost, `g m` Moments; `/` focuses the search on the
+  Overview (expanding it) and on Sessions.
 
-The landing page, and the answer to "where was that session". It lists **trees**, as the Session
+## 8. Sessions page (`/sessions`)
+
+The list of sessions, and the answer to "where was that session". It lists **trees**, as the Session
 page draws them: a session and every session forked or continued from it are one row.
 
 ```
@@ -721,21 +734,20 @@ bead's id as bd prints it (`acme-k1.2`); an unknown id shows "No such bead" (the
   is its root) and from the bead chips in the session header (the id; the title still opens the
   Sessions page filtered to the bead).
 
-## 10b. Overview page (`/overview`, experimental)
+## 10b. Overview page (`/`)
 
 Where the agents' work went over a day, a week or a month: one full-bleed **table of sessions**, each row a
 text line over a small graph of the session's context and the agents it launched, on one shared linear time
 axis. Beside it a **sidebar**, the places of those sessions as a file tree, whose selection is the table's
 **scope**; under the rows, a **summary** of that scope. Data from `GET /api/overview` ([api.md](api.md));
-code in `features/overview/` (epic `merlin-lce`). A separate route while it is an experiment: if it works, it
-becomes the landing page and the Cost page's day chart and project table go.
+code in `features/overview/` (epic `merlin-lce`). It is the start page.
 
 There are no group rows. Comparing places is the sidebar's job (every node has its sessions and spend), and
 the aggregate of a place is the summary once it is selected: one level up in the tree is the "groups view".
 The table only ever lists sessions.
 
 ```
- [1d 7d 30d Custom]            ( Search sessions...  / ) [in ~/work x]                   (sticky)
+ (  search sessions...   in ~/work x  ) [ 7d ]            <- the top bar's slot, one capsule expanded
  ORGANISE BY [Folder v] [<]|   START [..-=#=-..] END         FOLDER |   TURNS   AGENTS   SPEND  (sticky)
    ~             95  $342  |-------------------------------------------|----------------------------------
    acme          21  $73   | * bold head  muted description...  ~/acme/web|    22     14   $96.20 (scrolls)
@@ -749,33 +761,30 @@ The table only ever lists sessions.
   `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
   them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`, `bead`), `in` (the selection), `q` (the
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
-- **Toolbar**: no title; the **range control** first on the left, and centred in the space that is left the
-  **search box** with, when a place is selected, a removable chip `in ~/work x` (the display path; x clears).
-- **Range control**: `1d | 7d | 30d | Custom`. Custom shows its range once one is set: `May 20 → 10d` (the
-  first day, then the length in days; `May 20 → 1d` for one day; `May 20, 2025 → 10d` when the year is not the
-  current one), also while the locator is closed. A custom range asks the API for local midnight of `from` to
-  the next local midnight after `to`, capped at now; the empty state reads "Nothing ran between May 20 and May
-  29." (`on May 20` for one day). The presets cover the days up to today.
-  The last custom range applied (a locator drag or a URL with `from` and `to`) is **remembered** in
-  `localStorage` (`overview.custom`, `{from, to}`, try/catch; the URL stays the truth for what is shown). While
-  a preset is active the Custom segment still reads that range, unpressed and muted like the other unpressed
-  segments; a click on its label applies the range (`from`, `to`) without opening the locator
-  (`customAction`), and a click on the label while Custom is active toggles the locator. With nothing
-  remembered it reads `Custom` and a click on the label opens the locator. The control is a grey box
-  (`bg-surface-2`, 32 px high) built in the feature from the shared segmented control's classes. **Custom is one
-  unit, a pill**: pressed it is white (`bg-surface`, `outline-line`), unpressed it sits on the grey, and either
-  way it holds its label, the strip when the locator is open, and at its right end one small button in a fixed
-  slot (same size and padding either way): **>>** (`ChevronsRight`, 12 px, muted, title "Pick a range on the
-  timeline") right after the label when closed, **<<** (`ChevronsLeft`) at the far right when open. A range label
-  has one width, open or closed (`min-width` 13ch, left-aligned; a year makes it wider), so the label's box does
-  not move or resize when the locator opens or closes, nor under a drag; "Custom" without a range is its natural
-  width.
-- **Locator.** A click on **>>** (with a preset on and a range remembered it applies that range first), or on the
-  label when nothing is remembered, opens the locator **inside the Custom pill**: the pill widens (150 ms) to the
-  toolbar's right edge over the search box and the `in` chip, which are hidden meanwhile, and the grey box, which
-  hugs `1d 7d 30d` and the pill, ends where the pill ends: `[1d 7d 30d | Oct 20 → 10d [strip ………] <<]`. Custom is
-  the pressed segment while it is open. << folds the pill back to its normal width; Escape does too, and the
-  range stays. The toolbar is 48 px high open or closed. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
+- **The slot: two capsules, exactly one expanded.** Both are rounded, 32 px high, on the grey track (`bg-surface-2`),
+  siblings in the top bar's middle slot; the expanded one takes the slot's remaining width, the width changes in
+  150 ms. Which is expanded is page state, not URL; the search starts expanded.
+- **Search capsule** (expanded by default): the magnifier, the search input, and, when a place is selected, the
+  `in ~/work x` chip inside it (the display path; x clears). Minified, it is a round capsule with only the
+  magnifier, and an accent dot on it when `q` or `in` is active; its tooltip names them ("Search: foo · in
+  ~/work x"). A click on it, Escape or `/` collapses the date capsule and expands search; `/` and the magnifier
+  focus the input.
+- **Date capsule** (minified by default): shows the current range only, `7d` or `May 20 → 10d`; a click expands
+  it (and minifies search). Expanded it is `1d | 7d | 30d | Custom` and the locator strip filling the rest; it
+  stays expanded when a preset is applied (the brush shows the preset's days). Custom shows its range once one
+  is set: `May 20 → 10d` (the first day, then the length in days; `May 20 → 1d` for one day; `May 20, 2025 → 10d`
+  when the year is not the current one). A custom range asks the API for local midnight of `from` to the next
+  local midnight after `to`, capped at now; the empty state reads "Nothing ran between May 20 and May 29." (`on
+  May 20` for one day). The presets cover the days up to today. The last custom range applied (a locator drag or
+  a URL with `from` and `to`) is **remembered** in `localStorage` (`overview.custom`, `{from, to}`, try/catch;
+  the URL stays the truth for what is shown). While a preset is active the Custom label still reads that range,
+  unpressed and muted; a click on it applies the range (`from`, `to`). With nothing remembered it reads
+  `Custom`. **Custom is one unit, a pill**: pressed it is white (`bg-surface`, `outline-line`), unpressed it sits
+  on the grey, and either way it holds its label and the strip. A range label has one width (`min-width` 13ch,
+  left-aligned; a year makes it wider), so nothing moves under a drag.
+- **Locator.** The expanded date capsule *is* the locator open: `[1d 7d 30d | Oct 20 → 10d [strip ………]]`; the
+  capsule closes (search expands) with the magnifier, Escape or `/`, the range staying. At 1100 px both capsules
+  still fit; the strip is just shorter. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
   as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
   thin bars in the faint colour on the white pill, a light month axis under it (day numbers too when a day is 16
   px wide), the **brush** lit with the accent (a light fill, an outline and its two handles). Drag on the strip to draw a range, drag the brush to move it, drag its edges
@@ -789,7 +798,7 @@ The table only ever lists sessions.
   or more, when it is among the hits of `/api/search` (full text); until that answers, the local matches show.
   Nothing matching: "No sessions match "term"."
 - **Container, full bleed.** The page fills the area under the top bar edge to edge, as tall as the viewport
-  (the page itself does not scroll); the toolbar has a bottom border. Beside the sidebar the table has three
+  (the page itself does not scroll). Beside the sidebar the table has three
   parts: **top, fixed**, the one-line column header; **middle, scrolls**, the rows; **bottom, fixed**, the
   summary. Every part has the same two blocks: the **session column** (takes the width that is left; the plot
   is exactly its inner width, 12 px of padding each side) and the **structured block** (a 1 px rule on its
@@ -869,7 +878,7 @@ The table only ever lists sessions.
     (`RUN_W`) from the top of the row down to the baseline at its start. A spawn from before the range has no
     vertical and its run starts at the left edge;
   - the day lines, only inside the session's lifetime.
-- **Sidebar**: a 260 px column left of the table under the toolbar (its own scroll, right border). Its heading
+- **Sidebar**: a 260 px column left of the table under the top bar (its own scroll, right border). Its heading
   row is the **Organise by** selector (the shared `Select`: Folder, Worktree, Repo, Remote, Bead; `by`) and a
   collapse button (`PanelLeftClose` / `PanelLeftOpen`); collapsed it is a 37 px strip with the open button. The
   width animates in 150 ms (instantly under reduced motion); the choice is kept in `localStorage`

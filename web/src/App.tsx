@@ -16,15 +16,22 @@ function SpendRedirect() {
   return <Navigate replace to={`/s/${encodeURIComponent(harness)}/${encodeURIComponent(id)}${search}${hash}`} />
 }
 
+/** The Overview's old address: `/`, the query string kept. */
+function OverviewRedirect() {
+  const { search, hash } = useLocation()
+  return <Navigate replace to={`/${search}${hash}`} />
+}
+
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<SessionsPage />} />
+        <Route index element={<OverviewPage />} />
+        <Route path="sessions" element={<SessionsPage />} />
         <Route path="s/:harness/:id" element={<SessionPage />} />
         <Route path="bead/:id" element={<BeadPage />} />
         <Route path="cost" element={<CostPage />} />
-        <Route path="overview" element={<OverviewPage />} />
+        <Route path="overview" element={<OverviewRedirect />} />
         <Route path="moments" element={<MomentsPage />} />
         <Route path="dev/ui" element={<UiGallery />} />
         <Route path="dev/spend/:harness/:id" element={<SpendRedirect />} />

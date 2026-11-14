@@ -69,7 +69,7 @@ export type PlaceKind = 'checkout' | 'repo' | 'remote'
 export function placeLink(kind: PlaceKind, key: string, touched = false): string {
   const p = new URLSearchParams({ group: kind, [kind]: key || '-' })
   if (touched && key) p.set('touched', '1')
-  return `/?${p.toString()}`
+  return `/sessions?${p.toString()}`
 }
 
 /** One place of a session, as the Session page's header lists it. */
