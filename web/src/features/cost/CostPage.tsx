@@ -4,15 +4,16 @@
 
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useCost, useOverview } from '../../api/queries'
+import { useCost, useOverview, usePrices } from '../../api/queries'
 import type { CostRow, CostTable } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { backingLowerBound, backingSentence, lowerBoundNote, unknownNote } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
-import { classColor, HATCH, modelColor } from '../../lib/palette'
+import { classColor, HATCH, modelColor, tierColor } from '../../lib/palette'
 import { scopeSearch } from '../../lib/scope'
+import type { Prices } from '../../lib/tiers'
 import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
   buildPlaceTree,
@@ -32,7 +33,6 @@ import { ScopeSlot, useScope } from '../overview/ScopeSlot'
 import { Sidebar, useSidebarOpen } from '../overview/Sidebar'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
 import {
-  agentSentence,
   cascade,
   changeAgainst,
   classSentence,
@@ -42,17 +42,26 @@ import {
   previousWindow,
   sidebarExtras,
   sidebarGap,
+  tierColumns,
+  type WhoTierRow,
+  whoByTier,
+  whoTierSentence,
   windowDays,
 } from './lens'
 import {
   type Bucket,
+  bucketDay,
   bucketsFor,
   CLASS_STACK,
+  grainFor,
+  isHourly,
   OVERHEAD,
   parseStack,
   type Stack,
+  splitOf,
   stackOf,
   topModels,
+  WHO_STACK,
   type Window,
 } from './model'
 
@@ -96,10 +105,16 @@ export function CostPage() {
   const scoped = { since: days.from, until: days.to, place: sel === null ? undefined : by, in: sel ?? undefined }
 
   const head = useCost({ by: 'kind', ...scoped }, { enabled: ready })
-  const dayRows = useCost({ by: 'day', split: stack === 'class' ? 'class' : 'model', ...scoped }, { enabled: ready })
+  // the bars: hours up to 14 days (`by=hour` answers no more), days beyond (weeks are days added up)
+  const grain = grainFor(windowDays(days))
+  const dayRows = useCost(
+    { by: isHourly(grain) ? 'hour' : 'day', split: splitOf(stack), ...scoped },
+    { enabled: ready },
+  )
+  const prices = usePrices().data?.models
   const byModel = useCost({ by: 'model', ...scoped }, { enabled: ready })
   const byClass = useCost({ by: 'class', ...scoped }, { enabled: ready })
-  const byAgent = useCost({ by: 'agent', ...scoped }, { enabled: ready })
+  const byAgentModel = useCost({ by: 'agent', split: 'model', ...scoped }, { enabled: ready })
   // the period before: as many days just before the window, the same scope
   const before = previousWindow(days)
   const prev = useCost(
@@ -193,7 +208,7 @@ export function CostPage() {
             />
 
             <Section
-              title="By day"
+              title={sectionTitle(grain)}
               actions={
                 <SegmentedControl
                   label="Stack by"
@@ -201,10 +216,16 @@ export function CostPage() {
                   onChange={(v) => set({ stack: v === 'model' ? undefined : v })}
                   options={[
                     { value: 'model', label: 'By model' },
+                    { value: 'who', label: 'Who', title: 'Stack by the main thread and the sub-agents' },
                     {
                       value: 'class',
                       label: 'Price class',
                       title: 'Stack by what the tokens were: cache reads, cache writes, output, uncached input',
+                    },
+                    {
+                      value: 'tier',
+                      label: 'Tier',
+                      title: 'Stack by what the model costs: heavy, mid and light models, heavy at the bottom',
                     },
                     {
                       value: 'compaction',
@@ -222,7 +243,8 @@ export function CostPage() {
                     rows={d.rows}
                     win={win}
                     stack={stack}
-                    onPick={(b) => set({ range: undefined, ...formatCustom({ from: b.key, to: b.to }) })}
+                    prices={prices}
+                    onPick={(b) => set({ range: undefined, ...formatCustom({ from: bucketDay(b), to: b.to }) })}
                   />
                 )}
               </QueryBoundary>
@@ -278,23 +300,7 @@ export function CostPage() {
                     <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
                   )}
                 />
-                <LensTable
-                  query={byAgent}
-                  name="Agents"
-                  label={(r) =>
-                    r.key === 'main'
-                      ? 'Main thread'
-                      : r.key === 'agents'
-                        ? 'Sub-agents, teammates and forks'
-                        : 'Not split'
-                  }
-                  footer={(d) => (
-                    <>
-                      {agentSentence(d.rows)} The main thread is the messages with no agent; reported spend no message
-                      carries is not split.
-                    </>
-                  )}
-                />
+                <WhoTier query={byAgentModel} prices={prices} />
               </div>
             </div>
             <HowMade
@@ -407,25 +413,35 @@ function recordedNote(recordedUSD: number, billedUSD: number): string {
   return `${own}; ${formatMoney(billedUSD)} of it billed by the provider per call, the rest its catalog estimate`
 }
 
+/** The section's name: what a bar stands for. */
+function sectionTitle(grain: ReturnType<typeof grainFor>): string {
+  if (grain === 'week') return 'By week'
+  if (grain === 'day') return 'By day'
+  return grain === 1 ? 'By hour' : `By ${grain} hours`
+}
+
 function ChartBody({
   rows,
   win,
   stack,
+  prices,
   onPick,
 }: {
   rows: CostRow[]
   win: Window
   stack: Stack
+  prices?: Prices
   onPick: (b: Bucket) => void
 }) {
   const buckets = useMemo(() => bucketsFor(rows, win), [rows, win])
   const top = useMemo(() => topModels(buckets), [buckets])
-  const legend = useMemo(() => legendOf(buckets, stack, top), [buckets, stack, top])
+  const legend = useMemo(() => legendOf(buckets, stack, top, prices), [buckets, stack, top, prices])
   const weekly = buckets[0]?.weekly
+  const hours = buckets[0]?.hours
   if (buckets.length === 0) return <EmptyState title="No days in this range" />
   return (
     <div className="space-y-2">
-      <DayChart buckets={buckets} stack={stack} top={top} onSelect={onPick} />
+      <DayChart buckets={buckets} stack={stack} top={top} prices={prices} onSelect={onPick} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sec text-muted">
         {legend.map((l) => (
           <span key={l.key} className="inline-flex items-center gap-1.5">
@@ -440,6 +456,11 @@ function ChartBody({
           </span>
         )}
         {weekly && <span className="ml-auto text-faint">One bar per week (Mon to Sun)</span>}
+        {hours && (
+          <span className="ml-auto text-faint">
+            One bar per {hours === 1 ? 'hour' : `${hours} hours`}; a click selects its day
+          </span>
+        )}
       </div>
       <CompactionNote buckets={buckets} always={stack === 'compaction'} />
     </div>
@@ -485,16 +506,89 @@ function CompactionNote({ buckets, always }: { buckets: Bucket[]; always: boolea
   )
 }
 
-function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
+function legendOf(buckets: Bucket[], stack: Stack, top: string[], prices?: Prices) {
   const seen = new Map<string, string>()
-  for (const b of buckets) for (const s of stackOf(b, stack, top)) seen.set(s.key, s.color)
+  for (const b of buckets) for (const s of stackOf(b, stack, top, prices)) seen.set(s.key, s.color)
   const order =
     stack === 'class'
       ? CLASS_STACK
-      : stack === 'compaction'
-        ? ['compaction-warm', 'compaction-cold']
-        : [...top, 'other', OVERHEAD]
+      : stack === 'who'
+        ? WHO_STACK
+        : stack === 'tier'
+          ? ['heavy', 'mid', 'light', 'unknown', OVERHEAD]
+          : stack === 'compaction'
+            ? ['compaction-warm', 'compaction-cold']
+            : [...top, 'other', OVERHEAD]
   return order.filter((k) => seen.has(k)).map((key) => ({ key, color: seen.get(key) as string }))
+}
+
+/**
+ * Who × Tier: dollars of the main thread and the sub-agents on heavy, mid and light models (the unpriced only when
+ * there are some), from `by=agent&split=model`, and one sentence of what the figures show.
+ */
+function WhoTier({ query, prices }: { query: CutQuery; prices?: Prices }) {
+  return (
+    <QueryBoundary
+      query={query}
+      skeleton={<SkeletonRows rows={3} height={28} />}
+      empty={<EmptyState title="Nothing in this range" />}
+      isEmpty={(d) => d.rows.length === 0}
+    >
+      {(d) => {
+        const rows = whoByTier(d.rows, prices)
+        const cols = tierColumns(rows)
+        const overhead = rows.some((r) => r.overhead > 0)
+        const sentence = whoTierSentence(rows)
+        const label = (r: WhoTierRow) =>
+          r.key === 'main' ? 'Main thread' : r.key === 'agents' ? 'Sub-agents' : 'Not split'
+        return (
+          <div className="@container" data-testid="who-tier">
+            <table className="w-full table-fixed text-sec">
+              <thead>
+                <tr className={cn(HEAD, 'h-9')}>
+                  <th className="px-4 text-left font-normal">Who</th>
+                  {cols.map((t) => (
+                    <th key={t} className="w-16 px-1 text-right font-normal">
+                      <span className="inline-flex items-center gap-1">
+                        <Swatch color={tierColor(t)} />
+                        {segmentLabel(t).replace(' models', '')}
+                      </span>
+                    </th>
+                  ))}
+                  {overhead && <th className="w-16 px-1 text-right font-normal">Overhead</th>}
+                  <th className="w-20 px-2 pr-4 text-right font-normal">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.key} className="h-[34px]" data-testid={`who-${r.key}`}>
+                    <td className="truncate px-4 text-body">{label(r)}</td>
+                    {cols.map((t) => (
+                      <td key={t} className="px-1 text-right">
+                        {r.tiers[t] > 0 ? <Money usd={r.tiers[t]} /> : <span className="text-faint">–</span>}
+                      </td>
+                    ))}
+                    {overhead && (
+                      <td className="px-1 text-right">
+                        {r.overhead > 0 ? <Money usd={r.overhead} /> : <span className="text-faint">–</span>}
+                      </td>
+                    )}
+                    <td className="px-2 pr-4 text-right">
+                      <Money usd={r.total} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-4 pt-1 pb-3 text-meta text-muted">
+              {sentence} The main thread is the messages with no agent; reported spend no message carries is not split.
+              A model’s tier is its input price: heavy from $4 per million tokens, light up to $1.
+            </p>
+          </div>
+        )
+      }}
+    </QueryBoundary>
+  )
 }
 
 type CutQuery = Parameters<typeof QueryBoundary<CostTable>>[0]['query']

@@ -9,9 +9,22 @@ import { lowerBoundNote } from '../../lib/cost'
 import { formatMoney, plural } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
 import { HATCH } from '../../lib/palette'
+import type { Prices } from '../../lib/tiers'
 import { dayStart, shortDate } from '../../lib/time'
 import { Money } from '../../ui'
-import { type Bucket, barTotal, labelEvery, niceTicks, type Segment, type Stack, stackOf, tickLabel } from './model'
+import {
+  type Bucket,
+  barTotal,
+  hourLabelEvery,
+  hourTick,
+  hourTitle,
+  labelEvery,
+  niceTicks,
+  type Segment,
+  type Stack,
+  stackOf,
+  tickLabel,
+} from './model'
 
 const HEIGHT = 224
 const M = { left: 52, right: 8, top: 10, bottom: 24 }
@@ -27,6 +40,12 @@ export function segmentLabel(key: string): string {
   if (key === 'output') return 'Output'
   if (key === 'input') return 'Uncached input'
   if (key === '(unsplit)') return 'Not split'
+  if (key === 'main') return 'Main thread'
+  if (key === 'agents') return 'Sub-agents'
+  if (key === 'heavy') return 'Heavy models'
+  if (key === 'mid') return 'Mid models'
+  if (key === 'light') return 'Light models'
+  if (key === 'unknown') return 'Unpriced models'
   if (key === 'compaction-warm') return 'At the warm-cache price'
   if (key === 'compaction-cold') return 'Extra for a cold cache'
   return modelLabel(key)
@@ -34,6 +53,7 @@ export function segmentLabel(key: string): string {
 
 /** The label under a bar, as the Overview's timeline writes its days ("Fri 16"); a week's is its first day. */
 function tickText(b: Bucket): string {
+  if (b.hours) return hourTick(b)
   const from = dayStart(b.key)
   return b.weekly
     ? shortDate(from)
@@ -42,6 +62,7 @@ function tickText(b: Bucket): string {
 
 /** "Wed 16 Sep" or, for a week, "Week of 14 Sep – 20 Sep". */
 export function bucketTitle(b: Bucket): string {
+  if (b.hours) return hourTitle(b)
   const from = dayStart(b.key)
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][from.getDay()]
   if (!b.weekly) return `${dow} ${shortDate(from)}`
@@ -68,12 +89,15 @@ export function DayChart({
   buckets,
   stack,
   top,
+  prices,
   selected,
   onSelect,
 }: {
   buckets: Bucket[]
   stack: Stack
   top: string[]
+  /** The price table, for the tier stack. */
+  prices?: Prices
   /** Key of the selected bucket; the others are dimmed. */
   selected?: string
   onSelect: (b: Bucket) => void
@@ -81,7 +105,7 @@ export function DayChart({
   const [wrap, width] = useWidth()
   const [active, setActive] = useState<number | undefined>(undefined)
   const n = buckets.length
-  const stacks = buckets.map((b) => stackOf(b, stack, top))
+  const stacks = buckets.map((b) => stackOf(b, stack, top, prices))
   const max = Math.max(0, ...buckets.map(barTotal))
   const { ticks, top: yTop } = niceTicks(max)
   const plotW = Math.max(40, width - M.left - M.right)
@@ -89,7 +113,8 @@ export function DayChart({
   const band = plotW / Math.max(1, n)
   const barW = Math.max(1, Math.min(band * 0.74, MAX_BAR))
   const y = (v: number) => M.top + plotH - (v / yTop) * plotH
-  const every = labelEvery(n, plotW)
+  const hours = buckets[0]?.hours
+  const every = hours ? hourLabelEvery(n, plotW, hours) : labelEvery(n, plotW)
 
   const move = (i: number) => setActive(Math.min(n - 1, Math.max(0, i)))
   const cur = active === undefined ? undefined : buckets[active]
@@ -103,7 +128,7 @@ export function DayChart({
         role="application"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: the chart is one tab stop; arrow keys move between bars
         tabIndex={0}
-        aria-label={`${stack === 'compaction' ? 'Spend, with the estimated compaction calls marked,' : 'Spend'} per ${buckets[0]?.weekly ? 'week' : 'day'}. Arrow keys move between bars, Enter selects one.`}
+        aria-label={`${stack === 'compaction' ? 'Spend, with the estimated compaction calls marked,' : 'Spend'} per ${hours ? (hours === 1 ? 'hour' : `${hours} hours`) : buckets[0]?.weekly ? 'week' : 'day'}. Arrow keys move between bars, Enter selects one.`}
         className="block rounded-card"
         onFocus={() => setActive((a) => a ?? n - 1)}
         onBlur={() => setActive(undefined)}
@@ -140,6 +165,16 @@ export function DayChart({
           const parts = stacks[i]
           return (
             <g key={b.key} opacity={dim ? 0.4 : 1}>
+              {hours && i > 0 && b.key.endsWith('T00') && (
+                // a day begins: a hairline through the plot
+                <line
+                  x1={M.left + band * i}
+                  x2={M.left + band * i}
+                  y1={M.top}
+                  y2={M.top + plotH}
+                  stroke="var(--line)"
+                />
+              )}
               {(active === i || selected === b.key) && (
                 <rect x={M.left + band * i} y={M.top} width={band} height={plotH} fill="var(--surface-2)" />
               )}
@@ -262,7 +297,7 @@ function Tip({
         </p>
       )}
       {segments.length === 0 ? (
-        <p className="mt-1 text-muted">{stack === 'compaction' ? 'No compactions this day.' : 'No spend.'}</p>
+        <p className="mt-1 text-muted">{stack === 'compaction' ? 'No compactions here.' : 'No spend.'}</p>
       ) : (
         <ul className="mt-1 space-y-0.5">
           {[...segments].reverse().map((s) => (

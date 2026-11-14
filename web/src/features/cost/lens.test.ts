@@ -10,6 +10,9 @@ import {
   previousWindow,
   sidebarExtras,
   sidebarGap,
+  tierColumns,
+  whoByTier,
+  whoTierSentence,
   windowDays,
 } from './lens'
 
@@ -132,5 +135,54 @@ describe('the sidebar adds up', () => {
   })
   test('nothing to add: no lines', () => {
     expect(sidebarExtras({ selected: false, scriptedUsd: 0, scriptedRuns: 0, overheadUsd: 0 })).toEqual([])
+  })
+})
+
+describe('Who × Tier', () => {
+  const prices = { 'big-1': { input: 5 }, 'tiny-1': { input: 0.8 } } as never
+  const split = (key: string, usd: number) => ({ key, totalUSD: usd, reportedUSD: 0, attributedUSD: usd })
+  const r = (key: string, parts: ReturnType<typeof split>[]): CostRow => ({
+    key,
+    sessions: 1,
+    totalUSD: parts.reduce((a, p) => a + p.totalUSD, 0),
+    reportedUSD: 0,
+    attributedUSD: 0,
+    split: parts,
+  })
+  const rows = [
+    r('main', [split('big-1', 71), split('tiny-1', 29)]),
+    r('agents', [split('big-1', 26), split('tiny-1', 24)]),
+    r('(unsplit)', [split('(overhead)', 2)]),
+  ]
+
+  test('cells add up to the row, the overhead in a column of its own', () => {
+    const t = whoByTier(rows, prices)
+    expect(t.map((x) => [x.key, x.tiers.heavy, x.tiers.light, x.overhead])).toEqual([
+      ['main', 71, 29, 0],
+      ['agents', 26, 24, 0],
+      ['(unsplit)', 0, 0, 2],
+    ])
+    for (const x of t)
+      expect(x.tiers.heavy + x.tiers.mid + x.tiers.light + x.tiers.unknown + x.overhead).toBeCloseTo(x.total)
+  })
+
+  test('the unpriced column only when there is some', () => {
+    expect(tierColumns(whoByTier(rows, prices))).toEqual(['heavy', 'mid', 'light'])
+    expect(tierColumns(whoByTier([r('main', [split('mystery-model', 1)])], prices))).toEqual([
+      'heavy',
+      'mid',
+      'light',
+      'unknown',
+    ])
+  })
+
+  test('the sentence states the heavy shares', () => {
+    expect(whoTierSentence(whoByTier(rows, prices))).toBe(
+      'Sub-agents ran on heavy models for 52% of their spend; the main thread for 71%.',
+    )
+    expect(whoTierSentence(whoByTier([rows[0]], prices))).toBe(
+      'The main thread ran on heavy models for 71% of its spend.',
+    )
+    expect(whoTierSentence([])).toBeNull()
   })
 })

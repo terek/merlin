@@ -719,10 +719,20 @@ pages never disagree and switching tabs keeps it.
   on hover; one more `by=model` request for that window, hidden when it spent nothing) and a concentration link, "13
   sessions of 160 are half of it" (the fewest of the selected lanes whose spend makes half of their message spend;
   hidden under 5), to the Overview with the scope sorted by spend.
-- **By day**: an SVG bar chart over the scope's days, one bar per local day (per week over 120 days), labelled as the
-  Overview's timeline writes its days (`Fri 16`), stacked by model (`by=day&split=model`), the top eight models coloured
+- **By day** (hour, 3 hours, week: the section is named for its bars): an SVG bar chart over the scope's days.
+  **The time axis follows the range** (`grainFor`): up to 2 days one bar per hour, up to 7 days per 3 hours (7 days is
+  56 bars), up to 14 days per 6 hours, up to 120 days per day, beyond that per Monday-start week. Hour bars come from
+  `by=hour` (summed client-side into 3 or 6 hours, aligned to the clock, so a 23- or 25-hour day still has its 24
+  clock hours), days and weeks from `by=day`. Labels: hours as `14:00` and, at midnight, the day (`Fri 13`, with a
+  hairline through the plot); days as the Overview's timeline writes them (`Fri 16`); weeks by their first day (`14
+  Sep`). The hover names the bar ("Fri 13, 14:00–17:00"). A click selects the days: an hour bar selects its day.
+  The bars are stacked by model (`split=model`), the top eight models coloured
   and the rest grouped as "other"; hovering a bar lists that day's split. A switch at the right of the section header
-  changes the stack to **price class** (`by=day&split=class`: cache reads, cache writes, output, uncached input) or to
+  changes the stack (URL `stack=model|who|class|tier|compaction`) to **Who** (`split=agent`: main thread, series-1,
+  and sub-agents, series-2, as the Session page's kind colours; spend no message carries last, grey), **price class**
+  (`split=class`: cache reads, cache writes, output, uncached input), **Tier** (`split=model` grouped by `tierOf`
+  with the price table: heavy at the bottom in `--series-4`, mid 58 % and light 28 % of it, unpriced grey, as the
+  Session page's tier ramp; `(overhead)` stays the hatch) or to
   **compactions** (`stack=compaction`), which keeps the axis and the bars of the other stacks (the day's spend) and
   draws each bar empty, a faint fill and an outline, with only what the compaction calls cost coloured at its bottom
   (cold in red, warm in amber, at least 2 px) and a dot above each bar that has compactions (red when one
@@ -741,8 +751,10 @@ pages never disagree and switching tabs keeps it.
   Overview's table style (uppercase muted header row, tabular figures right-aligned): **Model** (Total and, wide
   enough, a muted ▲/▼ with the percentage against the period before, its dollars on hover; the `(overhead)` row
   explained in a footnote), **Price class** (cache reads, cache writes, output, uncached input, `(unsplit)` last, with
-  one computed sentence from the dollars alone), **Kind** and, under it, **Agents** (the main thread against
-  sub-agents, teammates and forks, with "Sub-agents spent 33% of it"). The figures are `by=class` and `by=agent`
+  one computed sentence from the dollars alone), **Kind** and, under it, **Who × Tier** (rows main thread, sub-agents
+  and not split; columns heavy, mid, light, the unpriced only when non-zero, and overhead only when the not-split row
+  has some; dollars from `by=agent&split=model` grouped by tier; one sentence from the figures: "Sub-agents ran on
+  heavy models for 52% of their spend; the main thread for 71%."). The figures are `by=class` and `by=agent`
   ([api.md](api.md)). Every table adds up to the total, and its share bars are a **cascade**: a faint full-width track
   per row, each row's segment starting where the row above ended, so reading down the segments walk once across the
   width (Model rows in the model's colour, Price class in the class's, Kind and Agents in the accent; at least 2

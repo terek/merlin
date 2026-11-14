@@ -2,6 +2,7 @@
 
 import type { CostRow } from '../../api/types'
 import { formatMoney } from '../../lib/format'
+import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
 import { type CustomRange, daysBetween } from '../overview/model'
 
@@ -99,6 +100,60 @@ export function agentSentence(rows: readonly CostRow[]): string | null {
   const a = rows.find((x) => x.key === 'agents')?.totalUSD ?? 0
   if (!(total > 0) || !(a > 0)) return null
   return `Sub-agents spent ${pctOf(a, total)}% of it (${formatMoney(a)}).`
+}
+
+/** One row of Who × Tier: the dollars of the main thread, the agents or the unsplit spend, by model tier. */
+export interface WhoTierRow {
+  key: string
+  total: number
+  tiers: Record<Tier, number>
+  /** The reported spend no message explains: it has no model, so no tier. */
+  overhead: number
+}
+
+/**
+ * `by=agent&split=model` rows grouped by the tier of their models (`lib/tiers.ts`, with the price table when
+ * there is one). Rows with no spend are left out; the cells of a row add up to its total.
+ */
+export function whoByTier(rows: readonly CostRow[], prices?: Prices): WhoTierRow[] {
+  const out: WhoTierRow[] = []
+  for (const r of rows) {
+    const row: WhoTierRow = {
+      key: r.key,
+      total: r.totalUSD,
+      tiers: { heavy: 0, mid: 0, light: 0, unknown: 0 },
+      overhead: 0,
+    }
+    for (const p of r.split ?? []) {
+      if (p.key === '(overhead)') row.overhead += p.totalUSD
+      else row.tiers[tierOf(p.key, prices)] += p.totalUSD
+    }
+    if (row.total > 0) out.push(row)
+  }
+  return out
+}
+
+/** The columns Who × Tier shows: the tiers with spend in any row, heavy first, the unpriced only when there is some. */
+export function tierColumns(rows: readonly WhoTierRow[]): Tier[] {
+  return TIERS.filter((t) => t !== 'unknown' || rows.some((r) => r.tiers[t] > 0))
+}
+
+/**
+ * The share of the main thread's and of the sub-agents' spend that ran on heavy models, in one sentence; null when
+ * neither has spend. Only what the figures show: no verdict.
+ */
+export function whoTierSentence(rows: readonly WhoTierRow[]): string | null {
+  const heavy = (key: string) => {
+    const r = rows.find((x) => x.key === key)
+    return r && r.total > 0 ? pctOf(r.tiers.heavy, r.total) : null
+  }
+  const a = heavy('agents')
+  const m = heavy('main')
+  if (a !== null && m !== null)
+    return `Sub-agents ran on heavy models for ${a}% of their spend; the main thread for ${m}%.`
+  if (a !== null) return `Sub-agents ran on heavy models for ${a}% of their spend.`
+  if (m !== null) return `The main thread ran on heavy models for ${m}% of its spend.`
+  return null
 }
 
 /**

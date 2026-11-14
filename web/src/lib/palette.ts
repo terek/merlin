@@ -105,3 +105,25 @@ CLASS.reread = CACHE_MISS
 export function classColor(key: string): string {
   return CLASS[key] ?? OTHER
 }
+
+/** Main thread and sub-agents: the Session page's `KIND_SERIES` (`main` series-1, `subagent` series-2). */
+const WHO: Record<string, string> = {
+  main: 'var(--series-1)',
+  agents: 'var(--series-2)',
+  '(unsplit)': 'color-mix(in srgb, var(--series-other) 40%, var(--surface))',
+}
+
+export function whoColor(key: string): string {
+  return WHO[key] ?? OTHER
+}
+
+/** The model tiers, as the Session page's `TIER_SERIES`: one hue (series-4) at 100, 58 and 28 %; unpriced grey. */
+const TIER: Record<string, string> = {
+  heavy: 'var(--series-4)',
+  mid: 'color-mix(in srgb, var(--series-4) 58%, var(--surface))',
+  light: 'color-mix(in srgb, var(--series-4) 28%, var(--surface))',
+}
+
+export function tierColor(key: string): string {
+  return TIER[key] ?? OTHER
+}

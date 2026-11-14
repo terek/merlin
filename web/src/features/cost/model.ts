@@ -11,12 +11,33 @@ import {
   HATCH,
   modelColor,
   OTHER,
+  tierColor,
+  whoColor,
 } from '../../lib/palette'
+import { type Prices, TIERS, tierOf } from '../../lib/tiers'
 import { daysBefore, localDay } from '../../lib/time'
 
 /** More days than this are drawn by week. */
 export const WEEKLY_AFTER_DAYS = 120
 export const OVERHEAD = '(overhead)'
+
+/** What one bar stands for: 1, 3 or 6 hours, a day, or a Monday-to-Sunday week. */
+export type Grain = 1 | 3 | 6 | 'day' | 'week'
+
+/**
+ * The bar width of a window of this many days: up to 2 days 1-hour bars, up to 7 days 3-hour bars, up to 14 days
+ * 6-hour bars, up to 120 days days, beyond that weeks. The hours need `by=hour`, which answers at most 14 days.
+ */
+export function grainFor(days: number): Grain {
+  if (days <= 2) return 1
+  if (days <= 7) return 3
+  if (days <= 14) return 6
+  return days > WEEKLY_AFTER_DAYS ? 'week' : 'day'
+}
+
+export const isHourly = (g: Grain): g is 1 | 3 | 6 => typeof g === 'number'
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
 
 export interface Window {
   /** First local day; undefined for "all" (from the first day with spend). */
@@ -54,6 +75,8 @@ export interface Bucket {
   /** Last day, included (a week is cut at the window). */
   to: string
   weekly: boolean
+  /** Hourly bars: the hours one bar stands for. Its `key` is then its first local hour, "2026-11-13T14", and `to` its day. */
+  hours?: 1 | 3 | 6
   total: number
   reported: number
   attributed: number
@@ -123,17 +146,45 @@ export function makeBuckets(rows: CostRow[], window: Window, weekly: boolean): B
     }
     e.b.to = day
     const row = byDay.get(day)
-    if (!row) continue
-    e.b.total += row.totalUSD
-    e.b.reported += row.reportedUSD
-    e.b.attributed += row.attributedUSD
-    if (row.recordedUSD) e.b.recorded = (e.b.recorded ?? 0) + row.recordedUSD
-    if (row.billedUSD) e.b.billed = (e.b.billed ?? 0) + row.billedUSD
-    if (row.unrecordedAgents) e.b.unrecorded = (e.b.unrecorded ?? 0) + row.unrecordedAgents
-    if (row.compactions) e.b.compactions = addTally(e.b.compactions, row.compactions)
-    addParts(e.parts, row.split)
+    if (row) addRow(e.b, e.parts, row)
   }
   return [...buckets.values()].map(({ b, parts }) => ({ ...b, parts: [...parts.values()].sort(bySize) }))
+}
+
+/** The local day an hour key, a day or a week's key falls on. */
+export const bucketDay = (b: Bucket): string => b.key.slice(0, 10)
+
+function addRow(b: Bucket, parts: Map<string, CostSplitEntry>, row: CostRow) {
+  b.total += row.totalUSD
+  b.reported += row.reportedUSD
+  b.attributed += row.attributedUSD
+  if (row.recordedUSD) b.recorded = (b.recorded ?? 0) + row.recordedUSD
+  if (row.billedUSD) b.billed = (b.billed ?? 0) + row.billedUSD
+  if (row.unrecordedAgents) b.unrecorded = (b.unrecorded ?? 0) + row.unrecordedAgents
+  if (row.compactions) b.compactions = addTally(b.compactions, row.compactions)
+  addParts(parts, row.split)
+}
+
+/**
+ * One bucket per `hours` local hours of every day of [since, until], empty ones included, from a `by=hour` response
+ * (keys "2026-11-13T14"). The buckets are aligned to the clock (0, 3, 6, ...), so a day's buckets are the same on a
+ * 23- or 25-hour day: the hour that does not exist is an empty bar, the repeated one one row.
+ */
+export function makeHourBuckets(rows: CostRow[], window: Window, hours: 1 | 3 | 6): Bucket[] {
+  const first = window.since ?? rows.map((r) => r.key.slice(0, 10)).sort()[0]
+  if (!first) return []
+  const out = new Map<string, { b: Bucket; parts: Map<string, CostSplitEntry> }>()
+  for (const day of listDays(first, window.until))
+    for (let h = 0; h < 24; h += hours) {
+      const key = `${day}T${pad2(h)}`
+      out.set(key, { b: { ...emptyBucket(key, day, false), hours }, parts: new Map() })
+    }
+  for (const row of rows) {
+    const hour = Number(row.key.slice(11, 13))
+    const e = out.get(`${row.key.slice(0, 10)}T${pad2(hour - (hour % hours))}`)
+    if (e && Number.isFinite(hour)) addRow(e.b, e.parts, row)
+  }
+  return [...out.values()].map(({ b, parts }) => ({ ...b, parts: [...parts.values()].sort(bySize) }))
 }
 
 /** The models that get a segment of their own: the eight with the most spend over the buckets, (overhead) apart. */
@@ -158,12 +209,23 @@ export interface Segment {
 /** The price classes in stack order (bottom first). Their colours are `classColor`'s. */
 export const CLASS_STACK: string[] = ['cacheRead', 'cacheWrite', 'output', 'input', '(unsplit)']
 
-/** By model, by source (reported, attributed or recorded), or the estimated compaction calls on their own. */
-export type Stack = 'model' | 'class' | 'compaction'
+/**
+ * By model, by who (main thread or agents), by price class, by model tier, or the estimated compaction calls on
+ * their own. The URL's `stack` is the same word.
+ */
+export type Stack = 'model' | 'who' | 'class' | 'tier' | 'compaction'
 
 export function parseStack(s: string | null): Stack {
-  return s === 'compaction' || s === 'class' ? s : 'model'
+  return s === 'compaction' || s === 'class' || s === 'who' || s === 'tier' ? s : 'model'
 }
+
+/** The `split` a stack's bars are read from: tiers and models both come from the models. */
+export function splitOf(stack: Stack): 'model' | 'class' | 'agent' {
+  return stack === 'class' ? 'class' : stack === 'who' ? 'agent' : 'model'
+}
+
+/** Main thread first (bottom), then the agents, then what no message explains. */
+export const WHO_STACK: string[] = ['main', 'agents', '(unsplit)']
 
 /**
  * The height of a bar: the day's spend, whatever the stack. The compaction stack keeps the axis and the bars of
@@ -179,7 +241,7 @@ export function barTotal(b: Bucket): number {
  * to the bucket's total. By compaction (drawn inside the day's full bar): the warm-cache cost of the calls, then the extra the cold
  * ones cost; they add up to the estimate.
  */
-export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
+export function stackOf(b: Bucket, stack: Stack, top: string[], prices?: Prices): Segment[] {
   if (stack === 'compaction') {
     // what the calls would have cost with a warm cache, then what the cold ones cost on top
     const c = b.compactions
@@ -193,6 +255,21 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
     // the price classes, bottom first; the parts of a `by=day&split=class` response
     const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
     return CLASS_STACK.map((key) => ({ key, color: classColor(key), usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
+  }
+  if (stack === 'who') {
+    const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
+    return WHO_STACK.map((key) => ({ key, color: whoColor(key), usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
+  }
+  if (stack === 'tier') {
+    // heavy at the bottom; the reported spend no model explains stays the hatch, as in the model stack
+    const usd = new Map<string, number>()
+    for (const p of b.parts) {
+      const k = p.key === OVERHEAD ? OVERHEAD : tierOf(p.key, prices)
+      usd.set(k, (usd.get(k) ?? 0) + p.totalUSD)
+    }
+    return [...TIERS, OVERHEAD]
+      .map((key) => ({ key, color: key === OVERHEAD ? HATCH : tierColor(key), usd: usd.get(key) ?? 0 }))
+      .filter((s) => s.usd > 0)
   }
   let other = 0
   let overhead = 0
@@ -235,6 +312,37 @@ export function labelEvery(bars: number, width: number, minPx = 64): number {
   return Math.max(1, Math.ceil(minPx / (width / bars)))
 }
 
+/**
+ * Index step between x labels for hourly bars: as `labelEvery`, but one that divides a day's bars, so a label always
+ * falls on midnight, where the day's name is.
+ */
+export function hourLabelEvery(bars: number, width: number, hours: 1 | 3 | 6, minPx = 64): number {
+  const perDay = 24 / hours
+  const want = labelEvery(bars, width, minPx)
+  for (let n = want; n < perDay; n++) if (perDay % n === 0) return n
+  return perDay
+}
+
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** "Fri 13": a day as the Overview's timeline writes it. */
+export function dayName(day: string): string {
+  const [y, m, d] = day.split('-').map(Number)
+  return `${DOW[new Date(y, m - 1, d).getDay()]} ${d}`
+}
+
+/** The label under an hourly bar: "14:00", and at midnight the day's name ("Fri 13"). */
+export function hourTick(b: Bucket): string {
+  const h = Number(b.key.slice(11, 13))
+  return h === 0 ? dayName(bucketDay(b)) : `${pad2(h)}:00`
+}
+
+/** "Fri 13, 14:00–17:00" (the last bar of a day ends at 24:00). */
+export function hourTitle(b: Bucket): string {
+  const h = Number(b.key.slice(11, 13))
+  return `${dayName(bucketDay(b))}, ${pad2(h)}:00–${pad2(h + (b.hours ?? 1))}:00`
+}
+
 export function sumRows(rows: { totalUSD: number }[]): number {
   let s = 0
   for (const r of rows) s += r.totalUSD
@@ -269,9 +377,12 @@ export function disagreements(cuts: Cut[], eps = 1e-6): string[] {
   return out
 }
 
-/** The buckets of a `by=day&split=model` response for a window: by week when it spans > 120 days. */
+/** The buckets of a `by=hour` (up to 14 days) or `by=day` response, with the split, for a window: see `grainFor`. */
 export function bucketsFor(rows: CostRow[], window: Window): Bucket[] {
   const first = window.since ?? rows.map((r) => r.key).sort()[0]
   if (!first) return []
-  return makeBuckets(rows, window, isWeekly(listDays(first, window.until).length))
+  const days = listDays(first, window.until).length
+  const grain = grainFor(days)
+  // the rows are by hour for the hourly grains (`by=hour`) and by day otherwise
+  return isHourly(grain) ? makeHourBuckets(rows, window, grain) : makeBuckets(rows, window, grain === 'week')
 }

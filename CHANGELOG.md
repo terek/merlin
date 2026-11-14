@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Cost draws a day or two by the hour and a week by three hours (up to two weeks by six), and can stack its bars by who spent (main thread or sub-agents) or by model tier (heavy, mid, light); the Agents table is now Who × Tier, the main thread and the sub-agents against the tiers of the models they ran on.
 - Cost colours each model the same way on every scope: by family (Opus blue, Sonnet orange, Haiku teal, Fable violet) with older versions lighter, never by rank, so pink is only ever the cache miss; warm compactions are amber, cold ones red, and the price classes use the Session page's colours.
 - Folder follows the work when a session started outside any checkout (say in `~`): it shows the checkout the session edited in. Resume still uses the directory the session started in.
 - Sessions from before a checkout became a bare container no longer show made-up checkouts named after its old subfolders.

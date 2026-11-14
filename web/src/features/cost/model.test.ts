@@ -6,13 +6,20 @@ import {
   type Bucket,
   barTotal,
   bucketsFor,
+  dayName,
   disagreements,
+  grainFor,
+  hourLabelEvery,
+  hourTick,
+  hourTitle,
   isWeekly,
   labelEvery,
   listDays,
   makeBuckets,
+  makeHourBuckets,
   niceTicks,
   parseStack,
+  splitOf,
   stackOf,
   tickLabel,
   topModels,
@@ -268,5 +275,149 @@ describe('the compaction stack', () => {
     expect(parseStack('compaction')).toBe('compaction')
     expect(parseStack('nonsense')).toBe('model')
     expect(parseStack('source')).toBe('model') // an old link: the reported / attributed stack is gone
+  })
+})
+
+describe('the time axis', () => {
+  test('the bar width by the number of days', () => {
+    expect([1, 2, 3, 7, 8, 14, 15, 120, 121].map(grainFor)).toEqual([1, 1, 3, 3, 6, 6, 'day', 'day', 'week'])
+  })
+
+  const hourRow = (key: string, usd: number, split: CostSplitEntry[] = [part('m', usd)]): CostRow => ({
+    ...row(key, split),
+    totalUSD: usd,
+  })
+
+  test('hours fill the window, the empty ones too, and add up', () => {
+    const rows = [
+      hourRow('2026-11-13T00', 1),
+      hourRow('2026-11-13T02', 2),
+      hourRow('2026-11-13T14', 4),
+      hourRow('2026-11-14T23', 8),
+    ]
+    const one = makeHourBuckets(rows, { since: '2026-11-13', until: '2026-11-14' }, 1)
+    expect(one).toHaveLength(48)
+    expect(one[0].key).toBe('2026-11-13T00')
+    expect(one[47].key).toBe('2026-11-14T23')
+    expect(one.every((b) => b.to === b.key.slice(0, 10))).toBe(true)
+    const three = makeHourBuckets(rows, { since: '2026-11-13', until: '2026-11-14' }, 3)
+    expect(three).toHaveLength(16)
+    expect(three[0].total).toBe(3) // 00:00-03:00: the hours 0 and 2
+    expect(three.find((b) => b.key === '2026-11-13T12')?.total).toBe(4)
+    expect(three[15].total).toBe(8)
+    expect(three[0].parts).toEqual([expect.objectContaining({ key: 'm', totalUSD: 3 })])
+    const six = makeHourBuckets(rows, { since: '2026-11-13', until: '2026-11-13' }, 6)
+    expect(six.map((b) => b.total)).toEqual([3, 0, 4, 0])
+    const sum = (g: Bucket[]) => g.reduce((a, b) => a + b.total, 0)
+    expect([sum(one), sum(three), sum(six)]).toEqual([15, 15, 7])
+  })
+
+  test('a day of 23 or 25 hours has the same 24 clock hours', () => {
+    // 2026-03-08 and 2026-11-01 in America/New_York: the missing 02:00 is an empty bar, the repeated 01:00 one row
+    const rows = [hourRow('2026-03-08T01', 1), hourRow('2026-03-08T03', 2), hourRow('2026-11-01T01', 5)]
+    const spring = makeHourBuckets(rows, { since: '2026-03-08', until: '2026-03-08' }, 1)
+    expect(spring).toHaveLength(24)
+    expect(spring[2].total).toBe(0)
+    expect(spring[3].total).toBe(2)
+    const autumn = makeHourBuckets(rows, { since: '2026-11-01', until: '2026-11-01' }, 1)
+    expect(autumn).toHaveLength(24)
+    expect(autumn[1].total).toBe(5)
+  })
+
+  test('hours outside the window are ignored; no window start begins at the first hour with spend', () => {
+    const rows = [hourRow('2026-11-12T10', 1), hourRow('2026-11-13T10', 2)]
+    expect(
+      makeHourBuckets(rows, { since: '2026-11-13', until: '2026-11-13' }, 6).reduce((a, b) => a + b.total, 0),
+    ).toBe(2)
+    expect(makeHourBuckets(rows, { until: '2026-11-13' }, 6)).toHaveLength(8)
+    expect(makeHourBuckets([], { until: '2026-11-13' }, 6)).toEqual([])
+  })
+
+  test('a partial first and last week are cut at the window', () => {
+    const w = makeBuckets(
+      [row('2026-09-23', [part('a', 1)]), row('2026-10-01', [part('a', 2)])],
+      { since: '2026-09-23', until: '2026-10-01' },
+      true,
+    )
+    expect(w.map((b) => [b.key, b.to])).toEqual([
+      ['2026-09-23', '2026-09-27'],
+      ['2026-09-28', '2026-10-01'],
+    ])
+  })
+
+  test('labels: the clock, and the day at midnight', () => {
+    const [mid, nine, three] = makeHourBuckets([], { since: '2026-11-13', until: '2026-11-13' }, 3)
+    expect(dayName('2026-11-13')).toBe('Fri 13')
+    expect(hourTick(mid)).toBe('Fri 13')
+    expect(hourTick(three)).toBe('06:00')
+    expect(hourTick(nine)).toBe('03:00')
+    const last = makeHourBuckets([], { since: '2026-11-13', until: '2026-11-13' }, 3)[7]
+    expect(hourTitle(last)).toBe('Fri 13, 21:00–24:00')
+    expect(hourTitle(makeHourBuckets([], { since: '2026-11-13', until: '2026-11-13' }, 1)[14])).toBe(
+      'Fri 13, 14:00–15:00',
+    )
+  })
+
+  test('hourly labels always include midnight', () => {
+    for (const hours of [1, 3, 6] as const)
+      for (const width of [200, 400, 900, 1600]) {
+        const every = hourLabelEvery(48, width, hours)
+        expect((24 / hours) % every).toBe(0)
+      }
+  })
+})
+
+describe('the stacks by who and by tier', () => {
+  const prices = { 'big-1': { input: 5 }, 'mid-1': { input: 3 }, 'tiny-1': { input: 0.8 } } as never
+  const bucket = (parts: CostSplitEntry[]): Bucket => ({
+    key: '2026-11-13',
+    to: '2026-11-13',
+    weekly: false,
+    total: parts.reduce((a, p) => a + p.totalUSD, 0),
+    reported: 0,
+    attributed: 0,
+    parts,
+  })
+
+  test('the url words and the splits', () => {
+    expect(parseStack('who')).toBe('who')
+    expect(parseStack('tier')).toBe('tier')
+    expect([splitOf('model'), splitOf('who'), splitOf('tier'), splitOf('class'), splitOf('compaction')]).toEqual([
+      'model',
+      'agent',
+      'model',
+      'class',
+      'model',
+    ])
+  })
+
+  test('who: the main thread at the bottom, then the agents, then what no message explains', () => {
+    const s = stackOf(bucket([part('agents', 1), part('(unsplit)', 0.5), part('main', 3)]), 'who', [])
+    expect(s.map((x) => [x.key, x.usd])).toEqual([
+      ['main', 3],
+      ['agents', 1],
+      ['(unsplit)', 0.5],
+    ])
+    expect(s[0].color).toBe('var(--series-1)')
+    expect(s[1].color).toBe('var(--series-2)')
+  })
+
+  test('tier: heavy at the bottom, models grouped by their price, the overhead a hatch on top', () => {
+    const s = stackOf(
+      bucket([part('tiny-1', 1), part('big-1', 4), part('mid-1', 2), part('(overhead)', 0.5), part('big-2', 1)]),
+      'tier',
+      [],
+      prices,
+    )
+    expect(s.map((x) => [x.key, x.usd])).toEqual([
+      ['heavy', 4],
+      ['mid', 2],
+      ['light', 1],
+      ['unknown', 1],
+      ['(overhead)', 0.5],
+    ])
+    expect(s[0].color).toBe('var(--series-4)')
+    expect(s[4].color).toBe(HATCH)
+    expect(s.reduce((a, x) => a + x.usd, 0)).toBe(8.5)
   })
 })
