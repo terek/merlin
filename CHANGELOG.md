@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The sidebar's selected line no longer turns bold (the text used to shift); it is marked by a stronger accent background and accent text.
 - The Overview's Custom range: the first click selects your last custom range, a second click opens the timeline.
 - Cost shows spend by price class (cache reads, cache writes, output, uncached input; also as a stack of the day chart) and by main thread against sub-agents, how the total changed against the same number of days before, and how many sessions make half of it.
 - Cost now looks like the Overview: its sidebar of places (where you pick a folder, repository or bead), then one pane with the total, spend by day, by model and by kind. Cost has no search; the Overview keeps its search when you come back to it.

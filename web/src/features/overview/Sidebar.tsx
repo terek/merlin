@@ -87,7 +87,9 @@ export function useSidebarOpen(): [boolean, (open: boolean) => void] {
 }
 
 const ITEM = 'flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left text-body'
-const SELECTED = 'bg-accent-soft font-medium text-accent'
+// The selection reads through colour, not weight (a bolder label would shift the text): a stronger accent tint,
+// the label, icon and figures in the accent. The hover tint (`bg-surface-2`) stays a grey.
+const SELECTED = 'bg-accent/15 text-accent'
 
 /**
  * The faint vertical guides of the levels above an item `indent` steps in: one through the chevron of each
@@ -105,11 +107,15 @@ function Guides({ indent }: { indent: number }) {
 }
 
 /** The figures at the end of an item: sessions shown and spend. */
-function Figures({ count, usd }: { count: number; usd: number }) {
+function Figures({ count, usd, selected }: { count: number; usd: number; selected: boolean }) {
   return (
     <>
-      <span className="w-6 shrink-0 text-right text-muted text-sec tabular-nums">{count}</span>
-      <Money usd={usd} dim className="w-12 shrink-0 text-right text-sec" />
+      <span className={cn('w-6 shrink-0 text-right text-sec tabular-nums', !selected && 'text-muted')}>{count}</span>
+      <Money
+        usd={usd}
+        dim={!selected}
+        className={cn('w-12 shrink-0 text-right text-sec', selected && 'text-accent!')}
+      />
     </>
   )
 }
@@ -157,7 +163,7 @@ function TreeLine({
   return (
     <li
       data-node={node}
-      className={cn('relative flex items-center rounded-card', hot && 'bg-surface-2', selected && SELECTED)}
+      className={cn('relative flex items-center rounded-card', selected ? SELECTED : hot && 'bg-surface-2')}
       style={{ paddingLeft: TREE_GUTTER + indent * TREE_INDENT }}
     >
       <Guides indent={indent} />
@@ -188,7 +194,7 @@ function TreeLine({
           muted && !selected && 'text-muted',
         )}
       >
-        <Icon size={14} aria-hidden className="shrink-0 text-muted" />
+        <Icon size={14} aria-hidden className={cn('shrink-0', !selected && 'text-muted')} />
         {/* the id wraps out of sight (the line is clipped) when it does not fit whole beside the title */}
         <span className="flex h-5 min-w-0 flex-1 flex-wrap items-baseline overflow-hidden">
           <span className="max-w-full truncate">{label}</span>
@@ -198,7 +204,7 @@ function TreeLine({
             </span>
           )}
         </span>
-        <Figures count={count} usd={usd} />
+        <Figures count={count} usd={usd} selected={selected} />
       </button>
     </li>
   )

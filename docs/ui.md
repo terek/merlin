@@ -962,8 +962,8 @@ The table only ever lists sessions.
   - **The selection is the scope.** A click on a line's label selects it: the table and the summary take only
     the sessions whose place sits **at or under** its path, matched segment-wise on the real path (`underPath`;
     so `~/work` does not take `~/workshop`); `(none)` takes the sessions with no value. A click on the selected
-    line, on All or on the chip's x clears it; a chevron only opens or closes. The selected line has the
-    accent style; All has it when nothing is selected. The selection applies after the search. Nothing under it:
+    line, on All or on the chip's x clears it; a chevron only opens or closes. The selected line reads through colour, not
+    weight (nothing shifts): the accent at 15% as its background, its label, icon and figures in the accent; All has it when nothing is selected. The selection applies after the search. Nothing under it:
     "Nothing under ~/work in this range." with a "Clear the selection" link.
   - **URL** `in` = the selected node's real path prefix (`-` for (none)). Selecting adds a history entry.
     On a change of Organise by it is kept when some session sits under it in the new key, else dropped
