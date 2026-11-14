@@ -234,7 +234,9 @@ One bar, 44px: **brand, the page's slot, the tabs, the theme and status buttons*
   Overview address visited in this tab (`pathname + search` in `sessionStorage`, `/` when there is none), then the
   session's harness mark and title, muted, truncating, the whole title in the tooltip. Cost, Moments, Sessions and
   Bead leave it empty and keep their toolbars in the page.
-- **Right**: the tabs **Overview** (`/`), **Cost**, **Moments**, the active one a quiet pill (`bg-surface-2`,
+- **Right**: the tabs **Overview** (`/`), **Cost**, **Moments**; Overview and Cost link with the scope (`range`
+  `from` `to` `by` `in` `q`) of the page being read when it is one of the two, else the last one seen (`sessionStorage`),
+  and `g o` and `g c` do the same; the active one a quiet pill (`bg-surface-2`,
   rounded, `text-fg`), no underline (one would read as a marker of the table's columns), their tooltips carrying
   the shortcuts; Sessions has no tab (`g s`, or the links that lead to it). Just left of the tabs, only while it
   applies, "Merlin updated to X · Reload" once the daemon has replaced itself. Then the **theme button** (one click cycles System, Light, Dark: Monitor, Sun, Moon) and one **status button**: a
@@ -694,29 +696,42 @@ the cost spent on each and "no bead" for the rest.
 
 ## 10. Cost page (`/cost`)
 
-- **Controls**: range (`7d`, `30d`, `90d`, `all`), project (from `/api/projects`).
-- **Headline**: total for the range; reported versus attributed as a `Bar` with both figures; a
-  sentence on backing ("69 sessions exact, 5 partial, 149 estimated, 3,132 scripted runs"); a line
-  on the compaction calls of the range, with what a warm cache every time would have cost.
-- **By day**: an SVG bar chart, one bar per local day, stacked by model (`by=day&split=model`),
-  the top five models coloured and the rest grouped as "other"; hovering a bar lists that day's
-  split. A toggle switches the stack to reported / attributed, or to **compactions**
-  (`stack=compaction`): the estimated compaction calls on their own, each bar the warm-cache price
-  (grey) with the extra a cold cache cost on top (red) and the number of cold calls over it, and a
-  paragraph under the chart that says what makes a compaction cold. The estimate is not part of the
-  spend, so it never shares a bar with it.
-- **Tables**, each a `DataTable` sorted by cost with a share bar: by project, by model (with the
-  `(overhead)` row explained in a footnote), by kind.
-- **Top sessions** (`by=session`, limit 50): title, project, last activity, compaction calls ("1 cold
-  · ~$3.48"), cost with flag, linking
-  to the session. Scripted runs are the `scripted:<project>` rows, not links.
-- **By repository** (repository, checkout, remote or branch, `repocut=checkout|remote|branch`, the
-  repository cut by default; the old `repocut=branch` URLs work) and **By bead** (family or bead,
-  `beadcut=bead`), limit 30 each, with a footnote saying how a session's cost is split. A row opens
-  the Sessions page grouped and filtered to it: a repository, checkout or remote row counts primary
-  values, so it links `group=…&repo|checkout|remote=<key>` with no `touched` (none is `-`); two rows
-  with one name show enough of their path to tell them apart.
-- Selecting a project row sets the `project` filter; selecting a day bar narrows the range to it.
+The Overview's scope read as money. One scope, two readings: the Overview reads the work (sessions, places, time),
+Cost reads the money (model, source, trust, compactions, days) of **exactly the same scope**, so the two pages never
+disagree and switching tabs keeps it.
+
+- **Scope**: the URL's `range` (`1d`, `7d`, `30d`), `from` and `to` (a custom range), `by`, `in` and `q`, read and
+  written by the code the Overview uses (`features/overview/ScopeSlot.tsx`), and the same two capsules in the top bar
+  (section 10b): the range with its axis, the search with the `in` chip. Cost adds its own `stack` (the chart's
+  toggle). The data is `GET /api/cost` with `since`, `until` (the scope's local days), `place` (`by` when `in` is
+  set), `in` and `q` ([api.md](api.md)). An old address is rewritten with `replace`: `project=X` is `by=dir&in=X`,
+  `range=90d` and `range=all` are `from` and `to` (all: from the first day with spend to today), the cuts
+  (`repocut`, `beadcut`) go.
+- **Headline**: the total of the scope; reported versus attributed (and recorded) as a `Bar` with the figures; a
+  sentence on backing ("69 sessions exact, 5 partial, 149 estimated, 3,132 scripted runs"); a line on the compaction
+  calls of the scope, with what a warm cache every time would have cost; and, only when it is not zero, "$2.55 of it
+  is reported spend no message explains, so it is in no session's figure on the Overview" (the `(overhead)` amount:
+  the bridge between this total and the Overview's).
+- **By day**: an SVG bar chart over the scope's days, one bar per local day (per week over 120 days), stacked by model
+  (`by=day&split=model`), the top five models coloured and the rest grouped as "other"; hovering a bar lists that
+  day's split. A toggle switches the stack to reported / attributed, or to **compactions** (`stack=compaction`): the
+  estimated compaction calls on their own, each bar the warm-cache price (grey) with the extra a cold cache cost on
+  top (red) and the number of cold calls over it, and a paragraph under the chart that says what makes a
+  compaction cold. The estimate is not part of the spend, so it never shares a bar with it. A click on a bar sets the
+  custom range to that day (remembered like a drag): the scope narrows for both pages.
+- **Tables**, a grid of cards (three columns when wide, fewer when narrow), each a `DataTable` with a share bar:
+  **By model** (the `(overhead)` row explained in a footnote), **By kind**, and **By place**. By place is the ranking
+  the Overview's tree lacks: the children of the selection (the top-level places with nothing selected), each rolled
+  up over everything under it, by spend, `(none)` last, in the Overview's tree (`buildPlaceTree`: the same merged
+  one-child folders, labels and icons). Its figures are the Overview's lanes for the scope (`/api/overview`, one-day
+  slots), not a second definition; a footnote says they count spend in messages, as the Overview does. A row click
+  selects the place (`in`, a history entry): drill down; a leaf shows as the one row it is, and a folder that is
+  itself a place gets a `(directly here)` row. The card's select is Organise by (`by`; the selection is kept where
+  some session sits under it on the new key).
+- **Under the tables** one quiet line, "The sessions behind these figures →", links to the Overview with the scope.
+  The Overview's footer Spend figure links here with it.
+- **Empty**: "Nothing was spent between May 20 and May 29." (the Overview's phrase), with "Clear the selection" when a
+  selection or search emptied it.
 
 ## 10a. Bead page (`/bead/:id`)
 
@@ -769,7 +784,8 @@ The table only ever lists sessions.
   `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
   them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`, `bead`), `in` (the selection), `q` (the
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
-- **The slot: two capsules, the range first, then search.** Both are rounded, 32 px high, on the grey track
+- **The slot: two capsules, the range first, then search.** (Cost renders the same two, section 10; the scope is the
+  same URL parameters.) Both are rounded, 32 px high, on the grey track
   (`bg-surface-2`). **The axis is open only while the user works the time axis; any other choice (a preset,
   Escape, `/`, the magnifier, a pointer-down outside the range capsule) puts the search back.** The search starts
   expanded; which is which is page state, not URL; widths change in 150 ms.

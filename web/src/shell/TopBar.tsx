@@ -1,11 +1,12 @@
 import { Monitor, Moon, Radio, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useConnection, useScanProgress, useVersion } from '../api/events'
 import { cn } from '../lib/cn'
 import { formatCount } from '../lib/format'
 import { availableToShow, releaseUrl } from '../lib/version'
 import { IconButton } from '../ui'
+import { lensLinks } from './lastOverview'
 import { SlotTarget } from './ShellSlot'
 import { nextTheme, useTheme } from './theme'
 import { useShortcut } from './useShortcut'
@@ -132,6 +133,8 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 /** 44 px: the name, the page's slot in the middle, the tabs and the status button at the right. */
 export function TopBar() {
+  const { pathname, search } = useLocation()
+  const links = lensLinks(pathname, search)
   return (
     <header className="relative z-30 flex h-11 shrink-0 items-center gap-4 border-b border-line bg-surface px-4">
       <Link to="/" className="flex items-center gap-2 font-semibold text-fg hover:no-underline" aria-label="Merlin">
@@ -141,10 +144,10 @@ export function TopBar() {
       <SlotTarget />
       <UpdateNotice />
       <nav className="flex gap-1" aria-label="Main">
-        <NavLink to="/" end className={navClass} title="Overview: where the agents' work went (g o)">
+        <NavLink to={links.overview} end className={navClass} title="Overview: where the agents' work went (g o)">
           Overview
         </NavLink>
-        <NavLink to="/cost" className={navClass} title="Cost (g c)">
+        <NavLink to={links.cost} className={navClass} title="Cost: the same scope, read as money (g c)">
           Cost
         </NavLink>
         <NavLink to="/moments" className={navClass} title="Moments: what your sessions say about how you work (g m)">

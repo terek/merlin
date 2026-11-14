@@ -860,7 +860,7 @@ when more hits exist than `limit`.
 
 ## GET /api/cost
 
-Cost rollups. Totals are the same for every `by`: they add up to the sum of best costs. With `place`, `in` and `q` the table covers exactly the Overview's scope: the lanes of `/api/overview` under the same selection and search add up to the table's attributed plus recorded spend, except for reported spend no message explains (the `(overhead)` row), which belongs to no lane.
+Cost rollups. Totals are the same for every `by`: they add up to the sum of best costs. With `place`, `in` and `q` the table covers exactly the Overview's scope: the lanes of `/api/overview` under the same selection and search add up to the table's attributed plus recorded spend, except for two things no lane carries: reported spend no message explains (the `(overhead)` row), and the estimated cost of truncated sub-agent messages (`estimatedUSD`, counted as attributed here).
 
 | Parameter | Meaning |
 |---|---|

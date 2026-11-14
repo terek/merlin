@@ -11,11 +11,7 @@ import {
   listDays,
   makeBuckets,
   niceTicks,
-  parseDay,
-  parseRange,
   parseStack,
-  rangeWindow,
-  selectedWindow,
   stackOf,
   tickLabel,
   topModels,
@@ -38,21 +34,6 @@ const row = (key: string, parts: CostSplitEntry[]): CostRow => ({
 })
 
 describe('windows', () => {
-  const now = new Date(2026, 9, 2, 15, 0)
-  test('ranges are whole local days, today included', () => {
-    expect(rangeWindow('7d', now)).toEqual({ since: '2026-09-26', until: '2026-10-02' })
-    expect(rangeWindow('30d', now).since).toBe('2026-09-03')
-    expect(rangeWindow('all', now)).toEqual({ since: undefined, until: '2026-10-02' })
-  })
-  test('parsing', () => {
-    expect(parseRange('90d')).toBe('90d')
-    expect(parseRange('x')).toBe('7d')
-    expect(parseDay('2026-02-30')).toBeUndefined()
-    expect(parseDay('2026-09-16')).toBe('2026-09-16')
-    expect(selectedWindow('2026-09-14', '2026-09-20')).toEqual({ since: '2026-09-14', until: '2026-09-20' })
-    expect(selectedWindow('2026-09-14', undefined)).toEqual({ since: '2026-09-14', until: '2026-09-14' })
-    expect(selectedWindow(undefined, '2026-09-20')).toBeUndefined()
-  })
   test('day arithmetic crosses months and DST', () => {
     expect(addDays('2026-09-30', 1)).toBe('2026-10-01')
     expect(listDays('2026-03-27', '2026-03-30')).toEqual(['2026-03-27', '2026-03-28', '2026-03-29', '2026-03-30'])
@@ -92,16 +73,15 @@ describe('buckets', () => {
       ['b', 1],
     ])
   })
-  test('weekly only for "all" and over 120 days', () => {
-    expect(isWeekly('all', 121)).toBe(true)
-    expect(isWeekly('all', 120)).toBe(false)
-    expect(isWeekly('90d', 500)).toBe(false)
+  test('weekly only over 120 days', () => {
+    expect(isWeekly(121)).toBe(true)
+    expect(isWeekly(120)).toBe(false)
     const long = [row('2026-01-01', [part('a', 1)]), row('2026-09-30', [part('a', 1)])]
-    const b = bucketsFor(long, { until: '2026-09-30' }, 'all')
+    const b = bucketsFor(long, { until: '2026-09-30' })
     expect(b[0].weekly).toBe(true)
     expect(b.length).toBeLessThan(45)
     expect(b.reduce((a, x) => a + x.total, 0)).toBe(2)
-    expect(bucketsFor(long, { since: '2026-09-01', until: '2026-09-30' }, '30d')[0].weekly).toBe(false)
+    expect(bucketsFor(long, { since: '2026-09-01', until: '2026-09-30' })[0].weekly).toBe(false)
   })
 })
 

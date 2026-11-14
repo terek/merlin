@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from './ErrorBoundary'
-import { rememberOverview } from './lastOverview'
+import { lensLinks, rememberOverview, rememberScope } from './lastOverview'
 import { SessionSlot } from './SessionSlot'
 import { SlotProvider } from './ShellSlot'
 import { TopBar } from './TopBar'
@@ -13,11 +13,15 @@ export function Layout() {
   const { pathname, search } = useLocation()
   const main = useRef<HTMLElement>(null)
   const onSession = useMatch('/s/:harness/:id') !== null
-  useShortcut('g o', () => navigate('/'))
+  const links = lensLinks(pathname, search)
+  useShortcut('g o', () => navigate(links.overview))
   useShortcut('g s', () => navigate('/sessions'))
-  useShortcut('g c', () => navigate('/cost'))
+  useShortcut('g c', () => navigate(links.cost))
   useShortcut('g m', () => navigate('/moments'))
-  useEffect(() => rememberOverview(pathname, search), [pathname, search])
+  useEffect(() => {
+    rememberOverview(pathname, search)
+    rememberScope(pathname, search)
+  }, [pathname, search])
   // a new page starts at the top of main (not on a filter change); the keyboard pages main unless a field has focus
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new page resets the scroll
   useEffect(() => {

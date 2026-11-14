@@ -1,164 +1,157 @@
-// The Cost page (docs/ui.md section 10): what was spent, when, on which project and model, and how
-// well backed the figure is. Controls are in the URL: range, project, stack, and from / to for a
-// selected bar. Every table and the chart are cuts of one sum; the headline shows it once.
+// The Cost page (docs/ui.md section 10): the Overview's scope read as money. The scope is the same URL
+// (`range`, `from`, `to`, `by`, `in`, `q`) and the same two capsules in the top bar; the page shows what
+// that scope cost: the total and how well it is backed, by day, by model, by kind and by place.
 
-import { X } from 'lucide-react'
-import { type ReactNode, useMemo } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useCost, useProjects } from '../../api/queries'
-import type { CompactionTally, CostRow, CostTable } from '../../api/types'
+import { ChevronRight, Folder, FolderX, Search } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { useCost, useOverview, useSearch } from '../../api/queries'
+import type { CostRow, CostTable } from '../../api/types'
+import { cn } from '../../lib/cn'
 import { tallyLine, warmLine } from '../../lib/compaction'
-import { backingLowerBound, backingSentence, lowerBoundNote, sessionsLowerBound, unknownNote } from '../../lib/cost'
+import { backingLowerBound, backingSentence, lowerBoundNote, unknownNote } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
-import { useDocumentTitle } from '../../lib/hooks'
+import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
-import { beadPath, sessionPath, shortProject } from '../../lib/paths'
-import { placeLabels, remoteLabels } from '../../lib/places'
-import { dayStart, shortDate } from '../../lib/time'
+import { scopeSearch } from '../../lib/scope'
 import {
   Bar,
-  Button,
   Card,
   DataTable,
   EmptyState,
   Money,
-  ProjectName,
   QueryBoundary,
-  RelTime,
   SegmentedControl,
   Select,
   Skeleton,
   SkeletonRows,
 } from '../../ui'
 import type { Column } from '../../ui/layout'
-import { parseRepoCut, placePath, type RepoCut } from './cuts'
+import {
+  type Beads,
+  BYS,
+  beadLabel,
+  customLabel,
+  customPhrase,
+  customWindow,
+  displayPath,
+  firstSpendDay,
+  formatCustom,
+  inferHome,
+  keepSelection,
+  type PlaceNode,
+  presetRange,
+  sessionKey,
+} from '../overview/model'
+import { BY_LABEL, folderIcon, NONE_TITLE } from '../overview/placeUi'
+import { ScopeSlot, useScope } from '../overview/ScopeSlot'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
+import { migrateCostSearch, type PlaceRow, placeRows } from './lens'
 import {
   type Bucket,
   bucketsFor,
   type modelTone,
   OVERHEAD,
-  parseDay,
-  parseRange,
   parseStack,
-  RANGES,
-  type Range,
-  rangeWindow,
   type Stack,
-  selectedWindow,
   stackOf,
   topModels,
-  windowCaption,
+  type Window,
 } from './model'
 
-const ALL = ''
+const TEN_MIN = 600_000
 
-const dayText = (d: string) => (d ? shortDate(dayStart(d)) : '')
+const RANGE_CAPTION = { '1d': 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days' } as const
 
 export function CostPage() {
   useDocumentTitle('Cost')
-  const [sp, setSp] = useSearchParams()
-  const range = parseRange(sp.get('range'))
-  const project = sp.get('project') || undefined
+  const scope = useScope()
+  const { sp, set, select, range, custom, by, sel, q } = scope
+  const [, setSp] = useSearchParams()
   const stack = parseStack(sp.get('stack'))
-  const from = parseDay(sp.get('from'))
-  const sel = selectedWindow(from, parseDay(sp.get('to')))
+  const now = useNow(300_000)
 
-  const set = (changes: Record<string, string | undefined>) => {
-    const next = new URLSearchParams(sp)
-    for (const [k, v] of Object.entries(changes)) {
-      if (v === undefined || v === '') next.delete(k)
-      else next.set(k, v)
-    }
-    setSp(next, { replace: false })
+  // an old address (project, 90d, all, the cuts) becomes the same scope in the Overview's terms
+  const everyDay = useCost({ by: 'day' })
+  const firstDay = everyDay.data ? (firstSpendDay(everyDay.data.rows) ?? null) : null
+  const migrated = migrateCostSearch(sp, now, firstDay)
+  useEffect(() => {
+    if (migrated instanceof URLSearchParams) setSp(migrated, { replace: true })
+  }, [migrated, setSp])
+
+  // the scope's days, whole local days as on the Overview
+  const days = custom ?? presetRange(range, now)
+  const win: Window = { since: days.from, until: days.to }
+  const term = q.trim()
+  const scoped = {
+    since: days.from,
+    until: days.to,
+    place: sel === null ? undefined : by,
+    in: sel ?? undefined,
+    q: term,
   }
 
-  // The chart always shows the whole range; the figures follow a selected bar when there is one.
-  const chartWin = useMemo(() => rangeWindow(range), [range])
-  const win = sel ?? chartWin
-  const q = { project, since: win.since, until: win.until }
+  const head = useCost({ by: 'kind', ...scoped }, { enabled: migrated === null })
+  const dayRows = useCost({ by: 'day', split: 'model', ...scoped }, { enabled: migrated === null })
+  const byModel = useCost({ by: 'model', ...scoped }, { enabled: migrated === null })
 
-  const head = useCost({ by: 'kind', ...q })
-  const days = useCost({ by: 'day', split: 'model', project, since: chartWin.since, until: chartWin.until })
-  const byProject = useCost({ by: 'project', ...q })
-  const byModel = useCost({ by: 'model', ...q })
-  const byKind = head
-  const repoCut = parseRepoCut(sp.get('repocut'))
-  const beadCut = sp.get('beadcut') === 'bead' ? 'bead' : 'family'
-  const byRepo = useCost({ by: repoCut, limit: 30, ...q })
-  const repoLabels = useMemo(() => {
-    const rows = byRepo.data?.rows ?? []
-    if (repoCut === 'remote') {
-      const short = remoteLabels(rows.map((r) => r.key))
-      return new Map(rows.map((r, i) => [r.key, short[i] || r.label || r.key]))
-    }
-    if (repoCut !== 'repo' && repoCut !== 'checkout') return new Map<string, string>()
-    // two repositories or checkouts of one name show enough of their path to tell them apart
-    const labels = placeLabels(rows.map((r) => ({ key: r.key, name: r.label ?? r.key })))
-    return new Map(rows.map((r, i) => [r.key, labels[i]]))
-  }, [byRepo.data, repoCut])
-  const byBead = useCost({ by: beadCut, limit: 30, ...q })
-  const navigate = useNavigate()
-  const top = useCost({ by: 'session', limit: 50, ...q })
-  const projects = useProjects()
+  // the places and the home come from the Overview's lanes for the same days: the figures are its figures
+  const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
+  const w = customWindow(days, to)
+  const overview = useOverview(
+    { from: new Date(w.fromMs).toISOString(), to: new Date(w.toMs).toISOString(), slot: '1d' },
+    migrated === null,
+  )
+  const lanes = overview.data?.lanes
+  const beads = overview.data?.beads
+  const home = useMemo(() => inferHome(lanes?.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [lanes])
+  const search = useSearch(term)
+  const hits = useMemo(
+    () => (search.data ? new Set(search.data.hits.map((h) => sessionKey(h.session.harness, h.session.id))) : undefined),
+    [search.data],
+  )
+
+  if (migrated !== null) return <Skeleton className="m-4 h-64" />
 
   const empty = head.data !== undefined && head.data.rows.length === 0 && head.data.total.totalUSD === 0
+  const overhead = byModel.data?.rows.find((r) => r.key === OVERHEAD)?.totalUSD ?? 0
+  const caption = custom ? `${customLabel(custom, now)}` : RANGE_CAPTION[range]
+  const where = [sel !== null ? `in ${displayPath(sel, home, by)}` : '', term ? `matching “${term}”` : ''].filter(
+    Boolean,
+  )
+  const overviewTo = `/${scopeSearch(sp)}`
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-4 p-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-page">Cost</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            label="Project"
-            value={project ?? ALL}
-            onChange={(v) => set({ project: v })}
-            options={[
-              { value: ALL, label: 'All projects' },
-              ...(projects.data?.projects ?? []).map((p) => ({ value: p.project, label: shortProject(p.project) })),
-              ...(project && !projects.data?.projects.some((p) => p.project === project)
-                ? [{ value: project, label: shortProject(project) }]
-                : []),
-            ]}
-            className="w-52"
-          />
-          <SegmentedControl
-            label="Range"
-            value={sel ? ('' as Range) : range}
-            onChange={(v) => set({ range: v, from: undefined, to: undefined })}
-            options={RANGES.map((r) => ({ value: r, label: r === 'all' ? 'All' : r }))}
-          />
-        </div>
-      </header>
-
-      {sel && (
-        <div className="flex items-center gap-2 text-sec text-muted">
-          <span>
-            Showing <b className="font-medium text-fg">{windowCaption(range, sel, dayText)}</b>; the chart still shows
-            the whole range.
-          </span>
-          <Button size="sm" variant="ghost" onClick={() => set({ from: undefined, to: undefined })}>
-            <X size={12} aria-hidden /> Clear
-          </Button>
-        </div>
-      )}
-
+      <ScopeSlot scope={scope} home={home} beads={beads} />
       {empty ? (
         <Card>
-          <EmptyState title="No spend in this range">
-            Nothing was spent {project ? `in ${shortProject(project)} ` : ''}
-            {sel ? 'on that day' : range === 'all' ? 'yet' : `in the last ${range.replace('d', '')} days`}. A longer
-            range or another project may have some.
-            {range !== 'all' && (
+          <EmptyState title="Nothing was spent here">
+            Nothing was spent {customPhrase(days, now)}
+            {sel !== null && ` in ${displayPath(sel, home, by)}`}
+            {term && ` matching “${term}”`}.
+            {(sel !== null || term) && (
               <div className="mt-3">
-                <Button onClick={() => set({ range: 'all', from: undefined, to: undefined })}>Show all time</Button>
+                <button
+                  type="button"
+                  className="text-accent hover:underline"
+                  onClick={() => {
+                    set({ in: undefined, q: undefined })
+                  }}
+                >
+                  Clear the selection
+                </button>
               </div>
             )}
           </EmptyState>
         </Card>
       ) : (
         <>
-          <Headline query={head} caption={windowCaption(range, sel, dayText)} />
+          <Headline
+            query={head}
+            caption={where.length ? `${caption} · ${where.join(' · ')}` : caption}
+            overheadUSD={overhead}
+          />
 
           <Card
             title="By day"
@@ -185,136 +178,101 @@ export function CostPage() {
               />
             }
           >
-            <QueryBoundary query={days} skeleton={<Skeleton className="h-56" />}>
+            <QueryBoundary query={dayRows} skeleton={<Skeleton className="h-56" />}>
               {(d) => (
                 <ChartBody
                   rows={d.rows}
-                  range={range}
-                  win={chartWin}
+                  win={win}
                   stack={stack}
-                  selected={sel}
-                  onPick={(b) => set({ from: b.key, to: b.to })}
+                  onPick={(b) => set({ range: undefined, ...formatCustom({ from: b.key, to: b.to }) })}
                 />
               )}
             </QueryBoundary>
           </Card>
 
-          <div className="grid grid-cols-2 items-start gap-4">
-            <Card title="By project" flush>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(440px,1fr))] items-start gap-4">
+            <Card title="By model" flush>
               <CutTable
-                query={byProject}
-                name="Project"
-                label={(r) => <ProjectName path={r.key} />}
-                onPick={(r) => set({ project: r.key })}
-                selected={project}
-              />
-            </Card>
-            <div className="space-y-4">
-              <Card title="By model" flush>
-                <CutTable
-                  query={byModel}
-                  name="Model"
-                  label={(r) =>
-                    r.key === OVERHEAD ? (
-                      <span title="Spend the harness reported that no transcript message explains.">
-                        (overhead)<sup className="ml-0.5 text-faint">1</sup>
-                      </span>
-                    ) : (
-                      <span title={r.key}>{modelLabel(r.key)}</span>
-                    )
-                  }
-                  footer={(d) =>
-                    d.rows.some((r) => r.key === OVERHEAD) && (
-                      <>
-                        <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It
-                        has no model of its own.
-                      </>
-                    )
-                  }
-                />
-              </Card>
-              <Card title="By kind" flush>
-                <CutTable
-                  query={byKind}
-                  name="Kind"
-                  label={(r) => (
-                    <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
-                  )}
-                />
-              </Card>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 items-start gap-4">
-            <Card
-              title="By repository"
-              flush
-              actions={
-                <SegmentedControl
-                  label="Cut by repository, checkout, remote or branch"
-                  value={repoCut}
-                  onChange={(v) => set({ repocut: v === 'repo' ? undefined : v })}
-                  options={REPO_CUTS}
-                />
-              }
-            >
-              <CutTable
-                query={byRepo}
-                name={REPO_CUTS.find((c) => c.value === repoCut)?.name ?? 'Repository'}
-                label={(r) => (
-                  <GroupLabel
-                    row={r}
-                    mono={repoCut === 'branch' || repoCut === 'remote'}
-                    text={repoLabels.get(r.key)}
-                  />
-                )}
-                onPick={(r) => navigate(placePath(repoCut, r.key))}
-                footer={() => REPO_CUT_NOTE[repoCut]}
-              />
-            </Card>
-            <Card
-              title="By bead"
-              flush
-              actions={
-                <SegmentedControl
-                  label="Bead family or bead"
-                  value={beadCut}
-                  onChange={(v) => set({ beadcut: v === 'family' ? undefined : v })}
-                  options={[
-                    { value: 'family', label: 'Family', title: 'Beads grouped under the root of their family' },
-                    { value: 'bead', label: 'Bead', title: 'Each bead on its own' },
-                  ]}
-                />
-              }
-            >
-              <CutTable
-                query={byBead}
-                name={beadCut === 'bead' ? 'Bead' : 'Family'}
-                label={(r) => <GroupLabel row={r} id />}
-                onPick={(r) => r.key && navigate(placePath('bead', r.key))}
-                footer={() =>
-                  'A session’s cost is split over the beads it worked on: from a claim (or the previous close) to the close, shared while several are open; an agent that worked on one bead spends all of it there. The rest is “no bead”.'
+                query={byModel}
+                name="Model"
+                label={(r) =>
+                  r.key === OVERHEAD ? (
+                    <span title="Spend the harness reported that no transcript message explains.">
+                      (overhead)<sup className="ml-0.5 text-faint">1</sup>
+                    </span>
+                  ) : (
+                    <span title={r.key}>{modelLabel(r.key)}</span>
+                  )
+                }
+                footer={(d) =>
+                  d.rows.some((r) => r.key === OVERHEAD) && (
+                    <>
+                      <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It has
+                      no model of its own.
+                    </>
+                  )
                 }
               />
             </Card>
-          </div>
-          <div>
+            <Card title="By kind" flush>
+              <CutTable
+                query={head}
+                name="Kind"
+                label={(r) => <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>}
+              />
+            </Card>
             <Card
-              title="Top sessions"
+              title="By place"
               flush
               actions={
-                <span className="text-sec text-muted">Sessions last active in this range, with their whole cost</span>
+                <Select
+                  label="Organise by"
+                  value={by}
+                  onChange={(v) =>
+                    set({ by: v === 'dir' ? undefined : v, in: keepSelection(sel, lanes ?? [], v, beads) })
+                  }
+                  options={BYS.map((v) => ({ value: v, label: BY_LABEL[v] }))}
+                  className="w-32"
+                />
               }
             >
-              <TopSessions query={top} />
+              <QueryBoundary
+                query={overview}
+                skeleton={<SkeletonRows rows={4} height={32} />}
+                empty={<EmptyState title="No places in this range" />}
+                isEmpty={(o) => o.lanes.length === 0}
+              >
+                {(o) => (
+                  <PlaceTable
+                    rows={placeRows(o.lanes, {
+                      by,
+                      sel,
+                      term,
+                      hits,
+                      home,
+                      beads: o.beads,
+                      label: (n) => (by === 'bead' ? beadLabel(n.label, o.beads) : { text: n.label, closed: false }),
+                    })}
+                    by={by}
+                    beads={o.beads}
+                    onPick={(r) => select(r.path)}
+                  />
+                )}
+              </QueryBoundary>
             </Card>
           </div>
+          <p className="pt-1 text-sec text-muted">
+            <Link to={overviewTo} className="inline-flex items-center gap-1">
+              <Search size={12} aria-hidden /> The sessions behind these figures →
+            </Link>
+          </p>
         </>
       )}
     </div>
   )
 }
 
-function Headline({ query, caption }: { query: CutQuery; caption: string }) {
+function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: string; overheadUSD: number }) {
   return (
     <Card>
       <QueryBoundary query={query} skeleton={<Skeleton className="h-16" />}>
@@ -352,6 +310,12 @@ function Headline({ query, caption }: { query: CutQuery; caption: string }) {
                   )}
                 </div>
                 <div className="text-sec text-muted">{backingSentence(d.backing)}</div>
+                {overheadUSD > 0.005 && (
+                  <div className="text-sec text-muted" data-testid="overhead-line">
+                    {formatMoney(overheadUSD)} of it is reported spend no message explains, so it is in no session’s
+                    figure on the Overview.
+                  </div>
+                )}
                 {(d.backing.unknown ?? 0) > 0 && (
                   <div className="text-sec text-muted" data-testid="unknown-line">
                     {unknownNote(d.backing.unknown ?? 0)}
@@ -412,30 +376,23 @@ function Source({
 
 function ChartBody({
   rows,
-  range,
   win,
   stack,
-  selected,
   onPick,
 }: {
   rows: CostRow[]
-  range: Range
-  win: ReturnType<typeof rangeWindow>
+  win: Window
   stack: Stack
-  selected: ReturnType<typeof selectedWindow>
   onPick: (b: Bucket) => void
 }) {
-  const buckets = useMemo(() => bucketsFor(rows, win, range), [rows, win, range])
+  const buckets = useMemo(() => bucketsFor(rows, win), [rows, win])
   const top = useMemo(() => topModels(buckets), [buckets])
   const legend = useMemo(() => legendOf(buckets, stack, top), [buckets, stack, top])
   const weekly = buckets[0]?.weekly
   if (buckets.length === 0) return <EmptyState title="No days in this range" />
-  const selKey = selected
-    ? buckets.find((b) => b.key <= (selected.since ?? '') && (selected.since ?? '') <= b.to)?.key
-    : undefined
   return (
     <div className="space-y-2">
-      <DayChart buckets={buckets} stack={stack} top={top} selected={selKey} onSelect={onPick} />
+      <DayChart buckets={buckets} stack={stack} top={top} onSelect={onPick} />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sec text-muted">
         {legend.map((l) => (
           <span key={l.key} className="inline-flex items-center gap-1.5">
@@ -502,46 +459,6 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
         ? ['compaction-warm', 'compaction-cold']
         : [...top, 'other', OVERHEAD]
   return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
-}
-
-const REPO_CUTS: { value: RepoCut; label: string; name: string; title: string }[] = [
-  { value: 'repo', label: 'Repository', name: 'Repository', title: 'Each session under its repository' },
-  { value: 'checkout', label: 'Checkout', name: 'Checkout', title: 'Each session under the checkout it worked in' },
-  { value: 'remote', label: 'Remote', name: 'Remote', title: 'Each session under its origin remote' },
-  {
-    value: 'branch',
-    label: 'Branch',
-    name: 'Branch',
-    title: 'Each session split over the branches its turns ran on',
-  },
-]
-
-const REPO_CUT_NOTE: Record<RepoCut, string> = {
-  repo: 'A session counts under the repository most of its edits were in, else its commands, else the one it started in.',
-  checkout: 'A session counts under the checkout of that repository it worked in most; none in a bare repository.',
-  remote: 'A session counts under the remote of its repository; several clones of one remote are one row.',
-  branch:
-    'A session counts under the repository it worked in; a branch gets the part of its cost spent on turns on that branch.',
-}
-
-/** A grouping row's name: the label the API gives, the id first for beads; none in italics. */
-function GroupLabel({ row, mono, id, text }: { row: CostRow; mono?: boolean; id?: boolean; text?: string }) {
-  if (!row.key) return <span className="text-muted italic">{row.label}</span>
-  return (
-    <span title={row.label ? `${row.key}\n${row.label}` : row.key}>
-      {id && (
-        <Link
-          to={beadPath(row.key)}
-          onClick={(e) => e.stopPropagation()}
-          title="The bead's page"
-          className="mr-1.5 font-mono text-meta"
-        >
-          {row.key}
-        </Link>
-      )}
-      <span className={mono ? 'font-mono text-meta' : undefined}>{text || row.label || row.key}</span>
-    </span>
-  )
 }
 
 type CutQuery = Parameters<typeof QueryBoundary<CostTable>>[0]['query']
@@ -651,99 +568,69 @@ function share(part: number, whole: number): string {
   return whole > 0 ? `${Math.round((part / whole) * 100)}%` : '0%'
 }
 
-function TopSessions({ query }: { query: CutQuery }) {
-  return (
-    <QueryBoundary
-      query={query}
-      skeleton={<SkeletonRows rows={6} height={32} />}
-      empty={<EmptyState title="No sessions in this range" />}
-      isEmpty={(d) => d.rows.length === 0}
-    >
-      {(d) => {
-        const columns: Column<CostRow>[] = [
-          {
-            key: 'title',
-            header: 'Session',
-            cell: (r) =>
-              r.key.startsWith('scripted:') || !r.harness ? (
-                <span title="Scripted runs are only shown in aggregate">{r.label ?? r.key}</span>
-              ) : (
-                <Link
-                  to={sessionPath({ harness: r.harness, id: r.key })}
-                  className="block max-w-[60ch] truncate"
-                  title={r.label ?? r.key}
-                >
-                  {r.label || r.key.slice(0, 8)}
-                </Link>
-              ),
-          },
-          {
-            key: 'project',
-            header: 'Project',
-            cell: (r) => {
-              const p = r.project ?? (r.key.startsWith('scripted:') ? r.key.slice('scripted:'.length) : undefined)
-              return p ? <ProjectName path={p} className="text-muted" /> : <span className="text-faint">–</span>
-            },
-          },
-          {
-            key: 'at',
-            header: 'Last activity',
-            cell: (r) =>
-              r.lastActivityAt ? (
-                <RelTime time={r.lastActivityAt} className="text-muted" />
-              ) : (
-                <span className="text-faint">–</span>
-              ),
-          },
-          {
-            key: 'compactions',
-            header: 'Compactions',
-            align: 'right',
-            width: '150px',
-            cell: (r) => <CompactionCell tally={r.compactions} />,
-          },
-          {
-            key: 'total',
-            header: 'Cost',
-            align: 'right',
-            width: '110px',
-            cell: (r) => <Money usd={r.totalUSD} flag={r.flag} lowerBound={sessionsLowerBound([r])} />,
-          },
-        ]
+/** The places of the scope, ranked: the children of the selection, each over everything under it. */
+function PlaceTable({
+  rows,
+  by,
+  beads,
+  onPick,
+}: {
+  rows: { rows: PlaceRow[]; total: number }
+  by: keyof typeof BY_LABEL
+  beads?: Beads
+  onPick: (r: PlaceRow) => void
+}) {
+  const columns: Column<PlaceRow>[] = [
+    {
+      key: 'name',
+      header: BY_LABEL[by],
+      cell: (r) => {
+        const Icon = r.none ? FolderX : r.node ? folderIcon(r.node as PlaceNode, by, false, beads) : Folder
         return (
-          <DataTable
-            columns={columns}
-            rows={d.rows}
-            rowKey={(r) => r.key}
-            rowHref={(r) =>
-              r.key.startsWith('scripted:')
-                ? undefined
-                : r.harness
-                  ? sessionPath({ harness: r.harness, id: r.key })
-                  : undefined
-            }
-            stickyTop={0}
-            footer={
-              d.truncated
-                ? `The 50 largest of ${formatCount(d.sessions)} sessions (scripted runs counted as ${formatCount(d.backing.scriptedRuns)}).`
-                : undefined
-            }
-          />
+          <div className="min-w-0 py-1" title={r.none ? NONE_TITLE[by] : r.title}>
+            <div className={cn('flex items-center gap-1.5 truncate', r.closed && 'text-muted')}>
+              <Icon size={14} aria-hidden className="shrink-0 text-muted" />
+              <span className="truncate">{r.text}</span>
+              {r.sub && <span className="whitespace-nowrap text-faint text-meta">{r.sub}</span>}
+              {r.drill && <ChevronRight size={12} aria-hidden className="ml-auto shrink-0 text-faint" />}
+            </div>
+            <Bar
+              height={3}
+              className="mt-1"
+              label={`${share(r.usd, rows.total)} of the places shown`}
+              segments={[{ value: r.usd, tone: 'accent' }]}
+              total={rows.total}
+            />
+          </div>
         )
-      }}
-    </QueryBoundary>
-  )
-}
-
-/** A session's compaction calls in the top-sessions table: the estimate, and how many were cold. */
-function CompactionCell({ tally }: { tally?: CompactionTally }) {
-  if (!tally || tally.calls === 0) return <span className="text-faint">–</span>
+      },
+    },
+    {
+      key: 'sessions',
+      header: 'Sessions',
+      align: 'right',
+      width: '84px',
+      cell: (r) => <span className="text-muted">{formatCount(r.count)}</span>,
+    },
+    {
+      key: 'total',
+      header: 'Spend',
+      align: 'right',
+      width: '92px',
+      cell: (r) => <Money usd={r.usd} />,
+    },
+  ]
   return (
-    <span
-      className="font-mono text-muted"
-      title={`${tallyLine(tally)}${tally.cold ? `; ${warmLine(tally)}` : ''}. Estimated; not in the cost.`}
-    >
-      {tally.cold > 0 && <span className="text-bad">{tally.cold} cold · </span>}~{formatMoney(tally.usd)}
-    </span>
+    <DataTable
+      columns={columns}
+      rows={rows.rows}
+      rowKey={(r) => r.id}
+      onRowClick={(r) => {
+        if (!r.id.endsWith('#here')) onPick(r)
+      }}
+      stickyTop={0}
+      className="table-fixed"
+      footer="These count spend in messages, as the Overview does: reported spend no message explains, and scripted runs, are in none of them."
+    />
   )
 }

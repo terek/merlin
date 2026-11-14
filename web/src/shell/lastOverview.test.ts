@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { lastOverview, rememberOverview } from './lastOverview'
+import { lastOverview, lastScope, lensLinks, rememberOverview, rememberScope } from './lastOverview'
 
 const memory = () => {
   const m = new Map<string, string>()
@@ -32,5 +32,25 @@ describe('lastOverview', () => {
         },
       }),
     ).toBe('/')
+  })
+})
+
+describe('the scope of the two lenses', () => {
+  test('the page being read gives its scope to both tabs', () => {
+    expect(lensLinks('/', '?range=30d&in=%2Fw&sort=spend')).toEqual({
+      overview: '/?range=30d&in=%2Fw',
+      cost: '/cost?range=30d&in=%2Fw',
+    })
+    expect(lensLinks('/cost', '?q=x&stack=source').cost).toBe('/cost?q=x')
+  })
+  test('another page carries the last scope seen', () => {
+    const s = memory()
+    rememberScope('/cost', '?range=1d&by=repo&stack=source', s)
+    rememberScope('/moments', '?range=30d', s)
+    expect(lensLinks('/moments', '', s)).toEqual({ overview: '/?range=1d&by=repo', cost: '/cost?range=1d&by=repo' })
+    expect(lastScope(s)).toBe('?range=1d&by=repo')
+  })
+  test('no scope seen is no scope', () => {
+    expect(lensLinks('/moments', '', memory())).toEqual({ overview: '/', cost: '/cost' })
   })
 })

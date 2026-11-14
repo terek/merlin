@@ -5,45 +5,15 @@
 import type { CompactionTally, CostRow, CostSplitEntry } from '../../api/types'
 import { daysBefore, localDay } from '../../lib/time'
 
-export type Range = '7d' | '30d' | '90d' | 'all'
-export const RANGES: Range[] = ['7d', '30d', '90d', 'all']
-export const DEFAULT_RANGE: Range = '7d'
-/** With range "all", more days than this are bucketed by week. */
+/** More days than this are drawn by week. */
 export const WEEKLY_AFTER_DAYS = 120
 export const OVERHEAD = '(overhead)'
-
-export function parseRange(s: string | null): Range {
-  return RANGES.includes(s as Range) ? (s as Range) : DEFAULT_RANGE
-}
-
-const DAY = /^\d{4}-\d{2}-\d{2}$/
-
-/** A valid "2026-09-16", else undefined. */
-export function parseDay(s: string | null | undefined): string | undefined {
-  if (!s || !DAY.test(s)) return undefined
-  const [y, m, d] = s.split('-').map(Number)
-  const t = new Date(y, m - 1, d)
-  return t.getFullYear() === y && t.getMonth() === m - 1 && t.getDate() === d ? s : undefined
-}
 
 export interface Window {
   /** First local day; undefined for "all" (from the first day with spend). */
   since?: string
   /** Last local day, included. */
   until: string
-}
-
-/** The window of a range: the last N local days, today included. */
-export function rangeWindow(range: Range, now: Date = new Date()): Window {
-  const days = { '7d': 7, '30d': 30, '90d': 90, all: 0 }[range]
-  return { since: days ? localDay(daysBefore(now, days - 1)) : undefined, until: localDay(now) }
-}
-
-/** The window a selected bar narrows the page to, if any (`from` and `to` are in the URL). */
-export function selectedWindow(from: string | undefined, to: string | undefined): Window | undefined {
-  if (!from) return undefined
-  const end = to && to >= from ? to : from
-  return { since: from, until: end }
 }
 
 function dayAt(day: string): Date {
@@ -119,9 +89,9 @@ function addTally(a: CompactionTally | undefined, b: CompactionTally): Compactio
 
 const bySize = (a: CostSplitEntry, b: CostSplitEntry) => b.totalUSD - a.totalUSD || (a.key < b.key ? -1 : 1)
 
-/** Whether a window of this many days is drawn by week: only for "all", and only when long. */
-export function isWeekly(range: Range, days: number): boolean {
-  return range === 'all' && days > WEEKLY_AFTER_DAYS
+/** Whether a window of this many days is drawn by week: only when long. */
+export function isWeekly(days: number): boolean {
+  return days > WEEKLY_AFTER_DAYS
 }
 
 /**
@@ -310,15 +280,9 @@ export function disagreements(cuts: Cut[], eps = 1e-6): string[] {
   return out
 }
 
-/** The buckets of a `by=day&split=model` response for a range: by week when "all" spans > 120 days. */
-export function bucketsFor(rows: CostRow[], window: Window, range: Range): Bucket[] {
+/** The buckets of a `by=day&split=model` response for a window: by week when it spans > 120 days. */
+export function bucketsFor(rows: CostRow[], window: Window): Bucket[] {
   const first = window.since ?? rows.map((r) => r.key).sort()[0]
   if (!first) return []
-  return makeBuckets(rows, window, isWeekly(range, listDays(first, window.until).length))
-}
-
-/** "Last 7 days", "All time", "Wed 16 Sep": what the headline says the figures cover. */
-export function windowCaption(range: Range, sel: Window | undefined, label: (day: string) => string): string {
-  if (sel) return sel.since === sel.until ? label(sel.since ?? '') : `${label(sel.since ?? '')} – ${label(sel.until)}`
-  return { '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', all: 'All time' }[range]
+  return makeBuckets(rows, window, isWeekly(listDays(first, window.until).length))
 }

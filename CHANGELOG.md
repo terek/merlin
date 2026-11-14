@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Cost is now the Overview's spend lens: it shows the same range, selection and search (the URL parameters and the two capsules in the top bar are the Overview's), and the Overview and Cost tabs keep them when you switch. The table views are by model, by kind and by place, the places ranked by spend (click one to drill down); Top sessions and the separate project, repository and bead tables are gone (sort the Overview by spend). The Overview's footer Spend links to Cost, Cost links back to the sessions behind its figures, and old Cost links (`project=`, `90d`, `all`) still work.
 - The page no longer scrolls under the top bar: the bar stays put when you switch tabs (no scrollbar appearing and shifting it), and each page scrolls below it.
 - The Overview is the start page (`/`; `/overview` still works). Sessions moved to `/sessions` (`g s`), and its tab is gone.
 - The Overview's 1d, 7d and 30d are whole days, today included (1d is today), the same days its timeline marks and the Cost page counts; they were the last 24 hours, 7 days or 30 days up to now.
