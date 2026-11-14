@@ -21,6 +21,11 @@ export function segmentLabel(key: string): string {
   if (key === 'reported') return 'Reported'
   if (key === 'attributed') return 'Attributed'
   if (key === 'recorded') return 'Recorded'
+  if (key === 'cacheRead') return 'Cache reads'
+  if (key === 'cacheWrite') return 'Cache writes'
+  if (key === 'output') return 'Output'
+  if (key === 'input') return 'Uncached input'
+  if (key === '(unsplit)') return 'Not split'
   if (key === 'compaction-warm') return 'At the warm-cache price'
   if (key === 'compaction-cold') return 'Extra for a cold cache'
   return modelLabel(key)

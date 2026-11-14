@@ -32,10 +32,19 @@ import {
 import { ScopeSlot, useScope } from '../overview/ScopeSlot'
 import { Sidebar, useSidebarOpen } from '../overview/Sidebar'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
-import { migrateCostSearch } from './lens'
+import {
+  agentSentence,
+  changeAgainst,
+  classSentence,
+  concentration,
+  migrateCostSearch,
+  previousWindow,
+  windowDays,
+} from './lens'
 import {
   type Bucket,
   bucketsFor,
+  CLASS_STACK,
   type modelTone,
   OVERHEAD,
   parseStack,
@@ -84,8 +93,16 @@ export function CostPage() {
   const scoped = { since: days.from, until: days.to, place: sel === null ? undefined : by, in: sel ?? undefined }
 
   const head = useCost({ by: 'kind', ...scoped }, { enabled: ready })
-  const dayRows = useCost({ by: 'day', split: 'model', ...scoped }, { enabled: ready })
+  const dayRows = useCost({ by: 'day', split: stack === 'class' ? 'class' : 'model', ...scoped }, { enabled: ready })
   const byModel = useCost({ by: 'model', ...scoped }, { enabled: ready })
+  const byClass = useCost({ by: 'class', ...scoped }, { enabled: ready })
+  const byAgent = useCost({ by: 'agent', ...scoped }, { enabled: ready })
+  // the period before: as many days just before the window, the same scope
+  const before = previousWindow(days)
+  const prev = useCost(
+    { by: 'model', since: before.from, until: before.to, place: scoped.place, in: scoped.in },
+    { enabled: ready },
+  )
 
   // the places come from the Overview's lanes for the same days: the sidebar shows its figures
   const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
@@ -100,10 +117,17 @@ export function CostPage() {
   const tree = useMemo(() => buildPlaceTree(placeItems(lanes ?? [], by, beads), by, home), [lanes, by, beads, home])
   const all = useMemo(() => totalsOf(lanes ?? []), [lanes])
 
+  const prevByModel = useMemo(() => new Map((prev.data?.rows ?? []).map((r) => [r.key, r.totalUSD])), [prev.data])
+  const conc = useMemo(() => concentration((lanes ?? []).map((l) => l.usd)), [lanes])
+
   if (!ready) return <Skeleton className="m-4 h-64" />
 
   const empty = head.data !== undefined && head.data.rows.length === 0 && head.data.total.totalUSD === 0
   const overhead = byModel.data?.rows.find((r) => r.key === OVERHEAD)?.totalUSD ?? 0
+  const change =
+    byModel.data && prev.data
+      ? changeAgainst(byModel.data.total.totalUSD, prev.data.total.totalUSD, windowDays(days))
+      : null
   const caption = custom ? customLabel(custom, now) : RANGE_CAPTION[range]
   const overviewTo = `/${scopeSearch(sp, { q: false })}`
 
@@ -139,6 +163,18 @@ export function CostPage() {
               query={head}
               caption={sel !== null ? `${caption} · in ${displayPath(sel, home, by)}` : caption}
               overheadUSD={overhead}
+              change={change}
+              concentration={
+                conc && (
+                  <Link
+                    className="text-muted hover:text-accent"
+                    to={`/${scopeSearch(sp, { q: false })}${scopeSearch(sp, { q: false }) ? '&' : '?'}sort=spend`}
+                  >
+                    {conc.n === 1 ? '1 session' : `${conc.n} sessions`} of {conc.of} {conc.n === 1 ? 'is' : 'are'} half
+                    of it
+                  </Link>
+                )
+              }
             />
 
             <Section
@@ -155,6 +191,11 @@ export function CostPage() {
                       label: 'Reported / attributed',
                       title:
                         "Stack by where the figure comes from (reported, recomputed, or the harness's own per-call figure)",
+                    },
+                    {
+                      value: 'class',
+                      label: 'Price class',
+                      title: 'Stack by what the tokens were: cache reads, cache writes, output, uncached input',
                     },
                     {
                       value: 'compaction',
@@ -178,12 +219,13 @@ export function CostPage() {
               </QueryBoundary>
             </Section>
 
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(380px,1fr))] gap-px border-line border-b bg-line">
-              <div className="bg-surface">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(380px,1fr))] overflow-hidden border-line border-b">
+              <div className="-mr-px -mb-px border-line border-r border-b">
                 <LensTable
                   query={byModel}
                   name="Model"
                   detail
+                  before={prevByModel}
                   label={(r) =>
                     r.key === OVERHEAD ? (
                       <span title="Spend the harness reported that no transcript message explains.">
@@ -203,12 +245,44 @@ export function CostPage() {
                   }
                 />
               </div>
-              <div className="bg-surface">
+              <div className="-mr-px -mb-px border-line border-r border-b">
+                <LensTable
+                  query={byClass}
+                  name="Price class"
+                  label={(r) => segmentLabel(r.key)}
+                  footer={(d) => (
+                    <>
+                      {classSentence(d.rows)}
+                      {d.rows.some((r) => r.key === '(unsplit)') && ' Not split: spend no token count explains.'} A
+                      message’s spend is spread over its tokens at the price of each kind; cache writes are the 5-minute
+                      and 1-hour ones together.
+                    </>
+                  )}
+                />
+              </div>
+              <div className="-mr-px -mb-px border-line border-r border-b">
                 <LensTable
                   query={head}
                   name="Kind"
                   label={(r) => (
                     <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
+                  )}
+                />
+                <LensTable
+                  query={byAgent}
+                  name="Agents"
+                  label={(r) =>
+                    r.key === 'main'
+                      ? 'Main thread'
+                      : r.key === 'agents'
+                        ? 'Sub-agents, teammates and forks'
+                        : 'Not split'
+                  }
+                  footer={(d) => (
+                    <>
+                      {agentSentence(d.rows)} The main thread is the messages with no agent; reported spend no message
+                      carries is not split.
+                    </>
                   )}
                 />
               </div>
@@ -238,7 +312,19 @@ function Section({ title, actions, children }: { title: string; actions?: ReactN
   )
 }
 
-function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: string; overheadUSD: number }) {
+function Headline({
+  query,
+  caption,
+  overheadUSD,
+  change,
+  concentration,
+}: {
+  query: CutQuery
+  caption: string
+  overheadUSD: number
+  change: ReturnType<typeof changeAgainst>
+  concentration: ReactNode
+}) {
   return (
     <section className="border-line border-b px-4 py-3">
       <QueryBoundary query={query} skeleton={<Skeleton className="h-16" />}>
@@ -252,6 +338,11 @@ function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: s
                 <div className="text-page" data-testid="total">
                   <Money usd={totalUSD} lowerBound={backingLowerBound(d.backing)} />
                 </div>
+                {change && (
+                  <div className="whitespace-nowrap text-meta text-muted" title={change.title} data-testid="change">
+                    {change.text}
+                  </div>
+                )}
               </div>
               <div className="min-w-0 space-y-1.5">
                 <Bar
@@ -276,6 +367,7 @@ function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: s
                   )}
                 </div>
                 <div className="text-sec text-muted">{backingSentence(d.backing)}</div>
+                {concentration && <div className="text-sec text-muted">{concentration}</div>}
                 {overheadUSD > 0.005 && (
                   <div className="text-sec text-muted" data-testid="overhead-line">
                     {formatMoney(overheadUSD)} of it is reported spend no message explains, so it is in no session’s
@@ -419,11 +511,13 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
   const seen = new Map<string, ReturnType<typeof modelTone>>()
   for (const b of buckets) for (const s of stackOf(b, stack, top)) seen.set(s.key, s.tone)
   const order =
-    stack === 'source'
-      ? ['reported', 'attributed', 'recorded']
-      : stack === 'compaction'
-        ? ['compaction-warm', 'compaction-cold']
-        : [...top, 'other', OVERHEAD]
+    stack === 'class'
+      ? CLASS_STACK.map(([k]) => k)
+      : stack === 'source'
+        ? ['reported', 'attributed', 'recorded']
+        : stack === 'compaction'
+          ? ['compaction-warm', 'compaction-cold']
+          : [...top, 'other', OVERHEAD]
   return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
 }
 
@@ -435,6 +529,7 @@ function LensTable({
   label,
   footer,
   detail,
+  before,
 }: {
   query: CutQuery
   name: string
@@ -442,6 +537,8 @@ function LensTable({
   footer?: (d: CostTable) => ReactNode
   /** Reported and attributed columns beside the total. */
   detail?: boolean
+  /** The total of each row in the period before: a small change beside the figures. */
+  before?: ReadonlyMap<string, number>
 }) {
   return (
     <QueryBoundary
@@ -461,10 +558,13 @@ function LensTable({
                   <th className="px-4 text-left font-normal">{name}</th>
                   <th className="w-20 px-2 text-right font-normal">Total</th>
                   {detail && (
-                    <th className="hidden w-20 px-2 text-right font-normal @min-[440px]:table-cell">Reported</th>
+                    <th className="hidden w-20 px-2 text-right font-normal @min-[560px]:table-cell">Reported</th>
                   )}
                   {detail && (
-                    <th className="hidden w-20 px-2 pr-4 text-right font-normal @min-[440px]:table-cell">Attributed</th>
+                    <th className="hidden w-20 px-2 text-right font-normal @min-[560px]:table-cell">Attributed</th>
+                  )}
+                  {before && (
+                    <th className="hidden w-20 px-2 pr-4 text-right font-normal @min-[400px]:table-cell">Before</th>
                   )}
                   {!detail && <th className="w-4" />}
                 </tr>
@@ -489,13 +589,18 @@ function LensTable({
                       <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />
                     </td>
                     {detail && (
-                      <td className="hidden px-2 text-right @min-[440px]:table-cell">
+                      <td className="hidden px-2 text-right @min-[560px]:table-cell">
                         <Money usd={r.reportedUSD} dim />
                       </td>
                     )}
                     {detail && (
-                      <td className="hidden px-2 pr-4 text-right @min-[440px]:table-cell">
+                      <td className="hidden px-2 text-right @min-[560px]:table-cell">
                         <Money usd={r.attributedUSD} dim />
+                      </td>
+                    )}
+                    {before && (
+                      <td className="hidden px-2 pr-4 text-right text-meta text-muted @min-[400px]:table-cell">
+                        <Delta now={r.totalUSD} before={before.get(r.key)} />
                       </td>
                     )}
                     {!detail && <td />}
@@ -513,4 +618,17 @@ function LensTable({
 
 function share(part: number, whole: number): string {
   return whole > 0 ? `${Math.round((part / whole) * 100)}%` : '0%'
+}
+
+/** A row's change against the period before: ▲ or ▼ with the percentage, the dollars on hover. */
+function Delta({ now, before }: { now: number; before: number | undefined }) {
+  if (before === undefined || !(before > 0)) return <span className="text-faint">–</span>
+  const d = now - before
+  const pct = Math.round((Math.abs(d) / before) * 100)
+  if (pct === 0) return <span className="text-faint">=</span>
+  return (
+    <span title={`${d > 0 ? '+' : '−'}${formatMoney(Math.abs(d))} against ${formatMoney(before)}`}>
+      {d > 0 ? '▲' : '▼'} {pct}%
+    </span>
+  )
 }

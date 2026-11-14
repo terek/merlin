@@ -158,13 +158,22 @@ export interface Segment {
   usd: number
 }
 
+/** The price classes in stack order (bottom first) and their colours. */
+export const CLASS_STACK: [string, Tone][] = [
+  ['cacheRead', 'series-1'],
+  ['cacheWrite', 'series-2'],
+  ['output', 'series-3'],
+  ['input', 'series-4'],
+  ['(unsplit)', 'series-other'],
+]
+
 const SERIES: Tone[] = ['series-1', 'series-2', 'series-3', 'series-4', 'series-5']
 
 /** By model, by source (reported, attributed or recorded), or the estimated compaction calls on their own. */
-export type Stack = 'model' | 'source' | 'compaction'
+export type Stack = 'model' | 'source' | 'class' | 'compaction'
 
 export function parseStack(s: string | null): Stack {
-  return s === 'source' || s === 'compaction' ? s : 'model'
+  return s === 'source' || s === 'compaction' || s === 'class' ? s : 'model'
 }
 
 /**
@@ -197,6 +206,11 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
       { key: 'compaction-warm', tone: 'faint' as const, usd: c.warmUSD },
       { key: 'compaction-cold', tone: 'bad' as const, usd: Math.max(0, c.usd - c.warmUSD) },
     ].filter((s) => s.usd > 0)
+  }
+  if (stack === 'class') {
+    // the price classes, bottom first; the parts of a `by=day&split=class` response
+    const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
+    return CLASS_STACK.map(([key, tone]) => ({ key, tone, usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
   }
   if (stack === 'source') {
     return [

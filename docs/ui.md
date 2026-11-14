@@ -719,10 +719,16 @@ pages never disagree and switching tabs keeps it.
   estimated, 3,132 scripted runs"); a line on the compaction calls of the scope, with what a warm cache every time would
   have cost; and, only when it is not zero, "$2.55 of it is reported spend no message explains, so it is in no
   session's figure on the Overview" (the `(overhead)` amount: the bridge between this total and the Overview's).
+  Under the total, the change against the same number of days just before the window ("+34% on the 30 days before",
+  the dollars on hover; one more `by=model` request for that window, hidden when it spent nothing), and a line of
+  concentration, "13 sessions of 160 are half of it" (the fewest sessions whose spend makes half of the scope's
+  message spend, from the sidebar's lanes; hidden under 5 sessions), linking to the Overview with the scope sorted
+  by spend.
 - **By day**: an SVG bar chart over the scope's days, one bar per local day (per week over 120 days), labelled as the
   Overview's timeline writes its days (`Fri 16`), stacked by model (`by=day&split=model`), the top five models coloured
   and the rest grouped as "other"; hovering a bar lists that day's split. A switch at the right of the section header
-  changes the stack to reported / attributed, or to **compactions** (`stack=compaction`): the estimated compaction
+  changes the stack to reported / attributed, to **price class** (`by=day&split=class`: cache reads, cache writes, output,
+  uncached input) or to **compactions** (`stack=compaction`): the estimated compaction
   calls on their own, each bar the warm-cache price (grey) with the extra a cold cache cost on top (red) and the number
   of cold calls over it, and a paragraph under the chart that says what makes a compaction cold. The estimate is not
   part of the spend, so it never shares a bar with it. A click on a bar sets the custom range to that day (remembered
@@ -730,7 +736,12 @@ pages never disagree and switching tabs keeps it.
 - **Tables**, a grid of columns separated by vertical hairlines (three when wide, two, then one), each in the
   Overview's table style (uppercase muted header row, tabular figures right-aligned, a thin share bar under the label):
   **Model** (Total, Reported, Attributed when the column is wide enough, and the `(overhead)` row explained in a
-  footnote) and **Kind** (Total; the split in its tooltip).
+  footnote; a muted ▲/▼ with the percentage against the period before, its dollars on hover), **Price class** (cache
+  reads, cache writes, output, uncached input, `(unsplit)` last, with one computed sentence: what writing and reading
+  caches cost and the output and input shares, from the dollars alone), **Kind** and, under it, **Agents** (the main
+  thread against sub-agents, teammates and forks, with "Sub-agents spent 33% of it"). The figures are
+  `by=class` and `by=agent` ([api.md](api.md)); Total is the column that always shows, Reported and Attributed come
+  with a column wide enough.
 - **Under the tables** one quiet line, "The sessions behind these figures →", links to the Overview with the scope. The
   Overview's footer Spend figure links here with it.
 - **Empty**: "Nothing was spent between May 20 and May 29." (the Overview's phrase), with "Clear the selection" when a
