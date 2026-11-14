@@ -714,7 +714,7 @@ pages never disagree and switching tabs keeps it.
   history entry) is where the selection lives; then one white pane, edge to edge, that scrolls inside itself (the
   document never scrolls). Its sections are separated by the Overview's hairline and labelled in its column-header style
   (small, uppercase, muted).
-- **Headline strip**, three facts and nothing else: the scope's caption (and the selection's display path), the total
+- **Headline strip**, no caption (the range capsule and the sidebar already say what the scope is): the total
   large, the change against the same number of days just before the window ("+34% on the 30 days before", the dollars
   on hover; one more `by=model` request for that window, hidden when it spent nothing) and a concentration link, "13
   sessions of 160 are half of it" (the fewest of the selected lanes whose spend makes half of their message spend;
@@ -750,8 +750,7 @@ pages never disagree and switching tabs keeps it.
   nothing" (and the harness's own per-call figures where there are any), the backing sentence (exact, partial,
   estimated; unknown, lower bound) and the arithmetic of the sidebar. There is no reported / attributed split anywhere
   else on the page.
-- **Under the tables** one quiet line, "The sessions behind these figures →", links to the Overview with the scope. The
-  Overview's footer Spend figure links here with it.
+- The Overview tab is the way back to the sessions (it keeps the scope); the Overview's footer Spend figure links here with it.
 - **Empty**: "Nothing was spent between May 20 and May 29." (the Overview's phrase), with "Clear the selection" when a
   selection emptied it.
 

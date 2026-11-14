@@ -2,7 +2,6 @@
 // (the places, where the selection lives), then one pane edge to edge. The scope is the Overview's URL (`range`,
 // `from`, `to`, `by`, `in`; Cost has no search) and the range capsule in the top bar.
 
-import { Search } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useCost, useOverview } from '../../api/queries'
@@ -16,7 +15,6 @@ import { scopeSearch } from '../../lib/scope'
 import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
   buildPlaceTree,
-  customLabel,
   customPhrase,
   customWindow,
   displayPath,
@@ -59,8 +57,6 @@ import {
 } from './model'
 
 const TEN_MIN = 600_000
-
-const RANGE_CAPTION = { '1d': 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days' } as const
 
 /** The uppercase muted label of a column or section, as the Overview's headers. */
 const HEAD = 'text-faint text-meta uppercase tracking-wide'
@@ -156,8 +152,6 @@ export function CostPage() {
     byModel.data && prev.data
       ? changeAgainst(byModel.data.total.totalUSD, prev.data.total.totalUSD, windowDays(days))
       : null
-  const caption = custom ? customLabel(custom, now) : RANGE_CAPTION[range]
-  const overviewTo = `/${scopeSearch(sp, { q: false })}`
 
   return (
     <div className="flex h-full w-full bg-surface">
@@ -190,7 +184,6 @@ export function CostPage() {
           <>
             <Headline
               query={head}
-              caption={sel !== null ? `${caption} · in ${displayPath(sel, home, by)}` : caption}
               change={change}
               concentration={
                 conc && (
@@ -317,11 +310,6 @@ export function CostPage() {
               }
               extras={extras}
             />
-            <p className="px-4 py-3 text-sec text-muted">
-              <Link to={overviewTo} className="inline-flex items-center gap-1">
-                <Search size={12} aria-hidden /> The sessions behind these figures →
-              </Link>
-            </p>
           </>
         )}
       </div>
@@ -344,12 +332,10 @@ function Section({ title, actions, children }: { title: string; actions?: ReactN
 
 function Headline({
   query,
-  caption,
   change,
   concentration,
 }: {
   query: CutQuery
-  caption: string
   change: ReturnType<typeof changeAgainst>
   concentration: ReactNode
 }) {
@@ -358,7 +344,6 @@ function Headline({
       <QueryBoundary query={query} skeleton={<Skeleton className="h-16" />}>
         {(d) => (
           <>
-            <div className={HEAD}>{caption}</div>
             <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
               <span className="text-page" data-testid="total">
                 <Money usd={d.total.totalUSD} lowerBound={backingLowerBound(d.backing)} />
