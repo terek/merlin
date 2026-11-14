@@ -84,7 +84,7 @@ export function ProjectRail({
 }) {
   if (collapsed) {
     return (
-      <aside className="sticky top-11 h-[calc(100vh-44px)] w-10 shrink-0 border-r border-line bg-surface py-2 text-center">
+      <aside className="sticky top-0 h-[calc(100dvh-44px)] w-10 shrink-0 border-r border-line bg-surface py-2 text-center">
         <IconButton label="Show the rail" onClick={onToggle}>
           <PanelLeftOpen size={15} />
         </IconButton>
@@ -92,7 +92,7 @@ export function ProjectRail({
     )
   }
   return (
-    <aside className="sticky top-11 flex h-[calc(100vh-44px)] w-rail shrink-0 flex-col border-r border-line bg-surface">
+    <aside className="sticky top-0 flex h-[calc(100dvh-44px)] w-rail shrink-0 flex-col border-r border-line bg-surface">
       <div className="flex h-10 shrink-0 items-center justify-between gap-1 pr-1 pl-2">
         <Select
           label="Group sessions by"

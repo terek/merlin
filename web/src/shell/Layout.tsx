@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from './ErrorBoundary'
 import { rememberOverview } from './lastOverview'
@@ -11,21 +11,33 @@ import { useShortcut } from './useShortcut'
 export function Layout() {
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
+  const main = useRef<HTMLElement>(null)
   const onSession = useMatch('/s/:harness/:id') !== null
   useShortcut('g o', () => navigate('/'))
   useShortcut('g s', () => navigate('/sessions'))
   useShortcut('g c', () => navigate('/cost'))
   useShortcut('g m', () => navigate('/moments'))
   useEffect(() => rememberOverview(pathname, search), [pathname, search])
+  // a new page starts at the top of main (not on a filter change); the keyboard pages main unless a field has focus
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new page resets the scroll
+  useEffect(() => {
+    const el = main.current
+    if (!el) return
+    el.scrollTop = 0
+    const a = document.activeElement
+    if (!a || a === document.body) el.focus({ preventScroll: true })
+  }, [pathname])
   return (
     <SlotProvider>
-      <TopBar />
-      {onSession && <SessionSlot />}
-      <main className="min-h-[calc(100vh-44px)]">
-        <ErrorBoundary resetKey={pathname}>
-          <Outlet />
-        </ErrorBoundary>
-      </main>
+      <div className="flex h-dvh flex-col overflow-hidden">
+        <TopBar />
+        {onSession && <SessionSlot />}
+        <main ref={main} tabIndex={-1} className="min-h-0 flex-1 overflow-auto outline-none">
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
+        </main>
+      </div>
     </SlotProvider>
   )
 }

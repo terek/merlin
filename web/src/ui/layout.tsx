@@ -192,7 +192,7 @@ export function DataTable<T>({
   sort: controlledSort,
   onSortChange,
   empty,
-  stickyTop = 44,
+  stickyTop = 0,
   className,
   footer,
 }: {
@@ -207,7 +207,7 @@ export function DataTable<T>({
   sort?: SortState
   onSortChange?: (s: SortState) => void
   empty?: ReactNode
-  /** Distance of the sticky header from the top of the viewport (the top bar is 44px). */
+  /** Distance of the sticky header from the top of the scrolling area (main, under the top bar). */
   stickyTop?: number
   className?: string
   footer?: ReactNode

@@ -1529,21 +1529,13 @@ export function OverviewPage() {
       ? `Search: ${[q, sel !== null ? `in ${displayPath(sel, home, by)}` : ''].filter(Boolean).join(' · ')}`
       : ''
 
-  // The page fills the window and scrolls inside: the document drops its reserved scrollbar gutter meanwhile.
-  useEffect(() => {
-    document.documentElement.dataset.fullbleed = ''
-    return () => {
-      delete document.documentElement.dataset.fullbleed
-    }
-  }, [])
-
   // the last custom range outlives the presets: the Custom segment keeps showing it, unpressed
   const remembered = useRememberedCustom(custom)
   const shown = live ?? custom
   const label = shown ?? remembered
   const grow = 'transition-[flex-grow,min-width] duration-150 motion-reduce:transition-none'
   return (
-    <div ref={rootRef} className="flex h-[calc(100vh-44px)] w-full flex-col bg-surface">
+    <div ref={rootRef} className="flex h-full w-full flex-col bg-surface">
       <ShellSlot>
         <div className="flex w-full min-w-0 items-center gap-2">
           {/* the two capsules: exactly one is expanded and takes the room; the other is a small one */}

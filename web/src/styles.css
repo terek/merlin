@@ -182,12 +182,8 @@
 @layer base {
   html {
     background: var(--bg);
-    /* a scroll bar that comes and goes would change the width under a drag */
-    scrollbar-gutter: stable;
-  }
-  /* a page that fills the window and scrolls inside (Overview): no empty gutter at the right edge */
-  html[data-fullbleed] {
-    scrollbar-gutter: auto;
+    /* the document never scrolls: the shell's main area (and the pages' own panes) do */
+    height: 100%;
     overflow: hidden;
   }
   body {

@@ -238,7 +238,7 @@ export function SessionsPage() {
         }}
       />
       <div className="min-w-0 flex-1">
-        <div className="@container sticky top-11 z-10 flex h-11 items-center gap-2 border-b border-line bg-bg px-3">
+        <div className="@container sticky top-0 z-10 flex h-11 items-center gap-2 border-b border-line bg-bg px-3">
           <SearchInput
             value={draft}
             onChange={setDraft}
@@ -500,7 +500,7 @@ function Group({
   const sessions = group.trees.reduce((n, t) => n + t.sessions.length, 0)
   return (
     <section>
-      <header className="sticky top-[88px] z-[5] flex items-baseline gap-2 border-b border-line bg-bg px-3 py-1">
+      <header className="sticky top-11 z-[5] flex items-baseline gap-2 border-b border-line bg-bg px-3 py-1">
         <h3 className="text-sec font-medium">{group.day ? dayLabelOf(group.day) : 'No activity time'}</h3>
         {group.trees.length > 0 && (
           <span

@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The page no longer scrolls under the top bar: the bar stays put when you switch tabs (no scrollbar appearing and shifting it), and each page scrolls below it.
 - The Overview is the start page (`/`; `/overview` still works). Sessions moved to `/sessions` (`g s`), and its tab is gone.
 - One top bar: the Merlin wizard logo on the left, the page's own tools in the middle, the tabs (a quiet pill marks the current one) and the theme and status buttons on the right. On the Overview the tools are the range control (1d, 7d, 30d, Custom; the timeline opens from Custom only while you work it) and search; on a session, a back link to the Overview and the session's title. The status button holds the connection, the version and an available update; indexing shows as a thin line along the bar's bottom edge; the 7-day spend link is gone. The browser tab gets the wizard icon too.
 - Pi sessions now count the lines written by Pi's `write` tool (a successful write adds the lines of its content to the session's lines added), not only the lines of its `edit` diffs. Pi records nothing about a file it overwrites, so for an overwrite the figure is an upper bound and no lines are counted as removed. Pi sessions are re-indexed once.

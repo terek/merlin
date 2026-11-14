@@ -133,7 +133,7 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 /** 44 px: the name, the page's slot in the middle, the tabs and the status button at the right. */
 export function TopBar() {
   return (
-    <header className="sticky top-0 z-30 flex h-11 items-center gap-4 border-b border-line bg-surface px-4">
+    <header className="relative z-30 flex h-11 shrink-0 items-center gap-4 border-b border-line bg-surface px-4">
       <Link to="/" className="flex items-center gap-2 font-semibold text-fg hover:no-underline" aria-label="Merlin">
         <img src="/logo-48.png" width={22} height={22} alt="" className="size-[22px]" />
         Merlin

@@ -219,7 +219,12 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
 
 ## 7. Shell
 
-One bar, 44px, sticky: **brand, the page's slot, the tabs, the theme and status buttons**.
+The document never scrolls. The top bar is fixed at the top of the viewport and never moves or shifts sideways;
+below it a page scrolls inside the shell's main area (its scrollbar starts under the bar) or in its own panes (the
+Overview's sidebar and table do). A new page starts at the top of main; a filter change does not move it.
+Sticky headers inside main stick at its top (`top: 0`).
+
+One bar, 44px: **brand, the page's slot, the tabs, the theme and status buttons**.
 
 - **Left**: the wizard logo (`public/logo-48.png`, shown at 22 px) and "Merlin", linking to `/`. The favicons and the
   apple-touch icon are in `public/`.
