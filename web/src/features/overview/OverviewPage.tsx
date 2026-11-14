@@ -1207,8 +1207,8 @@ function Sidebar({
 /** The locator's height (px): the day bars over the light axis. */
 const LOC_H = 28
 const LOC_BAR = 15
-/** The brush: a band centred on the axis line, LOC_BAND tall. */
-const LOC_AXIS = LOC_BAR + 2.5
+/** The brush: a band LOC_BAND tall, centred on the bars' baseline (the axis as it reads). */
+const LOC_AXIS = LOC_BAR + 0.5
 const LOC_BAND = 14
 /** How close to an edge of the brush (px) the pointer grabs it. */
 const LOC_GRAB = 6

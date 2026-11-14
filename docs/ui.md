@@ -788,7 +788,7 @@ The table only ever lists sessions.
   both capsules still fit; the axis is just shorter. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
   as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
   thin bars in the faint colour on the white pill, a light month axis under it (day numbers too when a day is 16
-  px wide), the **brush**: a light accent band centred on the axis line, no outline, with an accent marker at each end. Drag on the strip to draw a range, drag the brush to move it, drag its edges
+  px wide), the **brush**: a light accent band centred on the row the bars stand on, no outline, with an accent marker at each end. Drag on the strip to draw a range, drag the brush to move it, drag its edges
   to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day; a click on a **month's name** on the axis (pointer, underlined on hover, title "Show May 2026") applies exactly that calendar month at once (`monthRange`: its first to its last day, the current month ending today, clipped to the strip's first day), updating the URL and the remembered range, with the locator staying open and the brush on that month. The
   brush snaps to whole days, one at least. It starts on the current range (the preset's days when no custom
   range is set). The Custom label follows the drag live; the page applies the range (`from`, `to`) only when
