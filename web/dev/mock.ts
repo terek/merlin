@@ -984,7 +984,12 @@ function overview(u: URL): Overview {
       total += m.usd
       active[i] = 1
     }
+    // As the daemon: a lane's usd is message spend, not the reported overhead no message explains. The synthetic
+    // messages carry the session's whole best cost, so the lane takes what its days spent in the range.
+    const spent = s.spend.filter((e) => e.model !== '(overhead)' && e.at >= from && e.at < to)
+    for (const e of spent) active[Math.min(slots - 1, Math.max(0, at(e.at)))] = 1
     if (!active.includes(1)) continue
+    total = spent.reduce((n, e) => n + e.usd, 0)
     const { context, idle } = heldContext(
       os.msgs.filter((m) => m.ctx > 0).map((m) => ({ at: m.at, ctx: m.ctx })),
       from,

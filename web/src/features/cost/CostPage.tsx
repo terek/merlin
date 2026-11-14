@@ -8,13 +8,12 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useCost, useOverview } from '../../api/queries'
 import type { CostRow, CostTable } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { tallyLine, warmLine } from '../../lib/compaction'
 import { backingLowerBound, backingSentence, lowerBoundNote, unknownNote } from '../../lib/cost'
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
 import { scopeSearch } from '../../lib/scope'
-import { Bar, EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
+import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
   buildPlaceTree,
   customLabel,
@@ -35,18 +34,22 @@ import { Sidebar, useSidebarOpen } from '../overview/Sidebar'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
 import {
   agentSentence,
+  cascade,
   changeAgainst,
   classSentence,
   concentration,
+  type ExtraLine,
   migrateCostSearch,
   previousWindow,
+  sidebarExtras,
+  sidebarGap,
   windowDays,
 } from './lens'
 import {
   type Bucket,
   bucketsFor,
   CLASS_STACK,
-  type modelTone,
+  modelTone,
   OVERHEAD,
   parseStack,
   type Stack,
@@ -119,6 +122,28 @@ export function CostPage() {
   const all = useMemo(() => totalsOf(lanes ?? []), [lanes])
 
   const prevByModel = useMemo(() => new Map((prev.data?.rows ?? []).map((r) => [r.key, r.totalUSD])), [prev.data])
+  // what the places leave out of the total, so that the sidebar adds up to it
+  const scripted = overview.data?.scripted
+  const overhead = byModel.data?.rows.find((r) => r.key === OVERHEAD)?.totalUSD ?? 0
+  const extras = useMemo(
+    () =>
+      sidebarExtras({
+        selected: sel !== null,
+        scriptedUsd: scripted?.usd ?? 0,
+        scriptedRuns: scripted?.sessions ?? 0,
+        overheadUsd: overhead,
+      }),
+    [sel, scripted, overhead],
+  )
+  // the five models the chart colours: the biggest by spend, as the day chart picks them
+  const modelTop = useMemo(
+    () =>
+      (byModel.data?.rows ?? [])
+        .filter((r) => r.key !== OVERHEAD)
+        .slice(0, 5)
+        .map((r) => r.key),
+    [byModel.data],
+  )
   const conc = useMemo(
     () => concentration(selectLanes(lanes ?? [], sel, by, beads).map((l) => l.usd)),
     [lanes, sel, by, beads],
@@ -127,7 +152,6 @@ export function CostPage() {
   if (!ready) return <Skeleton className="m-4 h-64" />
 
   const empty = head.data !== undefined && head.data.rows.length === 0 && head.data.total.totalUSD === 0
-  const overhead = byModel.data?.rows.find((r) => r.key === OVERHEAD)?.totalUSD ?? 0
   const change =
     byModel.data && prev.data
       ? changeAgainst(byModel.data.total.totalUSD, prev.data.total.totalUSD, windowDays(days))
@@ -149,6 +173,7 @@ export function CostPage() {
         sel={sel}
         hover={null}
         onSelect={select}
+        extra={extras}
       />
       <div className="min-w-0 flex-1 overflow-y-auto">
         {empty ? (
@@ -166,7 +191,6 @@ export function CostPage() {
             <Headline
               query={head}
               caption={sel !== null ? `${caption} · in ${displayPath(sel, home, by)}` : caption}
-              overheadUSD={overhead}
               change={change}
               concentration={
                 conc && (
@@ -191,12 +215,6 @@ export function CostPage() {
                   options={[
                     { value: 'model', label: 'By model' },
                     {
-                      value: 'source',
-                      label: 'Reported / attributed',
-                      title:
-                        "Stack by where the figure comes from (reported, recomputed, or the harness's own per-call figure)",
-                    },
-                    {
                       value: 'class',
                       label: 'Price class',
                       title: 'Stack by what the tokens were: cache reads, cache writes, output, uncached input',
@@ -205,7 +223,7 @@ export function CostPage() {
                       value: 'compaction',
                       label: 'Compactions',
                       title:
-                        'The estimated cost of the calls that wrote compaction summaries, and what a cold cache added',
+                        'The days’ spend as above, empty, with what the compaction calls cost coloured at the bottom of each bar',
                     },
                   ]}
                 />
@@ -228,8 +246,8 @@ export function CostPage() {
                 <LensTable
                   query={byModel}
                   name="Model"
-                  detail
                   before={prevByModel}
+                  tone={(r) => `var(--${modelTone(r.key, modelTop)})`}
                   label={(r) =>
                     r.key === OVERHEAD ? (
                       <span title="Spend the harness reported that no transcript message explains.">
@@ -253,6 +271,7 @@ export function CostPage() {
                 <LensTable
                   query={byClass}
                   name="Price class"
+                  tone={(r) => `var(--${CLASS_STACK.find(([k]) => k === r.key)?.[1] ?? 'series-other'})`}
                   label={(r) => segmentLabel(r.key)}
                   footer={(d) => (
                     <>
@@ -291,6 +310,13 @@ export function CostPage() {
                 />
               </div>
             </div>
+            <HowMade
+              query={head}
+              placesUsd={
+                sel === null ? all.usd : selectLanes(lanes ?? [], sel, by, beads).reduce((n, l) => n + l.usd, 0)
+              }
+              extras={extras}
+            />
             <p className="px-4 py-3 text-sec text-muted">
               <Link to={overviewTo} className="inline-flex items-center gap-1">
                 <Search size={12} aria-hidden /> The sessions behind these figures →
@@ -319,91 +345,78 @@ function Section({ title, actions, children }: { title: string; actions?: ReactN
 function Headline({
   query,
   caption,
-  overheadUSD,
   change,
   concentration,
 }: {
   query: CutQuery
   caption: string
-  overheadUSD: number
   change: ReturnType<typeof changeAgainst>
   concentration: ReactNode
 }) {
   return (
     <section className="border-line border-b px-4 py-3">
       <QueryBoundary query={query} skeleton={<Skeleton className="h-16" />}>
-        {(d) => {
-          const { totalUSD, reportedUSD, attributedUSD } = d.total
-          const recordedUSD = d.total.recordedUSD ?? 0
-          return (
-            <div className="grid items-center gap-x-10 gap-y-3 grid-cols-[auto_1fr]">
-              <div>
-                <div className="text-faint text-meta uppercase tracking-wide">{caption}</div>
-                <div className="text-page" data-testid="total">
-                  <Money usd={totalUSD} lowerBound={backingLowerBound(d.backing)} />
-                </div>
-                {change && (
-                  <div className="whitespace-nowrap text-meta text-muted" title={change.title} data-testid="change">
-                    {change.text}
-                  </div>
-                )}
-              </div>
-              <div className="min-w-0 space-y-1.5">
-                <Bar
-                  height={8}
-                  label="Reported versus attributed"
-                  segments={[
-                    { value: reportedUSD, tone: 'reported', title: 'Reported by the harness' },
-                    { value: attributedUSD, tone: 'attributed', title: 'Attributed from token counts' },
-                    { value: recordedUSD, tone: 'recorded', title: 'Recorded per call by the harness' },
-                  ]}
-                />
-                <div className="flex flex-wrap gap-x-6 gap-y-0.5 text-sec">
-                  <Source tone="reported" name="Reported" usd={reportedUSD} note="the harness's own figure" />
-                  <Source tone="attributed" name="Attributed" usd={attributedUSD} note="recomputed from token counts" />
-                  {recordedUSD > 0 && (
-                    <Source
-                      tone="recorded"
-                      name="Recorded"
-                      usd={recordedUSD}
-                      note={recordedNote(recordedUSD, d.total.billedUSD ?? 0)}
-                    />
-                  )}
-                </div>
-                <div className="text-sec text-muted">{backingSentence(d.backing)}</div>
-                {concentration && <div className="text-sec text-muted">{concentration}</div>}
-                {overheadUSD > 0.005 && (
-                  <div className="text-sec text-muted" data-testid="overhead-line">
-                    {formatMoney(overheadUSD)} of it is reported spend no message explains, so it is in no session’s
-                    figure on the Overview.
-                  </div>
-                )}
-                {(d.backing.unknown ?? 0) > 0 && (
-                  <div className="text-sec text-muted" data-testid="unknown-line">
-                    {unknownNote(d.backing.unknown ?? 0)}
-                  </div>
-                )}
-                {d.total.compactions && d.total.compactions.calls > 0 && (
-                  <div
-                    className="text-sec text-muted"
-                    data-testid="compaction-line"
-                    title="The harness does not record the call that writes a compaction summary; this is estimated from the context size and the price table. Inside a reported figure it is part of the overhead; outside, it is in no figure at all. A cold call read its whole context again at full price."
-                  >
-                    Compaction calls, estimated: {tallyLine(d.total.compactions)}
-                    {d.total.compactions.cold > 0 && (
-                      <>
-                        {' · '}
-                        <span className="text-bad">{warmLine(d.total.compactions)}</span>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
+        {(d) => (
+          <>
+            <div className={HEAD}>{caption}</div>
+            <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
+              <span className="text-page" data-testid="total">
+                <Money usd={d.total.totalUSD} lowerBound={backingLowerBound(d.backing)} />
+              </span>
+              {change && (
+                <span className="text-body text-muted" title={change.title} data-testid="change">
+                  {change.text}
+                </span>
+              )}
+              {concentration && <span className="text-body">{concentration}</span>}
             </div>
-          )
-        }}
+          </>
+        )}
       </QueryBoundary>
     </section>
+  )
+}
+
+/**
+ * "How these figures are made", the one place provenance shows: what the harnesses reported and what Merlin worked
+ * out, how well backed the figure is, and how the sidebar adds up to the total. A quiet, closed `<details>` at the
+ * end of the pane.
+ */
+function HowMade({ query, placesUsd, extras }: { query: CutQuery; placesUsd: number; extras: ExtraLine[] }) {
+  return (
+    <QueryBoundary query={query} skeleton={null}>
+      {(d) => {
+        const { reportedUSD, attributedUSD, totalUSD } = d.total
+        const recordedUSD = d.total.recordedUSD ?? 0
+        const gap = sidebarGap(totalUSD, placesUsd, extras)
+        return (
+          <details className="group border-line border-b px-4 py-2 text-sec text-muted" data-testid="how-made">
+            <summary className="cursor-pointer select-none text-faint text-meta uppercase tracking-wide hover:text-fg">
+              How these figures are made
+            </summary>
+            <div className="max-w-[110ch] space-y-1.5 pt-2 pb-1">
+              <p>
+                {formatMoney(reportedUSD)} is what the harnesses reported themselves; {formatMoney(attributedUSD)}{' '}
+                Merlin worked out from token counts where they reported nothing
+                {recordedUSD > 0 && (
+                  <>
+                    ; {formatMoney(recordedUSD)} is {recordedNote(recordedUSD, d.total.billedUSD ?? 0)}
+                  </>
+                )}
+                .
+              </p>
+              <p>{backingSentence(d.backing)}</p>
+              {(d.backing.unknown ?? 0) > 0 && <p data-testid="unknown-line">{unknownNote(d.backing.unknown ?? 0)}</p>}
+              <p data-testid="sidebar-sum">
+                The sidebar adds up to the total: the places {cents(placesUsd)}
+                {extras.map((e) => ` + ${e.label.toLowerCase()} ${cents(e.usd)}`)} = {cents(totalUSD)}
+                {Math.abs(gap) >= 0.005 && ` (${cents(Math.abs(gap))} not placed)`}.
+              </p>
+            </div>
+          </details>
+        )
+      }}
+    </QueryBoundary>
   )
 }
 
@@ -413,27 +426,6 @@ function recordedNote(recordedUSD: number, billedUSD: number): string {
   if (billedUSD <= 0) return `${own}, its price-catalog estimate`
   if (billedUSD >= recordedUSD - 1e-9) return `${own}, billed by the provider per call`
   return `${own}; ${formatMoney(billedUSD)} of it billed by the provider per call, the rest its catalog estimate`
-}
-
-function Source({
-  tone,
-  name,
-  usd,
-  note,
-}: {
-  tone: 'reported' | 'attributed' | 'recorded'
-  name: string
-  usd: number
-  note: string
-}) {
-  return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span className="size-2 self-center rounded-badge" style={{ background: `var(--${tone})` }} />
-      <span className="text-muted">{name}</span>
-      <Money usd={usd} />
-      <span className="text-faint">{note}</span>
-    </span>
-  )
 }
 
 function ChartBody({
@@ -463,21 +455,25 @@ function ChartBody({
           </span>
         ))}
         {stack === 'compaction' && legend.length > 0 && (
-          <span className="text-bad">N over a bar: cold compactions</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-muted" aria-hidden />
+            <span className="size-2 rounded-full bg-bad" aria-hidden />a day with compactions (red: one ran cold)
+          </span>
         )}
         {weekly && <span className="ml-auto text-faint">One bar per week (Mon to Sun)</span>}
       </div>
-      {stack === 'compaction' && <CompactionNote buckets={buckets} />}
+      <CompactionNote buckets={buckets} always={stack === 'compaction'} />
     </div>
   )
 }
 
 /**
- * What the compaction view stands for. A compaction is one more call over the whole context; with a
- * warm cache that context is a cache read, after an idle gap longer than the cache lifetime it is
- * read again at full price. The figures are estimates and are kept out of the spend.
+ * One line under the chart, whatever the stack: what the compaction calls cost and what a warm cache would have.
+ * A compaction is one more call over the whole context; with a warm cache that is a cache read, after an idle gap
+ * longer than the cache lifetime it is read again at full price. The figures are estimates and are kept out of the
+ * spend (Claude Code does not record the call; Codex does, and its calls are in the spend like any other).
  */
-function CompactionNote({ buckets }: { buckets: Bucket[] }) {
+function CompactionNote({ buckets, always }: { buckets: Bucket[]; always: boolean }) {
   let calls = 0
   let cold = 0
   let usd = 0
@@ -490,23 +486,22 @@ function CompactionNote({ buckets }: { buckets: Bucket[] }) {
     usd += c.usd
     warm += c.warmUSD
   }
-  if (calls === 0) return <p className="text-sec text-muted">No compactions in this range.</p>
+  if (calls === 0) return always ? <p className="text-sec text-muted">No compactions in this range.</p> : null
   return (
-    <p className="max-w-[110ch] text-sec text-muted" data-testid="compaction-chart-note">
-      {plural(calls, 'compaction')} cost ~{formatMoney(usd)}
+    <p
+      className="max-w-[110ch] text-sec text-muted"
+      data-testid="compaction-chart-note"
+      title="A compaction sends the whole context once more to write the summary: warm, that is a cache read; after the main agent sat idle longer than the cache lifetime, it is read again at full price. Compacting before a long break, or right after coming back while the turn is still cached, keeps it cheap. Estimated from the context size: Claude Code does not record the call, so these figures are not in the spend above."
+    >
+      {plural(calls, 'compaction')}, ~{formatMoney(usd)}
       {cold > 0 ? (
         <>
-          ; <span className="text-bad">{cold} of them ran on a cold cache</span>, which added ~{formatMoney(usd - warm)}{' '}
-          over the ~{formatMoney(warm)} they would have cost warm.
+          , <span className="text-bad">{cold} of them cold</span>
         </>
       ) : (
-        ', all on a warm cache.'
-      )}{' '}
-      A compaction sends the whole context once more to write the summary: warm, that is a cache read; after the main
-      agent sat idle longer than the cache lifetime, it is read again at full price. Compacting before a long break, or
-      right after coming back while the turn is still cached, is what keeps it cheap. Estimated from the context size:
-      Claude Code does not record the call, so these figures are not in the spend above (Codex records it, and its
-      compaction calls are in the spend like any other).
+        ', all warm'
+      )}
+      . With a warm cache every time: ~{formatMoney(warm)}.
     </p>
   )
 }
@@ -517,11 +512,9 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
   const order =
     stack === 'class'
       ? CLASS_STACK.map(([k]) => k)
-      : stack === 'source'
-        ? ['reported', 'attributed', 'recorded']
-        : stack === 'compaction'
-          ? ['compaction-warm', 'compaction-cold']
-          : [...top, 'other', OVERHEAD]
+      : stack === 'compaction'
+        ? ['compaction-warm', 'compaction-cold']
+        : [...top, 'other', OVERHEAD]
   return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
 }
 
@@ -532,17 +525,17 @@ function LensTable({
   name,
   label,
   footer,
-  detail,
   before,
+  tone,
 }: {
   query: CutQuery
   name: string
   label: (r: CostRow) => ReactNode
   footer?: (d: CostTable) => ReactNode
-  /** Reported and attributed columns beside the total. */
-  detail?: boolean
   /** The total of each row in the period before: a small change beside the figures. */
   before?: ReadonlyMap<string, number>
+  /** The colour of a row's share bar (a CSS colour); the accent when absent. */
+  tone?: (r: CostRow) => string
 }) {
   return (
     <QueryBoundary
@@ -552,8 +545,14 @@ function LensTable({
       isEmpty={(d) => d.rows.length === 0}
     >
       {(d) => {
-        const recorded = (d.total.recordedUSD ?? 0) > 0
         const note = footer?.(d)
+        const rows = d.rows.filter((r) => !(r.key === '(unsplit)' && r.totalUSD === 0))
+        // one cascade: each row's bar starts where the row above ended, so the segments walk once across the width
+        const bars = cascade(
+          rows.map((r) => r.totalUSD),
+          d.total.totalUSD,
+          0,
+        )
         return (
           <div className="@container">
             <table className="w-full table-fixed text-sec">
@@ -561,57 +560,46 @@ function LensTable({
                 <tr className={cn(HEAD, 'h-9')}>
                   <th className="px-4 text-left font-normal">{name}</th>
                   <th className="w-20 px-2 text-right font-normal">Total</th>
-                  {detail && (
-                    <th className="hidden w-20 px-2 text-right font-normal @min-[560px]:table-cell">Reported</th>
-                  )}
-                  {detail && (
-                    <th className="hidden w-20 px-2 text-right font-normal @min-[560px]:table-cell">Attributed</th>
-                  )}
-                  {before && (
+                  {before ? (
                     <th className="hidden w-20 px-2 pr-4 text-right font-normal @min-[400px]:table-cell">Before</th>
+                  ) : (
+                    <th className="w-4" />
                   )}
-                  {!detail && <th className="w-4" />}
                 </tr>
               </thead>
               <tbody>
-                {d.rows
-                  .filter((r) => !(r.key === '(unsplit)' && r.totalUSD === 0))
-                  .map((r) => (
-                    <tr key={r.key} className="h-[34px]" title={`${formatCount(r.sessions)} sessions`}>
-                      <td className="min-w-0 px-4 py-1">
-                        <div className="truncate text-body">{label(r)}</div>
-                        <Bar
-                          height={3}
-                          className="mt-0.5"
-                          label={`${share(r.totalUSD, d.total.totalUSD)} of the total`}
-                          segments={[{ value: r.totalUSD, tone: r.key === OVERHEAD ? 'overhead' : 'accent' }]}
-                          total={d.total.totalUSD}
-                        />
-                      </td>
-                      <td
-                        className="px-2 text-right"
-                        title={`Reported ${formatMoney(r.reportedUSD)} · attributed ${formatMoney(r.attributedUSD)}${recorded ? ` · recorded ${formatMoney(r.recordedUSD ?? 0)}` : ''}`}
+                {rows.map((r, i) => (
+                  <tr key={r.key} className="h-[34px]" title={`${formatCount(r.sessions)} sessions`}>
+                    <td className="min-w-0 px-4 py-1">
+                      <div className="truncate text-body">{label(r)}</div>
+                      <div
+                        className="relative mt-0.5 h-[3px] overflow-hidden rounded-full bg-surface-2"
+                        role="img"
+                        aria-label={`${share(r.totalUSD, d.total.totalUSD)} of the total`}
                       >
-                        <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />
+                        <span
+                          className="absolute inset-y-0 rounded-full"
+                          style={{
+                            left: `${bars[i].from * 100}%`,
+                            width: `${bars[i].width * 100}%`,
+                            minWidth: r.totalUSD > 0 ? 2 : 0,
+                            background: tone ? tone(r) : 'var(--accent)',
+                          }}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-2 text-right">
+                      <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />
+                    </td>
+                    {before ? (
+                      <td className="hidden px-2 pr-4 text-right text-meta text-muted @min-[400px]:table-cell">
+                        <Delta now={r.totalUSD} before={before.get(r.key)} />
                       </td>
-                      {detail && (
-                        <td className="hidden px-2 text-right @min-[560px]:table-cell">
-                          <Money usd={r.reportedUSD} dim />
-                        </td>
-                      )}
-                      {detail && (
-                        <td className="hidden px-2 text-right @min-[560px]:table-cell">
-                          <Money usd={r.attributedUSD} dim />
-                        </td>
-                      )}
-                      {before && (
-                        <td className="hidden px-2 pr-4 text-right text-meta text-muted @min-[400px]:table-cell">
-                          <Delta now={r.totalUSD} before={before.get(r.key)} />
-                        </td>
-                      )}
-                      {!detail && <td />}
-                    </tr>
-                  ))}
+                    ) : (
+                      <td />
+                    )}
+                  </tr>
+                ))}
               </tbody>
             </table>
             {note && <p className="px-4 pt-1 pb-3 text-meta text-muted">{note}</p>}
@@ -621,6 +609,10 @@ function LensTable({
     </QueryBoundary>
   )
 }
+
+/** Dollars to the cent: the arithmetic of the sidebar is read to the cent. */
+const cents = (usd: number): string =>
+  `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 function share(part: number, whole: number): string {
   return whole > 0 ? `${Math.round((part / whole) * 100)}%` : '0%'

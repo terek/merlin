@@ -218,6 +218,7 @@ function TreeLine({
  * under the pointer (when a closed folder hides it, the folder is marked). It folds to a strip.
  */
 export function Sidebar({
+  extra,
   open,
   onOpen,
   by,
@@ -241,6 +242,8 @@ export function Sidebar({
   sel: string | null
   hover: string | null
   onSelect: (path: string | null) => void
+  /** Lines under the tree that are no places (Cost: what the places leave out of its total). */
+  extra?: { id: string; label: string; title: string; count?: number; usd: number }[]
 }) {
   const listRef = useRef<HTMLUListElement>(null)
   const [stored, toggle, openFolders] = useClosed(by)
@@ -364,6 +367,25 @@ export function Sidebar({
               onPick={() => pick(NONE_SEL)}
             />
           )}
+          {extra?.map((e) => (
+            <li
+              key={e.id}
+              title={e.title}
+              className="mt-1 flex items-center text-muted"
+              style={{ paddingLeft: TREE_GUTTER }}
+            >
+              <span className="size-4 shrink-0" aria-hidden />
+              <span className="flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-body">
+                <span className="min-w-0 flex-1 truncate pl-5">
+                  {e.label}
+                  {e.count !== undefined && (
+                    <span className="ml-1.5 text-faint text-meta">{e.count.toLocaleString('en-US')}</span>
+                  )}
+                </span>
+                <Money usd={e.usd} dim className="w-12 shrink-0 text-right text-sec" />
+              </span>
+            </li>
+          ))}
         </ul>
       </div>
     </aside>

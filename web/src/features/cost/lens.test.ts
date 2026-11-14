@@ -2,11 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import type { CostRow } from '../../api/types'
 import {
   agentSentence,
+  cascade,
   changeAgainst,
   classSentence,
   concentration,
   migrateCostSearch,
   previousWindow,
+  sidebarExtras,
+  sidebarGap,
   windowDays,
 } from './lens'
 
@@ -89,5 +92,45 @@ describe('concentration', () => {
   test('hidden under 5 sessions or without spend', () => {
     expect(concentration([5, 5, 5, 5])).toBeNull()
     expect(concentration([0, 0, 0, 0, 0])).toBeNull()
+  })
+})
+
+describe('the cascade', () => {
+  test('each segment starts where the one above ended', () => {
+    const c = cascade([50, 30, 20], 100)
+    expect(c.map((x) => [x.from, x.width])).toEqual([
+      [0, 0.5],
+      [0.5, 0.3],
+      [0.8, 0.2],
+    ])
+  })
+  test('a tiny share keeps a minimum width, and the segment stays inside the track', () => {
+    const c = cascade([99.9, 0.05, 0.05], 100, 0.01)
+    expect(c[1].width).toBe(0.01)
+    expect(c[2].from).toBeGreaterThanOrEqual(0.99)
+    expect(c[2].from + c[2].width).toBeLessThanOrEqual(1)
+  })
+  test('an empty total draws nothing', () => {
+    expect(cascade([0, 0], 0)).toEqual([
+      { from: 0, width: 0 },
+      { from: 0, width: 0 },
+    ])
+  })
+})
+
+describe('the sidebar adds up', () => {
+  test('places + scripted runs + not in any session = the total', () => {
+    // the mock, 30 days, nothing selected
+    const extras = sidebarExtras({ selected: false, scriptedUsd: 27.43, scriptedRuns: 3811, overheadUsd: 7.7 })
+    expect(extras.map((e) => e.id)).toEqual(['scripted', 'overhead'])
+    expect(Math.abs(sidebarGap(521.97, 486.84, extras))).toBeLessThan(0.01)
+  })
+  test('under a selection: no scripted line, the selection’s own overhead', () => {
+    const extras = sidebarExtras({ selected: true, scriptedUsd: 27.43, scriptedRuns: 3811, overheadUsd: 1.67 })
+    expect(extras.map((e) => e.id)).toEqual(['overhead'])
+    expect(Math.abs(sidebarGap(91.88, 90.21, extras))).toBeLessThan(0.01)
+  })
+  test('nothing to add: no lines', () => {
+    expect(sidebarExtras({ selected: false, scriptedUsd: 0, scriptedRuns: 0, overheadUsd: 0 })).toEqual([])
   })
 })

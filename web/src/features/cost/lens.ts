@@ -116,3 +116,62 @@ export function concentration(usds: readonly number[]): { n: number; of: number 
   }
   return { n: sorted.length, of: sorted.length }
 }
+
+/**
+ * The cascade of a table's share bars: row i spans from where the row above ended to its own end, as fractions of
+ * the total, so reading down the table the segments walk once across the width. A segment is at least `min` wide (a
+ * fraction) so a tiny share is still seen; the next one still starts where the true cumulative share does.
+ */
+export function cascade(values: readonly number[], total: number, min = 0): { from: number; width: number }[] {
+  let acc = 0
+  return values.map((v) => {
+    const from = total > 0 ? acc / total : 0
+    const width = total > 0 ? Math.max(v / total, v > 0 ? min : 0) : 0
+    acc += v
+    return { from: Math.min(from, Math.max(0, 1 - width)), width }
+  })
+}
+
+/** One extra line under the sidebar's tree. */
+export interface ExtraLine {
+  id: string
+  label: string
+  title: string
+  count?: number
+  usd: number
+}
+
+/**
+ * What the sidebar's tree leaves out of the total: scripted runs (when nothing is selected: they are out under a
+ * selection, as on the Overview) and the reported spend no message explains (the scope's own `(overhead)`). With
+ * the tree's rows these add up to the headline total.
+ */
+export function sidebarExtras(opts: {
+  selected: boolean
+  scriptedUsd: number
+  scriptedRuns: number
+  overheadUsd: number
+}): ExtraLine[] {
+  const out: ExtraLine[] = []
+  if (!opts.selected && opts.scriptedUsd > 0)
+    out.push({
+      id: 'scripted',
+      label: 'Scripted runs',
+      title: 'Runs started by a script or the SDK: they are in no place, and the Overview lists them beside its total.',
+      count: opts.scriptedRuns,
+      usd: opts.scriptedUsd,
+    })
+  if (opts.overheadUsd > 0)
+    out.push({
+      id: 'overhead',
+      label: 'Not in any session',
+      title: 'Spend the harness reported that no transcript message explains, so it is in no session’s figure.',
+      usd: opts.overheadUsd,
+    })
+  return out
+}
+
+/** The sidebar's figures against the headline total: what the places hold plus the extra lines; the gap is 0. */
+export function sidebarGap(total: number, placesUsd: number, extras: readonly ExtraLine[]): number {
+  return total - placesUsd - extras.reduce((n, e) => n + e.usd, 0)
+}

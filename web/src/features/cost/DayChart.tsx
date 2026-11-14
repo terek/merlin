@@ -81,7 +81,7 @@ export function DayChart({
   const [active, setActive] = useState<number | undefined>(undefined)
   const n = buckets.length
   const stacks = buckets.map((b) => stackOf(b, stack, top))
-  const max = Math.max(0, ...buckets.map((b) => barTotal(b, stack)))
+  const max = Math.max(0, ...buckets.map(barTotal))
   const { ticks, top: yTop } = niceTicks(max)
   const plotW = Math.max(40, width - M.left - M.right)
   const plotH = HEIGHT - M.top - M.bottom
@@ -102,7 +102,7 @@ export function DayChart({
         role="application"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: the chart is one tab stop; arrow keys move between bars
         tabIndex={0}
-        aria-label={`${stack === 'compaction' ? 'Estimated compaction calls' : 'Spend'} per ${buckets[0]?.weekly ? 'week' : 'day'}. Arrow keys move between bars, Enter selects one.`}
+        aria-label={`${stack === 'compaction' ? 'Spend, with the estimated compaction calls marked,' : 'Spend'} per ${buckets[0]?.weekly ? 'week' : 'day'}. Arrow keys move between bars, Enter selects one.`}
         className="block rounded-card"
         onFocus={() => setActive((a) => a ?? n - 1)}
         onBlur={() => setActive(undefined)}
@@ -142,6 +142,20 @@ export function DayChart({
               {(active === i || selected === b.key) && (
                 <rect x={M.left + band * i} y={M.top} width={band} height={plotH} fill="var(--surface-2)" />
               )}
+              {stack === 'compaction' && b.total > 0 && (
+                // the day's whole bar, empty: the compaction cost is coloured inside it, on the same scale
+                <rect
+                  x={x}
+                  y={y(b.total)}
+                  width={barW}
+                  height={Math.max(1, y(0) - y(b.total))}
+                  fill="var(--muted)"
+                  fillOpacity={0.08}
+                  stroke="var(--faint)"
+                  strokeOpacity={0.6}
+                  strokeWidth={1}
+                />
+              )}
               {parts.map((s: Segment) => {
                 const y0 = y(acc)
                 acc += s.usd
@@ -152,27 +166,23 @@ export function DayChart({
                     x={x}
                     y={y1}
                     width={barW}
-                    height={Math.max(1, y0 - y1)}
+                    height={Math.max(stack === 'compaction' ? 2 : 1, y0 - y1)}
                     fill={s.tone === 'overhead' ? 'url(#overhead-hatch)' : `var(--${s.tone})`}
                     stroke="var(--surface)"
                     strokeWidth={parts.length > 1 ? 0.5 : 0}
                   />
                 )
               })}
-              {barTotal(b, stack) <= 0 && (
-                <rect x={x} y={M.top + plotH - 1} width={barW} height={1} fill="var(--line)" />
-              )}
-              {stack === 'compaction' && (b.compactions?.cold ?? 0) > 0 && band >= 12 && (
-                <text
-                  x={centre(i)}
-                  y={y(acc) - 4}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill="var(--bad)"
-                  data-testid="cold-count"
-                >
-                  {b.compactions?.cold}
-                </text>
+              {barTotal(b) <= 0 && <rect x={x} y={M.top + plotH - 1} width={barW} height={1} fill="var(--line)" />}
+              {stack === 'compaction' && (b.compactions?.calls ?? 0) > 0 && (
+                // a marker over the bar: the days with compactions are findable though their cost is a sliver
+                <circle
+                  data-testid="compaction-marker"
+                  cx={centre(i)}
+                  cy={y(b.total) - 6}
+                  r={2.5}
+                  fill={(b.compactions?.cold ?? 0) > 0 ? 'var(--bad)' : 'var(--muted)'}
+                />
               )}
               {i % every === 0 && (
                 <text x={centre(i)} y={HEIGHT - 6} textAnchor="middle" fontSize={11} fill="var(--muted)">
@@ -242,20 +252,16 @@ function Tip({
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-medium text-fg">{bucketTitle(bucket)}</span>
-        {stack === 'compaction' ? (
-          <span className="font-mono">~{formatMoney(c?.usd ?? 0)}</span>
-        ) : (
-          <Money usd={bucket.total} lowerBound={lowerBoundNote(0, 0, bucket.unrecorded)} />
-        )}
+        <Money usd={bucket.total} lowerBound={lowerBoundNote(0, 0, bucket.unrecorded)} />
       </div>
       {stack === 'compaction' && c && (
         <p className="mt-0.5 text-muted">
-          {plural(c.calls, 'compaction')}
-          {c.cold > 0 && <span className="text-bad">, {c.cold} cold</span>}
+          Compactions ~{formatMoney(c.usd)}: {plural(c.calls, 'call')}
+          {c.cold > 0 ? <span className="text-bad">, {c.cold} cold</span> : ', all warm'}
         </p>
       )}
       {segments.length === 0 ? (
-        <p className="mt-1 text-muted">{stack === 'compaction' ? 'No compactions.' : 'No spend.'}</p>
+        <p className="mt-1 text-muted">{stack === 'compaction' ? 'No compactions this day.' : 'No spend.'}</p>
       ) : (
         <ul className="mt-1 space-y-0.5">
           {[...segments].reverse().map((s) => (

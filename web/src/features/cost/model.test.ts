@@ -114,12 +114,6 @@ describe('stacks', () => {
     expect(s.find((x) => x.key === 'other')?.usd).toBe(5 + 4)
     expect(s.reduce((a, x) => a + x.usd, 0)).toBe(b.parts.reduce((a, p) => a + p.totalUSD, 0))
   })
-  test('by source', () => {
-    expect(stackOf(b, 'source', []).map((x) => [x.key, x.usd])).toEqual([
-      ['reported', 6],
-      ['attributed', 4],
-    ])
-  })
 })
 
 describe('axis', () => {
@@ -242,17 +236,16 @@ describe('the compaction stack', () => {
     expect(segs.map((s) => s.key)).toEqual(['compaction-warm', 'compaction-cold'])
     expect(segs[0].usd).toBeCloseTo(1.21)
     expect(segs[1].usd).toBeCloseTo(10.59)
-    expect(barTotal(b, 'compaction')).toBeCloseTo(11.8)
-    expect(barTotal(b, 'model')).toBe(40)
+    expect(barTotal(b)).toBe(40) // the bar stays the day's spend: the stack only colours what compactions cost
   })
   test('all warm: no cold segment; no compactions: an empty bar', () => {
     const warm = { ...b, compactions: { calls: 1, cold: 0, usd: 0.7, warmUSD: 0.7, uncoveredUSD: 0 } }
     expect(stackOf(warm, 'compaction', []).map((s) => s.key)).toEqual(['compaction-warm'])
     expect(stackOf({ ...b, compactions: undefined }, 'compaction', [])).toEqual([])
-    expect(barTotal({ ...b, compactions: undefined }, 'compaction')).toBe(0)
   })
   test('the URL value', () => {
     expect(parseStack('compaction')).toBe('compaction')
     expect(parseStack('nonsense')).toBe('model')
+    expect(parseStack('source')).toBe('model') // an old link: the reported / attributed stack is gone
   })
 })

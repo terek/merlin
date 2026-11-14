@@ -170,18 +170,18 @@ export const CLASS_STACK: [string, Tone][] = [
 const SERIES: Tone[] = ['series-1', 'series-2', 'series-3', 'series-4', 'series-5']
 
 /** By model, by source (reported, attributed or recorded), or the estimated compaction calls on their own. */
-export type Stack = 'model' | 'source' | 'class' | 'compaction'
+export type Stack = 'model' | 'class' | 'compaction'
 
 export function parseStack(s: string | null): Stack {
-  return s === 'source' || s === 'compaction' || s === 'class' ? s : 'model'
+  return s === 'compaction' || s === 'class' ? s : 'model'
 }
 
 /**
- * The height of a bar: its spend, or for the compaction stack what its compaction calls cost. That
- * estimate is not part of the spend (format notes §6a), so it gets a chart of its own.
+ * The height of a bar: the day's spend, whatever the stack. The compaction stack keeps the axis and the bars of
+ * the others: it only colours the part of the day that compactions cost.
  */
-export function barTotal(b: Bucket, stack: Stack): number {
-  return stack === 'compaction' ? (b.compactions?.usd ?? 0) : b.total
+export function barTotal(b: Bucket): number {
+  return b.total
 }
 
 /** The colour of a model in the legend and the bars. */
@@ -193,8 +193,8 @@ export function modelTone(key: string, top: string[]): Tone {
 
 /**
  * The stack of one bar, bottom first. By model: the top models in rank order, "other" (every
- * other model) and (overhead) on top. By source: reported, attributed, then recorded. The segments add up
- * to the bucket's total. By compaction: the warm-cache cost of the calls, then the extra the cold
+ * other model) and (overhead) on top. By class: cache reads, cache writes, output, input. The segments add up
+ * to the bucket's total. By compaction (drawn inside the day's full bar): the warm-cache cost of the calls, then the extra the cold
  * ones cost; they add up to the estimate.
  */
 export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
@@ -203,7 +203,7 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
     const c = b.compactions
     if (!c) return []
     return [
-      { key: 'compaction-warm', tone: 'faint' as const, usd: c.warmUSD },
+      { key: 'compaction-warm', tone: 'recorded' as const, usd: c.warmUSD },
       { key: 'compaction-cold', tone: 'bad' as const, usd: Math.max(0, c.usd - c.warmUSD) },
     ].filter((s) => s.usd > 0)
   }
@@ -211,13 +211,6 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
     // the price classes, bottom first; the parts of a `by=day&split=class` response
     const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
     return CLASS_STACK.map(([key, tone]) => ({ key, tone, usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
-  }
-  if (stack === 'source') {
-    return [
-      { key: 'reported', tone: 'reported' as const, usd: b.reported },
-      { key: 'attributed', tone: 'attributed' as const, usd: b.attributed },
-      { key: 'recorded', tone: 'recorded' as const, usd: b.recorded ?? 0 },
-    ].filter((s) => s.usd > 0)
   }
   let other = 0
   let overhead = 0
