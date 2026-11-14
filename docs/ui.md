@@ -372,7 +372,7 @@ From top to bottom:
     and the spend bars, with an accent marker at each edge (as on the Overview's timeline); the rest
     dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
     strip kept (so over a break its time width changes); dragging a handle resizes it; a click outside the
-    window centres it there; a click on a date, or a double-click inside a day, snaps to that day (its
+    window centres it there; a click on a date (while the pointer is on one, the day it would snap to gets a soft accent wash), or a double-click inside a day, snaps to that day (its
     activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
     window by its own width, or to the previous or next day when it is a day; Home and End go to the
     start and end. A window is never narrower than 5 minutes. The parts of the effective window beyond the
@@ -811,7 +811,7 @@ The table only ever lists sessions.
   as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
   thin bars in the faint colour on the white pill, a light month axis under it (day numbers too when a day is 16
   px wide), the **brush**: a light accent band centred on the row the bars stand on, no outline, with an accent marker at each end. Drag on the strip to draw a range, drag the brush to move it, drag its edges
-  to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day; a click on a **month's name** on the axis (pointer, underlined on hover, title "Show May 2026") applies exactly that calendar month at once (`monthRange`: its first to its last day, the current month ending today, clipped to the strip's first day), updating the URL and the remembered range, with the locator staying open and the brush on that month. The
+  to resize, click the strip to bring the brush there (its length kept); the arrow keys move it a day; a click on a **month's name** on the axis (pointer, underlined on hover, title "Show May 2026") applies exactly that calendar month at once (while the pointer is on the name, that month gets a soft accent wash over the strip's full height, so a stray hover shows what a click would take) (`monthRange`: its first to its last day, the current month ending today, clipped to the strip's first day), updating the URL and the remembered range, with the locator staying open and the brush on that month. The
   brush snaps to whole days, one at least. It starts on the current range (the preset's days when no custom
   range is set). The Custom label follows the drag live; the page applies the range (`from`, `to`) only when
   the drag ends, so a drag does not refetch.

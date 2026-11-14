@@ -119,6 +119,9 @@ function Locator({
   const [live, setLive] = useState<Brush | null>(null)
   const drag = useRef<LocDrag | null>(null)
   const [cursor, setCursor] = useState('crosshair')
+  // the month whose name the pointer is on: its days get a soft wash, saying what a click selects
+  const [hoverMonth, setHoverMonth] = useState<number | null>(null)
+  const monthWash = hoverMonth === null || live ? null : rangeBrush(strip, monthRange(strip, hoverMonth, now))
   const brush = live ?? rangeBrush(strip, value)
   const x0 = brush.lo * dw
   const x1 = (brush.hi + 1) * dw
@@ -216,6 +219,18 @@ function Locator({
         onPointerUp={onUp}
         onPointerCancel={onUp}
       >
+        {monthWash && (
+          <rect
+            x={monthWash.lo * dw}
+            y={0}
+            width={(monthWash.hi - monthWash.lo + 1) * dw}
+            height={LOC_H}
+            rx={3}
+            fill="var(--accent)"
+            fillOpacity={0.08}
+            pointerEvents="none"
+          />
+        )}
         {/* the brush: a light accent band centred on the axis line, under the bars and labels */}
         <rect
           x={x0}
@@ -248,6 +263,8 @@ function Locator({
               fontSize={10}
               fill={t.month ? 'var(--muted)' : 'var(--faint)'}
               data-month={t.month ? t.day : undefined}
+              onPointerEnter={t.month ? () => setHoverMonth(t.day) : undefined}
+              onPointerLeave={t.month ? () => setHoverMonth(null) : undefined}
               className={t.month ? 'cursor-pointer hover:underline' : undefined}
               style={t.month ? { cursor: 'pointer' } : undefined}
             >

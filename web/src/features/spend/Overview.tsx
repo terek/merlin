@@ -78,6 +78,8 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
   const [cursor, setCursor] = useState('crosshair')
+  // the date label the pointer is on: the day it snaps to gets a soft wash, saying what a click selects
+  const [hoverSnap, setHoverSnap] = useState<number | null>(null)
   const x0 = PAD
   const x1 = Math.max(x0 + 80, width - PAD)
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
@@ -140,6 +142,7 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
   const dayOfWin = windowDay(win, days)
   const snap = (k: number) => onWin(snapDay(days[k]))
   const snapped = dayOfWin >= 0 ? { m: days[dayOfWin].date } : undefined
+  const wash = hoverSnap === null ? null : snapTarget(timeline, days, hoverSnap)
 
   const at = (e: PointerEvent) => e.clientX - (e.currentTarget as Element).getBoundingClientRect().left
   const zoneAt = (x: number): 'lo' | 'hi' | 'move' | 'new' =>
@@ -282,6 +285,18 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
               <title>{`${formatDuration(b.t1 - b.t0)} in which nothing ran, left out`}</title>
             </rect>
           ))}
+          {wash && (
+            <rect
+              x={axis.x(wash.lo)}
+              y={0}
+              width={Math.max(2, axis.x(wash.hi) - axis.x(wash.lo))}
+              height={H}
+              rx={3}
+              fill="var(--accent)"
+              fillOpacity={0.08}
+              pointerEvents="none"
+            />
+          )}
           {midnights.map((x) => (
             <line key={x} x1={x} x2={x} y1={0} y2={H} stroke="var(--line)" strokeWidth={1} />
           ))}
@@ -305,6 +320,8 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
             <text
               key={l.m}
               data-snap={l.m}
+              onPointerEnter={() => setHoverSnap(l.m)}
+              onPointerLeave={() => setHoverSnap(null)}
               x={l.x}
               y={LABEL_H - 3}
               fontSize={10}
