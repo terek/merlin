@@ -221,7 +221,7 @@ func TestCostByLocationKeys(t *testing.T) {
 		t.Errorf("cost of the touched worktree = %v", ct.Total.TotalUSD)
 	}
 	r.wantError("/api/cost?by=project&touched=maybe", 400, CodeInvalidParameter)
-	r.wantError("/api/cost?by=dir&split=project", 400, CodeInvalidParameter)
+	r.wantError("/api/cost?by=project&split=project", 400, CodeInvalidParameter)
 	e := r.wantError("/api/cost?by=worktree", 400, CodeInvalidParameter)
 	if !strings.Contains(e.Error.Message, "checkout, remote") {
 		t.Errorf("message = %q", e.Error.Message)

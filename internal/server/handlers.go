@@ -434,7 +434,7 @@ func (a *API) dayOf(t time.Time) string { return t.In(a.loc()).Format(dayLayout)
 var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel,
 	"kind": catalog.ByKind, "repo": catalog.ByRepo, "branch": catalog.ByBranch, "bead": catalog.ByBead,
 	"family": catalog.ByFamily, "checkout": catalog.ByCheckout, "remote": catalog.ByRemote,
-	"dir":   catalog.ByProject, // dir is project under another name
+	"dir":   catalog.ByDir, // the folder, not the start directory
 	"class": catalog.ByClass, "agent": catalog.ByAgent}
 
 // unsplitKey is the row of spend no token (by=class) or message (by=agent) explains.

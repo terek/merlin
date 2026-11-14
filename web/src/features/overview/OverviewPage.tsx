@@ -407,7 +407,7 @@ const SessionRow = memo(function SessionRow({
 }) {
   const head = laneHead(l)
   const navigate = useNavigate()
-  const command = resumeCommand(l.dir, l.id, useHarness(l.harness).resume)
+  const command = resumeCommand(l.project, l.id, useHarness(l.harness).resume)
   const urlAt = (e: React.MouseEvent<HTMLAnchorElement>) =>
     sessionStretchUrl(l, axis, e.clientX - e.currentTarget.getBoundingClientRect().left)
   return (

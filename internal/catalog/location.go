@@ -210,14 +210,18 @@ func pick(cands []string, of func(string) doing, start string) string {
 	return ""
 }
 
-// locate works out the primary repo, checkout and remote of a session and the lists of every
-// value it touched.
-func (fv *facets) locate(s *sess) (repo, checkout, remote string, checkouts, repoList, remotes []string) {
+// locate works out the primary repo, checkout, remote and dir of a session and the lists of
+// every value it touched.
+func (fv *facets) locate(s *sess) (repo, checkout, remote, dir string, checkouts, repoList, remotes []string) {
 	d := s.d
 	start, ok := fv.look(d.Project)
+	// The start directory's own checkout, without the fallback to where the session stopped: a
+	// session started in no repository (say in ~) that stopped inside one did not start there.
+	projectCheckout := start.Checkout
 	if !ok {
 		start, ok = fv.look(d.Cwd)
 	}
+	startDir := filepath.Clean(d.Project)
 	var startRepo, startCheckout string
 	if ok {
 		startRepo, startCheckout = start.GitCommonDir, start.Checkout
@@ -237,7 +241,10 @@ func (fv *facets) locate(s *sess) (repo, checkout, remote string, checkouts, rep
 			byRepo[k] = &doing{}
 		}
 		byRepo[k].add(*t)
-		if r.Checkout != "" {
+		// A start directory in no checkout (a container root) does not own the inferred
+		// checkouts directly under it: they are its old subfolders, never worktrees (§4).
+		hijack := r.Inferred && projectCheckout == "" && filepath.Dir(r.Checkout) == startDir
+		if r.Checkout != "" && !hijack {
 			touchedC[r.Checkout] = true
 			if byCheckout[k] == nil {
 				byCheckout[k] = map[string]*doing{}
@@ -266,6 +273,12 @@ func (fv *facets) locate(s *sess) (repo, checkout, remote string, checkouts, rep
 		remote = fv.repo[repo].Remote
 	}
 
+	dir = s.project
+	if projectCheckout == "" && checkout != "" && byCheckout[repo][checkout] != nil &&
+		byCheckout[repo][checkout].edits > 0 {
+		dir = checkout
+	}
+
 	for _, k := range []string{repo, startRepo} {
 		if k != "" {
 			touchedR[k] = true
@@ -282,7 +295,7 @@ func (fv *facets) locate(s *sess) (repo, checkout, remote string, checkouts, rep
 			touchedM[m] = true
 		}
 	}
-	return repo, checkout, remote, slices.Sorted(maps.Keys(touchedC)), slices.Sorted(maps.Keys(touchedR)),
+	return repo, checkout, remote, dir, slices.Sorted(maps.Keys(touchedC)), slices.Sorted(maps.Keys(touchedR)),
 		slices.Sorted(maps.Keys(touchedM))
 }
 
@@ -290,7 +303,7 @@ func (fv *facets) locate(s *sess) (repo, checkout, remote string, checkouts, rep
 type GroupBy string
 
 const (
-	GroupDir      GroupBy = "dir"      // the directory a session started in
+	GroupDir      GroupBy = "dir"      // its folder: the start directory, or the checkout it worked in when it started in none
 	GroupCheckout GroupBy = "checkout" // its primary checkout
 	GroupRepo     GroupBy = "repo"     // its primary repository (git common dir)
 	GroupRemote   GroupBy = "remote"   // its primary remote
@@ -333,7 +346,7 @@ func (c *Catalog) Groups(by GroupBy, f Filter) ([]Group, error) {
 		var key string
 		switch by {
 		case GroupDir:
-			key = s.project
+			key = sf.dir
 		case GroupCheckout:
 			key = sf.checkout
 		case GroupRepo:

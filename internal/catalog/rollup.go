@@ -100,6 +100,10 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 				for i := range parts {
 					parts[i].k.project = x.s.project
 				}
+			case ByDir:
+				for i := range parts {
+					parts[i].k.dir = fv.ses[x.s.idx].dir
+				}
 			case ByDay:
 				for i := range parts {
 					parts[i].k.day = x.day
@@ -195,7 +199,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 		for i, p := range parts {
 			a := rows[p.k]
 			if a == nil {
-				a = &acc{row: Row{Project: p.k.project, Day: p.k.day, Model: p.k.model, Kind: p.k.kind,
+				a = &acc{row: Row{Project: p.k.project, Dir: p.k.dir, Day: p.k.day, Model: p.k.model, Kind: p.k.kind,
 					Repo: p.k.repo, Checkout: p.k.checkout, Remote: p.k.remote, Branch: p.k.branch, Bead: p.k.bead,
 					Family: p.k.family, Class: p.k.class, Agent: p.k.agent}}
 				rows[p.k] = a
@@ -229,13 +233,15 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 }
 
 // rkey is the key of a rollup row: one value per dimension.
-type rkey struct{ project, day, model, kind, repo, checkout, remote, branch, bead, family, class, agent string }
+type rkey struct{ project, dir, day, model, kind, repo, checkout, remote, branch, bead, family, class, agent string }
 
 // get picks the value of one dimension.
 func (k rkey) get(d Dim) string {
 	switch d {
 	case ByProject:
 		return k.project
+	case ByDir:
+		return k.dir
 	case ByDay:
 		return k.day
 	case ByModel:
@@ -262,7 +268,7 @@ func (k rkey) get(d Dim) string {
 
 // Key is the row's value along a dimension.
 func (r Row) Key(d Dim) string {
-	return rkey{r.Project, r.Day, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent}.get(d)
+	return rkey{r.Project, r.Dir, r.Day, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent}.get(d)
 }
 
 // Total returns the spend of the sessions selected by f: the sum of their best costs

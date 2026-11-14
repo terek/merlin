@@ -864,7 +864,7 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 
 | Parameter | Meaning |
 |---|---|
-| `by` | `project` (default), `dir` (the same as `project`), `day`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
+| `by` | `project` (default), `dir` (the folder, [location.md](location.md) §7; `project` is the start directory), `day`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
 | `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
 | `project`, `repo`, `checkout`, `remote`, `touched`, `branch`, `bead` | as for `/api/sessions` (the same parser reads them) |
 | `place`, `in` | the Overview's scope: `place` is `dir` (default), `checkout`, `repo`, `remote` or `bead`; `in` is a path in it. Keeps the sessions whose **primary** value of that key (the one `/api/overview` puts on its lanes: `dir`, `checkout`, `repo`, `remote`, `bead`) sits at or under `in`, matched segment-wise (`dir`, `checkout` and `remote` split on `/`; a repository's trailing `.git` or `.bare` does not count; a bead's value is its path `prefix/root/…/bead`, the chain of `beads` in the overview). `in=-` selects the sessions with no value. With `in` the scripted runs are out (`backing.scriptedRuns` is 0), as on the Overview. A 400 for another `place` |
@@ -1033,11 +1033,12 @@ session that launched it (for a branched session, the branched session itself); 
 agent's description or name, or the branched session's title.
 
 **Places.** `dir`, `checkout`, `repo` and `remote` are the session's value of each location key of
-`/api/groups`, the same primary value per session: `dir` the directory it started in; `checkout`, `repo`
+`/api/groups`, the same primary value per session: `dir` its folder (the directory it started in, or the checkout it worked in when it started in none); `checkout`, `repo`
 (a git common dir) and `remote` (a normalised origin URL) its primary checkout, repository and remote
 ([location.md](location.md) §7: where it started, unless most of its work happened elsewhere). Each is
 omitted when the session has none. The page derives every name it shows from these keys, so there is no
-name lookup.
+name lookup. A lane's `project` is the directory the session started in, always set: resume uses
+it (Claude Code only resumes from where a session started), while `dir` is the folder it is grouped by.
 
 **Beads.** `bead` is the session's bead: the one holding the largest share of the session's bead-attributed
 cost, the first in sort order on a tie (the `bead` key of `/api/groups`); omitted for a session on none. The
@@ -1059,7 +1060,7 @@ of its root, as `beads.Prefix`).
   "lanes": [
     {
       "harness": "claude", "id": "394b4c16-…", "title": "long refactor",
-      "dir": "/home/dev/merlin/web", "checkout": "/home/dev/merlin", "repo": "/home/dev/merlin/.git",
+      "dir": "/home/dev/merlin/web", "project": "/home/dev/merlin/web", "checkout": "/home/dev/merlin", "repo": "/home/dev/merlin/.git",
       "remote": "github.com/dev/merlin", "bead": "merlin-lce.2",
       "startedAt": "2026-11-05T04:41:37Z", "lastActivityAt": "2026-11-10T21:29:40Z",
       "name": "the big one",
@@ -1195,7 +1196,7 @@ up; the other values it touched are listed in its detail.
 
 | Key | Meaning |
 |---|---|
-| `dir` | the directory it started in (`project`) |
+| `dir` | the folder: the directory it started in (`project`), or, when that is in no checkout, the primary checkout if the session edited there |
 | `checkout` | top of a working tree; none in a bare repository |
 | `repo` | the git common dir, the object store (`/home/dev/acme/.git`) |
 | `remote` | the normalised origin URL |
@@ -1205,7 +1206,8 @@ copied history: the `repo` with the most file edits, else the most shell command
 start directory; the `checkout` the same way inside that repo, else the start directory's if it is in
 that repo; the `remote` is the repo's. Edits outrank commands, ties go to the start directory's value
 and then to the first in sort order, and a directory in no repository counts for nothing. A session
-therefore never has a checkout outside its repo.
+therefore never has a checkout outside its repo. `dir` is the start directory unless that is in no
+checkout and the primary checkout had edits in the session (commands alone never move it).
 
 `GET /api/groups?by=` (`GroupList`), `by` one of `dir`, `checkout`, `repo`, `remote`, `beadDatabase`,
 `prefix`, `family`, `bead`: `groups[]` with `key`, `name` (the display name: `repos.Name` for a repo,

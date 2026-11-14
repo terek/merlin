@@ -121,6 +121,11 @@ that no longer exists is inferred, in this order:
 3. **Otherwise** nothing is recorded, as before, and it is tried again at the next recheck.
 
 Inferred entries are marked `inferred` and worked out again at each recheck, because the cache grows.
+A session that started in such a `P` (a directory that was a plain checkout and later became a bare
+container) must not take those old subfolders as checkouts: an inferred entry directly under its
+start directory, when the start directory has no checkout, still counts toward its repo but toward no
+checkout. The session gets the container's common dir as repo and no checkout.
+
 A removed tool worktree with no recorded sibling infers its main checkout: its repo and remote are
 right, its checkout is not, and nothing on disk can tell.
 
@@ -186,7 +191,13 @@ and agents spawned in such a turn), decides:
 2. **`checkout`:** the same inside that repo: most edits, else most commands. With none, the start
    directory's checkout if it is in that repo, else none.
 3. **`remote`:** the repo's.
-4. **`dir`:** always the start directory. Activity would give a deep subfolder.
+4. **`dir`** ("Folder"): the start directory, except when it is in no checkout (no entry, or an
+   entry with no checkout: `~`, a scratch directory, a container root) and the primary checkout had
+   edits in this session; then the primary checkout. Commands alone never move it, and a start
+   directory inside a checkout (say `proj/web`) stays, because activity would give a deep subfolder.
+   The reason: a session started in the wrong place, or always in `~`, did its work elsewhere, and
+   the folder should say where. Resume keeps the true start directory (`project`), because Claude
+   Code only resumes from where a session started.
 5. **`branch`:** not a primary value. The spend keeps splitting over the turns' branches, which also
    adds up.
 

@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Folder follows the work when a session started outside any checkout (say in `~`): it shows the checkout the session edited in. Resume still uses the directory the session started in.
+- Sessions from before a checkout became a bare container no longer show made-up checkouts named after its old subfolders.
 - Cost looks like the Overview and says less: its sidebar of places (which, with two lines for scripted runs and for spend no session explains, adds up to the total), then one pane with the total, how it changed against the days before, and how few sessions make half of it; spend by day, by model, by price class (cache reads, cache writes, output, uncached input) and by main thread against sub-agents, each table's bars walking across the width in turn. Reported against attributed is gone from view (it is under "How these figures are made"), and the compactions chart keeps the days' bars and only colours what compactions cost. Cost has no search; the Overview keeps its own when you come back.
 - The Overview counts the estimated output of truncated sub-agent messages in a session's spend, as the session's own cost already did.
 - The sidebar's selected line no longer turns bold (the text used to shift); it is marked by a stronger accent background and accent text.

@@ -94,10 +94,12 @@ type OverviewScripted struct {
 // Dir, Checkout, Repo and Remote are its places, the primary value of each location key ("" when
 // it has none).
 type OverviewLane struct {
-	Harness  string `json:"harness"`
-	ID       string `json:"id"`
-	Title    string `json:"title,omitempty"`
-	Dir      string `json:"dir,omitempty"`
+	Harness string `json:"harness"`
+	ID      string `json:"id"`
+	Title   string `json:"title,omitempty"`
+	Dir     string `json:"dir,omitempty"`
+	// Project is the directory the session started in (resume needs it); Dir is its folder.
+	Project  string `json:"project,omitempty"`
 	Checkout string `json:"checkout,omitempty"`
 	Repo     string `json:"repo,omitempty"`
 	Remote   string `json:"remote,omitempty"`
@@ -225,6 +227,7 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			StartedAt: s.d.StartedAt.UTC(), LastActivityAt: s.d.LastActivityAt.UTC(), USD: o.total,
 			Spans: sortedSpans(overviewSpans(s, from, to))}
 		l.Dir, l.Checkout, l.Repo, l.Remote, l.Bead = fv.placeValues(s)
+		l.Project = s.project
 		inherited := make(map[int]bool, len(s.info.InheritedTurns))
 		for _, i := range s.info.InheritedTurns {
 			inherited[i] = true

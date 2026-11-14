@@ -1210,6 +1210,8 @@ export interface OverviewLane {
   lastPrompt?: PromptPreview
   /** The session's places, the primary value of each location key; absent when it has none. */
   dir?: string
+  /** The directory it started in (always set): what resume needs; `dir` is its folder. */
+  project?: string
   checkout?: string
   repo?: string
   remote?: string

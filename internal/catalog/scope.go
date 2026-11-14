@@ -86,7 +86,7 @@ func (fv *facets) placeValues(s *sess) (dir, checkout, repo, remote, bead string
 	if b := fv.topValue(sf, GroupBead); b != NoBead {
 		bead = b
 	}
-	return s.project, sf.checkout, sf.repo, sf.remote, bead
+	return sf.dir, sf.checkout, sf.repo, sf.remote, bead
 }
 
 // inScope reports whether the session's value of the filter's place key sits under f.In.

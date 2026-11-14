@@ -315,15 +315,18 @@ const (
 	// the main thread and the agents (spendsplit.go).
 	ByClass
 	ByAgent
+	// ByDir puts a session's whole spend under its folder (location.go).
+	ByDir
 )
 
 // facet reports whether the dimension needs the groupings.
-func (d Dim) facet() bool { return d >= ByRepo && d <= ByRemote }
+func (d Dim) facet() bool { return d >= ByRepo && d <= ByRemote || d == ByDir }
 
 // Row is one line of a rollup. Only the fields of the requested dimensions are set.
 // Sessions counts the distinct sessions that contributed spend to the row.
 type Row struct {
 	Project  string `json:"project,omitempty"`
+	Dir      string `json:"dir,omitempty"`
 	Day      string `json:"day,omitempty"` // local date, 2006-01-02
 	Model    string `json:"model,omitempty"`
 	Kind     string `json:"kind,omitempty"`

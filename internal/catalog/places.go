@@ -131,6 +131,7 @@ type sessFacets struct {
 	// Primary values (location.go): they never contradict, the checkout is inside the repo and
 	// the remote is the repo's.
 	repo, checkout, remote string
+	dir                    string // the folder (location.go): the start directory unless the work moved it
 	// Every value touched: the primary and start-directory values and those of its own activity.
 	checkouts, repos, remotes []string // sorted, no duplicates
 	branches                  []string // in order of first use
@@ -323,7 +324,7 @@ func (fv *facets) session(s *sess) sessFacets {
 	d := s.d
 	sf := sessFacets{ops: map[string][]model.BeadOp{}, lastOn: map[string]time.Time{}}
 
-	sf.repo, sf.checkout, sf.remote, sf.checkouts, sf.repos, sf.remotes = fv.locate(s)
+	sf.repo, sf.checkout, sf.remote, sf.dir, sf.checkouts, sf.repos, sf.remotes = fv.locate(s)
 	for _, t := range d.Turns {
 		if t.GitBranch != "" && !slices.Contains(sf.branches, t.GitBranch) {
 			sf.branches = append(sf.branches, t.GitBranch)
