@@ -1207,6 +1207,9 @@ function Sidebar({
 /** The locator's height (px): the day bars over the light axis. */
 const LOC_H = 28
 const LOC_BAR = 15
+/** The brush: a band centred on the axis line, LOC_BAND tall. */
+const LOC_AXIS = LOC_BAR + 2.5
+const LOC_BAND = 14
 /** How close to an edge of the brush (px) the pointer grabs it. */
 const LOC_GRAB = 6
 
@@ -1343,8 +1346,15 @@ function Locator({
         onPointerUp={onUp}
         onPointerCancel={onUp}
       >
-        {/* the brush's days are lit with the accent on the white pill */}
-        <rect x={x0} y={0} width={Math.max(2, x1 - x0)} height={LOC_H} fill="var(--accent)" fillOpacity={0.12} rx={2} />
+        {/* the brush: a light accent band centred on the axis line, under the bars and labels */}
+        <rect
+          x={x0}
+          y={LOC_AXIS - LOC_BAND / 2}
+          width={Math.max(2, x1 - x0)}
+          height={LOC_BAND}
+          fill="var(--accent)"
+          fillOpacity={0.16}
+        />
         {spend.map((v, i) =>
           v > 0 ? (
             <rect
@@ -1377,24 +1387,14 @@ function Locator({
           </g>
         ))}
         <g pointerEvents="none">
-          <rect
-            x={x0}
-            y={0.75}
-            width={Math.max(2, x1 - x0)}
-            height={LOC_H - 1.5}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth={1.5}
-            rx={2}
-          />
           {[x0, x1].map((x, i) => (
             <rect
               key={i === 0 ? 'lo' : 'hi'}
-              x={x - 2}
-              y={LOC_H / 2 - 5}
-              width={4}
-              height={10}
-              rx={2}
+              x={x - 1.5}
+              y={LOC_AXIS - LOC_BAND / 2}
+              width={3}
+              height={LOC_BAND}
+              rx={1.5}
               fill="var(--accent)"
             />
           ))}
