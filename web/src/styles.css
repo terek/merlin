@@ -182,9 +182,11 @@
 @layer base {
   html {
     background: var(--bg);
-    /* the document never scrolls: the shell's main area (and the pages' own panes) do */
+    /* the document never scrolls down: the shell's main area (and the pages' own panes) do; below the body's
+       min-width it scrolls sideways */
     height: 100%;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
   body {
     margin: 0;
