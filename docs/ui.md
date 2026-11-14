@@ -765,7 +765,7 @@ The table only ever lists sessions.
                            | Sat 7     Sun 8     Mon 9  ... axis       | 102 sessions · 913 scripted runs
 ```
 
-- **URL**: `range` (`1d`, `7d` default, `30d`, ending now) or a custom range `from` and `to` (local days,
+- **URL**: `range` (`1d`, `7d` default, `30d`: that many whole local days, today included, ending now; the same days the timeline shows and the Cost page counts) or a custom range `from` and `to` (local days,
   `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
   them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`, `bead`), `in` (the selection), `q` (the
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.

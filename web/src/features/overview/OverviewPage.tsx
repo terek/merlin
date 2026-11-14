@@ -101,7 +101,6 @@ import {
   placeItems,
   placeOf,
   presetRange,
-  RANGES,
   type Range,
   rangeBrush,
   resizeBrush,
@@ -1499,7 +1498,9 @@ export function OverviewPage() {
   // "Ending now", rounded up so that the query key holds still between refreshes.
   const now = useNow(300_000)
   const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
-  const win = custom ? customWindow(custom, to) : { fromMs: to - RANGES[range].ms, toMs: to }
+  // a preset is its whole local days (today included), as the timeline draws it, ending now
+  const days = custom ?? presetRange(range, now)
+  const win = customWindow(days, to)
   const rangeMs = win.toMs - win.fromMs
 
   // The plot's width picks the slot (about one per pixel); the width is followed live, the slot only
@@ -1602,7 +1603,7 @@ export function OverviewPage() {
               {axisOpen && (
                 <div className="flex min-w-0 flex-1 items-center overflow-hidden">
                   <Locator
-                    value={custom ?? presetRange(range, now)}
+                    value={days}
                     now={now}
                     onLive={setLive}
                     onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
@@ -1687,11 +1688,7 @@ export function OverviewPage() {
         <QueryBoundary
           query={query}
           isEmpty={(o) => o.lanes.length === 0 && o.scripted.sessions === 0}
-          empty={
-            <div className="p-6 text-muted">
-              {custom ? `Nothing ran ${customPhrase(custom, now)}.` : 'Nothing ran in this range.'}
-            </div>
-          }
+          empty={<div className="p-6 text-muted">{`Nothing ran ${customPhrase(days, now)}.`}</div>}
           skeleton={<Skeleton className="m-3 h-64" />}
         >
           {(o) => (
