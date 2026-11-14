@@ -418,6 +418,8 @@ interface Contribution {
   /** by=class or by=agent: the part of the spend this contribution stands for. */
   class?: string
   agent?: string
+  /** by=hour: local hour key, 2026-11-13T14. */
+  hour?: string
   session: string
   label?: string
   flag?: Sess['summary']['cost']['flag']
@@ -514,12 +516,40 @@ function fanOut(
   return out
 }
 
+/** How a working day's spend lies over the 24 local hours: little at night, a morning and an afternoon hump. */
+const HOUR_SHAPE = (() => {
+  const w = Array.from(
+    { length: 24 },
+    (_, h) => 0.02 + 1.0 * Math.exp(-(((h - 10.5) / 1.8) ** 2)) + 0.85 * Math.exp(-(((h - 15.5) / 2.2) ** 2)),
+  )
+  const sum = w.reduce((a, b) => a + b, 0)
+  return w.map((x) => x / sum)
+})()
+
+/** Spreads every contribution over the hours of its day (a compaction tally goes with the first hour). */
+function fanOutHours(cs: Contribution[]): Contribution[] {
+  const out: Contribution[] = []
+  for (const c of cs) {
+    HOUR_SHAPE.forEach((share, h) => {
+      out.push({
+        ...c,
+        hour: `${c.day}T${String(h).padStart(2, '0')}`,
+        usd: c.usd * share,
+        count: h === 0 ? c.count : 0,
+        comp: h === 0 ? c.comp : undefined,
+      })
+    })
+  }
+  return out
+}
+
 function costTable(u: URL): CostTable {
   const by = (u.searchParams.get('by') ?? 'project') as CostBy
   if (
     ![
       'project',
       'day',
+      'hour',
       'model',
       'kind',
       'class',
@@ -533,7 +563,7 @@ function costTable(u: URL): CostTable {
     ].includes(by)
   )
     throw new BadRequest(
-      `by=${JSON.stringify(by)}: use project, day, model, kind, class, agent, session, dir, checkout, repo, remote or branch`,
+      `by=${JSON.stringify(by)}: use project, day, hour, model, kind, class, agent, session, dir, checkout, repo, remote or branch`,
     )
   const split = u.searchParams.get('split') as 'project' | 'model' | 'kind' | 'class' | 'agent' | null
   if (split && !['project', 'model', 'kind', 'class', 'agent'].includes(split))
@@ -545,6 +575,14 @@ function costTable(u: URL): CostTable {
   const until = parseTime('until', u.searchParams.get('until'), true)
   const limit = u.searchParams.has('limit') ? limitParam(u, 0) : by === 'session' ? 100 : 0
 
+  if (by === 'hour') {
+    if (since === undefined || until === undefined)
+      throw new BadRequest('by=hour needs since and until, at most 14 local days apart')
+    const days =
+      Math.round((Date.parse(`${localDay(until - 1)}T12:00:00`) - Date.parse(`${localDay(since)}T12:00:00`)) / 864e5) +
+      1
+    if (days > 14) throw new BadRequest(`by=hour covers at most 14 local days; since..until spans ${days}`)
+  }
   const fromDay = since === undefined ? '' : localDay(since)
   const toDay = until === undefined ? '9999-99-99' : localDay(until - 1)
   const inDays = (d: string) => d >= fromDay && d <= toDay
@@ -636,6 +674,7 @@ function costTable(u: URL): CostTable {
     })
   }
 
+  if (by === 'hour') cs = fanOutHours(cs)
   // by=class and by=agent: each contribution stands for its shares. Cache reads dominate tokens but not spend.
   if (by === 'class' || split === 'class') cs = fanOut(cs, 'class', CLASS_SHARES, () => null)
   if (by === 'agent' || split === 'agent')
@@ -643,17 +682,19 @@ function costTable(u: URL): CostTable {
 
   const placeDims = ['dir', 'checkout', 'repo', 'remote', 'branch']
   const keyOf = (c: Contribution, dim: CostBy | 'project' | 'model' | 'kind' | 'class' | 'agent'): string =>
-    dim === 'class'
-      ? (c.class ?? '')
-      : dim === 'agent'
-        ? (c.agent ?? '')
-        : dim === 'session'
-          ? c.session
-          : placeDims.includes(dim) && c.summary
-            ? costKey(dim as 'dir', c.summary)
-            : placeDims.includes(dim)
-              ? ''
-              : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
+    dim === 'hour'
+      ? (c.hour ?? '')
+      : dim === 'class'
+        ? (c.class ?? '')
+        : dim === 'agent'
+          ? (c.agent ?? '')
+          : dim === 'session'
+            ? c.session
+            : placeDims.includes(dim) && c.summary
+              ? costKey(dim as 'dir', c.summary)
+              : placeDims.includes(dim)
+                ? ''
+                : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
   const rows = new Map<string, CostRow & { ids: Set<string>; parts: Map<string, CostSplitEntry> }>()
   for (const c of cs) {
     const k = keyOf(c, by)
@@ -694,7 +735,7 @@ function costTable(u: URL): CostTable {
     split: split ? [...parts.values()].sort((a, b) => b.totalUSD - a.totalUSD) : undefined,
   }))
   out =
-    by === 'day'
+    by === 'day' || by === 'hour'
       ? out.sort((a, b) => (a.key < b.key ? -1 : 1))
       : out.sort((a, b) => Number(a.key === '(unsplit)') - Number(b.key === '(unsplit)') || b.totalUSD - a.totalUSD)
   const total: Money = { totalUSD: 0, reportedUSD: 0, attributedUSD: 0 }

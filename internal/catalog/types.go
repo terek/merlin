@@ -317,6 +317,8 @@ const (
 	ByAgent
 	// ByDir puts a session's whole spend under its folder (location.go).
 	ByDir
+	// ByHour groups by local hour (2006-01-02T15, Row.Hour); the spend is the ByDay spend, finer.
+	ByHour
 )
 
 // facet reports whether the dimension needs the groupings.
@@ -327,7 +329,8 @@ func (d Dim) facet() bool { return d >= ByRepo && d <= ByRemote || d == ByDir }
 type Row struct {
 	Project  string `json:"project,omitempty"`
 	Dir      string `json:"dir,omitempty"`
-	Day      string `json:"day,omitempty"` // local date, 2006-01-02
+	Day      string `json:"day,omitempty"`  // local date, 2006-01-02
+	Hour     string `json:"hour,omitempty"` // by=hour: local hour, 2006-01-02T15
 	Model    string `json:"model,omitempty"`
 	Kind     string `json:"kind,omitempty"`
 	Repo     string `json:"repo,omitempty"`

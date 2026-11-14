@@ -908,6 +908,7 @@ export interface SearchResult {
 export type CostBy =
   | 'project'
   | 'day'
+  | 'hour'
   | 'model'
   | 'kind'
   | 'class'

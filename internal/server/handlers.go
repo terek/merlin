@@ -431,11 +431,14 @@ func (a *API) handleSearch(w http.ResponseWriter, r *http.Request) {
 func (a *API) dayOf(t time.Time) string { return t.In(a.loc()).Format(dayLayout) }
 
 // costDims are the dimensions of GET /api/cost.
-var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel,
+var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "hour": catalog.ByHour, "model": catalog.ByModel,
 	"kind": catalog.ByKind, "repo": catalog.ByRepo, "branch": catalog.ByBranch, "bead": catalog.ByBead,
 	"family": catalog.ByFamily, "checkout": catalog.ByCheckout, "remote": catalog.ByRemote,
 	"dir":   catalog.ByDir, // the folder, not the start directory
 	"class": catalog.ByClass, "agent": catalog.ByAgent}
+
+// maxHourDays is the longest range of local days by=hour answers.
+const maxHourDays = 14
 
 // unsplitKey is the row of spend no token (by=class) or message (by=agent) explains.
 const unsplitKey = "(unsplit)"
@@ -456,7 +459,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	split := q.Get("split")
 	dim, isDim := costDims[by]
 	if !isDim && by != "session" {
-		a.badParam(w, "by=%q: use project, dir, day, model, kind, class, agent, repo, checkout, remote, branch, bead, family or session", by)
+		a.badParam(w, "by=%q: use project, dir, day, hour, model, kind, class, agent, repo, checkout, remote, branch, bead, family or session", by)
 		return
 	}
 	var splitDim catalog.Dim
@@ -479,6 +482,19 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.paramError(w, err)
 		return
+	}
+	if by == "hour" {
+		if since.IsZero() || until.IsZero() {
+			a.badParam(w, "by=hour needs since and until, at most %d local days apart", maxHourDays)
+			return
+		}
+		first := time.Date(since.In(a.loc()).Year(), since.In(a.loc()).Month(), since.In(a.loc()).Day(), 12, 0, 0, 0, a.loc())
+		last := until.Add(-time.Nanosecond).In(a.loc())
+		lastDay := time.Date(last.Year(), last.Month(), last.Day(), 12, 0, 0, 0, a.loc())
+		if days := int(lastDay.Sub(first).Round(24*time.Hour)/(24*time.Hour)) + 1; days > maxHourDays {
+			a.badParam(w, "by=hour covers at most %d local days; since..until spans %d", maxHourDays, days)
+			return
+		}
 	}
 	defLimit := 0
 	if by == "session" {
@@ -586,6 +602,8 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 				row.Key = r.Project
 			case "day":
 				row.Key = r.Day
+			case "hour":
+				row.Key = r.Hour
 			case "model":
 				row.Key = r.Model
 				if r.Model == catalog.OverheadModel {
@@ -610,7 +628,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if by == "day" {
+	if by == "day" || by == "hour" {
 		sort.SliceStable(out.Rows, func(i, j int) bool { return out.Rows[i].Key < out.Rows[j].Key })
 	} else {
 		sort.SliceStable(out.Rows, func(i, j int) bool {

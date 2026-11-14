@@ -864,7 +864,7 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 
 | Parameter | Meaning |
 |---|---|
-| `by` | `project` (default), `dir` (the folder, [location.md](location.md) §7; `project` is the start directory), `day`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
+| `by` | `project` (default), `dir` (the folder, [location.md](location.md) §7; `project` is the start directory), `day`, `hour`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
 | `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
 | `project`, `repo`, `checkout`, `remote`, `touched`, `branch`, `bead` | as for `/api/sessions` (the same parser reads them) |
 | `place`, `in` | the Overview's scope: `place` is `dir` (default), `checkout`, `repo`, `remote` or `bead`; `in` is a path in it. Keeps the sessions whose **primary** value of that key (the one `/api/overview` puts on its lanes: `dir`, `checkout`, `repo`, `remote`, `bead`) sits at or under `in`, matched segment-wise (`dir`, `checkout` and `remote` split on `/`; a repository's trailing `.git` or `.bare` does not count; a bead's value is its path `prefix/root/…/bead`, the chain of `beads` in the overview). `in=-` selects the sessions with no value. With `in` the scripted runs are out (`backing.scriptedRuns` is 0), as on the Overview. A 400 for another `place` |
@@ -872,7 +872,11 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 | `limit` | cut the rows (1 to 500). Default: none; `by=session` defaults to 100. `total` is not affected; `truncated` says rows were cut |
 | `split` | `project`, `model`, `kind`, `class` or `agent`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
 
-Rows are ordered by cost, largest first; `by=day` is chronological. `by=model` has a row
+Rows are ordered by cost, largest first; `by=day` and `by=hour` are chronological. `by=hour` has one row per local
+clock hour with spend, `key` `2026-11-13T14` (the daemon's time zone; the repeated hour of a 25-hour day is one row);
+hours without spend are absent. It needs `since` and `until` no more than 14 local days apart (a 400 otherwise), takes
+every filter and every `split`, and its total equals `by=day`'s over the same range. A reported window's overhead is
+spread over the hours of its covered spend, as `by=day` spreads it over days; a compaction call falls in the hour it ran. `by=model` has a row
 `(overhead)` for reported spend no transcript message explains; `by=kind` has the row `sdk` for
 scripted runs; `by=session` lists scripted runs as one `scripted:<project>` row per project.
 A `by=session` row also carries `harness`, `project` and `lastActivityAt` (a scripted row only

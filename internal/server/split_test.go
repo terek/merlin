@@ -94,3 +94,43 @@ func TestCostSplitRefused(t *testing.T) {
 		t.Errorf("by=kind&split=model: %d", code)
 	}
 }
+
+func TestCostByHour(t *testing.T) {
+	r := newRig(t)
+	for _, split := range []string{"", "&split=model", "&split=kind", "&split=project", "&split=class", "&split=agent"} {
+		const rng = "&since=2026-09-18&until=2026-10-01"
+		var hours, days CostTable
+		if code := r.get("/api/cost?by=hour&limit=500"+split+rng, &hours); code != 200 {
+			t.Fatalf("hour%s: %d", split, code)
+		}
+		r.get("/api/cost?by=day&limit=500"+split+rng, &days)
+		if len(hours.Rows) == 0 {
+			t.Fatalf("hour%s: no rows", split)
+		}
+		if math.Abs(hours.Total.TotalUSD-days.Total.TotalUSD) > 1e-9 {
+			t.Errorf("hour%s: total %v, day total %v", split, hours.Total.TotalUSD, days.Total.TotalUSD)
+		}
+		perDay := map[string]float64{}
+		for i, row := range hours.Rows {
+			if len(row.Key) != len("2006-01-02T15") || (i > 0 && hours.Rows[i-1].Key >= row.Key) {
+				t.Errorf("hour%s: key %q after %q", split, row.Key, hours.Rows[max(i-1, 0)].Key)
+			}
+			perDay[row.Key[:10]] += row.TotalUSD
+		}
+		for _, row := range days.Rows {
+			if math.Abs(perDay[row.Key]-row.TotalUSD) > 1e-9 {
+				t.Errorf("hour%s: day %s = %v, hours add up to %v", split, row.Key, row.TotalUSD, perDay[row.Key])
+			}
+		}
+	}
+	for _, path := range []string{"/api/cost?by=hour", "/api/cost?by=hour&since=2026-09-01&until=2026-09-15", "/api/cost?by=hour&since=2026-09-01"} {
+		var e map[string]any
+		if code := r.get(path, &e); code != 400 {
+			t.Errorf("%s: %d, want 400", path, code)
+		}
+	}
+	var ok CostTable
+	if code := r.get("/api/cost?by=hour&since=2026-09-01&until=2026-09-14", &ok); code != 200 {
+		t.Errorf("14 days: %d", code)
+	}
+}

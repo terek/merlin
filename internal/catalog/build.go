@@ -27,10 +27,11 @@ type sess struct {
 	info    SessionInfo
 }
 
-// fact is the smallest unit of spend: one session, one local day, one model.
+// fact is the smallest unit of spend: one session, one local day and hour, one model.
 type fact struct {
 	s          *sess
 	day, model string
+	hour       int8 // local clock hour 0-23 of the message; -1 when the fact has no day
 	reported   float64
 	attributed float64         // outside every window, recomputed; excludes recorded
 	recorded   float64         // outside every window, the harness's own figure
@@ -496,6 +497,13 @@ func (v *view) holdCompactions() {
 	}
 }
 
+func (v *view) hour(t time.Time) int8 {
+	if t.IsZero() {
+		return -1
+	}
+	return int8(t.In(v.loc).Hour())
+}
+
 func (v *view) day(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -521,8 +529,9 @@ func inWindow(w model.ReportedWindow, t time.Time) bool {
 }
 
 type dayAmount struct {
-	day string
-	usd float64
+	day  string
+	hour int8
+	usd  float64
 }
 
 // costs computes every session's cost figures and its facts.
@@ -542,6 +551,7 @@ func (v *view) costs() {
 
 		type key struct {
 			day, model string
+			hour       int8
 			cov        bool
 		}
 		var order []key
@@ -555,7 +565,7 @@ func (v *view) costs() {
 		var priced, recorded, billed int // owned messages with a price, and of those the harness's own figure
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)
-			k := key{v.day(m.At), m.Model, wi >= 0}
+			k := key{v.day(m.At), m.Model, v.hour(m.At), wi >= 0}
 			if _, ok := sums[k]; !ok {
 				order = append(order, k)
 			}
@@ -610,12 +620,12 @@ func (v *view) costs() {
 			coveredBy[wi] += m.USD
 			estBy[wi] += m.EstimatedUSD
 			days := perWin[wi]
-			if n := len(days); n > 0 && days[n-1].day == k.day {
+			if n := len(days); n > 0 && days[n-1].day == k.day && days[n-1].hour == k.hour {
 				days[n-1].usd += m.USD
 			} else {
-				j := slices.IndexFunc(days, func(a dayAmount) bool { return a.day == k.day })
+				j := slices.IndexFunc(days, func(a dayAmount) bool { return a.day == k.day && a.hour == k.hour })
 				if j < 0 {
-					perWin[wi] = append(days, dayAmount{k.day, m.USD})
+					perWin[wi] = append(days, dayAmount{k.day, k.hour, m.USD})
 				} else {
 					days[j].usd += m.USD
 				}
@@ -631,7 +641,7 @@ func (v *view) costs() {
 			}
 			t := tally(cp.Call, covered(s.windows, cp.At) >= 0)
 			c.Compactions.add(t)
-			v.facts = append(v.facts, fact{s: s, day: v.day(cp.At), model: cp.Call.Model, comp: t})
+			v.facts = append(v.facts, fact{s: s, day: v.day(cp.At), hour: v.hour(cp.At), model: cp.Call.Model, comp: t})
 		}
 		for k := range s.d.Compactions {
 			cp := &s.d.Compactions[k]
@@ -648,7 +658,7 @@ func (v *view) costs() {
 			}
 		}
 		for _, k := range order {
-			f := fact{s: s, day: k.day, model: k.model, cls: *clsSums[k], ag: *agSums[k]}
+			f := fact{s: s, day: k.day, hour: k.hour, model: k.model, cls: *clsSums[k], ag: *agSums[k]}
 			if k.cov {
 				f.reported = sums[k]
 			} else {
@@ -681,7 +691,7 @@ func (v *view) costs() {
 				shares, shareSum := windowShares(w)
 				for _, d := range perWin[wi] {
 					amount := over * d.usd / coveredBy[wi]
-					f := fact{s: s, day: d.day, model: OverheadModel, reported: amount}
+					f := fact{s: s, day: d.day, hour: d.hour, model: OverheadModel, reported: amount}
 					f.cls.addScaled(amount, shares, shareSum)
 					f.ag[AgentUnsplit] = amount
 					v.facts = append(v.facts, f)
@@ -692,7 +702,7 @@ func (v *view) costs() {
 					at = w.From
 				}
 				shares, shareSum := windowShares(w)
-				f := fact{s: s, day: v.day(at), model: OverheadModel, reported: over}
+				f := fact{s: s, day: v.day(at), hour: v.hour(at), model: OverheadModel, reported: over}
 				f.cls.addScaled(over, shares, shareSum)
 				f.ag[AgentUnsplit] = over
 				v.facts = append(v.facts, f)

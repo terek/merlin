@@ -108,6 +108,10 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 				for i := range parts {
 					parts[i].k.day = x.day
 				}
+			case ByHour:
+				for i := range parts {
+					parts[i].k.hour = x.hourKey()
+				}
 			case ByModel:
 				for i := range parts {
 					parts[i].k.model = x.model
@@ -199,7 +203,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 		for i, p := range parts {
 			a := rows[p.k]
 			if a == nil {
-				a = &acc{row: Row{Project: p.k.project, Dir: p.k.dir, Day: p.k.day, Model: p.k.model, Kind: p.k.kind,
+				a = &acc{row: Row{Project: p.k.project, Dir: p.k.dir, Day: p.k.day, Hour: p.k.hour, Model: p.k.model, Kind: p.k.kind,
 					Repo: p.k.repo, Checkout: p.k.checkout, Remote: p.k.remote, Branch: p.k.branch, Bead: p.k.bead,
 					Family: p.k.family, Class: p.k.class, Agent: p.k.agent}}
 				rows[p.k] = a
@@ -233,7 +237,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 }
 
 // rkey is the key of a rollup row: one value per dimension.
-type rkey struct{ project, dir, day, model, kind, repo, checkout, remote, branch, bead, family, class, agent string }
+type rkey struct{ project, dir, day, hour, model, kind, repo, checkout, remote, branch, bead, family, class, agent string }
 
 // get picks the value of one dimension.
 func (k rkey) get(d Dim) string {
@@ -244,6 +248,8 @@ func (k rkey) get(d Dim) string {
 		return k.dir
 	case ByDay:
 		return k.day
+	case ByHour:
+		return k.hour
 	case ByModel:
 		return k.model
 	case ByKind:
@@ -268,7 +274,7 @@ func (k rkey) get(d Dim) string {
 
 // Key is the row's value along a dimension.
 func (r Row) Key(d Dim) string {
-	return rkey{r.Project, r.Dir, r.Day, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent}.get(d)
+	return rkey{r.Project, r.Dir, r.Day, r.Hour, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent}.get(d)
 }
 
 // Total returns the spend of the sessions selected by f: the sum of their best costs
@@ -330,4 +336,12 @@ func (v *view) scripted(f Filter) []ScriptedLine {
 		return strings.Compare(out[i].Day, out[j].Day) < 0
 	})
 	return out
+}
+
+// hourKey is the fact's local hour as 2006-01-02T15, empty for a fact without a day.
+func (f fact) hourKey() string {
+	if f.day == "" || f.hour < 0 {
+		return ""
+	}
+	return f.day + "T" + string([]byte{'0' + byte(f.hour/10), '0' + byte(f.hour%10)})
 }
