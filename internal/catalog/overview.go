@@ -218,14 +218,10 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			continue
 		}
 		o.holdContext(main, from, slot)
-		l := OverviewLane{Harness: s.key.Harness, ID: s.key.ID, Title: s.info.Title, Dir: s.project,
+		l := OverviewLane{Harness: s.key.Harness, ID: s.key.ID, Title: s.info.Title,
 			StartedAt: s.d.StartedAt.UTC(), LastActivityAt: s.d.LastActivityAt.UTC(), USD: o.total,
 			Spans: sortedSpans(overviewSpans(s, from, to))}
-		sf := &fv.ses[s.idx]
-		l.Checkout, l.Repo, l.Remote = sf.checkout, sf.repo, sf.remote
-		if b := fv.topValue(sf, GroupBead); b != NoBead {
-			l.Bead = b
-		}
+		l.Dir, l.Checkout, l.Repo, l.Remote, l.Bead = fv.placeValues(s)
 		inherited := make(map[int]bool, len(s.info.InheritedTurns))
 		for _, i := range s.info.InheritedTurns {
 			inherited[i] = true

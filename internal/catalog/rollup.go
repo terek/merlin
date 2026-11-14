@@ -29,6 +29,12 @@ func (f Filter) selects(s *sess, state State) bool {
 	if len(f.States) > 0 && !slices.Contains(f.States, state) {
 		return false
 	}
+	if f.NoScripted && s.d.Kind == model.KindSDK {
+		return false
+	}
+	if f.Only != nil && !f.Only[s.key] {
+		return false
+	}
 	if f.facet != nil && !f.facet(f, s) {
 		return false
 	}
@@ -238,6 +244,9 @@ func (c *Catalog) Scripted(f Filter) []ScriptedLine {
 }
 
 func (v *view) scripted(f Filter) []ScriptedLine {
+	if f.NoScripted {
+		return nil
+	}
 	if len(f.Kinds) > 0 && !slices.Contains(f.Kinds, model.KindSDK) {
 		return nil
 	}

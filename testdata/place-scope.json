@@ -1,0 +1,31 @@
+{
+  "about": "Cases for the Overview's scope: does a place value sit at or under the selected path? Read by catalog.UnderPath (Go) and underPath (web/src/features/overview/model.ts). Synthetic.",
+  "cases": [
+    {"by": "dir", "key": "/w/acme/api", "in": "/w/acme", "want": true},
+    {"by": "dir", "key": "/w/acme/api", "in": "/w/acme/api", "want": true},
+    {"by": "dir", "key": "/w/acme", "in": "/w/acme/api", "want": false},
+    {"by": "dir", "key": "/w/acme-two/api", "in": "/w/acme", "want": false},
+    {"by": "dir", "key": "/w/acme/api", "in": "/w//acme/", "want": true},
+    {"by": "dir", "key": "/w/acme/api", "in": "", "want": true},
+    {"by": "dir", "key": "", "in": "", "want": true},
+    {"by": "dir", "key": "", "in": "/w", "want": false},
+    {"by": "dir", "key": "", "in": "-", "want": true},
+    {"by": "dir", "key": "/w/acme", "in": "-", "want": false},
+    {"by": "checkout", "key": "/w/acme/main", "in": "/w/acme", "want": true},
+    {"by": "remote", "key": "github.com/acme/api", "in": "github.com/acme", "want": true},
+    {"by": "remote", "key": "github.com/acme/api", "in": "github.com/other", "want": false},
+    {"by": "repo", "key": "/w/acme/.git", "in": "/w/acme", "want": true},
+    {"by": "repo", "key": "/w/acme/.git", "in": "/w/acme/.git", "want": false},
+    {"by": "repo", "key": "/w/acme/.bare", "in": "/w", "want": true},
+    {"by": "repo", "key": "/w/acme/.bare", "in": "/w/acme/.bare", "want": false},
+    {"by": "repo", "key": "/w/acme/.git", "in": "/w/acme/x", "want": false},
+    {"by": "dir", "key": "/w/acme/.git", "in": "/w/acme/.git", "want": true},
+    {"by": "bead", "key": "acme/acme-k2/acme-k2.1", "in": "acme", "want": true},
+    {"by": "bead", "key": "acme/acme-k2/acme-k2.1", "in": "acme/acme-k2", "want": true},
+    {"by": "bead", "key": "acme/acme-k2/acme-k2.1", "in": "acme/acme-k2/acme-k2.1", "want": true},
+    {"by": "bead", "key": "acme/acme-k2", "in": "acme/acme-k2/acme-k2.1", "want": false},
+    {"by": "bead", "key": "acme/acme-k2/acme-k2.1", "in": "acme/acme-k3", "want": false},
+    {"by": "bead", "key": "", "in": "-", "want": true},
+    {"by": "bead", "key": "", "in": "acme", "want": false}
+  ]
+}

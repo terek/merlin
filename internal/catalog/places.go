@@ -164,7 +164,7 @@ func (c *Catalog) views() (*view, *facets) {
 // prepare returns the view and f with its grouping filters resolved; the groupings too when
 // need is set or the filter uses them (nil otherwise).
 func (c *Catalog) prepare(f Filter, need bool) (*view, *facets, Filter) {
-	filters := f.Repo != "" || f.Checkout != "" || f.Remote != "" || f.Branch != "" || f.Bead != ""
+	filters := f.Repo != "" || f.Checkout != "" || f.Remote != "" || f.Branch != "" || f.Bead != "" || f.Place != ""
 	if !need && !filters {
 		return c.view(), nil, f
 	}
@@ -542,6 +542,9 @@ func (fv *facets) selects(f Filter, s *sess) bool {
 		return false
 	}
 	if f.Branch != "" && !slices.Contains(sf.branches, f.Branch) {
+		return false
+	}
+	if f.Place != "" && !fv.inScope(f, s) {
 		return false
 	}
 	if f.Bead != "" && !slices.ContainsFunc(sf.beads, func(id string) bool { return fv.within(id, f.Bead) }) {

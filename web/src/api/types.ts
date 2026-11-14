@@ -1143,6 +1143,10 @@ export interface CostParams {
   remote?: string
   touched?: string
   bead?: string
+  /** The Overview's scope: `in` is a path in the `place` key (default `dir`); `q` is its search. */
+  place?: string
+  in?: string
+  q?: string
   limit?: number
 }
 

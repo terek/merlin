@@ -493,6 +493,10 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		a.paramError(w, err)
 		return
 	}
+	if err := a.scope(cat, q, &f); err != nil {
+		a.paramError(w, err)
+		return
+	}
 	out := CostTable{By: by, Split: split, Project: f.Project, Rows: []CostRow{}}
 	if !since.IsZero() {
 		out.Since = &since

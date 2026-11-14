@@ -30,7 +30,7 @@ import type {
   TreeList,
   TreeSummary,
 } from '../src/api/types'
-import { heldContext } from '../src/features/overview/model'
+import { type By, beadPath, heldContext, underPath } from '../src/features/overview/model'
 import { buildDataset, type Dataset, makeRng, messagesOf, order, PRICE, type Sess } from './gen'
 import {
   assignPlaces,
@@ -435,6 +435,41 @@ interface Contribution {
   comp?: CompactionTally
 }
 
+/**
+ * The Overview's scope on /api/cost: `place` and `in` (a path at or under which the session's primary value of
+ * the key sits) and `q` (the search). With either, scripted runs are out.
+ */
+function scopeOf(u: URL): { keeps: (p: SessionSummary) => boolean; noScripted: boolean } | null {
+  const inPath = u.searchParams.get('in') || ''
+  const place = (u.searchParams.get('place') || 'dir') as By
+  const q = (u.searchParams.get('q') ?? '').trim().toLowerCase()
+  if (!['dir', 'checkout', 'repo', 'remote', 'bead'].includes(place))
+    throw new BadRequest(`place=${JSON.stringify(place)}: use dir, checkout, repo, remote or bead`)
+  if (!inPath && !q) return null
+  let hits: Set<string> | undefined
+  if (q.length >= 2)
+    hits = new Set(
+      search(new URL(`http://mock/api/search?q=${encodeURIComponent(q)}`)).hits.map((h) => `${h.session.id}`),
+    )
+  const beadPathOf = (id: string): string => {
+    const b = overviewBead(id)
+    return b ? beadPath(b, OV_BEADS).join('/') : ''
+  }
+  return {
+    noScripted: true,
+    keeps: (p) => {
+      if (inPath) {
+        const key = place === 'bead' ? beadPathOf(p.key.id) : place === 'dir' ? p.project : costKey(place, p)
+        if (!underPath(key, inPath, place)) return false
+      }
+      if (!q) return true
+      const t = overviewText(p.key.id)
+      const hay = [t.name, p.title, p.key.id, t.recap?.text, t.firstPrompt?.text, t.lastPrompt?.text]
+      return hay.some((x) => x?.toLowerCase().includes(q)) || !!hits?.has(p.key.id)
+    },
+  }
+}
+
 function costTable(u: URL): CostTable {
   const by = (u.searchParams.get('by') ?? 'project') as CostBy
   if (!['project', 'day', 'model', 'kind', 'session', 'dir', 'checkout', 'repo', 'remote', 'branch'].includes(by))
@@ -446,6 +481,7 @@ function costTable(u: URL): CostTable {
     throw new BadRequest(`split=${JSON.stringify(split)}: use project, model or kind`)
   const project = u.searchParams.get('project') || undefined
   const place = placeFilterOf(u)
+  const scope = scopeOf(u)
   const since = parseTime('since', u.searchParams.get('since'))
   const until = parseTime('until', u.searchParams.get('until'), true)
   const limit = u.searchParams.has('limit') ? limitParam(u, 0) : by === 'session' ? 100 : 0
@@ -458,6 +494,7 @@ function costTable(u: URL): CostTable {
     const p = s.summary
     if (project && project !== p.project && project !== p.projectKey) continue
     if (!placeMatches(place, p)) continue
+    if (scope && !scope.keeps(p)) continue
     if (by === 'session') {
       const at = Date.parse(p.lastActivityAt ?? '')
       if ((since !== undefined && at < since) || (until !== undefined && at >= until)) continue
@@ -511,6 +548,7 @@ function costTable(u: URL): CostTable {
     }
   }
   for (const l of ds.scripted) {
+    if (scope?.noScripted) break
     if ((project && l.project !== project) || (by !== 'session' && !inDays(l.day))) continue
     if (by === 'session' && (since !== undefined || until !== undefined) && !dayInRange(l.day, since, until)) continue
     const model = 'claude-haiku-4-5-20251001'

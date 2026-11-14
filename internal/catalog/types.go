@@ -393,6 +393,12 @@ type Filter struct {
 	// location.go.
 	Repo, Checkout, Remote, Branch, Bead string
 	Touched                              bool
+	// Place and In are the Overview's scope: the sessions whose primary value of the place key (dir,
+	// checkout, repo, remote or bead) sits at or under the path In (see scope.go). Only, when not nil,
+	// keeps those sessions. NoScripted leaves the scripted lines out.
+	Place, In  string
+	Only       map[model.SessionKey]bool
+	NoScripted bool
 
 	facet func(Filter, *sess) bool // set by Catalog.prepare when one of the three is
 }
