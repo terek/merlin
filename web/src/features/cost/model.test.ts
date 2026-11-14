@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CostRow, CostSplitEntry, CostTable } from '../../api/types'
+import { HATCH, modelColor } from '../../lib/palette'
 import {
   addDays,
   type Bucket,
@@ -86,7 +87,19 @@ describe('buckets', () => {
 })
 
 describe('stacks', () => {
-  const models = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7']
+  // ten models: the cap is eight, the stack goes heavy to light, newest first
+  const models = [
+    'claude-haiku-5-5',
+    'claude-sonnet-5-5',
+    'claude-opus-5-5',
+    'claude-fable-5-1',
+    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-5',
+    'claude-opus-4-1',
+    'mystery-1',
+    'tiny-a',
+    'tiny-b',
+  ]
   const b: Bucket = {
     key: '2026-09-28',
     to: '2026-09-28',
@@ -96,22 +109,29 @@ describe('stacks', () => {
     attributed: 4,
     parts: [...models.map((m, i) => part(m, 10 - i)), part('(overhead)', 20)].sort((x, y) => y.totalUSD - x.totalUSD),
   }
-  test('top five models by spend, (overhead) never among them', () => {
-    expect(topModels([b])).toEqual(['m1', 'm2', 'm3', 'm4', 'm5'])
+  test('the top models by spend, (overhead) never among them, in stack order', () => {
+    expect(topModels([b])).toEqual([
+      'claude-fable-5-1',
+      'claude-opus-5-5',
+      'claude-opus-4-1',
+      'claude-sonnet-5-5',
+      'claude-sonnet-4-5',
+      'claude-haiku-5-5',
+      'claude-haiku-4-5-20251001',
+      'mystery-1',
+    ])
   })
-  test('the rest is "other", overhead on top, and the stack adds up', () => {
+  test('the rest is "other", overhead on top, colours by model and not by rank, and the stack adds up', () => {
     const top = topModels([b])
     const s = stackOf(b, 'model', top)
-    expect(s.map((x) => [x.key, x.tone])).toEqual([
-      ['m1', 'series-1'],
-      ['m2', 'series-2'],
-      ['m3', 'series-3'],
-      ['m4', 'series-4'],
-      ['m5', 'series-5'],
-      ['other', 'series-other'],
-      ['(overhead)', 'overhead'],
-    ])
-    expect(s.find((x) => x.key === 'other')?.usd).toBe(5 + 4)
+    expect(s.map((x) => x.key)).toEqual([...top, 'other', '(overhead)'])
+    for (const x of s.filter((x) => top.includes(x.key))) expect(x.color).toBe(modelColor(x.key))
+    expect(s.find((x) => x.key === 'other')?.color).toBe('var(--series-other)')
+    expect(s.find((x) => x.key === '(overhead)')?.color).toBe(HATCH)
+    // the same model has the same colour whatever else is in the scope
+    const alone = stackOf({ ...b, parts: [part('claude-sonnet-5-5', 3)] }, 'model', ['claude-sonnet-5-5'])
+    expect(alone[0].color).toBe(modelColor('claude-sonnet-5-5'))
+    expect(s.find((x) => x.key === 'other')?.usd).toBe(2 + 1)
     expect(s.reduce((a, x) => a + x.usd, 0)).toBe(b.parts.reduce((a, p) => a + p.totalUSD, 0))
   })
 })
@@ -234,6 +254,7 @@ describe('the compaction stack', () => {
   test('the warm-cache cost, then the cold extra; they add up to the estimate, not to the spend', () => {
     const segs = stackOf(b, 'compaction', [])
     expect(segs.map((s) => s.key)).toEqual(['compaction-warm', 'compaction-cold'])
+    expect(segs.map((s) => s.color)).toEqual(['var(--warn)', 'var(--bad)']) // amber warm, red cold
     expect(segs[0].usd).toBeCloseTo(1.21)
     expect(segs[1].usd).toBeCloseTo(10.59)
     expect(barTotal(b)).toBe(40) // the bar stays the day's spend: the stack only colours what compactions cost

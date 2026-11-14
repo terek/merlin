@@ -8,6 +8,7 @@ import { cn } from '../../lib/cn'
 import { lowerBoundNote } from '../../lib/cost'
 import { formatMoney, plural } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
+import { HATCH } from '../../lib/palette'
 import { dayStart, shortDate } from '../../lib/time'
 import { Money } from '../../ui'
 import { type Bucket, barTotal, labelEvery, niceTicks, type Segment, type Stack, stackOf, tickLabel } from './model'
@@ -167,7 +168,7 @@ export function DayChart({
                     y={y1}
                     width={barW}
                     height={Math.max(stack === 'compaction' ? 2 : 1, y0 - y1)}
-                    fill={s.tone === 'overhead' ? 'url(#overhead-hatch)' : `var(--${s.tone})`}
+                    fill={s.color === HATCH ? 'url(#overhead-hatch)' : s.color}
                     stroke="var(--surface)"
                     strokeWidth={parts.length > 1 ? 0.5 : 0}
                   />
@@ -218,11 +219,11 @@ export function DayChart({
 }
 
 /** The colour chip of a series; (overhead) is hatched, as in the bars, because it shares a hue with a model. */
-export function Swatch({ tone }: { tone: string }) {
+export function Swatch({ color }: { color: string }) {
   const style =
-    tone === 'overhead'
+    color === HATCH
       ? { background: 'repeating-linear-gradient(45deg, var(--overhead) 0 2px, var(--surface) 2px 4px)' }
-      : { background: `var(--${tone})` }
+      : { background: color }
   return <span className="inline-block size-2 shrink-0 rounded-badge" style={style} />
 }
 
@@ -266,7 +267,7 @@ function Tip({
         <ul className="mt-1 space-y-0.5">
           {[...segments].reverse().map((s) => (
             <li key={s.key} className="flex items-center gap-2">
-              <Swatch tone={s.tone} />
+              <Swatch color={s.color} />
               <span className="min-w-0 flex-1 truncate text-muted">{segmentLabel(s.key)}</span>
               <Money usd={s.usd} />
             </li>

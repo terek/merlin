@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { modelLabel } from './models'
+import { compareVersions, modelLabel, modelVersion } from './models'
 
 test('modelLabel', () => {
   expect(modelLabel('claude-fable-5-1')).toBe('Fable 5.1')
@@ -21,4 +21,15 @@ test('unknown names are unchanged', () => {
   expect(modelLabel('codex-auto-review')).toBe('codex-auto-review')
   expect(modelLabel('claude-mystery-7')).toBe('claude-mystery-7')
   expect(modelLabel('')).toBe('')
+})
+
+test('modelVersion and compareVersions', () => {
+  expect(modelVersion('claude-opus-5-5')).toEqual([5, 5])
+  expect(modelVersion('claude-sonnet-4-20250514')).toEqual([4])
+  expect(modelVersion('claude-3-5-sonnet-20241022')).toEqual([3, 5])
+  expect(modelVersion('gpt-6.1-sol')).toEqual([6, 1])
+  expect(modelVersion('haiku')).toBeUndefined()
+  expect(compareVersions([5, 5], [5])).toBeGreaterThan(0)
+  expect(compareVersions([4], [4, 0])).toBe(0)
+  expect(compareVersions(undefined, [1])).toBeLessThan(0)
 })

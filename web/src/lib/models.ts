@@ -38,3 +38,30 @@ export function modelFamily(name: string): string | undefined {
   if (FAMILIES.has(name)) return name
   return GPT_FAMILY.exec(name.replace(/\[[^\]]*\]$/, ''))?.[1]
 }
+
+const GPT_VERSION = /^gpt-(\d+)(?:\.(\d+))?(?:-|$)/
+
+/**
+ * The version of a model by name, as numbers to compare: "claude-opus-5-5" -> [5, 5], "claude-sonnet-4-20250514" ->
+ * [4], "gpt-6.1-sol" -> [6, 1]. undefined for a bare alias or anything else.
+ */
+export function modelVersion(name: string): number[] | undefined {
+  const bare = name.replace(/\[[^\]]*\]$/, '')
+  const n = NEW_STYLE.exec(bare)
+  if (n) return n[3] ? [Number(n[2]), Number(n[3])] : [Number(n[2])]
+  const o = OLD_STYLE.exec(bare)
+  if (o) return o[2] ? [Number(o[1]), Number(o[2])] : [Number(o[1])]
+  const g = GPT_VERSION.exec(bare)
+  return g ? (g[2] ? [Number(g[1]), Number(g[2])] : [Number(g[1])]) : undefined
+}
+
+/** Compares two versions from `modelVersion`: negative when `a` is older, 0 when equal; a missing one is oldest. */
+export function compareVersions(a: number[] | undefined, b: number[] | undefined): number {
+  const x = a ?? []
+  const y = b ?? []
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return (a ? 1 : 0) - (b ? 1 : 0)
+}

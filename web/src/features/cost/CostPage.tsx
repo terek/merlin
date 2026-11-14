@@ -11,6 +11,7 @@ import { backingLowerBound, backingSentence, lowerBoundNote, unknownNote } from 
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
+import { classColor, HATCH, modelColor } from '../../lib/palette'
 import { scopeSearch } from '../../lib/scope'
 import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
@@ -47,7 +48,6 @@ import {
   type Bucket,
   bucketsFor,
   CLASS_STACK,
-  modelTone,
   OVERHEAD,
   parseStack,
   type Stack,
@@ -55,6 +55,9 @@ import {
   topModels,
   type Window,
 } from './model'
+
+/** A table's share bar cannot be hatched: (overhead) is its solid hue there. */
+const tableColor = (c: string) => (c === HATCH ? 'var(--overhead)' : c)
 
 const TEN_MIN = 600_000
 
@@ -130,15 +133,6 @@ export function CostPage() {
         overheadUsd: overhead,
       }),
     [sel, scripted, overhead],
-  )
-  // the five models the chart colours: the biggest by spend, as the day chart picks them
-  const modelTop = useMemo(
-    () =>
-      (byModel.data?.rows ?? [])
-        .filter((r) => r.key !== OVERHEAD)
-        .slice(0, 5)
-        .map((r) => r.key),
-    [byModel.data],
   )
   const conc = useMemo(
     () => concentration(selectLanes(lanes ?? [], sel, by, beads).map((l) => l.usd)),
@@ -240,7 +234,7 @@ export function CostPage() {
                   query={byModel}
                   name="Model"
                   before={prevByModel}
-                  tone={(r) => `var(--${modelTone(r.key, modelTop)})`}
+                  tone={(r) => tableColor(modelColor(r.key))}
                   label={(r) =>
                     r.key === OVERHEAD ? (
                       <span title="Spend the harness reported that no transcript message explains.">
@@ -264,7 +258,7 @@ export function CostPage() {
                 <LensTable
                   query={byClass}
                   name="Price class"
-                  tone={(r) => `var(--${CLASS_STACK.find(([k]) => k === r.key)?.[1] ?? 'series-other'})`}
+                  tone={(r) => classColor(r.key)}
                   label={(r) => segmentLabel(r.key)}
                   footer={(d) => (
                     <>
@@ -435,7 +429,7 @@ function ChartBody({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sec text-muted">
         {legend.map((l) => (
           <span key={l.key} className="inline-flex items-center gap-1.5">
-            <Swatch tone={l.tone} />
+            <Swatch color={l.color} />
             {segmentLabel(l.key)}
           </span>
         ))}
@@ -492,15 +486,15 @@ function CompactionNote({ buckets, always }: { buckets: Bucket[]; always: boolea
 }
 
 function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
-  const seen = new Map<string, ReturnType<typeof modelTone>>()
-  for (const b of buckets) for (const s of stackOf(b, stack, top)) seen.set(s.key, s.tone)
+  const seen = new Map<string, string>()
+  for (const b of buckets) for (const s of stackOf(b, stack, top)) seen.set(s.key, s.color)
   const order =
     stack === 'class'
-      ? CLASS_STACK.map(([k]) => k)
+      ? CLASS_STACK
       : stack === 'compaction'
         ? ['compaction-warm', 'compaction-cold']
         : [...top, 'other', OVERHEAD]
-  return order.filter((k) => seen.has(k)).map((key) => ({ key, tone: seen.get(key) as ReturnType<typeof modelTone> }))
+  return order.filter((k) => seen.has(k)).map((key) => ({ key, color: seen.get(key) as string }))
 }
 
 type CutQuery = Parameters<typeof QueryBoundary<CostTable>>[0]['query']

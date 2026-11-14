@@ -1,8 +1,17 @@
 // Pure logic of the Cost page: the window a URL stands for, one bar per day (or week) with the
-// empty ones filled in, the top five models, nice axis ticks, and the check that every cut of the
+// empty ones filled in, the models that get a segment, nice axis ticks, and the check that every cut of the
 // same range adds up to the same total. No React in here, so all of it is tested.
 
 import type { CompactionTally, CostRow, CostSplitEntry } from '../../api/types'
+import {
+  COMPACTION_COLD,
+  COMPACTION_WARM,
+  classColor,
+  compareModels,
+  HATCH,
+  modelColor,
+  OTHER,
+} from '../../lib/palette'
 import { daysBefore, localDay } from '../../lib/time'
 
 /** More days than this are drawn by week. */
@@ -127,8 +136,8 @@ export function makeBuckets(rows: CostRow[], window: Window, weekly: boolean): B
   return [...buckets.values()].map(({ b, parts }) => ({ ...b, parts: [...parts.values()].sort(bySize) }))
 }
 
-/** The models that get a colour: the five with the most spend over the buckets, (overhead) apart. */
-export function topModels(buckets: Bucket[], n = 5): string[] {
+/** The models that get a segment of their own: the eight with the most spend over the buckets, (overhead) apart. */
+export function topModels(buckets: Bucket[], n = 8): string[] {
   const sum = new Map<string, number>()
   for (const b of buckets)
     for (const p of b.parts) if (p.key !== OVERHEAD) sum.set(p.key, (sum.get(p.key) ?? 0) + p.totalUSD)
@@ -136,38 +145,18 @@ export function topModels(buckets: Bucket[], n = 5): string[] {
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .slice(0, n)
     .map(([k]) => k)
+    .sort(compareModels)
 }
-
-export type Tone =
-  | 'series-1'
-  | 'series-2'
-  | 'series-3'
-  | 'series-4'
-  | 'series-5'
-  | 'series-other'
-  | 'overhead'
-  | 'reported'
-  | 'attributed'
-  | 'recorded'
-  | 'faint'
-  | 'bad'
 
 export interface Segment {
   key: string
-  tone: Tone
+  /** A CSS colour from `lib/palette.ts`, or `HATCH` for (overhead). */
+  color: string
   usd: number
 }
 
-/** The price classes in stack order (bottom first) and their colours. */
-export const CLASS_STACK: [string, Tone][] = [
-  ['cacheRead', 'series-1'],
-  ['cacheWrite', 'series-2'],
-  ['output', 'series-3'],
-  ['input', 'series-4'],
-  ['(unsplit)', 'series-other'],
-]
-
-const SERIES: Tone[] = ['series-1', 'series-2', 'series-3', 'series-4', 'series-5']
+/** The price classes in stack order (bottom first). Their colours are `classColor`'s. */
+export const CLASS_STACK: string[] = ['cacheRead', 'cacheWrite', 'output', 'input', '(unsplit)']
 
 /** By model, by source (reported, attributed or recorded), or the estimated compaction calls on their own. */
 export type Stack = 'model' | 'class' | 'compaction'
@@ -184,15 +173,8 @@ export function barTotal(b: Bucket): number {
   return b.total
 }
 
-/** The colour of a model in the legend and the bars. */
-export function modelTone(key: string, top: string[]): Tone {
-  if (key === OVERHEAD) return 'overhead'
-  const i = top.indexOf(key)
-  return i >= 0 ? SERIES[i] : 'series-other'
-}
-
 /**
- * The stack of one bar, bottom first. By model: the top models in rank order, "other" (every
+ * The stack of one bar, bottom first. By model: the top models, heavy to light (`compareModels`), "other" (every
  * other model) and (overhead) on top. By class: cache reads, cache writes, output, input. The segments add up
  * to the bucket's total. By compaction (drawn inside the day's full bar): the warm-cache cost of the calls, then the extra the cold
  * ones cost; they add up to the estimate.
@@ -203,14 +185,14 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
     const c = b.compactions
     if (!c) return []
     return [
-      { key: 'compaction-warm', tone: 'recorded' as const, usd: c.warmUSD },
-      { key: 'compaction-cold', tone: 'bad' as const, usd: Math.max(0, c.usd - c.warmUSD) },
+      { key: 'compaction-warm', color: COMPACTION_WARM, usd: c.warmUSD },
+      { key: 'compaction-cold', color: COMPACTION_COLD, usd: Math.max(0, c.usd - c.warmUSD) },
     ].filter((s) => s.usd > 0)
   }
   if (stack === 'class') {
     // the price classes, bottom first; the parts of a `by=day&split=class` response
     const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
-    return CLASS_STACK.map(([key, tone]) => ({ key, tone, usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
+    return CLASS_STACK.map((key) => ({ key, color: classColor(key), usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
   }
   let other = 0
   let overhead = 0
@@ -222,9 +204,9 @@ export function stackOf(b: Bucket, stack: Stack, top: string[]): Segment[] {
   }
   const out: Segment[] = top
     .filter((k) => named.has(k))
-    .map((k) => ({ key: k, tone: modelTone(k, top), usd: named.get(k) ?? 0 }))
-  if (other > 0) out.push({ key: 'other', tone: 'series-other', usd: other })
-  if (overhead > 0) out.push({ key: OVERHEAD, tone: 'overhead', usd: overhead })
+    .map((k) => ({ key: k, color: modelColor(k), usd: named.get(k) ?? 0 }))
+  if (other > 0) out.push({ key: 'other', color: OTHER, usd: other })
+  if (overhead > 0) out.push({ key: OVERHEAD, color: HATCH, usd: overhead })
   return out.filter((s) => s.usd > 0)
 }
 

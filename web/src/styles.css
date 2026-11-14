@@ -31,6 +31,9 @@
   --series-4: #8a6bd0;
   --series-5: #cf4f86;
   --series-other: #aab1bd;
+  --model-astra: #5f8f2a;
+  --model-sol: #b08d1f;
+  --model-luna: #4f7f9c;
   /* harness marks (ui/harness.tsx) */
   --harness-claude: #d97757;
   /* derived */
@@ -68,6 +71,9 @@
     --series-4: #b496f0;
     --series-5: #e872a5;
     --series-other: #5b6372;
+    --model-astra: #94c254;
+    --model-sol: #dcbc4a;
+    --model-luna: #82b0cc;
     --harness-claude: #e58c6d;
     --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
     --ok-soft: color-mix(in srgb, var(--ok) 16%, var(--surface));
@@ -103,6 +109,9 @@
   --series-4: #b496f0;
   --series-5: #e872a5;
   --series-other: #5b6372;
+  --model-astra: #94c254;
+  --model-sol: #dcbc4a;
+  --model-luna: #82b0cc;
   --harness-claude: #e58c6d;
   --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
   --ok-soft: color-mix(in srgb, var(--ok) 16%, var(--surface));

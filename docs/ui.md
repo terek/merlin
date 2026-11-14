@@ -720,16 +720,23 @@ pages never disagree and switching tabs keeps it.
   sessions of 160 are half of it" (the fewest of the selected lanes whose spend makes half of their message spend;
   hidden under 5), to the Overview with the scope sorted by spend.
 - **By day**: an SVG bar chart over the scope's days, one bar per local day (per week over 120 days), labelled as the
-  Overview's timeline writes its days (`Fri 16`), stacked by model (`by=day&split=model`), the top five models coloured
+  Overview's timeline writes its days (`Fri 16`), stacked by model (`by=day&split=model`), the top eight models coloured
   and the rest grouped as "other"; hovering a bar lists that day's split. A switch at the right of the section header
   changes the stack to **price class** (`by=day&split=class`: cache reads, cache writes, output, uncached input) or to
   **compactions** (`stack=compaction`), which keeps the axis and the bars of the other stacks (the day's spend) and
   draws each bar empty, a faint fill and an outline, with only what the compaction calls cost coloured at its bottom
-  (cold in the red, warm in a calmer teal, at least 2 px) and a dot above each bar that has compactions (red when one
+  (cold in red, warm in amber, at least 2 px) and a dot above each bar that has compactions (red when one
   was cold); the tooltip gives the day's total, the compaction cost and its calls. Under the chart, whatever the
   stack, one line: "28 compactions, ~$12.76, 9 of them cold. With a warm cache every time: ~$6.44." (the explanation
   on hover; the estimate is not part of the spend). A click on a bar sets the custom range to that day (remembered
   like a drag): the scope narrows for both pages. An old `stack=source` falls back to the model stack.
+- **Colours** (`lib/palette.ts`, shared; the Session page can import it later): a model is coloured by family and
+  version, never by rank, so it looks the same on every scope and page: Opus blue, Sonnet orange, Haiku teal, Fable
+  violet, GPT astra / sol / luna green / gold / steel (`--model-*`), unknown grey; the newest known version of a family
+  is the full hue, the next 65 % and older ones 40 % (mixed into the surface). Stacks run heavy to light, bottom up. The
+  price classes keep the Session page's hues (output violet, cache read teal, cache write orange, uncached input
+  grey, `(unsplit)` a fainter grey). Pink is the cache miss and no model ever gets it; compactions are amber when warm
+  and red when cold; `(overhead)` is the hatch.
 - **Tables**, a grid of columns separated by vertical hairlines (three when wide, two, then one), each in the
   Overview's table style (uppercase muted header row, tabular figures right-aligned): **Model** (Total and, wide
   enough, a muted ▲/▼ with the percentage against the period before, its dollars on hover; the `(overhead)` row
@@ -738,7 +745,7 @@ pages never disagree and switching tabs keeps it.
   sub-agents, teammates and forks, with "Sub-agents spent 33% of it"). The figures are `by=class` and `by=agent`
   ([api.md](api.md)). Every table adds up to the total, and its share bars are a **cascade**: a faint full-width track
   per row, each row's segment starting where the row above ended, so reading down the segments walk once across the
-  width (Model rows in the model's chart colour, Price class in the class's, Kind and Agents in the accent; at least 2
+  width (Model rows in the model's colour, Price class in the class's, Kind and Agents in the accent; at least 2
   px; the tables of a grid row share one track width).
 - **The sidebar adds up**: under the tree, on Cost only, **Scripted runs** (count muted; nothing selected, the scope
   has any: they are out under a selection, as on the Overview) and **Not in any session** (the scope's `(overhead)`:

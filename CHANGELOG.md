@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Cost colours each model the same way on every scope: by family (Opus blue, Sonnet orange, Haiku teal, Fable violet) with older versions lighter, never by rank, so pink is only ever the cache miss; warm compactions are amber, cold ones red, and the price classes use the Session page's colours.
 - Folder follows the work when a session started outside any checkout (say in `~`): it shows the checkout the session edited in. Resume still uses the directory the session started in.
 - Sessions from before a checkout became a bare container no longer show made-up checkouts named after its old subfolders.
 - Cost looks like the Overview and says less: its sidebar of places (which, with two lines for scripted runs and for spend no session explains, adds up to the total), then one pane with the total, how it changed against the days before, and how few sessions make half of it; spend by day, by model, by price class (cache reads, cache writes, output, uncached input) and by main thread against sub-agents, each table's bars walking across the width in turn. Reported against attributed is gone from view (it is under "How these figures are made"), and the compactions chart keeps the days' bars and only colours what compactions cost. Cost has no search; the Overview keeps its own when you come back.
