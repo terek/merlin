@@ -311,10 +311,14 @@ const (
 	// (location.go), like ByRepo.
 	ByCheckout
 	ByRemote
+	// ByClass splits spend over the price classes (input, output, cache read, cache write) and ByAgent over
+	// the main thread and the agents (spendsplit.go).
+	ByClass
+	ByAgent
 )
 
 // facet reports whether the dimension needs the groupings.
-func (d Dim) facet() bool { return d >= ByRepo }
+func (d Dim) facet() bool { return d >= ByRepo && d <= ByRemote }
 
 // Row is one line of a rollup. Only the fields of the requested dimensions are set.
 // Sessions counts the distinct sessions that contributed spend to the row.
@@ -329,6 +333,8 @@ type Row struct {
 	Branch   string `json:"branch,omitempty"` // repository#branch (SplitBranchKey)
 	Bead     string `json:"bead,omitempty"`
 	Family   string `json:"family,omitempty"` // the root bead of the family
+	Class    string `json:"class,omitempty"`  // by=class: input, output, cacheRead, cacheWrite or (unsplit)
+	Agent    string `json:"agent,omitempty"`  // by=agent: main, agents or (unsplit)
 	Sessions int    `json:"sessions"`
 	// UnrecordedAgents is how many agent runs the harness kept no record of, in the sessions
 	// behind the row (SessionCost.UnrecordedAgents; a session that spans several rows counts in

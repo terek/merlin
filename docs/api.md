@@ -864,13 +864,13 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 
 | Parameter | Meaning |
 |---|---|
-| `by` | `project` (default), `dir` (the same as `project`), `day`, `model`, `kind`, `repo`, `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
+| `by` | `project` (default), `dir` (the same as `project`), `day`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
 | `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
 | `project`, `repo`, `checkout`, `remote`, `touched`, `branch`, `bead` | as for `/api/sessions` (the same parser reads them) |
 | `place`, `in` | the Overview's scope: `place` is `dir` (default), `checkout`, `repo`, `remote` or `bead`; `in` is a path in it. Keeps the sessions whose **primary** value of that key (the one `/api/overview` puts on its lanes: `dir`, `checkout`, `repo`, `remote`, `bead`) sits at or under `in`, matched segment-wise (`dir`, `checkout` and `remote` split on `/`; a repository's trailing `.git` or `.bare` does not count; a bead's value is its path `prefix/root/…/bead`, the chain of `beads` in the overview). `in=-` selects the sessions with no value. With `in` the scripted runs are out (`backing.scriptedRuns` is 0), as on the Overview. A 400 for another `place` |
 | `q` | the Overview's search: a session matches when its name, title, id, recap, first prompt or last prompt contains the term (case-insensitive), or, for a term of two or more characters, when `/api/search` (its default limit of 50) has it among its hits. Scripted runs are out. Combines with `place` and `in` |
 | `limit` | cut the rows (1 to 500). Default: none; `by=session` defaults to 100. `total` is not affected; `truncated` says rows were cut |
-| `split` | `project`, `model` or `kind`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
+| `split` | `project`, `model`, `kind`, `class` or `agent`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
 
 Rows are ordered by cost, largest first; `by=day` is chronological. `by=model` has a row
 `(overhead)` for reported spend no transcript message explains; `by=kind` has the row `sdk` for
@@ -925,6 +925,25 @@ exactly those runs: on one real history 2,529 of 3,132 scripted runs had spend, 
   }
 }
 ```
+
+### By class and by agent
+
+`by=class` splits the spend over the price classes `input` (uncached input), `output` (thinking included),
+`cacheRead` and `cacheWrite` (5-minute and 1-hour writes together); `by=agent` over `main` (the session's own
+thread: messages with no agent id) and `agents` (sub-agents, teammates and forks: messages with an agent id). Both
+follow every filter, and their rows add up to the same `total` as any other `by` (to within float rounding), also
+when `split=model` makes the parts per model. Rows come by cost; `(unsplit)` is last whatever it cost.
+
+How the figures are apportioned (computed when the catalog is built, deterministic):
+
+- A message's spend is its `usd` (the harness's own figure for a recorded message, else the recomputed one; the
+  estimated output of a truncated message is added to `output` and to its thread). Inside a reported window the
+  messages' spend is what `reportedUSD` counts, so a message splits the same way in or outside a window.
+- Classes: the message's tokens are priced per class with the price table and the message's `usd` is spread in those
+  proportions. A message with no tokens or an unknown model has no proportions: its spend is `(unsplit)`.
+- The `(overhead)` amount (reported spend no message explains) splits like the rest of its window: by the window's
+  `byModel` tokens priced the same way, `(unsplit)` for a window without tokens. For `by=agent` it is `(unsplit)`:
+  no message carries it.
 
 ### Split
 

@@ -124,6 +124,44 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 				for i := range parts {
 					parts[i].k.remote = fv.ses[x.s.idx].remote
 				}
+			case ByClass:
+				var next []part
+				tot := x.cls.sum()
+				for _, p := range parts {
+					if tot <= 0 {
+						q := p
+						q.k.class = ClassNames[ClassUnsplit]
+						next = append(next, q)
+						continue
+					}
+					for i, a := range x.cls {
+						if a != 0 {
+							q := p
+							q.frac, q.k.class = p.frac*a/tot, ClassNames[i]
+							next = append(next, q)
+						}
+					}
+				}
+				parts = next
+			case ByAgent:
+				var next []part
+				tot := x.ag.sum()
+				for _, p := range parts {
+					if tot <= 0 {
+						q := p
+						q.k.agent = AgentNames[AgentUnsplit]
+						next = append(next, q)
+						continue
+					}
+					for i, a := range x.ag {
+						if a != 0 {
+							q := p
+							q.frac, q.k.agent = p.frac*a/tot, AgentNames[i]
+							next = append(next, q)
+						}
+					}
+				}
+				parts = next
 			case ByBranch, ByBead, ByFamily:
 				sf := &fv.ses[x.s.idx]
 				var next []part
@@ -159,7 +197,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 			if a == nil {
 				a = &acc{row: Row{Project: p.k.project, Day: p.k.day, Model: p.k.model, Kind: p.k.kind,
 					Repo: p.k.repo, Checkout: p.k.checkout, Remote: p.k.remote, Branch: p.k.branch, Bead: p.k.bead,
-					Family: p.k.family}}
+					Family: p.k.family, Class: p.k.class, Agent: p.k.agent}}
 				rows[p.k] = a
 				keys = append(keys, p.k)
 			}
@@ -191,7 +229,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 }
 
 // rkey is the key of a rollup row: one value per dimension.
-type rkey struct{ project, day, model, kind, repo, checkout, remote, branch, bead, family string }
+type rkey struct{ project, day, model, kind, repo, checkout, remote, branch, bead, family, class, agent string }
 
 // get picks the value of one dimension.
 func (k rkey) get(d Dim) string {
@@ -214,13 +252,17 @@ func (k rkey) get(d Dim) string {
 		return k.branch
 	case ByBead:
 		return k.bead
+	case ByClass:
+		return k.class
+	case ByAgent:
+		return k.agent
 	}
 	return k.family
 }
 
 // Key is the row's value along a dimension.
 func (r Row) Key(d Dim) string {
-	return rkey{r.Project, r.Day, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family}.get(d)
+	return rkey{r.Project, r.Day, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent}.get(d)
 }
 
 // Total returns the spend of the sessions selected by f: the sum of their best costs

@@ -415,6 +415,9 @@ function search(u: URL): SearchResult {
 // ---- /api/cost ------------------------------------------------------------------------
 
 interface Contribution {
+  /** by=class or by=agent: the part of the spend this contribution stands for. */
+  class?: string
+  agent?: string
   session: string
   label?: string
   flag?: Sess['summary']['cost']['flag']
@@ -470,15 +473,71 @@ function scopeOf(u: URL): { keeps: (p: SessionSummary) => boolean; noScripted: b
   }
 }
 
+const CLASS_SHARES: [string, number][] = [
+  ['cacheRead', 0.3],
+  ['cacheWrite', 0.3],
+  ['output', 0.3],
+  ['input', 0.1],
+]
+const AGENT_SHARES: [string, number][] = [
+  ['main', 0.65],
+  ['agents', 0.35],
+]
+
+/**
+ * Splits every contribution over the parts (its usd by share; a compaction tally goes with the first part).
+ * `whole(c)` names the part a contribution stays whole in, null for the ones that split.
+ */
+function fanOut(
+  cs: Contribution[],
+  dim: 'class' | 'agent',
+  shares: [string, number][],
+  whole: (c: Contribution) => string | null,
+): Contribution[] {
+  const out: Contribution[] = []
+  for (const c of cs) {
+    const w = whole(c)
+    if (w) {
+      out.push({ ...c, [dim]: w })
+      continue
+    }
+    shares.forEach(([key, share], i) => {
+      out.push({
+        ...c,
+        [dim]: key,
+        usd: c.usd * share,
+        count: i === 0 ? c.count : 0,
+        comp: i === 0 ? c.comp : undefined,
+      })
+    })
+  }
+  return out
+}
+
 function costTable(u: URL): CostTable {
   const by = (u.searchParams.get('by') ?? 'project') as CostBy
-  if (!['project', 'day', 'model', 'kind', 'session', 'dir', 'checkout', 'repo', 'remote', 'branch'].includes(by))
+  if (
+    ![
+      'project',
+      'day',
+      'model',
+      'kind',
+      'class',
+      'agent',
+      'session',
+      'dir',
+      'checkout',
+      'repo',
+      'remote',
+      'branch',
+    ].includes(by)
+  )
     throw new BadRequest(
-      `by=${JSON.stringify(by)}: use project, day, model, kind, session, dir, checkout, repo, remote or branch`,
+      `by=${JSON.stringify(by)}: use project, day, model, kind, class, agent, session, dir, checkout, repo, remote or branch`,
     )
-  const split = u.searchParams.get('split') as 'project' | 'model' | 'kind' | null
-  if (split && !['project', 'model', 'kind'].includes(split))
-    throw new BadRequest(`split=${JSON.stringify(split)}: use project, model or kind`)
+  const split = u.searchParams.get('split') as 'project' | 'model' | 'kind' | 'class' | 'agent' | null
+  if (split && !['project', 'model', 'kind', 'class', 'agent'].includes(split))
+    throw new BadRequest(`split=${JSON.stringify(split)}: use project, model, kind, class or agent`)
   const project = u.searchParams.get('project') || undefined
   const place = placeFilterOf(u)
   const scope = scopeOf(u)
@@ -489,7 +548,7 @@ function costTable(u: URL): CostTable {
   const fromDay = since === undefined ? '' : localDay(since)
   const toDay = until === undefined ? '9999-99-99' : localDay(until - 1)
   const inDays = (d: string) => d >= fromDay && d <= toDay
-  const cs: Contribution[] = []
+  let cs: Contribution[] = []
   for (const s of visible()) {
     const p = s.summary
     if (project && project !== p.project && project !== p.projectKey) continue
@@ -577,15 +636,24 @@ function costTable(u: URL): CostTable {
     })
   }
 
+  // by=class and by=agent: each contribution stands for its shares. Cache reads dominate tokens but not spend.
+  if (by === 'class' || split === 'class') cs = fanOut(cs, 'class', CLASS_SHARES, () => null)
+  if (by === 'agent' || split === 'agent')
+    cs = fanOut(cs, 'agent', AGENT_SHARES, (c) => (c.scripted ? 'main' : c.model === '(overhead)' ? '(unsplit)' : null))
+
   const placeDims = ['dir', 'checkout', 'repo', 'remote', 'branch']
-  const keyOf = (c: Contribution, dim: CostBy | 'project' | 'model' | 'kind'): string =>
-    dim === 'session'
-      ? c.session
-      : placeDims.includes(dim) && c.summary
-        ? costKey(dim as 'dir', c.summary)
-        : placeDims.includes(dim)
-          ? ''
-          : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
+  const keyOf = (c: Contribution, dim: CostBy | 'project' | 'model' | 'kind' | 'class' | 'agent'): string =>
+    dim === 'class'
+      ? (c.class ?? '')
+      : dim === 'agent'
+        ? (c.agent ?? '')
+        : dim === 'session'
+          ? c.session
+          : placeDims.includes(dim) && c.summary
+            ? costKey(dim as 'dir', c.summary)
+            : placeDims.includes(dim)
+              ? ''
+              : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
   const rows = new Map<string, CostRow & { ids: Set<string>; parts: Map<string, CostSplitEntry> }>()
   for (const c of cs) {
     const k = keyOf(c, by)
@@ -625,7 +693,10 @@ function costTable(u: URL): CostTable {
     sessions: by === 'session' ? Math.max(1, row.sessions) : ids.size + row.sessions,
     split: split ? [...parts.values()].sort((a, b) => b.totalUSD - a.totalUSD) : undefined,
   }))
-  out = by === 'day' ? out.sort((a, b) => (a.key < b.key ? -1 : 1)) : out.sort((a, b) => b.totalUSD - a.totalUSD)
+  out =
+    by === 'day'
+      ? out.sort((a, b) => (a.key < b.key ? -1 : 1))
+      : out.sort((a, b) => Number(a.key === '(unsplit)') - Number(b.key === '(unsplit)') || b.totalUSD - a.totalUSD)
   const total: Money = { totalUSD: 0, reportedUSD: 0, attributedUSD: 0 }
   for (const c of cs) {
     addMoney(total, c.usd, c.reported)

@@ -910,6 +910,8 @@ export type CostBy =
   | 'day'
   | 'model'
   | 'kind'
+  | 'class'
+  | 'agent'
   | 'repo'
   | 'checkout'
   | 'remote'
@@ -918,7 +920,7 @@ export type CostBy =
   | 'bead'
   | 'family'
   | 'session'
-export type CostSplit = 'project' | 'model' | 'kind'
+export type CostSplit = 'project' | 'model' | 'kind' | 'class' | 'agent'
 
 /** One slice of a row when the table is requested with `split=`. */
 export interface CostSplitEntry extends Money {

@@ -434,7 +434,11 @@ func (a *API) dayOf(t time.Time) string { return t.In(a.loc()).Format(dayLayout)
 var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catalog.ByDay, "model": catalog.ByModel,
 	"kind": catalog.ByKind, "repo": catalog.ByRepo, "branch": catalog.ByBranch, "bead": catalog.ByBead,
 	"family": catalog.ByFamily, "checkout": catalog.ByCheckout, "remote": catalog.ByRemote,
-	"dir": catalog.ByProject} // dir is project under another name
+	"dir":   catalog.ByProject, // dir is project under another name
+	"class": catalog.ByClass, "agent": catalog.ByAgent}
+
+// unsplitKey is the row of spend no token (by=class) or message (by=agent) explains.
+const unsplitKey = "(unsplit)"
 
 // rowKey is the value of a rollup row along the named dimension.
 func rowKey(dim string, r catalog.Row) string { return r.Key(costDims[dim]) }
@@ -452,15 +456,15 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	split := q.Get("split")
 	dim, isDim := costDims[by]
 	if !isDim && by != "session" {
-		a.badParam(w, "by=%q: use project, dir, day, model, kind, repo, checkout, remote, branch, bead, family or session", by)
+		a.badParam(w, "by=%q: use project, dir, day, model, kind, class, agent, repo, checkout, remote, branch, bead, family or session", by)
 		return
 	}
 	var splitDim catalog.Dim
 	if split != "" {
 		sd, ok := costDims[split]
 		switch {
-		case !ok || split != "project" && split != "model" && split != "kind":
-			a.badParam(w, "split=%q: use project, model or kind", split)
+		case !ok || split != "project" && split != "model" && split != "kind" && split != "class" && split != "agent":
+			a.badParam(w, "split=%q: use project, model, kind, class or agent", split)
 			return
 		case by == "session":
 			a.badParam(w, "split cannot be combined with by=session")
@@ -565,6 +569,9 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			}
 			for _, ps := range parts {
 				sort.SliceStable(ps, func(i, j int) bool {
+					if u, v := ps[i].Key == unsplitKey, ps[j].Key == unsplitKey; u != v {
+						return v
+					}
 					if ps[i].TotalUSD != ps[j].TotalUSD {
 						return ps[i].TotalUSD > ps[j].TotalUSD
 					}
@@ -584,6 +591,10 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 				if r.Model == catalog.OverheadModel {
 					row.Label = "overhead: reported, in no transcript"
 				}
+			case "class":
+				row.Key = r.Class
+			case "agent":
+				row.Key = r.Agent
 			case "kind":
 				row.Key = r.Kind
 				if r.Kind == string(model.KindSDK) {
@@ -603,6 +614,9 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		sort.SliceStable(out.Rows, func(i, j int) bool { return out.Rows[i].Key < out.Rows[j].Key })
 	} else {
 		sort.SliceStable(out.Rows, func(i, j int) bool {
+			if u, v := out.Rows[i].Key == unsplitKey, out.Rows[j].Key == unsplitKey; u != v {
+				return v // (unsplit) is last whatever it cost
+			}
 			if out.Rows[i].TotalUSD != out.Rows[j].TotalUSD {
 				return out.Rows[i].TotalUSD > out.Rows[j].TotalUSD
 			}

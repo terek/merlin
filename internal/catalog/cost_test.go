@@ -44,6 +44,11 @@ func checkIdentities(t *testing.T, c *Catalog, f Filter) {
 		"kind":        c.Rollup(f, ByKind),
 		"project/day": c.Rollup(f, ByProject, ByDay),
 		"model/day":   c.Rollup(f, ByModel, ByDay),
+		"class":       c.Rollup(f, ByClass),
+		"agent":       c.Rollup(f, ByAgent),
+		"class/model": c.Rollup(f, ByClass, ByModel),
+		"agent/model": c.Rollup(f, ByAgent, ByModel),
+		"class/day":   c.Rollup(f, ByClass, ByDay),
 		"all":         c.Rollup(f),
 	} {
 		got := sum(rows)

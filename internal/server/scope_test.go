@@ -79,3 +79,41 @@ func TestCostFollowsTheOverviewScope(t *testing.T) {
 		t.Errorf("in=-: %+v", ct)
 	}
 }
+
+// The class and agent tables add up to the plain total under every filter, parts included.
+func TestClassAndAgentTablesAddUp(t *testing.T) {
+	r := ovRig(t)
+	const days = "&since=2026-12-26&until=2027-01-01"
+	for _, extra := range []string{"", "&place=dir&in=/main", "&q=thing", "&place=dir&in=/other&q=title"} {
+		var plain CostTable
+		r.get("/api/cost?by=model"+days+extra, &plain)
+		for _, by := range []string{"class", "agent"} {
+			var ct CostTable
+			if code := r.get("/api/cost?by="+by+days+extra, &ct); code != 200 {
+				t.Fatalf("%s%s: %d", by, extra, code)
+			}
+			sum := 0.0
+			for _, row := range ct.Rows {
+				sum += row.TotalUSD
+			}
+			if !near(sum, plain.Total.TotalUSD) || !near(ct.Total.TotalUSD, plain.Total.TotalUSD) {
+				t.Errorf("by=%s%s: rows %v total %v, plain %v", by, extra, sum, ct.Total.TotalUSD, plain.Total.TotalUSD)
+			}
+			var sp CostTable
+			r.get("/api/cost?by="+by+"&split=model"+days+extra, &sp)
+			for _, row := range sp.Rows {
+				parts := 0.0
+				for _, p := range row.Split {
+					parts += p.TotalUSD
+				}
+				if !near(parts, row.TotalUSD) {
+					t.Errorf("by=%s split=model%s: %s parts %v row %v", by, extra, row.Key, parts, row.TotalUSD)
+				}
+			}
+		}
+	}
+	var ct CostTable
+	if code := r.get("/api/cost?by=model&split=class"+days, &ct); code != 200 {
+		t.Errorf("by=model&split=class: %d", code)
+	}
+}

@@ -36,6 +36,10 @@ type fact struct {
 	recorded   float64         // outside every window, the harness's own figure
 	billed     float64         // part of recorded the provider charged
 	comp       CompactionTally // compaction calls; nothing else set on such a fact
+	// cls and ag split the fact's total spend (reported + attributed + recorded) over the price
+	// classes and over the main thread and the agents (spendsplit.go).
+	cls classSplit
+	ag  agentSplit
 }
 
 // view is the derived state of a catalog. It is immutable once built.
@@ -543,6 +547,7 @@ func (v *view) costs() {
 		var order []key
 		sums := make(map[key]float64)
 		recSums, billSums := make(map[key]float64), make(map[key]float64)
+		clsSums, agSums := make(map[key]*classSplit), make(map[key]*agentSplit)
 		perWin := make([][]dayAmount, len(s.windows))
 		coveredBy := make([]float64, len(s.windows))
 		estBy := make([]float64, len(s.windows))
@@ -555,6 +560,16 @@ func (v *view) costs() {
 				order = append(order, k)
 			}
 			sums[k] += m.USD
+			if clsSums[k] == nil {
+				clsSums[k], agSums[k] = new(classSplit), new(agentSplit)
+			}
+			shares, shareSum := classShares(m.Model, m.Tokens, m.Fast)
+			clsSums[k].addScaled(m.USD, shares, shareSum)
+			if m.AgentID == "" {
+				agSums[k][AgentMain] += m.USD
+			} else {
+				agSums[k][AgentSub] += m.USD
+			}
 			c.OwnUSD += m.USD
 			if m.Truncated {
 				c.TruncatedMessages++
@@ -582,6 +597,12 @@ func (v *view) costs() {
 				c.UncoveredUSD += m.USD
 				c.EstimatedUncoveredUSD += m.EstimatedUSD
 				sums[k] += m.EstimatedUSD
+				clsSums[k][ClassOutput] += m.EstimatedUSD // the output tokens the message is missing
+				if m.AgentID == "" {
+					agSums[k][AgentMain] += m.EstimatedUSD
+				} else {
+					agSums[k][AgentSub] += m.EstimatedUSD
+				}
 				c.LowerBound = c.LowerBound || m.Unpriced
 				continue
 			}
@@ -627,7 +648,7 @@ func (v *view) costs() {
 			}
 		}
 		for _, k := range order {
-			f := fact{s: s, day: k.day, model: k.model}
+			f := fact{s: s, day: k.day, model: k.model, cls: *clsSums[k], ag: *agSums[k]}
 			if k.cov {
 				f.reported = sums[k]
 			} else {
@@ -657,15 +678,24 @@ func (v *view) costs() {
 			case coveredBy[wi] > 0:
 				// Spread the window's overhead over its days in proportion to the covered
 				// spend of each day, so the days add up to the window's total.
+				shares, shareSum := windowShares(w)
 				for _, d := range perWin[wi] {
-					v.facts = append(v.facts, fact{s: s, day: d.day, model: OverheadModel, reported: over * d.usd / coveredBy[wi]})
+					amount := over * d.usd / coveredBy[wi]
+					f := fact{s: s, day: d.day, model: OverheadModel, reported: amount}
+					f.cls.addScaled(amount, shares, shareSum)
+					f.ag[AgentUnsplit] = amount
+					v.facts = append(v.facts, f)
 				}
 			default:
 				at := w.To
 				if at.IsZero() {
 					at = w.From
 				}
-				v.facts = append(v.facts, fact{s: s, day: v.day(at), model: OverheadModel, reported: over})
+				shares, shareSum := windowShares(w)
+				f := fact{s: s, day: v.day(at), model: OverheadModel, reported: over}
+				f.cls.addScaled(over, shares, shareSum)
+				f.ag[AgentUnsplit] = over
+				v.facts = append(v.facts, f)
 			}
 		}
 		over := c.ReportedUSD - c.CoveredUSD
