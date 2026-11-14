@@ -43,7 +43,7 @@ const GRAB = 7
 const STRIP_BREAKS = 16
 /** The window: a band BAND tall, centred on the line between the context area and the spend bars. */
 const AXIS = CTX_BASE + 0.5
-const BAND = 28
+const BAND = 20
 
 const clock = (t: number) =>
   new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
