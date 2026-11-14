@@ -219,23 +219,25 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
 
 ## 7. Shell
 
-One bar, 44px, sticky: **brand, the page's slot, the tabs, the status button**.
+One bar, 44px, sticky: **brand, the page's slot, the tabs, the theme and status buttons**.
 
-- **Left**: the logo and "Merlin", linking to `/`.
+- **Left**: the wizard logo (`public/logo-48.png`, shown at 22 px) and "Merlin", linking to `/`. The favicons and the
+  apple-touch icon are in `public/`.
 - **Middle, the slot**: a flexible area the current page fills with its own tools (`ShellSlot`, a portal into the
   bar; a page never imports the bar). Empty means empty space. The Overview puts its two capsules there
   (section 10b); the Session page's slot is filled by the shell (`SessionSlot`): `← Overview`, linking to the last
   Overview address visited in this tab (`pathname + search` in `sessionStorage`, `/` when there is none), then the
   session's harness mark and title, muted, truncating, the whole title in the tooltip. Cost, Moments, Sessions and
   Bead leave it empty and keep their toolbars in the page.
-- **Right**: the tabs **Overview** (`/`), **Cost**, **Moments**, in the underline style, their tooltips carrying
+- **Right**: the tabs **Overview** (`/`), **Cost**, **Moments**, the active one a quiet pill (`bg-surface-2`,
+  rounded, `text-fg`), no underline (one would read as a marker of the table's columns), their tooltips carrying
   the shortcuts; Sessions has no tab (`g s`, or the links that lead to it). Just left of the tabs, only while it
-  applies, "Merlin updated to X · Reload" once the daemon has replaced itself. Then one **status button**: a
+  applies, "Merlin updated to X · Reload" once the daemon has replaced itself. Then the **theme button** (one click cycles System, Light, Dark: Monitor, Sun, Moon) and one **status button**: a
   small icon whose look is the connection (live: quiet; connecting: faint; offline: the bad colour, tooltip
   "offline, retrying"). Its popover (closes on an outside click and Escape) holds the connection, the running
-  version, "X available" (a link to that release's page; the tooltip says `merlin upgrade` installs it and
+  version and "X available" (a link to that release's page; the tooltip says `merlin upgrade` installs it and
   `merlin autoupgrade` keeps Merlin up to date; not while the "updated" notice is up, nor when X is the version
-  running) and the theme (System, Light, Dark).
+  running).
 - **Indexing**: while `pending > 0`, a thin accent line along the bar's bottom edge, as wide as done / seen,
   its tooltip "indexing 120 / 3,355 · n unchanged · n failed". Nothing otherwise.
 - **Shortcuts**: `g o` Overview, `g s` Sessions, `g c` Cost, `g m` Moments; `/` focuses the search on the
@@ -761,30 +763,29 @@ The table only ever lists sessions.
   `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
   them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`, `bead`), `in` (the selection), `q` (the
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
-- **The slot: two capsules, exactly one expanded.** Both are rounded, 32 px high, on the grey track (`bg-surface-2`),
-  siblings in the top bar's middle slot; the expanded one takes the slot's remaining width, the width changes in
-  150 ms. Which is expanded is page state, not URL; the search starts expanded.
-- **Search capsule** (expanded by default): the magnifier, the search input, and, when a place is selected, the
-  `in ~/work x` chip inside it (the display path; x clears). Minified, it is a round capsule with only the
-  magnifier, and an accent dot on it when `q` or `in` is active; its tooltip names them ("Search: foo · in
-  ~/work x"). A click on it, Escape or `/` collapses the date capsule and expands search; `/` and the magnifier
-  focus the input.
-- **Date capsule** (minified by default): shows the current range only, `7d` or `May 20 → 10d`; a click expands
-  it (and minifies search). Expanded it is `1d | 7d | 30d | Custom` and the locator strip filling the rest; it
-  stays expanded when a preset is applied (the brush shows the preset's days). Custom shows its range once one
-  is set: `May 20 → 10d` (the first day, then the length in days; `May 20 → 1d` for one day; `May 20, 2025 → 10d`
-  when the year is not the current one). A custom range asks the API for local midnight of `from` to the next
-  local midnight after `to`, capped at now; the empty state reads "Nothing ran between May 20 and May 29." (`on
-  May 20` for one day). The presets cover the days up to today. The last custom range applied (a locator drag or
-  a URL with `from` and `to`) is **remembered** in `localStorage` (`overview.custom`, `{from, to}`, try/catch;
-  the URL stays the truth for what is shown). While a preset is active the Custom label still reads that range,
-  unpressed and muted; a click on it applies the range (`from`, `to`). With nothing remembered it reads
-  `Custom`. **Custom is one unit, a pill**: pressed it is white (`bg-surface`, `outline-line`), unpressed it sits
-  on the grey, and either way it holds its label and the strip. A range label has one width (`min-width` 13ch,
-  left-aligned; a year makes it wider), so nothing moves under a drag.
-- **Locator.** The expanded date capsule *is* the locator open: `[1d 7d 30d | Oct 20 → 10d [strip ………]]`; the
-  capsule closes (search expands) with the magnifier, Escape or `/`, the range staying. At 1100 px both capsules
-  still fit; the strip is just shorter. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
+- **The slot: two capsules, the range first, then search.** Both are rounded, 32 px high, on the grey track
+  (`bg-surface-2`). **The axis is open only while the user works the time axis; any other choice (a preset,
+  Escape, `/`, the magnifier, a pointer-down outside the range capsule) puts the search back.** The search starts
+  expanded; which is which is page state, not URL; widths change in 150 ms.
+- **Range capsule**: always `1d | 7d | 30d | Custom`, the active one the white pill. Custom shows its range once
+  one is set: `May 20 → 10d` (the first day, then the length in days; `May 20 → 1d` for one day; `May 20, 2025 →
+  10d` when the year is not the current one) with a muted `»` that says it opens the timeline. A preset
+  applies and closes the axis. Custom, while collapsed, applies the remembered range (if there is one and it is
+  not active) and opens the axis, which fills the slot to the right of the segments (search shrinks to the
+  magnifier); Custom, while open, closes it, the range staying. A drag on the axis applies on drag end and keeps
+  it open. A custom range asks the API for local midnight of `from` to the next local midnight after `to`,
+  capped at now; the empty state reads "Nothing ran between May 20 and May 29." (`on May 20` for one day). The
+  presets cover the days up to today. The last custom range applied (a drag or a URL with `from` and `to`) is
+  **remembered** in `localStorage` (`overview.custom`, `{from, to}`, try/catch; the URL stays the truth). While a
+  preset is active the Custom label still reads that range, unpressed and muted. **Custom is one unit, a pill**:
+  pressed it is white (`bg-surface`, `outline-line`), unpressed it sits on the grey. A range label has one width
+  (`min-width` 13ch, left-aligned), so nothing moves under a drag.
+- **Search capsule**: the magnifier, the input and, when a place is selected, the `in ~/work x` chip inside it
+  (the display path; x clears), filling the space right of the range capsule. Collapsed it is a round capsule
+  holding only the magnifier, centred by flex, with an accent dot at its top right when `q` or `in` is active; its
+  tooltip names them ("Search: foo · in ~/work x"). `/` and the magnifier focus the input.
+- **Locator.** The open axis is the range capsule's editor: `[1d 7d 30d | Oct 20 → 10d « [axis ………]]`. At 1100 px
+  both capsules still fit; the axis is just shorter. It is a strip like the Session page's overview (`features/spend/Overview.tsx`): the whole history
   as whole local days from the first day with spend (`GET /api/cost?by=day`, no bounds) to today, daily spend as
   thin bars in the faint colour on the white pill, a light month axis under it (day numbers too when a day is 16
   px wide), the **brush** lit with the accent (a light fill, an outline and its two handles). Drag on the strip to draw a range, drag the brush to move it, drag its edges

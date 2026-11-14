@@ -10,6 +10,8 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Circle,
   CircleCheck,
   Folder,
@@ -1433,16 +1435,28 @@ export function OverviewPage() {
   }
 
   // ---- the slot's two capsules: exactly one is expanded (page state, not URL); the search starts expanded ----
-  const [dateOpen, setDateOpen] = useState(false)
+  // The axis is open only while the user works the time axis; any other choice puts the search back.
+  const [axisOpen, setAxisOpen] = useState(false)
   const [live, setLive] = useState<CustomRange | null>(null)
   const wantFocus = useRef(false)
-  const openDate = () => setDateOpen(true)
+  const rangeRef = useRef<HTMLFieldSetElement>(null)
   const openSearch = () => {
     setLive(null)
-    setDateOpen(false)
+    setAxisOpen(false)
     wantFocus.current = true
   }
-  useShortcut('Escape', openSearch, { enabled: dateOpen })
+  useShortcut('Escape', openSearch, { enabled: axisOpen })
+  useEffect(() => {
+    if (!axisOpen) return
+    const onDown = (e: PointerEvent) => {
+      if (!rangeRef.current?.contains(e.target as Node)) {
+        setLive(null)
+        setAxisOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [axisOpen])
 
   // ---- search box: typing is local, the URL follows after 200 ms ----
   const [draft, setDraft] = useState(q)
@@ -1464,17 +1478,17 @@ export function OverviewPage() {
   }, [q])
   const inputRef = useRef<HTMLInputElement>(null)
   useShortcut('/', () => {
-    if (dateOpen) return openSearch()
+    if (axisOpen) return openSearch()
     inputRef.current?.focus()
     inputRef.current?.select()
   })
   // the search capsule is back: focus its input if a `/` or the magnifier asked for it
   useEffect(() => {
-    if (!dateOpen && wantFocus.current) {
+    if (!axisOpen && wantFocus.current) {
       wantFocus.current = false
       inputRef.current?.focus()
     }
-  }, [dateOpen])
+  }, [axisOpen])
   const term = q.trim()
   const search = useSearch(term)
   const hits = useMemo(
@@ -1533,27 +1547,99 @@ export function OverviewPage() {
       <ShellSlot>
         <div className="flex w-full min-w-0 items-center gap-2">
           {/* the two capsules: exactly one is expanded and takes the room; the other is a small one */}
+          {/* the range capsule: the four modes always; Custom's editor, the axis, opens only while it is worked */}
+          <fieldset
+            ref={rangeRef}
+            aria-label="Range"
+            className={cn(
+              'm-0 inline-flex h-8 min-w-0 shrink-0 items-center rounded-full border border-line bg-surface-2 p-0.5',
+              grow,
+            )}
+            style={{ flexGrow: axisOpen ? 1 : 0, flexBasis: axisOpen ? 0 : 'auto' }}
+          >
+            {(['1d', '7d', '30d'] as const).map((v) => {
+              const on = !shown && range === v
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={on}
+                  title={RANGE_TITLE[v]}
+                  onClick={() => {
+                    setAxisOpen(false)
+                    setLive(null)
+                    set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
+                  }}
+                  className={cn(
+                    'h-full shrink-0 whitespace-nowrap rounded-full px-2.5 text-sec',
+                    on ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted hover:text-fg',
+                  )}
+                >
+                  {v}
+                </button>
+              )
+            })}
+            {/* Custom: one unit, a pill (white when pressed, on the grey when not) holding the label and, open, the axis */}
+            <span
+              className={cn(
+                'inline-flex h-full min-w-0 items-center rounded-full',
+                axisOpen && 'flex-1',
+                shown ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted',
+              )}
+            >
+              <button
+                type="button"
+                aria-pressed={!!shown}
+                aria-expanded={axisOpen}
+                title={axisOpen ? 'Close the timeline' : 'Pick any range of days on the timeline'}
+                onClick={() => {
+                  if (axisOpen) return openSearch()
+                  if (!shown && remembered) set({ range: undefined, ...formatCustom(remembered) })
+                  setAxisOpen(true)
+                }}
+                className="inline-flex h-full shrink-0 items-center gap-1 whitespace-nowrap pr-1.5 pl-2.5 text-left text-sec hover:text-fg"
+              >
+                {/* one width for a range label, so that nothing shifts under a drag */}
+                {label ? <span className="inline-block min-w-[13ch]">{customLabel(label, now)}</span> : 'Custom'}
+                {axisOpen ? (
+                  <ChevronsLeft size={12} aria-hidden className="text-muted" />
+                ) : (
+                  <ChevronsRight size={12} aria-hidden className="text-muted" />
+                )}
+              </button>
+              {axisOpen && (
+                <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+                  <Locator
+                    value={custom ?? presetRange(range, now)}
+                    now={now}
+                    onLive={setLive}
+                    onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
+                  />
+                </div>
+              )}
+            </span>
+          </fieldset>
           <div
             className={cn(
               'relative flex h-8 items-center overflow-hidden rounded-full border border-line bg-surface-2',
               grow,
-              dateOpen ? 'shrink-0' : 'min-w-0',
+              axisOpen ? 'shrink-0' : 'min-w-0',
             )}
-            style={{ flexGrow: dateOpen ? 0 : 1, flexBasis: dateOpen ? 32 : 0, minWidth: dateOpen ? 32 : 160 }}
+            style={{ flexGrow: axisOpen ? 0 : 1, flexBasis: axisOpen ? 32 : 0, minWidth: axisOpen ? 32 : 160 }}
           >
             <button
               type="button"
-              aria-label={dateOpen ? 'Search sessions' : 'Focus the search'}
-              title={dateOpen ? ['Search sessions (/)', searchNote].filter(Boolean).join('\n') : 'Search sessions (/)'}
-              onClick={() => (dateOpen ? openSearch() : inputRef.current?.focus())}
-              className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
+              aria-label={axisOpen ? 'Search sessions' : 'Focus the search'}
+              title={axisOpen ? ['Search sessions (/)', searchNote].filter(Boolean).join('\n') : 'Search sessions (/)'}
+              onClick={() => (axisOpen ? openSearch() : inputRef.current?.focus())}
+              className="relative inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
             >
               <Search size={14} aria-hidden />
-              {dateOpen && (q || sel !== null) && (
-                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-accent" aria-hidden />
+              {axisOpen && (q || sel !== null) && (
+                <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-accent" aria-hidden />
               )}
             </button>
-            {!dateOpen && (
+            {!axisOpen && (
               <>
                 <input
                   ref={inputRef}
@@ -1601,84 +1687,6 @@ export function OverviewPage() {
               </>
             )}
           </div>
-          {dateOpen ? (
-            <fieldset
-              aria-label="Range"
-              className={cn(
-                'm-0 inline-flex h-8 min-w-0 items-center rounded-full border border-line bg-surface-2 p-0.5',
-                grow,
-              )}
-              style={{ flexGrow: 1, flexBasis: 0 }}
-            >
-              {(['1d', '7d', '30d'] as const).map((v) => {
-                const on = !shown && range === v
-                return (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={on}
-                    title={RANGE_TITLE[v]}
-                    onClick={() => {
-                      set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
-                    }}
-                    className={cn(
-                      'h-full shrink-0 whitespace-nowrap rounded-full px-2.5 text-sec',
-                      on ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted hover:text-fg',
-                    )}
-                  >
-                    {v}
-                  </button>
-                )
-              })}
-              {/* Custom: one unit, a pill (white when pressed, on the grey when not) holding the label and the strip */}
-              <span
-                className={cn(
-                  'inline-flex h-full min-w-0 items-center rounded-full',
-                  shown ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted',
-                )}
-                style={{ flexGrow: 1, flexBasis: 0 }}
-              >
-                <button
-                  type="button"
-                  aria-pressed={!!shown}
-                  title={
-                    shown || !remembered
-                      ? 'Drag on the timeline to pick any range of days'
-                      : 'Back to the range you picked last'
-                  }
-                  onClick={() => {
-                    if (!shown && remembered) set({ range: undefined, ...formatCustom(remembered) })
-                  }}
-                  className="h-full shrink-0 whitespace-nowrap pr-1 pl-2.5 text-left text-sec hover:text-fg"
-                >
-                  {/* one width for a range label, so that nothing shifts under a drag */}
-                  {label ? <span className="inline-block min-w-[13ch]">{customLabel(label, now)}</span> : 'Custom'}
-                </button>
-                <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-                  <Locator
-                    value={custom ?? presetRange(range, now)}
-                    now={now}
-                    onLive={setLive}
-                    onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
-                  />
-                </div>
-              </span>
-            </fieldset>
-          ) : (
-            <button
-              type="button"
-              title="Pick the range of days"
-              aria-label={`Range: ${custom ? customLabel(custom, now) : range}. Pick the range of days`}
-              onClick={openDate}
-              className={cn(
-                'inline-flex h-8 shrink-0 items-center whitespace-nowrap rounded-full border border-line bg-surface-2 px-3.5 text-sec text-fg hover:border-faint',
-                grow,
-              )}
-              style={{ flexGrow: 0, flexBasis: 'auto' }}
-            >
-              {custom ? customLabel(custom, now) : range}
-            </button>
-          )}
         </div>
       </ShellSlot>
       <div className="flex min-h-0 flex-1 flex-col">

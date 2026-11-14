@@ -1,12 +1,13 @@
 import { Monitor, Moon, Radio, Sun } from 'lucide-react'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useConnection, useScanProgress, useVersion } from '../api/events'
 import { cn } from '../lib/cn'
 import { formatCount } from '../lib/format'
 import { availableToShow, releaseUrl } from '../lib/version'
+import { IconButton } from '../ui'
 import { SlotTarget } from './ShellSlot'
-import { type ThemeChoice, useTheme } from './theme'
+import { nextTheme, useTheme } from './theme'
 import { useShortcut } from './useShortcut'
 
 /** Indexing, along the bar's bottom edge: done / seen of the width, the counts in the tooltip. Nothing when idle. */
@@ -40,18 +41,22 @@ function UpdateNotice() {
   )
 }
 
-const THEMES: { id: ThemeChoice; label: string; icon: ReactNode }[] = [
-  { id: 'system', label: 'System', icon: <Monitor size={13} aria-hidden /> },
-  { id: 'light', label: 'Light', icon: <Sun size={13} aria-hidden /> },
-  { id: 'dark', label: 'Dark', icon: <Moon size={13} aria-hidden /> },
-]
+/** The theme: one button that cycles System, Light, Dark. */
+function ThemeControl() {
+  const [theme, set] = useTheme()
+  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
+  return (
+    <IconButton label={`Theme: ${theme}. Click for ${nextTheme(theme)}.`} onClick={() => set(nextTheme(theme))}>
+      <Icon size={15} />
+    </IconButton>
+  )
+}
 
 /** One button at the far right: its look is the connection; its panel holds the state, the version and the theme. */
 function StatusButton() {
   const connection = useConnection()
   const version = useVersion()
   const available = availableToShow(version)
-  const [theme, setTheme] = useTheme()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   useShortcut('Escape', () => setOpen(false), { enabled: open })
@@ -112,30 +117,6 @@ function StatusButton() {
                 </dd>
               </>
             )}
-            <dt className="text-muted">Theme</dt>
-            <dd className="m-0 flex justify-end">
-              <fieldset
-                aria-label="Theme"
-                className="m-0 inline-flex rounded-card border border-line bg-surface-2 p-0.5"
-              >
-                {THEMES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    aria-pressed={theme === t.id}
-                    title={t.label}
-                    aria-label={t.label}
-                    onClick={() => setTheme(t.id)}
-                    className={cn(
-                      'inline-flex h-6 w-7 items-center justify-center rounded-badge',
-                      theme === t.id ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted hover:text-fg',
-                    )}
-                  >
-                    {t.icon}
-                  </button>
-                ))}
-              </fieldset>
-            </dd>
           </dl>
         </div>
       )}
@@ -145,8 +126,8 @@ function StatusButton() {
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex h-11 items-center border-b-2 px-0.5 text-body hover:no-underline',
-    isActive ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg',
+    'flex items-center rounded-full px-2.5 py-[3px] text-body hover:no-underline',
+    isActive ? 'bg-surface-2 font-medium text-fg' : 'text-muted hover:text-fg',
   )
 
 /** 44 px: the name, the page's slot in the middle, the tabs and the status button at the right. */
@@ -154,16 +135,12 @@ export function TopBar() {
   return (
     <header className="sticky top-0 z-30 flex h-11 items-center gap-4 border-b border-line bg-surface px-4">
       <Link to="/" className="flex items-center gap-2 font-semibold text-fg hover:no-underline" aria-label="Merlin">
-        <svg width="16" height="16" viewBox="0 0 16 16">
-          <title>Merlin</title>
-          <circle cx="8" cy="8" r="6" fill="none" stroke="var(--accent)" strokeWidth="2" />
-          <circle cx="8" cy="8" r="2" fill="var(--accent)" />
-        </svg>
+        <img src="/logo-48.png" width={22} height={22} alt="" className="size-[22px]" />
         Merlin
       </Link>
       <SlotTarget />
       <UpdateNotice />
-      <nav className="flex gap-5" aria-label="Main">
+      <nav className="flex gap-1" aria-label="Main">
         <NavLink to="/" end className={navClass} title="Overview: where the agents' work went (g o)">
           Overview
         </NavLink>
@@ -174,7 +151,10 @@ export function TopBar() {
           Moments
         </NavLink>
       </nav>
-      <StatusButton />
+      <div className="flex items-center gap-1">
+        <ThemeControl />
+        <StatusButton />
+      </div>
       <ScanBar />
     </header>
   )
