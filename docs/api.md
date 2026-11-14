@@ -995,8 +995,11 @@ for agents and branched sessions. The page groups, filters and sums the lanes it
 
 Only messages count, and only the messages a session **owns** (a copied message is billed once, as
 everywhere): a lane's `usd` is the `usd` of its owned messages whose `at` falls in the range, the main
-agent's and every agent's alike. That is the attributed (or recorded) figure; reported windows and overhead
-cannot be cut into slots, so it can differ from the session's best cost. Scripted runs (`kind: sdk`) have no
+agent's and every agent's alike, plus the estimated cost of the output a truncated message is missing
+(`estimatedUSD`) when the message lies outside every reported window (inside one the reported total already
+covers it): the session's own cost, as `/api/cost` counts it. That is the attributed (or recorded) figure;
+reported windows and overhead (the `(overhead)` row of `/api/cost`) cannot be cut into slots, so it can differ from
+the session's best cost by that overhead. Scripted runs (`kind: sdk`) have no
 lane; they are summed in `scripted`.
 
 **Context.** A message's context is its prompt tokens: `input + cacheRead + cacheWrite5m + cacheWrite1h`.

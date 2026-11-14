@@ -208,6 +208,9 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			}
 			o.held[i] = true
 			o.total += m.USD
+			if m.EstimatedUSD > 0 && covered(s.windows, m.At) < 0 {
+				o.total += m.EstimatedUSD // the output a truncated message is missing: in the session's own cost, outside a window
+			}
 		}
 		if !seen {
 			continue

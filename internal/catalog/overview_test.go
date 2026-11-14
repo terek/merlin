@@ -640,3 +640,24 @@ func TestOverviewLaneBeadAndChains(t *testing.T) {
 		t.Errorf("beads without any bead lane = %+v, %v", o2.Beads, err)
 	}
 }
+
+// A truncated message outside every reported window adds its estimated missing output to the lane: it is in the
+// session's own cost, so the lane and /api/cost agree. Inside a window the reported total covers it.
+func TestOverviewLaneCountsTheEstimateOfATruncatedMessage(t *testing.T) {
+	d := syn("claude", "est", "/p/est", 0, 60, []model.Turn{turn(0, "ue", "go", 0)}, msgSpec{"e1", 5, 1, 0}, msgSpec{"e2", 10, 2, 0})
+	d.Messages[1].Truncated, d.Messages[1].EstimatedUSD = true, 0.5
+	c := ovCatalog(d)
+	o, err := c.Overview(ovQuery(time.Hour, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNear(t, "lane usd", laneOf(t, o, "est").USD, 3.5)
+	wantNear(t, "session best cost", c.Rollup(Filter{})[0].TotalUSD, 3.5)
+
+	d2 := syn("claude", "win", "/p/win", 0, 60, []model.Turn{turn(0, "uw", "go", 0)}, msgSpec{"w1", 5, 1, 0}, msgSpec{"w2", 10, 2, 0})
+	d2.Messages[1].Truncated, d2.Messages[1].EstimatedUSD = true, 0.5
+	withWindows(d2, window(0, 30, 3.2))
+	c2 := ovCatalog(d2)
+	o2, _ := c2.Overview(ovQuery(time.Hour, 3))
+	wantNear(t, "lane usd inside a window", laneOf(t, o2, "win").USD, 3)
+}
