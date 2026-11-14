@@ -36,7 +36,7 @@ import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { resumeCommand, sessionPath } from '../../lib/paths'
 import { ShellSlot } from '../../shell/ShellSlot'
 import { useShortcut } from '../../shell/useShortcut'
-import { copyText, HarnessIcon, IconButton, Money, QueryBoundary, Select, Skeleton } from '../../ui'
+import { copyText, HarnessIcon, IconButton, KeyHint, Money, QueryBoundary, Select, Skeleton } from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
@@ -1655,10 +1655,12 @@ export function OverviewPage() {
                   }}
                   className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
                 />
-                {draft && (
+                {draft ? (
                   <IconButton label="Clear" onClick={() => setDraft('')} className="mr-1 size-5 shrink-0">
                     <X size={13} />
                   </IconButton>
+                ) : (
+                  <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
                 )}
                 {sel !== null && (
                   <span className="mr-1 inline-flex h-6 max-w-[260px] shrink-0 items-center gap-1 rounded-full border border-line bg-surface pr-1 pl-2.5 text-sec">
