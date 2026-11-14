@@ -26,6 +26,14 @@ export function segmentLabel(key: string): string {
   return modelLabel(key)
 }
 
+/** The label under a bar, as the Overview's timeline writes its days ("Fri 16"); a week's is its first day. */
+function tickText(b: Bucket): string {
+  const from = dayStart(b.key)
+  return b.weekly
+    ? shortDate(from)
+    : `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][from.getDay()]} ${from.getDate()}`
+}
+
 /** "Wed 16 Sep" or, for a week, "Week of 14 Sep – 20 Sep". */
 export function bucketTitle(b: Bucket): string {
   const from = dayStart(b.key)
@@ -163,7 +171,7 @@ export function DayChart({
               )}
               {i % every === 0 && (
                 <text x={centre(i)} y={HEIGHT - 6} textAnchor="middle" fontSize={11} fill="var(--muted)">
-                  {shortDate(dayStart(b.key))}
+                  {tickText(b)}
                 </text>
               )}
               <rect

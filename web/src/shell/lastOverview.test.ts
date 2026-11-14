@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { lastOverview, lastScope, lensLinks, rememberOverview, rememberScope } from './lastOverview'
+import { lastOverview, lastQ, lastScope, lensLinks, rememberOverview, rememberScope } from './lastOverview'
 
 const memory = () => {
   const m = new Map<string, string>()
@@ -36,19 +36,38 @@ describe('lastOverview', () => {
 })
 
 describe('the scope of the two lenses', () => {
-  test('the page being read gives its scope to both tabs', () => {
-    expect(lensLinks('/', '?range=30d&in=%2Fw&sort=spend')).toEqual({
-      overview: '/?range=30d&in=%2Fw',
+  test('the Overview gives its scope to both tabs, the search to its own only', () => {
+    expect(lensLinks('/', '?range=30d&in=%2Fw&sort=spend&q=x')).toEqual({
+      overview: '/?range=30d&in=%2Fw&q=x',
       cost: '/cost?range=30d&in=%2Fw',
     })
-    expect(lensLinks('/cost', '?q=x&stack=source').cost).toBe('/cost?q=x')
+  })
+  test('Cost has no search; the Overview gets the one it last had', () => {
+    const s = memory()
+    rememberScope('/', '?range=30d&q=release&in=%2Fw', s)
+    rememberScope('/cost', '?range=7d&in=%2Fw&q=ignored&stack=source', s)
+    expect(lensLinks('/cost', '?range=7d&in=%2Fw&q=ignored', s)).toEqual({
+      overview: '/?range=7d&in=%2Fw&q=release',
+      cost: '/cost?range=7d&in=%2Fw',
+    })
   })
   test('another page carries the last scope seen', () => {
     const s = memory()
+    rememberScope('/', '?range=1d&q=foo', s)
     rememberScope('/cost', '?range=1d&by=repo&stack=source', s)
     rememberScope('/moments', '?range=30d', s)
-    expect(lensLinks('/moments', '', s)).toEqual({ overview: '/?range=1d&by=repo', cost: '/cost?range=1d&by=repo' })
+    expect(lensLinks('/moments', '', s)).toEqual({
+      overview: '/?range=1d&by=repo&q=foo',
+      cost: '/cost?range=1d&by=repo',
+    })
     expect(lastScope(s)).toBe('?range=1d&by=repo')
+    expect(lastQ(s)).toBe('foo')
+  })
+  test('clearing the search on the Overview forgets it', () => {
+    const s = memory()
+    rememberScope('/', '?q=foo', s)
+    rememberScope('/', '?range=7d', s)
+    expect(lensLinks('/cost', '', s).overview).toBe('/')
   })
   test('no scope seen is no scope', () => {
     expect(lensLinks('/moments', '', memory())).toEqual({ overview: '/', cost: '/cost' })

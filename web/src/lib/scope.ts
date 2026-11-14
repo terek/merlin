@@ -2,11 +2,14 @@
 
 export const SCOPE_KEYS = ['range', 'from', 'to', 'by', 'in', 'q'] as const
 
-/** The scope's parameters of a query string, as `?…` (empty for none). */
-export function scopeSearch(search: string | URLSearchParams): string {
+/**
+ * The scope's parameters of a query string, as `?…` (empty for none). `q: false` leaves the search out: Cost has none.
+ */
+export function scopeSearch(search: string | URLSearchParams, opts: { q?: boolean } = {}): string {
   const from = typeof search === 'string' ? new URLSearchParams(search) : search
   const out = new URLSearchParams()
   for (const k of SCOPE_KEYS) {
+    if (k === 'q' && opts.q === false) continue
     const v = from.get(k)
     if (v) out.set(k, v)
   }

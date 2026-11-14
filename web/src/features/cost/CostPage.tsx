@@ -1,11 +1,11 @@
-// The Cost page (docs/ui.md section 10): the Overview's scope read as money. The scope is the same URL
-// (`range`, `from`, `to`, `by`, `in`, `q`) and the same two capsules in the top bar; the page shows what
-// that scope cost: the total and how well it is backed, by day, by model, by kind and by place.
+// The Cost page (docs/ui.md section 10): the Overview's scope read as money, in the Overview's frame: its sidebar
+// (the places, where the selection lives), then one pane edge to edge. The scope is the Overview's URL (`range`,
+// `from`, `to`, `by`, `in`; Cost has no search) and the range capsule in the top bar.
 
-import { ChevronRight, Folder, FolderX, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useCost, useOverview, useSearch } from '../../api/queries'
+import { useCost, useOverview } from '../../api/queries'
 import type { CostRow, CostTable } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { tallyLine, warmLine } from '../../lib/compaction'
@@ -14,23 +14,9 @@ import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
 import { scopeSearch } from '../../lib/scope'
+import { Bar, EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
-  Bar,
-  Card,
-  DataTable,
-  EmptyState,
-  Money,
-  QueryBoundary,
-  SegmentedControl,
-  Select,
-  Skeleton,
-  SkeletonRows,
-} from '../../ui'
-import type { Column } from '../../ui/layout'
-import {
-  type Beads,
-  BYS,
-  beadLabel,
+  buildPlaceTree,
   customLabel,
   customPhrase,
   customWindow,
@@ -39,14 +25,14 @@ import {
   formatCustom,
   inferHome,
   keepSelection,
-  type PlaceNode,
+  placeItems,
   presetRange,
-  sessionKey,
+  totalsOf,
 } from '../overview/model'
-import { BY_LABEL, folderIcon, NONE_TITLE } from '../overview/placeUi'
 import { ScopeSlot, useScope } from '../overview/ScopeSlot'
+import { Sidebar, useSidebarOpen } from '../overview/Sidebar'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
-import { migrateCostSearch, type PlaceRow, placeRows } from './lens'
+import { migrateCostSearch } from './lens'
 import {
   type Bucket,
   bucketsFor,
@@ -63,218 +49,198 @@ const TEN_MIN = 600_000
 
 const RANGE_CAPTION = { '1d': 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days' } as const
 
+/** The uppercase muted label of a column or section, as the Overview's headers. */
+const HEAD = 'text-faint text-meta uppercase tracking-wide'
+
 export function CostPage() {
   useDocumentTitle('Cost')
   const scope = useScope()
-  const { sp, set, select, range, custom, by, sel, q } = scope
+  const { sp, set, select, range, custom, by, sel } = scope
   const [, setSp] = useSearchParams()
   const stack = parseStack(sp.get('stack'))
   const now = useNow(300_000)
+  const [sbOpen, setSbOpen] = useSidebarOpen()
 
-  // an old address (project, 90d, all, the cuts) becomes the same scope in the Overview's terms
+  // an old address (project, 90d, all, the cuts) becomes the same scope in the Overview's terms; Cost has no search
   const everyDay = useCost({ by: 'day' })
   const firstDay = everyDay.data ? (firstSpendDay(everyDay.data.rows) ?? null) : null
   const migrated = migrateCostSearch(sp, now, firstDay)
+  const dropQ = sp.has('q')
   useEffect(() => {
-    if (migrated instanceof URLSearchParams) setSp(migrated, { replace: true })
-  }, [migrated, setSp])
+    if (migrated instanceof URLSearchParams) {
+      migrated.delete('q')
+      setSp(migrated, { replace: true })
+    } else if (migrated === null && dropQ) {
+      const next = new URLSearchParams(sp)
+      next.delete('q')
+      setSp(next, { replace: true })
+    }
+  }, [migrated, dropQ, sp, setSp])
+  const ready = migrated === null && !dropQ
 
   // the scope's days, whole local days as on the Overview
   const days = custom ?? presetRange(range, now)
   const win: Window = { since: days.from, until: days.to }
-  const term = q.trim()
-  const scoped = {
-    since: days.from,
-    until: days.to,
-    place: sel === null ? undefined : by,
-    in: sel ?? undefined,
-    q: term,
-  }
+  const scoped = { since: days.from, until: days.to, place: sel === null ? undefined : by, in: sel ?? undefined }
 
-  const head = useCost({ by: 'kind', ...scoped }, { enabled: migrated === null })
-  const dayRows = useCost({ by: 'day', split: 'model', ...scoped }, { enabled: migrated === null })
-  const byModel = useCost({ by: 'model', ...scoped }, { enabled: migrated === null })
+  const head = useCost({ by: 'kind', ...scoped }, { enabled: ready })
+  const dayRows = useCost({ by: 'day', split: 'model', ...scoped }, { enabled: ready })
+  const byModel = useCost({ by: 'model', ...scoped }, { enabled: ready })
 
-  // the places and the home come from the Overview's lanes for the same days: the figures are its figures
+  // the places come from the Overview's lanes for the same days: the sidebar shows its figures
   const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
   const w = customWindow(days, to)
   const overview = useOverview(
     { from: new Date(w.fromMs).toISOString(), to: new Date(w.toMs).toISOString(), slot: '1d' },
-    migrated === null,
+    ready,
   )
   const lanes = overview.data?.lanes
   const beads = overview.data?.beads
   const home = useMemo(() => inferHome(lanes?.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [lanes])
-  const search = useSearch(term)
-  const hits = useMemo(
-    () => (search.data ? new Set(search.data.hits.map((h) => sessionKey(h.session.harness, h.session.id))) : undefined),
-    [search.data],
-  )
+  const tree = useMemo(() => buildPlaceTree(placeItems(lanes ?? [], by, beads), by, home), [lanes, by, beads, home])
+  const all = useMemo(() => totalsOf(lanes ?? []), [lanes])
 
-  if (migrated !== null) return <Skeleton className="m-4 h-64" />
+  if (!ready) return <Skeleton className="m-4 h-64" />
 
   const empty = head.data !== undefined && head.data.rows.length === 0 && head.data.total.totalUSD === 0
   const overhead = byModel.data?.rows.find((r) => r.key === OVERHEAD)?.totalUSD ?? 0
-  const caption = custom ? `${customLabel(custom, now)}` : RANGE_CAPTION[range]
-  const where = [sel !== null ? `in ${displayPath(sel, home, by)}` : '', term ? `matching “${term}”` : ''].filter(
-    Boolean,
-  )
-  const overviewTo = `/${scopeSearch(sp)}`
+  const caption = custom ? customLabel(custom, now) : RANGE_CAPTION[range]
+  const overviewTo = `/${scopeSearch(sp, { q: false })}`
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4 p-4">
-      <ScopeSlot scope={scope} home={home} beads={beads} />
-      {empty ? (
-        <Card>
-          <EmptyState title="Nothing was spent here">
+    <div className="flex h-full w-full bg-surface">
+      <ScopeSlot scope={scope} home={home} beads={beads} search={false} />
+      <Sidebar
+        open={sbOpen}
+        onOpen={setSbOpen}
+        by={by}
+        onBy={(v) => set({ by: v === 'dir' ? undefined : v, in: keepSelection(sel, lanes ?? [], v, beads) })}
+        tree={tree}
+        beads={beads}
+        all={all}
+        sel={sel}
+        hover={null}
+        onSelect={select}
+      />
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        {empty ? (
+          <div className="p-6 text-muted">
             Nothing was spent {customPhrase(days, now)}
-            {sel !== null && ` in ${displayPath(sel, home, by)}`}
-            {term && ` matching “${term}”`}.
-            {(sel !== null || term) && (
-              <div className="mt-3">
-                <button
-                  type="button"
-                  className="text-accent hover:underline"
-                  onClick={() => {
-                    set({ in: undefined, q: undefined })
-                  }}
-                >
-                  Clear the selection
-                </button>
-              </div>
+            {sel !== null && ` in ${displayPath(sel, home, by)}`}.{' '}
+            {sel !== null && (
+              <button type="button" onClick={() => select(null)} className="text-accent hover:underline">
+                Clear the selection
+              </button>
             )}
-          </EmptyState>
-        </Card>
-      ) : (
-        <>
-          <Headline
-            query={head}
-            caption={where.length ? `${caption} · ${where.join(' · ')}` : caption}
-            overheadUSD={overhead}
-          />
+          </div>
+        ) : (
+          <>
+            <Headline
+              query={head}
+              caption={sel !== null ? `${caption} · in ${displayPath(sel, home, by)}` : caption}
+              overheadUSD={overhead}
+            />
 
-          <Card
-            title="By day"
-            actions={
-              <SegmentedControl
-                label="Stack by"
-                value={stack}
-                onChange={(v) => set({ stack: v === 'model' ? undefined : v })}
-                options={[
-                  { value: 'model', label: 'By model' },
-                  {
-                    value: 'source',
-                    label: 'Reported / attributed',
-                    title:
-                      "Stack by where the figure comes from (reported, recomputed, or the harness's own per-call figure)",
-                  },
-                  {
-                    value: 'compaction',
-                    label: 'Compactions',
-                    title:
-                      'The estimated cost of the calls that wrote compaction summaries, and what a cold cache added',
-                  },
-                ]}
-              />
-            }
-          >
-            <QueryBoundary query={dayRows} skeleton={<Skeleton className="h-56" />}>
-              {(d) => (
-                <ChartBody
-                  rows={d.rows}
-                  win={win}
-                  stack={stack}
-                  onPick={(b) => set({ range: undefined, ...formatCustom({ from: b.key, to: b.to }) })}
-                />
-              )}
-            </QueryBoundary>
-          </Card>
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(440px,1fr))] items-start gap-4">
-            <Card title="By model" flush>
-              <CutTable
-                query={byModel}
-                name="Model"
-                label={(r) =>
-                  r.key === OVERHEAD ? (
-                    <span title="Spend the harness reported that no transcript message explains.">
-                      (overhead)<sup className="ml-0.5 text-faint">1</sup>
-                    </span>
-                  ) : (
-                    <span title={r.key}>{modelLabel(r.key)}</span>
-                  )
-                }
-                footer={(d) =>
-                  d.rows.some((r) => r.key === OVERHEAD) && (
-                    <>
-                      <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It has
-                      no model of its own.
-                    </>
-                  )
-                }
-              />
-            </Card>
-            <Card title="By kind" flush>
-              <CutTable
-                query={head}
-                name="Kind"
-                label={(r) => <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>}
-              />
-            </Card>
-            <Card
-              title="By place"
-              flush
+            <Section
+              title="By day"
               actions={
-                <Select
-                  label="Organise by"
-                  value={by}
-                  onChange={(v) =>
-                    set({ by: v === 'dir' ? undefined : v, in: keepSelection(sel, lanes ?? [], v, beads) })
-                  }
-                  options={BYS.map((v) => ({ value: v, label: BY_LABEL[v] }))}
-                  className="w-32"
+                <SegmentedControl
+                  label="Stack by"
+                  value={stack}
+                  onChange={(v) => set({ stack: v === 'model' ? undefined : v })}
+                  options={[
+                    { value: 'model', label: 'By model' },
+                    {
+                      value: 'source',
+                      label: 'Reported / attributed',
+                      title:
+                        "Stack by where the figure comes from (reported, recomputed, or the harness's own per-call figure)",
+                    },
+                    {
+                      value: 'compaction',
+                      label: 'Compactions',
+                      title:
+                        'The estimated cost of the calls that wrote compaction summaries, and what a cold cache added',
+                    },
+                  ]}
                 />
               }
             >
-              <QueryBoundary
-                query={overview}
-                skeleton={<SkeletonRows rows={4} height={32} />}
-                empty={<EmptyState title="No places in this range" />}
-                isEmpty={(o) => o.lanes.length === 0}
-              >
-                {(o) => (
-                  <PlaceTable
-                    rows={placeRows(o.lanes, {
-                      by,
-                      sel,
-                      term,
-                      hits,
-                      home,
-                      beads: o.beads,
-                      label: (n) => (by === 'bead' ? beadLabel(n.label, o.beads) : { text: n.label, closed: false }),
-                    })}
-                    by={by}
-                    beads={o.beads}
-                    onPick={(r) => select(r.path)}
+              <QueryBoundary query={dayRows} skeleton={<Skeleton className="h-56" />}>
+                {(d) => (
+                  <ChartBody
+                    rows={d.rows}
+                    win={win}
+                    stack={stack}
+                    onPick={(b) => set({ range: undefined, ...formatCustom({ from: b.key, to: b.to }) })}
                   />
                 )}
               </QueryBoundary>
-            </Card>
-          </div>
-          <p className="pt-1 text-sec text-muted">
-            <Link to={overviewTo} className="inline-flex items-center gap-1">
-              <Search size={12} aria-hidden /> The sessions behind these figures →
-            </Link>
-          </p>
-        </>
-      )}
+            </Section>
+
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(380px,1fr))] gap-px border-line border-b bg-line">
+              <div className="bg-surface">
+                <LensTable
+                  query={byModel}
+                  name="Model"
+                  detail
+                  label={(r) =>
+                    r.key === OVERHEAD ? (
+                      <span title="Spend the harness reported that no transcript message explains.">
+                        (overhead)<sup className="ml-0.5 text-faint">1</sup>
+                      </span>
+                    ) : (
+                      <span title={r.key}>{modelLabel(r.key)}</span>
+                    )
+                  }
+                  footer={(d) =>
+                    d.rows.some((r) => r.key === OVERHEAD) && (
+                      <>
+                        <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It
+                        has no model of its own.
+                      </>
+                    )
+                  }
+                />
+              </div>
+              <div className="bg-surface">
+                <LensTable
+                  query={head}
+                  name="Kind"
+                  label={(r) => (
+                    <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
+                  )}
+                />
+              </div>
+            </div>
+            <p className="px-4 py-3 text-sec text-muted">
+              <Link to={overviewTo} className="inline-flex items-center gap-1">
+                <Search size={12} aria-hidden /> The sessions behind these figures →
+              </Link>
+            </p>
+          </>
+        )}
+      </div>
     </div>
+  )
+}
+
+/** A section of the pane: the Overview's column-header style label, an action at the right, a hairline under. */
+function Section({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="border-line border-b">
+      <div className="flex min-h-9 items-center justify-between gap-3 px-4 pt-2">
+        <h2 className={HEAD}>{title}</h2>
+        {actions}
+      </div>
+      <div className="px-4 pt-1 pb-3">{children}</div>
+    </section>
   )
 }
 
 function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: string; overheadUSD: number }) {
   return (
-    <Card>
+    <section className="border-line border-b px-4 py-3">
       <QueryBoundary query={query} skeleton={<Skeleton className="h-16" />}>
         {(d) => {
           const { totalUSD, reportedUSD, attributedUSD } = d.total
@@ -282,7 +248,7 @@ function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: s
           return (
             <div className="grid items-center gap-x-10 gap-y-3 grid-cols-[auto_1fr]">
               <div>
-                <div className="text-sec text-muted">{caption}</div>
+                <div className="text-faint text-meta uppercase tracking-wide">{caption}</div>
                 <div className="text-page" data-testid="total">
                   <Money usd={totalUSD} lowerBound={backingLowerBound(d.backing)} />
                 </div>
@@ -341,7 +307,7 @@ function Headline({ query, caption, overheadUSD }: { query: CutQuery; caption: s
           )
         }}
       </QueryBoundary>
-    </Card>
+    </section>
   )
 }
 
@@ -463,101 +429,82 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[]) {
 
 type CutQuery = Parameters<typeof QueryBoundary<CostTable>>[0]['query']
 
-function CutTable({
+function LensTable({
   query,
   name,
   label,
-  onPick,
-  selected,
   footer,
+  detail,
 }: {
   query: CutQuery
   name: string
   label: (r: CostRow) => ReactNode
-  onPick?: (r: CostRow) => void
-  selected?: string
   footer?: (d: CostTable) => ReactNode
+  /** Reported and attributed columns beside the total. */
+  detail?: boolean
 }) {
   return (
     <QueryBoundary
       query={query}
-      skeleton={<SkeletonRows rows={4} height={32} />}
+      skeleton={<SkeletonRows rows={4} height={28} />}
       empty={<EmptyState title="Nothing in this range" />}
       isEmpty={(d) => d.rows.length === 0}
     >
       {(d) => {
-        const columns: Column<CostRow>[] = [
-          {
-            key: 'name',
-            header: name,
-            sortValue: (r) => r.key.toLowerCase(),
-            cell: (r) => (
-              <div className="min-w-0 py-1" title={`${formatCount(r.sessions)} sessions`}>
-                <div className="truncate">{label(r)}</div>
-                <Bar
-                  height={3}
-                  className="mt-1"
-                  label={`${share(r.totalUSD, d.total.totalUSD)} of the total`}
-                  segments={[{ value: r.totalUSD, tone: r.key === OVERHEAD ? 'overhead' : 'accent' }]}
-                  total={d.total.totalUSD}
-                />
-              </div>
-            ),
-          },
-          {
-            key: 'total',
-            header: 'Total',
-            align: 'right',
-            width: '84px',
-            sortValue: (r) => r.totalUSD,
-            cell: (r) => <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />,
-          },
-          {
-            key: 'reported',
-            header: 'Reported',
-            align: 'right',
-            width: '84px',
-            sortValue: (r) => r.reportedUSD,
-            cell: (r) => <Money usd={r.reportedUSD} dim />,
-          },
-          {
-            key: 'attributed',
-            header: 'Attributed',
-            align: 'right',
-            width: '92px',
-            sortValue: (r) => r.attributedUSD,
-            cell: (r) => <Money usd={r.attributedUSD} dim />,
-          },
-          // Pi's own per-call figures: a column only when the table has some, so Claude Code and
-          // Codex users see the same three.
-          ...((d.total.recordedUSD ?? 0) > 0
-            ? [
-                {
-                  key: 'recorded',
-                  header: 'Recorded',
-                  align: 'right' as const,
-                  width: '92px',
-                  sortValue: (r: CostRow) => r.recordedUSD ?? 0,
-                  cell: (r: CostRow) => (
-                    <Money usd={r.recordedUSD ?? 0} dim title={recordedNote(r.recordedUSD ?? 0, r.billedUSD ?? 0)} />
-                  ),
-                },
-              ]
-            : []),
-        ]
+        const recorded = (d.total.recordedUSD ?? 0) > 0
         const note = footer?.(d)
         return (
-          <DataTable
-            columns={columns}
-            rows={d.rows}
-            rowKey={(r) => r.key}
-            defaultSort={{ key: 'total', dir: 'desc' }}
-            onRowClick={onPick}
-            selectedKey={selected}
-            stickyTop={0}
-            className="table-fixed"
-            footer={note || undefined}
-          />
+          <div className="@container">
+            <table className="w-full table-fixed text-sec">
+              <thead>
+                <tr className={cn(HEAD, 'h-9')}>
+                  <th className="px-4 text-left font-normal">{name}</th>
+                  <th className="w-20 px-2 text-right font-normal">Total</th>
+                  {detail && (
+                    <th className="hidden w-20 px-2 text-right font-normal @min-[440px]:table-cell">Reported</th>
+                  )}
+                  {detail && (
+                    <th className="hidden w-20 px-2 pr-4 text-right font-normal @min-[440px]:table-cell">Attributed</th>
+                  )}
+                  {!detail && <th className="w-4" />}
+                </tr>
+              </thead>
+              <tbody>
+                {d.rows.map((r) => (
+                  <tr key={r.key} className="h-[34px]" title={`${formatCount(r.sessions)} sessions`}>
+                    <td className="min-w-0 px-4 py-1">
+                      <div className="truncate text-body">{label(r)}</div>
+                      <Bar
+                        height={3}
+                        className="mt-0.5"
+                        label={`${share(r.totalUSD, d.total.totalUSD)} of the total`}
+                        segments={[{ value: r.totalUSD, tone: r.key === OVERHEAD ? 'overhead' : 'accent' }]}
+                        total={d.total.totalUSD}
+                      />
+                    </td>
+                    <td
+                      className="px-2 text-right"
+                      title={`Reported ${formatMoney(r.reportedUSD)} · attributed ${formatMoney(r.attributedUSD)}${recorded ? ` · recorded ${formatMoney(r.recordedUSD ?? 0)}` : ''}`}
+                    >
+                      <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />
+                    </td>
+                    {detail && (
+                      <td className="hidden px-2 text-right @min-[440px]:table-cell">
+                        <Money usd={r.reportedUSD} dim />
+                      </td>
+                    )}
+                    {detail && (
+                      <td className="hidden px-2 pr-4 text-right @min-[440px]:table-cell">
+                        <Money usd={r.attributedUSD} dim />
+                      </td>
+                    )}
+                    {!detail && <td />}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {note && <p className="px-4 pt-1 pb-3 text-meta text-muted">{note}</p>}
+          </div>
         )
       }}
     </QueryBoundary>
@@ -566,71 +513,4 @@ function CutTable({
 
 function share(part: number, whole: number): string {
   return whole > 0 ? `${Math.round((part / whole) * 100)}%` : '0%'
-}
-
-/** The places of the scope, ranked: the children of the selection, each over everything under it. */
-function PlaceTable({
-  rows,
-  by,
-  beads,
-  onPick,
-}: {
-  rows: { rows: PlaceRow[]; total: number }
-  by: keyof typeof BY_LABEL
-  beads?: Beads
-  onPick: (r: PlaceRow) => void
-}) {
-  const columns: Column<PlaceRow>[] = [
-    {
-      key: 'name',
-      header: BY_LABEL[by],
-      cell: (r) => {
-        const Icon = r.none ? FolderX : r.node ? folderIcon(r.node as PlaceNode, by, false, beads) : Folder
-        return (
-          <div className="min-w-0 py-1" title={r.none ? NONE_TITLE[by] : r.title}>
-            <div className={cn('flex items-center gap-1.5 truncate', r.closed && 'text-muted')}>
-              <Icon size={14} aria-hidden className="shrink-0 text-muted" />
-              <span className="truncate">{r.text}</span>
-              {r.sub && <span className="whitespace-nowrap text-faint text-meta">{r.sub}</span>}
-              {r.drill && <ChevronRight size={12} aria-hidden className="ml-auto shrink-0 text-faint" />}
-            </div>
-            <Bar
-              height={3}
-              className="mt-1"
-              label={`${share(r.usd, rows.total)} of the places shown`}
-              segments={[{ value: r.usd, tone: 'accent' }]}
-              total={rows.total}
-            />
-          </div>
-        )
-      },
-    },
-    {
-      key: 'sessions',
-      header: 'Sessions',
-      align: 'right',
-      width: '84px',
-      cell: (r) => <span className="text-muted">{formatCount(r.count)}</span>,
-    },
-    {
-      key: 'total',
-      header: 'Spend',
-      align: 'right',
-      width: '92px',
-      cell: (r) => <Money usd={r.usd} />,
-    },
-  ]
-  return (
-    <DataTable
-      columns={columns}
-      rows={rows.rows}
-      rowKey={(r) => r.id}
-      onRowClick={(r) => {
-        if (!r.id.endsWith('#here')) onPick(r)
-      }}
-      stickyTop={0}
-      className="table-fixed"
-      footer="These count spend in messages, as the Overview does: reported spend no message explains, and scripted runs, are in none of them."
-    />
-  )
 }

@@ -10,6 +10,9 @@ describe('scopeSearch', () => {
   test('a custom range', () => {
     expect(scopeSearch('?from=2026-10-20&to=2026-11-03&range=7d')).toBe('?range=7d&from=2026-10-20&to=2026-11-03')
   })
+  test('without the search', () => {
+    expect(scopeSearch('?range=30d&q=x&in=%2Fw', { q: false })).toBe('?range=30d&in=%2Fw')
+  })
   test('nothing in scope is nothing', () => {
     expect(scopeSearch('')).toBe('')
     expect(scopeSearch('?sort=spend')).toBe('')
