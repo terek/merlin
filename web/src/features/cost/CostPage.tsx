@@ -570,42 +570,44 @@ function LensTable({
                 </tr>
               </thead>
               <tbody>
-                {d.rows.map((r) => (
-                  <tr key={r.key} className="h-[34px]" title={`${formatCount(r.sessions)} sessions`}>
-                    <td className="min-w-0 px-4 py-1">
-                      <div className="truncate text-body">{label(r)}</div>
-                      <Bar
-                        height={3}
-                        className="mt-0.5"
-                        label={`${share(r.totalUSD, d.total.totalUSD)} of the total`}
-                        segments={[{ value: r.totalUSD, tone: r.key === OVERHEAD ? 'overhead' : 'accent' }]}
-                        total={d.total.totalUSD}
-                      />
-                    </td>
-                    <td
-                      className="px-2 text-right"
-                      title={`Reported ${formatMoney(r.reportedUSD)} · attributed ${formatMoney(r.attributedUSD)}${recorded ? ` · recorded ${formatMoney(r.recordedUSD ?? 0)}` : ''}`}
-                    >
-                      <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />
-                    </td>
-                    {detail && (
-                      <td className="hidden px-2 text-right @min-[560px]:table-cell">
-                        <Money usd={r.reportedUSD} dim />
+                {d.rows
+                  .filter((r) => !(r.key === '(unsplit)' && r.totalUSD === 0))
+                  .map((r) => (
+                    <tr key={r.key} className="h-[34px]" title={`${formatCount(r.sessions)} sessions`}>
+                      <td className="min-w-0 px-4 py-1">
+                        <div className="truncate text-body">{label(r)}</div>
+                        <Bar
+                          height={3}
+                          className="mt-0.5"
+                          label={`${share(r.totalUSD, d.total.totalUSD)} of the total`}
+                          segments={[{ value: r.totalUSD, tone: r.key === OVERHEAD ? 'overhead' : 'accent' }]}
+                          total={d.total.totalUSD}
+                        />
                       </td>
-                    )}
-                    {detail && (
-                      <td className="hidden px-2 text-right @min-[560px]:table-cell">
-                        <Money usd={r.attributedUSD} dim />
+                      <td
+                        className="px-2 text-right"
+                        title={`Reported ${formatMoney(r.reportedUSD)} · attributed ${formatMoney(r.attributedUSD)}${recorded ? ` · recorded ${formatMoney(r.recordedUSD ?? 0)}` : ''}`}
+                      >
+                        <Money usd={r.totalUSD} lowerBound={lowerBoundNote(0, 0, r.unrecordedAgents)} />
                       </td>
-                    )}
-                    {before && (
-                      <td className="hidden px-2 pr-4 text-right text-meta text-muted @min-[400px]:table-cell">
-                        <Delta now={r.totalUSD} before={before.get(r.key)} />
-                      </td>
-                    )}
-                    {!detail && <td />}
-                  </tr>
-                ))}
+                      {detail && (
+                        <td className="hidden px-2 text-right @min-[560px]:table-cell">
+                          <Money usd={r.reportedUSD} dim />
+                        </td>
+                      )}
+                      {detail && (
+                        <td className="hidden px-2 text-right @min-[560px]:table-cell">
+                          <Money usd={r.attributedUSD} dim />
+                        </td>
+                      )}
+                      {before && (
+                        <td className="hidden px-2 pr-4 text-right text-meta text-muted @min-[400px]:table-cell">
+                          <Delta now={r.totalUSD} before={before.get(r.key)} />
+                        </td>
+                      )}
+                      {!detail && <td />}
+                    </tr>
+                  ))}
               </tbody>
             </table>
             {note && <p className="px-4 pt-1 pb-3 text-meta text-muted">{note}</p>}
