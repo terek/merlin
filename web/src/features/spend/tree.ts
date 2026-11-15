@@ -5,16 +5,7 @@
 
 import type { LinkKind, SessionDetail, SessionKey } from '../../api/types'
 import { sessionTitle } from '../../lib/session'
-import {
-  buildSpend,
-  CLASS_SERIES,
-  type Decision,
-  KIND_SERIES,
-  type Part,
-  type Reread,
-  type SpendModel,
-  type Unit,
-} from './model'
+import { buildSpend, CLASS_SERIES, KIND_SERIES, type Part, type Reread, type SpendModel, type Unit } from './model'
 
 /** One session of the tree. */
 export interface Branch {
@@ -160,19 +151,4 @@ function overheadOf(d: SessionDetail): Overhead[] {
       },
     ]
   })
-}
-
-/** A decision with the branch it was made on. */
-export interface TreeDecision {
-  branch: Branch
-  decision: Decision
-}
-
-/** The `n` most expensive decisions of the whole tree, most expensive first. */
-export function topTreeDecisions(tree: Tree, n: number): TreeDecision[] {
-  return tree.branches
-    .flatMap((branch) => branch.model.decisions.map((decision) => ({ branch, decision })))
-    .filter((x) => x.decision.usd > 0)
-    .sort((a, b) => b.decision.usd - a.decision.usd || a.branch.index - b.branch.index)
-    .slice(0, n)
 }

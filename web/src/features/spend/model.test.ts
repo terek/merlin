@@ -2,20 +2,16 @@ import { describe, expect, test } from 'bun:test'
 import type { Agent, Message, SessionDetail, Turn } from '../../api/types'
 import {
   addMessage,
-  agentWorkText,
   buildSpend,
   CLASS_SERIES,
   compactionTally,
-  decisionItems,
   fitPrices,
   missCause,
   missText,
   newBucket,
   promptLine,
-  reportWhere,
   rereadTokens,
   stepParts,
-  topDecisions,
   turnAt,
   turnList,
   unitParts,
@@ -350,19 +346,6 @@ describe('buildSpend', () => {
     expect(sum(a.parts)).toBeCloseTo(a.usd, 10)
     expect(b.rereadUSD).toBeCloseTo(m.rereads[0].usd, 10)
     expect(m.cols.map((c) => c.decision)).toEqual([0, 0, 0, 1])
-    expect(topDecisions(m, 1).map((x) => x.start)).toEqual([a.usd > b.usd ? 0 : 3])
-  })
-
-  test('the items of a decision are its steps and its units, and add up to it', () => {
-    const [a, b] = m.decisions
-    const items = decisionItems(m, a)
-    expect(items.filter((x) => x.kind === 'step').map((x) => x.kind === 'step' && x.col.index)).toHaveLength(3)
-    expect(items.filter((x) => x.kind === 'unit')).toHaveLength(3)
-    expect(sum(items)).toBeCloseTo(a.usd, 10)
-    // in time order: a step, then what it launched
-    const times = items.map((x) => (x.kind === 'step' ? Date.parse(x.col.turn.startedAt ?? '') : x.unit.startMs))
-    expect(times).toEqual([...times].sort((p, q) => p - q))
-    expect(decisionItems(m, b).map((x) => x.kind)).toEqual(['step'])
   })
 
   test('inherited turns are drawn but not counted', () => {
@@ -608,7 +591,6 @@ describe('an agent that reported more than once', () => {
   })
 
   test('in words', () => {
-    expect(reportWhere(u)).toBe('3 reports, turns 1, 2 and 4')
     expect(turnList([5, 6, 7])).toBe('turns 5 to 7')
     expect(turnList([3])).toBe('turn 3')
   })
@@ -630,12 +612,6 @@ test('a bucket counts its truncated and unpriced messages and carries the estima
   expect([b.messages, b.truncated, b.unpriced, b.estimated, b.usd]).toEqual([3, 1, 1, 0.5, 3.5])
   // the estimate is missing output
   expect(b.byClass.output).toBeGreaterThanOrEqual(0.5)
-})
-
-test('agentWorkText never prints $0 for runs nothing recorded', () => {
-  expect(agentWorkText(2, 0, 0.5)).toBe('2 pieces of agent work $0.50')
-  expect(agentWorkText(1, 1, 0)).toBe('1 piece of agent work, not recorded')
-  expect(agentWorkText(4, 1, 0.5)).toBe('3 pieces of agent work $0.50 + 1 not recorded')
 })
 
 test('an unrecorded run nested under a recorded agent makes its decision "at least", though no piece of work is itself unrecorded', () => {

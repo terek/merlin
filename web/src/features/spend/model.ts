@@ -24,7 +24,7 @@ import type {
 } from '../../api/types'
 import { agentRole } from '../../lib/agent'
 import { idleText } from '../../lib/compaction'
-import { formatDuration, formatMoney, plural } from '../../lib/format'
+import { formatDuration } from '../../lib/format'
 import { ENCRYPTED, inboxBody, turnPrompt } from '../../lib/inbox'
 import { modelLabel } from '../../lib/models'
 import type { Tier } from '../../lib/tiers'
@@ -526,13 +526,6 @@ export function turnList(list: number[]): string {
   return `turns ${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`
 }
 
-/** Where a unit's report came in, from the turn `here` (its launch, unless given). */
-export function reportWhere(u: Unit, here = 'the same turn'): string {
-  if (!u.returned) return 'no report'
-  if (u.reports.length > 1) return `${u.reports.length} reports, ${turnList(u.reports)}`
-  return u.ret === u.launch ? `back in ${here}` : `back in turn ${u.ret}`
-}
-
 /** A person typed this turn. Anything else (a report, a notification, a schedule) follows from an earlier one. */
 export const isDecision = (t: Pick<Turn, 'origin'>) => t.origin === 'human' || t.origin === 'command'
 
@@ -948,40 +941,5 @@ export function buildSpend(detail: SessionDetail): SpendModel {
   }
 }
 
-/**
- * "2 pieces of agent work $0.004", or, with runs nothing recorded, "1 piece of agent work, not recorded"
- * and "3 pieces of agent work $0.004 + 1 not recorded": an unrecorded run's spend is unknown, never $0.
- */
-export function agentWorkText(units: number, unrecorded: number, usd: number): string {
-  const known = units - unrecorded
-  if (unrecorded <= 0) return `${plural(units, 'piece')} of agent work ${formatMoney(usd)}`
-  if (known <= 0) return `${plural(units, 'piece')} of agent work, not recorded`
-  return `${plural(known, 'piece')} of agent work ${formatMoney(usd)} + ${unrecorded} not recorded`
-}
-
 /** How many agents of a piece of work (its own, and its sub-agents) left no record of their calls. */
 export const unitUnrecorded = (u: Unit): number => [u.agent, ...u.nested].filter((a) => a.unrecorded).length
-
-/** One thing a decision paid for: a step of the main agent, or a piece of agent work. */
-export type DecisionItem = { kind: 'step'; col: Col; usd: number } | { kind: 'unit'; unit: Unit; usd: number }
-
-/** What a decision paid for, in time order: each step of its turns, then the units launched in it. */
-export function decisionItems(model: SpendModel, dec: Decision): DecisionItem[] {
-  const out: DecisionItem[] = []
-  for (let i = dec.start; i <= dec.end; i++) {
-    const c = model.cols[i]
-    if (!c || c.inherited) continue
-    if (c.usd > 0) out.push({ kind: 'step', col: c, usd: c.usd })
-    for (const u of [...c.launched].sort((a, b) => a.startMs - b.startMs))
-      out.push({ kind: 'unit', unit: u, usd: u.bucket.usd })
-  }
-  return out
-}
-
-/** The `n` most expensive decisions, most expensive first. */
-export function topDecisions(model: SpendModel, n: number): Decision[] {
-  return model.decisions
-    .filter((x) => x.usd > 0)
-    .sort((a, b) => b.usd - a.usd || a.index - b.index)
-    .slice(0, n)
-}

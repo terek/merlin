@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { Agent, Diagnostics, FamilyMember, Message, SessionDetail, Turn } from '../../api/types'
-import { diagnosticsLines, familyRows, parseHash, resolveTarget, resumeInfo } from './session'
+import type { Agent, FamilyMember, Message, SessionDetail, Turn } from '../../api/types'
+import { parseHash, resolveTarget } from './session'
 import { buildTree } from './tree'
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 1, 10, min)).toISOString()
@@ -151,85 +151,5 @@ describe('resolveTarget', () => {
     expect(resolveTarget(tree, home, { kind: 'compaction', index: 1 })).toBeNull()
     expect(resolveTarget(tree, home, { kind: 'agent', id: 'nobody' })).toBeNull()
     expect(resolveTarget(tree, home, null)).toBeNull()
-  })
-})
-
-const CLAUDE_RESUME = 'claude --resume {id}'
-
-describe('resumeInfo', () => {
-  test('quoted cwd and the full id', () => {
-    const d = detail({ cwd: "/home/dev/it's here" })
-    expect(resumeInfo(d, CLAUDE_RESUME).command).toBe(`cd '/home/dev/it'\\''s here' && claude --resume aaaa`)
-  })
-  test('no cwd: just the resume', () => {
-    expect(resumeInfo(detail({}), CLAUDE_RESUME).command).toBe('claude --resume aaaa')
-  })
-  test('a harness without a resume command has none', () => {
-    expect(resumeInfo(detail({}), undefined).command).toBe('')
-  })
-  test('a non-leaf lists the other leaves it knows', () => {
-    const m = (id: string, leaf: boolean): FamilyMember => ({
-      key: k(id),
-      kind: 'interactive',
-      state: 'ended',
-      leaf,
-      turns: 1,
-      bestUSD: 0,
-    })
-    const d = detail({
-      leaf: false,
-      members: [m('aaaa', false), m('bbbb', true), m('cccc', true)],
-      leaves: ['cccc', 'bbbb', 'zzzz'],
-    })
-    const r = resumeInfo(d, CLAUDE_RESUME)
-    expect(r.leaf).toBe(false)
-    expect(r.leaves.map((x) => x.key.id)).toEqual(['cccc', 'bbbb'])
-  })
-})
-
-describe('familyRows', () => {
-  test('depth follows parents; relations come from the current links', () => {
-    const m = (id: string, parent?: string): FamilyMember => ({
-      key: k(id),
-      kind: 'interactive',
-      state: 'ended',
-      parent: parent ? k(parent) : undefined,
-      leaf: false,
-      turns: 1,
-      bestUSD: 0,
-    })
-    const d = detail({ members: [m('r'), m('aaaa', 'r'), m('x', 'aaaa')] })
-    d.lineage.parent = {
-      parent: k('r'),
-      child: k('aaaa'),
-      sharedMessages: 1,
-      sharedTurns: 1,
-      atTurn: 0,
-      explicit: true,
-      kind: 'fork',
-    }
-    d.lineage.children = [
-      {
-        parent: k('aaaa'),
-        child: k('x'),
-        sharedMessages: 1,
-        sharedTurns: 1,
-        atTurn: 0,
-        explicit: false,
-        kind: 'continuation',
-      },
-    ]
-    const rows = familyRows(d)
-    expect(rows.map((r) => r.depth)).toEqual([0, 1, 2])
-    expect(rows.map((r) => r.current)).toEqual([false, true, false])
-    expect(rows.map((r) => r.relation)).toEqual([undefined, 'fork', 'continuation'])
-  })
-})
-
-describe('diagnosticsLines', () => {
-  test('only what is there', () => {
-    expect(diagnosticsLines({})).toEqual([])
-    const dg: Diagnostics = { unknownTypes: { b: 1, a: 3 }, badLines: 2, unpricedModels: ['m1'], unresolvedAgents: 1 }
-    expect(diagnosticsLines(dg).map((l) => l.value)).toEqual(['a ×3, b ×1', '2', 'm1', '1'])
   })
 })

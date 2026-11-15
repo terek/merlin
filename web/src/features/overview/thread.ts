@@ -4,12 +4,12 @@
 
 import type { Agent, InboxKind, InboxMessage, QueuedPrompt, Turn, TurnOrigin } from '../../api/types'
 import { plural } from '../../lib/format'
-import { inboxBody, inboxLabel } from '../../lib/inbox'
+import { inboxBody } from '../../lib/inbox'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
 
 /** Where a prompt came from, in words. `typed` is the one a person wrote. */
-export interface Source {
+interface Source {
   typed: boolean
   label: string
 }
@@ -204,11 +204,6 @@ export function exchangeGist(x: Exchange): string {
   if (x.encrypted && !x.request) return 'encrypted'
   const first = x.request.trim() ? x.request : x.inbox.map(inboxBody).join('\n')
   return firstLine(unwrapMachineText(first).body)
-}
-
-/** The text of a request when the exchange's prompt is a machine's: the inbox messages (shown on their own). */
-export function exchangeLabel(x: Exchange): string {
-  return x.inbox.length > 0 ? inboxLabel(x.inbox[0]) : ''
 }
 
 /** A turn's marks: interrupted, abandoned, a slash command. */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Message, SessionDetail, Turn } from '../../api/types'
 import type { Unit } from './model'
-import { buildTree, shortTitle, topTreeDecisions, wakeupsOf } from './tree'
+import { buildTree, shortTitle, wakeupsOf } from './tree'
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 1, 10, min)).toISOString()
 
@@ -83,15 +83,6 @@ describe('buildTree', () => {
     expect(tree.branches.map((x) => x.model.total)).toEqual([10, 30, 11, 7])
     expect(tree.total).toBe(58)
     expect(tree.byKind.map((p) => [p.key, p.usd])).toEqual([['main', 58]])
-  })
-
-  test('decisions are ranked over the whole tree, and a fork starts one of its own', () => {
-    const top = topTreeDecisions(tree, 3)
-    expect(top.map((x) => [x.branch.key.id, x.decision.start, x.decision.usd])).toEqual([
-      ['a', 3, 20],
-      ['a', 2, 10],
-      ['b', 3, 7],
-    ])
   })
 
   test('a session whose parent did not load is a trunk of its own', () => {

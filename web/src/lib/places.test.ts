@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { placeLabels, placeLink, remoteLabels, repoName, sessionPlaces } from './places'
+import { placeLabels, remoteLabels, repoName } from './places'
 
 describe('repoName', () => {
   test('follows repos.Name', () => {
@@ -58,56 +58,6 @@ describe('placeLabels', () => {
         ['github.com/acme/app', 'github.com/acme/app'],
       ]),
     ).toEqual(['no repository', 'github.com/acme/app'])
-  })
-})
-
-describe('placeLink', () => {
-  test('one value, grouped by its key', () => {
-    expect(placeLink('remote', 'github.com/acme/app')).toBe('/sessions?group=remote&remote=github.com%2Facme%2Fapp')
-    expect(placeLink('checkout', '/w/a/main', true)).toBe('/sessions?group=checkout&checkout=%2Fw%2Fa%2Fmain&touched=1')
-  })
-  test('none is - and never touched', () => {
-    expect(placeLink('repo', '')).toBe('/sessions?group=repo&repo=-')
-    expect(placeLink('repo', '', true)).toBe('/sessions?group=repo&repo=-')
-  })
-})
-
-describe('sessionPlaces', () => {
-  const places = {
-    repo: { repo: '/w/api/.bare', name: 'api' },
-    checkout: '/w/api/main',
-    remote: 'h.example/acme/api',
-    checkouts: ['/w/api/feature', '/w/api/main', '/w/web/main'],
-    repos: [
-      { repo: '/w/api/.bare', name: 'api' },
-      { repo: '/w/web/.git', name: 'web' },
-    ],
-    remotes: ['h.example/acme/api', 'h.example/acme/web'],
-    noBeadUSD: 0,
-  }
-  test('primary values first, the others after, each once', () => {
-    const { primary, others } = sessionPlaces(places)
-    expect(primary.map((e) => `${e.kind}:${e.key}`)).toEqual([
-      'checkout:/w/api/main',
-      'repo:/w/api/.bare',
-      'remote:h.example/acme/api',
-    ])
-    expect(others.map((e) => `${e.kind}:${e.key}`)).toEqual([
-      'checkout:/w/api/feature',
-      'checkout:/w/web/main',
-      'repo:/w/web/.git',
-      'remote:h.example/acme/web',
-    ])
-  })
-  test('two checkouts named main are told apart; the repository is not shown as .bare', () => {
-    const { primary, others } = sessionPlaces(places)
-    expect(primary[0].label).toBe('api/main')
-    expect(others[1].label).toBe('web/main')
-    expect(others[0].label).toBe('feature')
-    expect(primary[1].label).toBe('api')
-  })
-  test('a session in no repository', () => {
-    expect(sessionPlaces({ noBeadUSD: 0 })).toEqual({ primary: [], others: [] })
   })
 })
 

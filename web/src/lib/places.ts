@@ -2,9 +2,6 @@
 // A repository's key is its git common dir (`/home/dev/acme/.git`), whose base name is `.git`
 // or `.bare`: a name is never read off the key when the API gives one.
 
-import type { SessionPlaces } from '../api/types'
-import { baseName } from './paths'
-
 const segments = (path: string) => path.split(/[\\/]+/).filter(Boolean)
 
 /**
@@ -56,66 +53,6 @@ export function placeLabels(items: readonly { key: string; name: string }[]): st
     }
   }
   return out
-}
-
-export type PlaceKind = 'checkout' | 'repo' | 'remote'
-
-/**
- * The Sessions page narrowed to one value of a location key, grouped by that key. An empty key
- * (the sessions with none) is `-`. `touched` adds the sessions that only touched the value: the
- * Session page uses it so the session you came from is in the list; a table row that counts the
- * primary value does not.
- */
-export function placeLink(kind: PlaceKind, key: string, touched = false): string {
-  const p = new URLSearchParams({ group: kind, [kind]: key || '-' })
-  if (touched && key) p.set('touched', '1')
-  return `/sessions?${p.toString()}`
-}
-
-/** One place of a session, as the Session page's header lists it. */
-export interface PlaceEntry {
-  kind: PlaceKind
-  key: string
-  /** The name shown: with enough of the path when two of the session's places share one. */
-  label: string
-  /** Where the session counts (its primary value) rather than only touched it. */
-  primary: boolean
-  /** The directory is no longer on disk (known for repositories only). */
-  gone?: boolean
-}
-
-const unique = <T>(xs: T[], key: (x: T) => string): T[] => {
-  const seen = new Set<string>()
-  return xs.filter((x) => !seen.has(key(x)) && !!seen.add(key(x)))
-}
-
-/**
- * The places of a session split into the ones it counts under (checkout, repository, remote, in
- * that order) and the others it touched, each kind in the order the API lists it.
- */
-export function sessionPlaces(p: SessionPlaces): { primary: PlaceEntry[]; others: PlaceEntry[] } {
-  const checkouts = unique([...(p.checkout ? [p.checkout] : []), ...(p.checkouts ?? [])], (k) => k)
-  const repos = unique([...(p.repo ? [p.repo] : []), ...(p.repos ?? [])], (r) => r.repo)
-  const remotes = unique([...(p.remote ? [p.remote] : []), ...(p.remotes ?? [])], (k) => k)
-  const labelled = (kind: PlaceKind, keys: string[], names: string[], primary: string | undefined): PlaceEntry[] => {
-    const labels = placeLabels(keys.map((key, i) => ({ key, name: names[i] })))
-    return keys.map((key, i) => ({ kind, key, label: labels[i], primary: key === primary }))
-  }
-  const all = [
-    ...labelled('checkout', checkouts, checkouts.map(baseName), p.checkout),
-    ...labelled(
-      'repo',
-      repos.map((r) => r.repo),
-      repos.map((r) => r.name),
-      p.repo?.repo,
-    ).map((e, i) => (repos[i].gone ? { ...e, gone: true } : e)),
-    ...labelled('remote', remotes, remotes, p.remote),
-  ]
-  const order = { checkout: 0, repo: 1, remote: 2 }
-  return {
-    primary: all.filter((e) => e.primary).sort((a, b) => order[a.kind] - order[b.kind]),
-    others: all.filter((e) => !e.primary),
-  }
 }
 
 /** What tells a remote apart without its host: `github.com/acme/app` -> `acme/app`; a local path keeps its last two directories. */

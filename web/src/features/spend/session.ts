@@ -1,9 +1,5 @@
-// The Session page around the spend tree, as pure functions: what a URL hash points at, the resume
-// command, the family list and the parser's diagnostics.
+// The session in the Overview's focus, as pure functions: what a URL hash points at in the spend tree.
 
-import type { Diagnostics, FamilyMember, LinkKind, SessionDetail, SessionKey } from '../../api/types'
-import { resumeCommand } from '../../lib/paths'
-import { sameKey } from '../../lib/session'
 import type { Pin, UnitRef } from './SpendGraph'
 import type { Tree } from './tree'
 
@@ -53,65 +49,4 @@ export function resolveTarget(
     if (c && !c.inherited) return { pin: { branch: x.index, col: index }, unit: null }
   }
   return null
-}
-
-// ---- resume -----------------------------------------------------------------------------
-
-export interface ResumeInfo {
-  command: string
-  /** Nobody continues from this session. */
-  leaf: boolean
-  /** The newest sessions of the family, when this one is not a leaf. */
-  leaves: FamilyMember[]
-}
-
-/** `resume` is the harness's resume template (HarnessInfo.resume); the command is '' without one. */
-export function resumeInfo(d: SessionDetail, resume: string | undefined): ResumeInfo {
-  const cwd = d.summary.cwd ?? d.digest.cwd
-  const leaves = d.family.leaves
-    .filter((k) => !sameKey(k, d.summary.key))
-    .map((k) => d.family.members.find((m) => sameKey(m.key, k)))
-    .filter((m): m is FamilyMember => !!m)
-  return { command: resumeCommand(cwd, d.summary.key.id, resume), leaf: d.lineage.leaf, leaves }
-}
-
-// ---- family -----------------------------------------------------------------------------
-
-export interface FamilyRow {
-  member: FamilyMember
-  depth: number
-  current: boolean
-  /** How this member relates to its parent, when the detail says so (only links of the current session are given). */
-  relation?: LinkKind
-}
-
-export function familyRows(d: SessionDetail): FamilyRow[] {
-  const depthOf = new Map<string, number>()
-  const id = (k: SessionKey) => `${k.harness}/${k.id}`
-  const relations = new Map<string, LinkKind>()
-  if (d.lineage.parent) relations.set(id(d.lineage.parent.child), d.lineage.parent.kind)
-  for (const c of d.lineage.children) relations.set(id(c.child), c.kind)
-  return d.family.members.map((member) => {
-    const depth = member.parent ? (depthOf.get(id(member.parent)) ?? 0) + 1 : 0
-    depthOf.set(id(member.key), depth)
-    return {
-      member,
-      depth,
-      current: sameKey(member.key, d.summary.key),
-      relation: relations.get(id(member.key)),
-    }
-  })
-}
-
-// ---- diagnostics ------------------------------------------------------------------------
-
-export function diagnosticsLines(dg: Diagnostics): { label: string; value: string }[] {
-  const out: { label: string; value: string }[] = []
-  const unknown = Object.entries(dg.unknownTypes ?? {}).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
-  if (unknown.length)
-    out.push({ label: 'Unknown record types', value: unknown.map(([k, n]) => `${k} ×${n}`).join(', ') })
-  if (dg.badLines) out.push({ label: 'Lines that could not be parsed', value: String(dg.badLines) })
-  if (dg.unpricedModels?.length) out.push({ label: 'Models without a price', value: dg.unpricedModels.join(', ') })
-  if (dg.unresolvedAgents) out.push({ label: 'Agents not tied to a spawn', value: String(dg.unresolvedAgents) })
-  return out
 }
