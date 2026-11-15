@@ -48,7 +48,7 @@ func Load(st *store.Store, harness string) (*Catalog, error) {
 			return nil, err
 		}
 		if found {
-			c.digests[d.Key()] = d
+			c.Upsert(d)
 		}
 	}
 	return c, nil
@@ -63,21 +63,39 @@ func (c *Catalog) SetLocation(loc *time.Location) {
 	c.mu.Unlock()
 }
 
-// Upsert adds or replaces a session digest.
+// Upsert adds or replaces a session digest. When the session is already held under another
+// project key (its directory was renamed, so the store has a stale copy and a live one), the
+// better digest stays: one whose source is present beats one whose source is missing, then
+// the later last activity, then the greater project key, so the order of calls does not matter.
 func (c *Catalog) Upsert(d *model.SessionDigest) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if old, ok := c.digests[d.Key()]; ok && old.ProjectKey != d.ProjectKey && !preferred(d, old) {
+		return
+	}
 	c.digests[d.Key()] = d
 	c.dirty = true
-	c.mu.Unlock()
 }
 
-// MarkMissing flags a session's source files as gone, as the store does on disk. It
-// reports whether the session was known.
-func (c *Catalog) MarkMissing(key model.SessionKey) bool {
+// preferred reports whether a beats b, two digests of one session under different project keys.
+func preferred(a, b *model.SessionDigest) bool {
+	if a.SourceMissing != b.SourceMissing {
+		return !a.SourceMissing
+	}
+	if !a.LastActivityAt.Equal(b.LastActivityAt) {
+		return a.LastActivityAt.After(b.LastActivityAt)
+	}
+	return a.ProjectKey > b.ProjectKey
+}
+
+// MarkMissing flags the source files of a session under one project key as gone, as the
+// store does on disk. It reports whether that digest was held: a digest of the same session
+// under another project key is left alone.
+func (c *Catalog) MarkMissing(key model.SessionKey, projectKey string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	d, ok := c.digests[key]
-	if !ok {
+	if !ok || d.ProjectKey != projectKey {
 		return false
 	}
 	if !d.SourceMissing {

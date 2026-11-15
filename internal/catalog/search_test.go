@@ -303,7 +303,7 @@ func TestConcurrentUpsertAndReaders(t *testing.T) {
 			for _, d := range ds {
 				c.Upsert(d)
 			}
-			c.MarkMissing(ds[0].Key())
+			c.MarkMissing(ds[0].Key(), ds[0].ProjectKey)
 			c.Remove(ds[1].Key())
 		}
 	}()

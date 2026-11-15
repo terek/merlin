@@ -338,7 +338,7 @@ func TestUpsertEqualsFreshLoad(t *testing.T) {
 			delete(live, d.Key())
 		case 1:
 			if _, ok := live[d.Key()]; ok {
-				c.MarkMissing(d.Key())
+				c.MarkMissing(d.Key(), d.ProjectKey)
 				cp := *live[d.Key()]
 				cp.SourceMissing = true
 				live[d.Key()] = &cp

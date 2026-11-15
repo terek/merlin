@@ -416,7 +416,7 @@ func (d *Daemon) onWrite(ev engine.Event) {
 	cat := d.cat.Load()
 	switch ev.Kind {
 	case engine.SourceMissing:
-		cat.MarkMissing(model.SessionKey{Harness: ev.Ref.Harness, ID: ev.Ref.SessionID})
+		cat.MarkMissing(model.SessionKey{Harness: ev.Ref.Harness, ID: ev.Ref.SessionID}, ev.Ref.ProjectKey)
 	default:
 		if ev.Digest != nil {
 			cat.Upsert(ev.Digest)

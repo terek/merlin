@@ -82,6 +82,7 @@ func loadWorld(name string) (*world, error) {
 		return nil, err
 	}
 	w := &world{cat: catalog.New(), now: currentTime()}
+	var read []*model.SessionDigest
 	for _, r := range refs {
 		d, found, err := st.Read(r)
 		if err != nil {
@@ -90,11 +91,19 @@ func loadWorld(name string) (*world, error) {
 		if !found {
 			continue
 		}
+		read = append(read, d)
+		w.cat.Upsert(d)
+	}
+	// A session stored under two project keys (its directory was renamed) counts once: the
+	// copy the catalog kept.
+	for _, d := range read {
+		if kept, _ := w.cat.Digest(d.Key()); kept != d {
+			continue
+		}
 		w.digests = append(w.digests, d)
 		if d.Error == "" {
 			w.sessions = append(w.sessions, d)
 		}
-		w.cat.Upsert(d)
 	}
 	reg, err := liveRegistry()
 	if err != nil {

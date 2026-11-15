@@ -231,8 +231,9 @@ func TestEventsSessionMissing(t *testing.T) {
 	waitFor(t, "subscription", func() bool { return r.bus.Subscribers() == 1 })
 
 	key := model.SessionKey{Harness: "claude", ID: costStateID}
-	r.cat.MarkMissing(key)
-	r.bus.Publish(engine.Event{Kind: engine.SourceMissing, Ref: store.Ref{Harness: "claude", SessionID: costStateID}})
+	held, _ := r.cat.Digest(key)
+	r.cat.MarkMissing(key, held.ProjectKey)
+	r.bus.Publish(engine.Event{Kind: engine.SourceMissing, Ref: store.Ref{Harness: "claude", ProjectKey: held.ProjectKey, SessionID: costStateID}})
 	f := c.nextEvent(t, EventSessionMissing)
 	var ev SessionMissingEvent
 	if err := json.Unmarshal([]byte(f.data), &ev); err != nil || ev.Key != key {
