@@ -15,11 +15,11 @@ import { useDocumentTitle } from '../../lib/hooks'
 import { sessionTitle } from '../../lib/session'
 import { isTyping } from '../../shell/useShortcut'
 import { EmptyState, ErrorState, Id, ProjectName, QueryBoundary, RelTime, Skeleton, SkeletonRows } from '../../ui'
-import { type Pin, SpendGraph, type UnitRef } from './SpendGraph'
-import { parseHash, resolveTarget } from './session'
-import { TurnInspector } from './TurnInspector'
-import { parseTime } from './timeline'
-import { buildTree } from './tree'
+import { type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
+import { parseHash, resolveTarget } from '../spend/session'
+import { parseTime } from '../spend/timeline'
+import { buildTree } from '../spend/tree'
+import { TurnBox } from './TurnBox'
 
 const num = (s: string | null) => (s !== null && s !== '' && Number.isFinite(Number(s)) ? Number(s) : null)
 const same = (a: SessionKey, b: SessionKey) => a.harness === b.harness && a.id === b.id
@@ -82,6 +82,14 @@ function Loaded({
       setPinned({ branch: r.branch, col: u.launch })
   }
 
+  // a sender of a message, or a sub-agent: its work, wherever in the tree it is
+  const openAgent = (id: string) => {
+    const t = resolveTarget(tree, homeIndex, { kind: 'agent', id })
+    if (!t) return
+    setPinned(t.pin)
+    setUnit(t.unit)
+  }
+
   // a link to a turn, a compaction or an agent (from search) opens it, here or on a later hash change
   const opened = useRef<HTMLDivElement>(null)
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new hash opens a new target
@@ -130,14 +138,19 @@ function Loaded({
       />
       <div ref={opened} className="scroll-mt-4 space-y-4">
         {branch && col && pinned && (
-          <TurnInspector
+          <TurnBox
             key={`${pinned.branch}/${col.index}`}
             model={branch.model}
             col={col}
             branchTitle={multi ? branch.title : undefined}
-            selectedUnitId={unit?.branch === pinned.branch ? unit.id : null}
+            unit={unit?.branch === pinned.branch ? branch.model.units.find((u) => u.id === unit.id) : undefined}
             onPin={(i) => pin(i === null ? null : { branch: pinned.branch, col: i })}
-            onSelectUnit={(id) => selectUnit(id === null ? null : { branch: pinned.branch, id })}
+            onSelectUnit={(id) => (id === null ? setUnit(null) : selectUnit({ branch: pinned.branch, id }))}
+            onOpenAgent={openAgent}
+            onOpenTurn={(i) => {
+              setUnit(null)
+              setPinned({ branch: pinned.branch, col: i })
+            }}
           />
         )}
       </div>

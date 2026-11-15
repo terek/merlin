@@ -14,9 +14,9 @@ import { resumeCommand } from '../../lib/paths'
 import { sessionTitle } from '../../lib/session'
 import { isTyping, useShortcut } from '../../shell/useShortcut'
 import { CopyButton, HarnessIcon, IconButton, Money } from '../../ui'
-import { SessionView } from '../spend/SessionPage'
 import { closedSearch, focusSearch, type Key, positionIn } from './focus'
 import { laneHead } from './model'
+import { SessionView } from './SessionView'
 
 export function SessionFocus({
   open,
