@@ -63,9 +63,17 @@ function WindowBand({ axis, lo, hi }: { axis: Axis; lo: number; hi: number }) {
       aria-hidden
       data-testid="focus-band"
     >
-      <rect x={b.x0} y={0} width={b.x1 - b.x0} height="100%" fill="var(--accent)" fillOpacity={0.12} />
-      <line x1={b.x0 + 0.5} x2={b.x0 + 0.5} y1={0} y2="100%" stroke="var(--accent)" strokeWidth={1} />
-      <line x1={b.x1 - 0.5} x2={b.x1 - 0.5} y1={0} y2="100%" stroke="var(--accent)" strokeWidth={1} />
+      {/* an outline, not a fill: a lockout is a shaded block on the same row, and the two must not read alike */}
+      <rect x={b.x0} y={0} width={b.x1 - b.x0} height="100%" fill="var(--accent)" fillOpacity={0.04} />
+      <rect
+        x={b.x0 + 0.5}
+        y={0.5}
+        width={Math.max(0, b.x1 - b.x0 - 1)}
+        style={{ height: 'calc(100% - 1px)' }}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth={1}
+      />
       {b.before && <path d={mark(b.x0 + 1, 1)} fill="none" stroke="var(--accent)" strokeWidth={1.25} />}
       {b.after && <path d={mark(b.x1 - 1, -1)} fill="none" stroke="var(--accent)" strokeWidth={1.25} />}
     </svg>

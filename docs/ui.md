@@ -1080,7 +1080,7 @@ a history entry, so Back is the undo.
   while a field has focus. The previous and next sessions' details are prefetched once the current one has loaded.
   - **The zoom band.** The row graph is linear in time; the main graph and the locator are distorted to give active
     time room. So the head draws the main graph's effective window (the whole session, or the stretch zoomed to) on
-    the row graph as a band in true time: a faint accent fill with 1 px edges, clipped to the axis, a small ‹ or ›
+    the row graph as a band in true time: a 1 px accent outline with a barely-there tint (never a fill: a lockout is a shaded block on the same row), clipped to the axis, a small ‹ or ›
     at an edge that runs past it (`windowBand`). It follows the main graph live (drag, Latest, All, keys): the graph
     reports its window through `onWindow`. A click on the head's row graph zooms the main graph to the same stretch
     the list's row click opens at (`sessionStretch`, the day or hour under the pointer cut to the session's activity).
