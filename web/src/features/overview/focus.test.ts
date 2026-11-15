@@ -59,6 +59,27 @@ describe('the old session address', () => {
     expect(q.get('cursor')).toBe('2')
     expect(q.has('from')).toBe(false)
   })
+  test('an old zoom never reaches the scope: from/to become sfrom/sto only', () => {
+    const to = legacyTarget('/?range=30d', key, '?from=2026-11-01T00:00:00Z&to=2026-11-02T00:00:00Z', '')
+    const q = new URLSearchParams(to.split('?')[1])
+    expect(q.has('from')).toBe(false)
+    expect(q.has('to')).toBe(false)
+    expect(q.get('range')).toBe('30d')
+    expect(q.get('sfrom')).toBe('2026-11-01T00:00:00Z')
+    expect(q.get('sto')).toBe('2026-11-02T00:00:00Z')
+  })
+  test("the last scope's from/to stay the scope and are not the session's zoom", () => {
+    const last = '/?from=2026-10-01T00:00:00Z&to=2026-10-08T00:00:00Z&harness=claude'
+    const q = new URLSearchParams(legacyTarget(last, key, '', '').split('?')[1])
+    expect(q.get('from')).toBe('2026-10-01T00:00:00Z')
+    expect(q.get('to')).toBe('2026-10-08T00:00:00Z')
+    expect(q.has('sfrom')).toBe(false)
+    expect(q.has('sto')).toBe(false)
+    const z = new URLSearchParams(legacyTarget(last, key, '?from=2026-11-01T00:00:00Z', '').split('?')[1])
+    expect(z.get('from')).toBe('2026-10-01T00:00:00Z')
+    expect(z.get('sfrom')).toBe('2026-11-01T00:00:00Z')
+    expect(z.has('sto')).toBe(false)
+  })
   test('a remembered session is not carried over', () => {
     expect(legacyTarget('/?range=1d&open=claude:old&sfrom=x', key, '', '')).toBe('/?range=1d&open=claude%3Aabc')
   })
