@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { formatDuration, formatMoney } from '../../lib/format'
 import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
+  axisSpans,
   boundsOf,
   centerWindow,
   contextEnvelope,
@@ -69,7 +70,7 @@ export interface OverviewProps {
 
 /** The strip's time axis at a width: the whole tree, idle time squeezed out. */
 export const stripAxis = (timeline: Timeline, width: number): TimeAxis =>
-  timeAxis(timeline.spans, PAD, Math.max(PAD + 80, width - PAD), undefined, STRIP_BREAKS)
+  timeAxis(axisSpans(timeline), PAD, Math.max(PAD + 80, width - PAD), undefined, STRIP_BREAKS)
 
 type Drag =
   | { mode: 'move'; x: number; xlo: number; xhi: number }

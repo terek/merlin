@@ -7,7 +7,7 @@ describe('legend panel', () => {
     expect(defaultPanelOpen(1400)).toBe(true)
   })
   test('tabs show in the known order, unknown ids dropped', () => {
-    expect(orderTabs(['cost', 'graph', 'x'])).toEqual(['graph', 'cost'])
+    expect(orderTabs(['cost', 'graph', 'overview', 'x'])).toEqual(['overview', 'graph', 'cost'])
   })
   test('the last filled tab shows unless one was picked and is still filled', () => {
     expect(chooseTab([], null)).toBeNull()

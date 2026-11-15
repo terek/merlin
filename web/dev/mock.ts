@@ -1079,6 +1079,13 @@ function limits(): Limits {
     lockWindow(id, at[i] + MIN, at[i + 4] + 25 * MIN, [at[i] + MIN, at[i] + 5 * MIN])
     break
   }
+  // a session that ends at its refusal: its last call, then a refused one, and the lockout runs three hours on
+  for (const [id, ts] of byCalls) {
+    if (lockSessions.includes(id) || ts.length < 12) continue
+    const last = Math.max(...ts)
+    lockWindow(id, last + 3 * MIN, last + 3 * H, [last + 3 * MIN])
+    break
+  }
   wins.sort((a, b) => (a.resetsAt < b.resetsAt ? -1 : a.resetsAt > b.resetsAt ? 1 : a.harness < b.harness ? -1 : 1))
   refusals.sort((a, b) => (a.at < b.at ? -1 : 1))
   return { windows: wins, refusals }

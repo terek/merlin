@@ -156,3 +156,57 @@ export function lockoutTitle(s: Pick<LockoutSpan, 'untilMs' | 'windows'>): strin
   const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]
   return `Locked out by the ${list} limit${names.length > 1 ? 's' : ''} until ${stampText(s.untilMs)}`
 }
+
+/** How far a session's last activity may lie before a lockout's first refused call and still be its end (a refused call writes no activity). */
+export const LOCK_TOLERANCE_MS = 5 * MIN
+
+/** A session's life, in ms. */
+export interface Life {
+  fromMs: number
+  toMs: number
+}
+
+const inSpan = (s: Pick<LockoutSpan, 'fromMs' | 'toMs'>, refusals: readonly number[]) =>
+  refusals.some((t) => t >= s.fromMs && t < s.toMs)
+
+/**
+ * Whether a lockout touched a session: its life overlaps the lockout (a last activity just before the first
+ * refused call counts, since the call that was refused is not activity), or one of its calls was refused in it.
+ */
+export function lockoutAffects(
+  s: Pick<LockoutSpan, 'fromMs' | 'toMs'>,
+  life: Life | null,
+  refusals: readonly number[] = [],
+): boolean {
+  if (inSpan(s, refusals)) return true
+  return !!life && life.fromMs < s.toMs && life.toMs + LOCK_TOLERANCE_MS >= s.fromMs
+}
+
+/** The lockouts that touched the session, whole (the caller clips them to its axis). */
+export function affectedLockouts<T extends Pick<LockoutSpan, 'fromMs' | 'toMs'>>(
+  spans: readonly T[] | undefined,
+  life: Life | null,
+  refusals: readonly number[] = [],
+): T[] {
+  return (spans ?? []).filter((s) => lockoutAffects(s, life, refusals))
+}
+
+/**
+ * When the wait for a limit's reset ends, for a session that was stopped by it: the latest end among the lockouts
+ * that began within the session (first refusal no later than its last activity plus a little, or one of its calls
+ * refused in it) and run past its last activity. undefined when none.
+ */
+export function waitUntil(
+  spans: readonly Pick<LockoutSpan, 'fromMs' | 'toMs'>[] | undefined,
+  life: Life,
+  refusals: readonly number[] = [],
+): number | undefined {
+  let end: number | undefined
+  for (const s of spans ?? []) {
+    if (s.toMs <= life.toMs) continue
+    const began = s.fromMs >= life.fromMs - LOCK_TOLERANCE_MS && s.fromMs <= life.toMs + LOCK_TOLERANCE_MS
+    if (!began && !inSpan(s, refusals)) continue
+    end = Math.max(end ?? s.toMs, s.toMs)
+  }
+  return end
+}

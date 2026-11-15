@@ -17,7 +17,8 @@ import { formatDuration, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { resumeCommand } from '../../lib/paths'
 import { scopeSearch } from '../../lib/scope'
-import { HarnessIcon, Money, QueryBoundary, Skeleton } from '../../ui'
+import { PanelTab } from '../../shell/Panel'
+import { HarnessIcon, LockoutPattern, LockoutSwatch, Money, QueryBoundary, Skeleton, useLockoutId } from '../../ui'
 import { COLOR, CTX_FILL } from '../spend/TimeView'
 import { focusSearch, type Key, parseOpen } from './focus'
 import {
@@ -72,7 +73,17 @@ import {
   totalsOf,
   xOf,
 } from './model'
-import { CELL_PAD, FolderCell, IDLE_FILL, laneData, type RowData, RowGraph, SessionText, spanColor } from './RowParts'
+import {
+  CELL_PAD,
+  FolderCell,
+  IDLE_FILL,
+  laneData,
+  REFUSAL_W,
+  type RowData,
+  RowGraph,
+  SessionText,
+  spanColor,
+} from './RowParts'
 import { ScopeSlot, useScope } from './ScopeSlot'
 import { SessionFocus } from './SessionFocus'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
@@ -541,12 +552,16 @@ function Summary({
   const scale = useMemo(() => tokenScale([data.ctx, data.idle]), [data])
   const depth = useMemo(() => depthOf(lanes), [lanes])
   const ticks = fitLabels(axisTicks(axis), axis.width)
+  const lockId = useLockoutId()
   const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
   return (
     <div className="flex border-line border-t bg-surface" style={{ paddingRight: padRight }}>
       <div className="min-w-0 flex-1 overflow-hidden pt-1" style={{ paddingInline: CELL_PAD }}>
         <RowGraph data={data} axis={axis} pxPerTok={scale.pxPerTok} />
         <svg width={axis.width} height={22} className="block" role="img" aria-label="Time axis">
+          <defs>
+            <LockoutPattern id={lockId} />
+          </defs>
           {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={22} fill="var(--surface-2)" />}
           {windows.map((w) => {
             const b = lockoutBand(w, axis.fromMs, axis.toMs)
@@ -564,7 +579,7 @@ function Summary({
                 y={0}
                 width={Math.max(3, xOf(axis, b.toMs) - x)}
                 height={22}
-                fill="var(--bad-soft)"
+                fill={`url(#${lockId})`}
                 className="cursor-pointer"
                 onClick={() => onWindow(w)}
                 onKeyDown={(e) => {
@@ -628,6 +643,30 @@ function Summary({
 }
 
 // ---- the page ----------------------------------------------------------------------------
+
+/** What the rows' limit marks mean, in the legend panel. */
+function LimitKey() {
+  return (
+    <section className="text-meta text-muted">
+      <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">Limits</h4>
+      <ul className="grid grid-cols-[28px_1fr] items-center gap-x-2 gap-y-1.5">
+        <li className="contents">
+          <LockoutSwatch />
+          <span title="From the first refused call to the reset, whole, on every session it touched">
+            Locked out by a limit
+          </span>
+        </li>
+        <li className="contents">
+          <svg width={28} height={16} className="shrink-0" role="img" aria-label="A refused call">
+            <line x1={14} x2={14} y1={1} y2={13} stroke="var(--bad)" strokeWidth={REFUSAL_W} />
+            <line x1={0} x2={28} y1={13.5} y2={13.5} stroke="var(--line)" />
+          </svg>
+          <span title="A call the limit refused, on the session's row">A refused call</span>
+        </li>
+      </ul>
+    </section>
+  )
+}
 
 export function OverviewPage() {
   useDocumentTitle('Overview')
@@ -779,6 +818,7 @@ function Table({
       out.set(h, lockoutSpans(limits.data?.windows ?? [], h, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY))
     return out
   }, [limits.data])
+  const hasLimits = (limits.data?.refusals.length ?? 0) > 0 || lockouts.size > 0
   // The rows scroll; header and summary do not. The scrollbar takes width from the rows only, so the
   // header and the summary give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -835,6 +875,11 @@ function Table({
   const where = sel === null ? '' : ` in ${displayPath(sel, home, by)}`
   return (
     <div className="flex min-h-0 flex-1">
+      {hasLimits && !open && (
+        <PanelTab id="overview" title="Overview">
+          <LimitKey />
+        </PanelTab>
+      )}
       <Sidebar
         open={sbOpen}
         onOpen={onSbOpen}

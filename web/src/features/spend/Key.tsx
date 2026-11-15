@@ -3,6 +3,7 @@
 // samples are drawn with the plot's own constants and colours (exported by TimeView.tsx), so that a
 // change to the plot's look changes its legend; marks the tree cannot have are listed too, faint.
 import { type ReactNode, useId } from 'react'
+import { LockoutPattern } from '../../ui'
 import {
   BREAK_DOTS,
   BREAK_VEIL,
@@ -49,9 +50,11 @@ export interface KeyFacts {
   compactions: { cold: boolean; warm: boolean; unknown: boolean }
   queued: boolean
   overhead: boolean
+  /** A limit's lockout lies on the axis. */
+  lockedOut: boolean
 }
 
-export function keyFacts(tree: Tree, timeline: Timeline): KeyFacts {
+export function keyFacts(tree: Tree, timeline: Timeline, lockedOut = false): KeyFacts {
   const lanes = timeline.lanes.filter((l) => !l.main)
   const cs = tree.branches.flatMap((b) => [...b.model.compactions, ...b.model.agentCompactions])
   return {
@@ -69,6 +72,7 @@ export function keyFacts(tree: Tree, timeline: Timeline): KeyFacts {
     },
     queued: tree.branches.some((b) => b.model.cols.some((c) => (c.turn.queued?.length ?? 0) > 0)),
     overhead: tree.overheadUSD >= 0.005,
+    lockedOut,
   }
 }
 
@@ -475,6 +479,19 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
               <line x1={0} x2={W} y1={B + 0.5} y2={B + 0.5} stroke="var(--faint)" />
               <rect x={8} y={1} width={W - 16} height={H - 2} fill="var(--surface)" opacity={BREAK_VEIL} />
               <line x1={8} x2={W - 8} y1={2.5} y2={2.5} stroke="var(--faint)" strokeDasharray={BREAK_DOTS} />
+            </>
+          ),
+        },
+        {
+          label: 'locked out by a limit',
+          title: "From the limit's first refused call to its reset; calls made inside it (extra usage) draw over it",
+          has: f.lockedOut,
+          sample: (
+            <>
+              <defs>
+                <LockoutPattern id={`${id}-lock`} />
+              </defs>
+              <rect x={1} y={1} width={W - 2} height={H - 2} rx={2} fill={`url(#${id}-lock)`} />
             </>
           ),
         },

@@ -4,6 +4,7 @@
 // drawn into that frame (`windowRow`), on a dollar scale of its own (`dollarScale`).
 import { niceTicks } from '../context/chart'
 import {
+  axisSpans,
   collapseSwarms,
   type Lane,
   mergeSwarm,
@@ -86,7 +87,7 @@ export function buildFrame(
   x1: number,
   overhead: readonly boolean[],
 ): Frame {
-  const axis = timeAxis(timeline.spans, x0, x1)
+  const axis = timeAxis(axisSpans(timeline), x0, x1)
   const rows = packLanes(collapseSwarms(timeline.lanes, swarms, open), axis.x)
   const slot = slotLength(axis, SLOT_PX)
   const maxes = rows.map((r) => Math.max(0, ...slotTotals(r.lanes, slot).values()))

@@ -1,7 +1,7 @@
 /** The legend panel's pure rules: which tabs exist, which one shows, and whether it starts open. */
 
 /** The known tabs, in the order they are shown. */
-export const PANEL_TABS = ['graph', 'cost'] as const
+export const PANEL_TABS = ['overview', 'graph', 'cost'] as const
 export type PanelTabId = (typeof PANEL_TABS)[number]
 
 /** Wide enough to start with the panel open. */

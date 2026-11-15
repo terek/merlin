@@ -12,7 +12,7 @@ import { PanelTab, usePanelInset } from '../../shell/Panel'
 import { FrameSection, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
-import type { LockoutSpan } from '../overview/windows'
+import { type LockoutSpan, waitUntil } from '../overview/windows'
 import { Breakdown, BreakdownKey, type Hover, useBreakdown } from './Breakdown'
 import { keyFacts, Legend } from './Key'
 import { kindColor } from './marks'
@@ -70,8 +70,10 @@ export interface SpendGraphProps {
   current?: SessionKey
   /** The key goes to the Graph tab of the legend panel instead of under the plot. */
   keyInPanel?: boolean
-  /** The lockouts of the session's harness (drawn in the plot). */
+  /** The lockouts of the session's harness, whole (drawn in the plot; one that ended the session extends the axis to its reset). */
   lockouts?: readonly LockoutSpan[]
+  /** The times (ms) at which a limit refused this session's calls. */
+  refusals?: readonly number[]
   /** Told the window the plot shows (ms, after the defaults) whenever it changes: the page draws it elsewhere. */
   onWindow?: (lo: number, hi: number) => void
   /** Zoom the plot to this stretch (ms) when `n` changes: a click somewhere else on the page. */
@@ -263,6 +265,7 @@ export function SpendGraph({
   current,
   keyInPanel,
   lockouts,
+  refusals,
   onWindow,
   zoomTo,
 }: SpendGraphProps) {
@@ -290,8 +293,20 @@ export function SpendGraph({
 
   // a tree is shown a window at a time, picked in the overview (a short one opens on all of it)
   const prices = usePrices().data?.models // until it arrives (or if it fails) tiers go by the model's family
-  const timeline = useMemo(() => buildTimeline(tree, prices), [tree, prices])
-  const facts = useMemo(() => keyFacts(tree, timeline), [tree, timeline])
+  const timeline = useMemo(() => {
+    const tl = buildTimeline(tree, prices)
+    // a session a limit stopped: the axis goes on to the reset, so the wait shows as a break
+    const wait = tl.t1 > tl.t0 ? waitUntil(lockouts, { fromMs: tl.t0, toMs: tl.t1 }, refusals) : undefined
+    return wait === undefined ? tl : { ...tl, wait }
+  }, [tree, prices, lockouts, refusals])
+  const facts = useMemo(() => {
+    const end = timeline.wait ?? timeline.t1
+    return keyFacts(
+      tree,
+      timeline,
+      (lockouts ?? []).some((l) => l.toMs > timeline.t0 && l.fromMs < end),
+    )
+  }, [tree, timeline, lockouts])
   const days = useMemo(() => splitDays(timeline), [timeline])
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
   const turnStart = (p: Pin | null | undefined) =>

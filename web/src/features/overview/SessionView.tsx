@@ -19,8 +19,9 @@ import { type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
 import { parseHash, resolveTarget } from '../spend/session'
 import { parseTime } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
+import { sessionKey } from './model'
 import { TurnBox } from './TurnBox'
-import { lockoutSpans } from './windows'
+import { lockoutSpans, refusalsBySession } from './windows'
 
 const num = (s: string | null) => (s !== null && s !== '' && Number.isFinite(Number(s)) ? Number(s) : null)
 const same = (a: SessionKey, b: SessionKey) => a.harness === b.harness && a.id === b.id
@@ -134,6 +135,11 @@ function Loaded({
     [limits.data, home.summary.key.harness],
   )
 
+  const refusals = useMemo(
+    () => refusalsBySession(limits.data?.refusals ?? []).get(sessionKey(home.summary.key.harness, home.summary.key.id)),
+    [limits.data, home.summary.key.harness, home.summary.key.id],
+  )
+
   return (
     <div>
       {missing > 0 && (
@@ -153,6 +159,7 @@ function Loaded({
         initialWindow={{ lo: parseTime(params.get('sfrom')), hi: parseTime(params.get('sto')) }}
         keyInPanel
         lockouts={lockouts}
+        refusals={refusals}
         onWindow={onWindow}
         zoomTo={zoomTo}
       />

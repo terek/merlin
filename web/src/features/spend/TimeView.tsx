@@ -44,6 +44,7 @@ import type { SessionKey } from '../../api/types'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
+import { LockoutPattern, useLockoutId } from '../../ui'
 import { type LockoutSpan, lockoutTitle } from '../overview/windows'
 import {
   AXIS_H,
@@ -61,6 +62,7 @@ import { KIND_SERIES, type KindKey, missText, type Unit } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
+  axisSpans,
   barSpan,
   bracketed,
   branchRole,
@@ -299,6 +301,7 @@ export function TimePlot({
   const width = useWidth(wrap)
   const [px, setPx] = useState<{ x: number; row: number } | null>(null)
   const [band, setBand] = useState<{ branch: number; k: number } | null>(null)
+  const lockId = useLockoutId()
   const hatch = `hatch${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
   const tl = useMemo(() => (range ? sliceWindow(timeline, range) : timeline), [timeline, range])
   // the overhead windows of the day
@@ -308,7 +311,7 @@ export function TimePlot({
   )
   const X0 = LABEL_W
   const X1 = Math.max(X0 + 80, width - MR)
-  const axis = useMemo(() => timeAxis(tl.spans, X0, X1), [tl, X1])
+  const axis = useMemo(() => timeAxis(axisSpans(tl), X0, X1), [tl, X1])
   // swarms (found on the whole timeline, so that a window keeps their ids) are one row each until opened
   const swarms = useMemo(() => findSwarms(timeline.lanes), [timeline])
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
@@ -1473,7 +1476,7 @@ export function TimePlot({
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
           {/* limit lockouts: a light red block behind everything, across breaks too */}
           {lockBlocks.map((l) => (
-            <rect key={`l${l.fromMs}`} x={l.x0} y={0} width={l.x1 - l.x0} height={height} fill="var(--bad-soft)">
+            <rect key={`l${l.fromMs}`} x={l.x0} y={0} width={l.x1 - l.x0} height={height} fill={`url(#${lockId})`}>
               <title>{lockoutTitle(l)}</title>
             </rect>
           ))}
@@ -1526,6 +1529,7 @@ export function TimePlot({
             </text>
           ))}
           <defs>
+            <LockoutPattern id={lockId} />
             <OverheadPattern id={hatch} />
             {colors.map((c, k) => (
               <InheritPattern key={c} id={`${hatch}-${k}`} color={c} />
@@ -1587,7 +1591,7 @@ export function TimePlot({
                   y={y0}
                   width={x1 - x0}
                   height={y1 - y0}
-                  fill={locked ? 'var(--bad-soft)' : 'var(--surface)'}
+                  fill={locked ? `url(#${lockId})` : 'var(--surface)'}
                   opacity={BREAK_VEIL}
                   pointerEvents="none"
                 />

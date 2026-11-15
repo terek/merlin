@@ -4,7 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
-- A subscription limit's lockout (first refused call to the reset) is blocked out in red behind a session's row in the Overview and across the session graph, breaks included (the break names the limit and when it lifts); calls made inside it draw over the block.
+- A subscription limit's lockout (first refused call to the reset) is one striped red mark everywhere: behind the rows of the sessions it touched in the Overview (the whole lockout, so a session that stopped at the refusal shows the wait), in the summary's axis and across the session graph, breaks included (the break names the limit and when it lifts; a session a limit stopped now has its axis run on to the reset); calls made inside it draw over the mark, and the legend lists it.
 - A pinned turn or agent now reads as the conversation: the prompt, what it did, the reply; requests and responses between the main agent and its agents.
 - A session opens inside the Overview, with previous and next in the list (`[` and `]`, Esc closes); its legend is in the Legend panel. Old session links land there. Its head is the session's own row from the list, with the main graph's zoom drawn on the row's time axis (click it to zoom there); the graph and the pinned turn sit in the page's frame like Cost's sections, and zooming never changes the address.
 - A Legend panel at the right of the web UI (the button in the top bar, or `l`); Cost's colour key moved into it.

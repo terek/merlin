@@ -143,7 +143,13 @@ export interface Timeline {
   peak: number
   t0: number
   t1: number
+  /** When a limit's lockout that ended the session lifts: the axis reaches it (a break, then a point), `t1` stays the last work. */
+  wait?: number
 }
+
+/** What the time axis is laid out on: the spans of work, and the end of the wait for a limit's reset. */
+export const axisSpans = (tl: Pick<Timeline, 'spans' | 'wait'>): [number, number][] =>
+  tl.wait === undefined ? tl.spans : [...tl.spans, [tl.wait, tl.wait]]
 
 /** Everything that ran, as lanes: per branch its main lane, then its agents' lanes in launch order. */
 export function buildTimeline(tree: Tree, prices?: Prices): Timeline {
@@ -705,7 +711,7 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
   const busy = new Set(
     lanes.filter((l) => l.calls.length > 0 || l.units.length > 0 || l.turns.length > 0).map((l) => l.branch),
   )
-  return withBounds(
+  const out = withBounds(
     lanes.filter((l) => (l.main ? busy.has(l.branch) : l.calls.length > 0 || l.units.length > 0)),
     tl.spans.flatMap(([a, b]) => {
       if (a >= hi || b < lo) return []
@@ -713,6 +719,8 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
       return [[Math.max(a, lo), whole && !workSpans.has(`${a}/${b}`) ? b : Math.min(b, hi)] as [number, number]]
     }),
   )
+  // a window that reaches the end of the work keeps the wait for the limit's reset after it
+  return tl.wait !== undefined && hi > tl.t1 && out.spans.length > 0 ? { ...out, wait: tl.wait } : out
 }
 
 /**

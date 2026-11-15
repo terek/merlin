@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { LimitWindow } from '../../api/types'
-import { lockoutSpans, lockoutTitle } from './windows'
+import { affectedLockouts, lockoutAffects, lockoutSpans, lockoutTitle, waitUntil } from './windows'
 
 const at = (h: number, m = 0) =>
   Date.parse(`2026-11-10T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`)
@@ -61,5 +61,49 @@ describe('lockoutTitle', () => {
     expect(one).toMatch(/^Locked out by the 5h limit until \w{3} \d+, \d\d:\d\d$/)
     const two = lockoutTitle({ untilMs: at(15), windows: [win({}), win({ windowMinutes: 10080 })] })
     expect(two).toMatch(/^Locked out by the 5h and Weekly limits until /)
+  })
+})
+
+describe('affected lockouts', () => {
+  const lock = { fromMs: at(12), toMs: at(15) }
+  test('a session alive in the lockout is affected', () => {
+    expect(lockoutAffects(lock, { fromMs: at(10), toMs: at(13) })).toBe(true)
+    expect(lockoutAffects(lock, { fromMs: at(13), toMs: at(14) })).toBe(true)
+  })
+  test('a session that stopped at the refusal is affected, even a little before it', () => {
+    expect(lockoutAffects(lock, { fromMs: at(10), toMs: at(11, 58) })).toBe(true)
+    expect(lockoutAffects(lock, { fromMs: at(10), toMs: at(11, 30) })).toBe(false)
+  })
+  test('a session that ended before or began after is not affected', () => {
+    expect(lockoutAffects(lock, { fromMs: at(8), toMs: at(10) })).toBe(false)
+    expect(lockoutAffects(lock, { fromMs: at(15), toMs: at(16) })).toBe(false)
+  })
+  test('a refused call inside it counts, whatever the life', () => {
+    expect(lockoutAffects(lock, null, [at(13)])).toBe(true)
+    expect(lockoutAffects(lock, { fromMs: at(8), toMs: at(10) }, [at(16)])).toBe(false)
+  })
+  test('the filter keeps the whole spans', () => {
+    const other = { fromMs: at(20), toMs: at(22) }
+    expect(affectedLockouts([lock, other], { fromMs: at(13), toMs: at(14) })).toEqual([lock])
+    expect(affectedLockouts(undefined, null)).toEqual([])
+  })
+})
+
+describe('waitUntil', () => {
+  const lock = { fromMs: at(12), toMs: at(15) }
+  test('a session that ended at the first refusal waits for the reset', () => {
+    expect(waitUntil([lock], { fromMs: at(9), toMs: at(12) })).toBe(at(15))
+    expect(waitUntil([lock], { fromMs: at(9), toMs: at(11, 57) })).toBe(at(15))
+  })
+  test('a session that stopped well before it, or carried on past the reset, has no wait', () => {
+    expect(waitUntil([lock], { fromMs: at(9), toMs: at(11) })).toBeUndefined()
+    expect(waitUntil([lock], { fromMs: at(9), toMs: at(16) })).toBeUndefined()
+  })
+  test('a refused call of the session in it makes it start within the session', () => {
+    expect(waitUntil([lock], { fromMs: at(13), toMs: at(13, 30) })).toBeUndefined()
+    expect(waitUntil([lock], { fromMs: at(13), toMs: at(13, 30) }, [at(13, 10)])).toBe(at(15))
+  })
+  test('the latest end of several wins', () => {
+    expect(waitUntil([lock, { fromMs: at(12, 2), toMs: at(18) }], { fromMs: at(9), toMs: at(12) })).toBe(at(18))
   })
 })

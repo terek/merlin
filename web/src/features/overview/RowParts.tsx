@@ -5,7 +5,7 @@
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { copyText } from '../../ui'
+import { copyText, LockoutPattern, useLockoutId } from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
 import {
   ACTIVE_W,
@@ -23,7 +23,7 @@ import {
   xOf,
 } from './model'
 import { useWidth } from './useWidth'
-import { type LockoutSpan, refusalTicks } from './windows'
+import { affectedLockouts, type LockoutSpan, refusalTicks } from './windows'
 
 /** The padding a row's cell keeps on each side of the graph (px). */
 export const CELL_PAD = 12
@@ -38,7 +38,7 @@ const DEEP_TICK_W = 1.5
 const RUN_W = 2
 const PAD_TOP = 1
 /** A limit refusal on a row: a red vertical from the top of the row to the baseline. */
-const REFUSAL_W = 1.25
+export const REFUSAL_W = 1.25
 
 /** The colour a span is drawn in: the Session page's, by kind; a branched session is the main colour. */
 export const spanColor = (k: OverviewSpan['kind']): string =>
@@ -65,8 +65,16 @@ export interface RowData {
   lane?: OverviewLane
   /** The times (ms) at which a limit refused this session's calls. */
   refusals?: readonly number[]
-  /** The lockouts of the session's harness: drawn behind the row, over the session's life only. */
+  /** The lockouts that touched the session, whole: drawn behind the row, clipped to the axis. */
   lockouts?: readonly LockoutSpan[]
+}
+
+/** The session's life in ms (start to last activity); null without a start. */
+export function lifeOf(l: Pick<OverviewLane, 'startedAt' | 'lastActivityAt'>): { fromMs: number; toMs: number } | null {
+  const a = Date.parse(l.startedAt ?? '')
+  if (Number.isNaN(a)) return null
+  const b = l.lastActivityAt ? Date.parse(l.lastActivityAt) : a
+  return { fromMs: a, toMs: Number.isNaN(b) ? a : Math.max(a, b) }
 }
 
 export const laneData = (
@@ -75,7 +83,7 @@ export const laneData = (
   lockouts?: readonly LockoutSpan[],
 ): RowData => ({
   refusals,
-  lockouts,
+  lockouts: affectedLockouts(lockouts, lifeOf(l), refusals),
   lives: [l],
   ctx: l.context,
   idle: l.idle,
@@ -112,24 +120,28 @@ export function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; 
     [data.lane, axis],
   )
 
-  // the lockouts, cut to the session's life: a session merely open in the same hours does not turn red
-  const locked = useMemo(() => {
-    const l = data.lane
-    if (!l || !life || !data.lockouts?.length) return []
-    const a = Date.parse(l.startedAt ?? '')
-    const b = l.lastActivityAt ? Date.parse(l.lastActivityAt) : a
-    return data.lockouts.flatMap((s) => {
-      const x0 = Math.max(life[0], xOf(axis, Math.max(s.fromMs, a)))
-      const x1 = Math.min(life[1], xOf(axis, Math.min(s.toMs, b)))
-      return x1 > x0 ? [[x0, x1] as const] : []
-    })
-  }, [data.lane, data.lockouts, life, axis])
+  // the lockouts that touched the session, whole, cut to the axis: the wait after a refusal shows too
+  const locked = useMemo(
+    () =>
+      (data.lockouts ?? []).flatMap((s) => {
+        const x0 = Math.max(0, xOf(axis, s.fromMs))
+        const x1 = Math.min(axis.width, xOf(axis, s.toMs))
+        return x1 > x0 ? [[x0, x1] as const] : []
+      }),
+    [data.lockouts, axis],
+  )
+  const lockId = useLockoutId()
 
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: decoration; the row's text is the content
     <svg width={axis.width} height={height} className="pointer-events-none block select-none" aria-hidden>
+      {locked.length > 0 && (
+        <defs>
+          <LockoutPattern id={lockId} />
+        </defs>
+      )}
       {locked.map(([x0, x1]) => (
-        <rect key={x0} x={x0} y={0} width={x1 - x0} height={base} fill="var(--bad-soft)" />
+        <rect key={x0} x={x0} y={0} width={x1 - x0} height={base} fill={`url(#${lockId})`} />
       ))}
       {midnights.map((x) => (
         <line key={x} x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={1} opacity={0.6} />
