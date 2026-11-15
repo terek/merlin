@@ -6,7 +6,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 - A subscription limit's lockout (first refused call to the reset) is blocked out in red behind a session's row in the Overview and across the session graph, breaks included (the break names the limit and when it lifts); calls made inside it draw over the block.
 - A pinned turn or agent now reads as the conversation: the prompt, what it did, the reply; requests and responses between the main agent and its agents.
-- A session opens inside the Overview, with previous and next in the list (`[` and `]`, Esc closes); its legend is in the Legend panel. Old session links land there.
+- A session opens inside the Overview, with previous and next in the list (`[` and `]`, Esc closes); its legend is in the Legend panel. Old session links land there. Its head is the session's own row from the list, with the main graph's zoom drawn on the row's time axis (click it to zoom there); the graph and the pinned turn sit in the page's frame like Cost's sections, and zooming never changes the address.
 - A Legend panel at the right of the web UI (the button in the top bar, or `l`); Cost's colour key moved into it.
 - Context depth in the web UI: the Overview has a Peak column (the largest context a session reached, who held it, and what was spent in calls at 200k or more; sortable) and marks deep sub-agents; Cost can stack its bars by Depth and has a Context depth section with a Who × Depth table.
 - Sessions whose last call was refused at a subscription usage limit are marked refused instead of mid-turn, and the scripted run counts (projects and Cost) say how many of those runs were refused.

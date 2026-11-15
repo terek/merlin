@@ -173,7 +173,7 @@ export function SessionFocus({
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: ctx.padRight }}>
-        <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
+        <div className="min-w-0 flex-1 overflow-hidden pb-1" style={{ paddingInline: CELL_PAD }}>
           <SessionText
             mark={<HarnessIcon harness={key.harness} size={13} />}
             head={<span className="font-semibold text-fg">{title}</span>}

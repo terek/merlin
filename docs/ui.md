@@ -181,6 +181,7 @@ restyle them.
 | `CopyButton` | copies a string, shows a check for a second |
 | `Bar` | a horizontal proportion bar with one or more coloured segments |
 | `Card`, `Section` | a bordered surface with an optional title row |
+| `FrameSection` | a full-bleed section of a page's frame: uppercase heading row, `actions` at the right, content, a hairline under (Cost, the session focus) |
 | `DataTable` | a plain table: sticky header, right-aligned numeric columns, optional row link |
 | `Tabs`, `SegmentedControl`, `Select`, `SearchInput` | small inputs, keyboard accessible |
 | `Tooltip` | a title-attribute fallback is acceptable; no popover library |
@@ -318,7 +319,7 @@ page draws them: a session and every session forked or continued from it are one
 panel's Graph tab) and, under it, the **box** for the pinned turn or piece of agent work (`TurnBox.tsx`). The header,
 the resume box, the family strip, the banners, the diagnostics, the decision panel and the list of the most expensive
 decisions were removed (the paginator has a copy button for the resume command; the Cost page ranks decisions). The
-zoom is `sfrom`/`sto`.*
+zoom is state, not address; `sfrom`/`sto` only come in from links.*
 
 The focus answers "what happened in this session, and what did it cost", for a session and every session forked or
 continued from it: they are one tree, and the focus is the same whichever member it is opened on.
@@ -328,10 +329,10 @@ dollars are recomputed from the messages' token counts with prices fitted per mo
 
 From top to bottom, the graph and then the box:
 
-- **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
+- **Spend graph** (`SpendGraph.tsx` the section, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
   by when it happened. At the top the **breakdown** of the spend as three bars (below); then a line adding up the compactions, the strip,
-  the **readout** above the plot, and the plot. All of that is the card's content, at its full width (the strip and the plot
+  the **readout** above the plot, and the plot. All of that is the section's content, at its full width (the strip and the plot
   measure it), with the plot's **key** under the plot.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
@@ -625,12 +626,12 @@ From top to bottom, the graph and then the box:
   turn or a piece of work shows the chips by who. The timeline keeps for each call its model and
   tier, and for each row its **model runs** (consecutive calls on one model, `{ t0, t1, model, tier }`)
   and its main model, for drawing the weight of a line by model;
-- **The box under the graph** (`TurnBox.tsx`; pure parts in `thread.ts`; bead `merlin-bj5.3`): one card, as wide as the
-  graph, shown while a turn or a piece of agent work is pinned. It reads as the conversation: who said what, in
+- **The box under the graph** (`TurnBox.tsx`; pure parts in `thread.ts`; bead `merlin-bj5.3`): one section of the focus's frame
+  (full-bleed, a hairline under it, no border or corners), shown while a turn or a piece of agent work is pinned. It reads as the conversation: who said what, in
   order, with times, and **no dollars, tokens or cost bars** (the graph and its hover carry those). Texts are
   rendered as markdown (`Prose`) and fold at 12 lines with "show more"; a typed prompt is plain text; lines are
   capped at 100ch.
-  - **A pinned main turn**: a head line (`Turn 12`, its time and duration, marks for interrupted, abandoned or a
+  - **A pinned main turn**: a heading row (`Turn 12`, its time and duration, marks for interrupted, abandoned or a
     slash command, ‹ › to the previous and next turn of the session, ✕ to unpin); the **prompt**, with who it came
     from (you typed it; a teammate wrote; a background task reported; a wake-up; ...), its text, and each delivered
     `inbox` message as a block with its sender (a link that pins that agent's work when `agentId` is set), its kind
@@ -1055,7 +1056,7 @@ The table only ever lists sessions.
 A session opens inside the Overview, in the list it was clicked in. The address is the Overview's plus
 `open=<harness>:<id>` (the scope parameters stay as they are); the session's own zoom is `sfrom`/`sto` (the
 Overview's `from`/`to` are its scope), and its hash targets (`#t<n>`, `#a<agentId>`, `#c<n>`) work as they did.
-A click on a row's head or text opens it whole; a click on its graph opens it on that stretch (`sfrom`, `sto`).
+A click on a row's head or text opens it whole; a click on its graph opens it on that stretch (`sfrom`, `sto`, read once on open).
 Cost's Limits "biggest sessions" open in the window's scope, sorted by spend. Every open, previous/next and close is
 a history entry, so Back is the undo.
 
@@ -1065,25 +1066,45 @@ a history entry, so Back is the undo.
   focus** (a sidebar place, the range, a Custom or limit window, the search, the Organise-by key): the writers of
   those parameters drop `open`, `sfrom`, `sto` (and the development `pin`, `unit`, `cursor`) and the hash
   (`withoutFocus`, `useScope`).
-- **Paginator row**, sticky, one line: `‹ 12 of 160 ›`, the harness icon, the title, the session's spend in the
-  scope, a copy button for the resume command, and ✕. ‹ and › walk the table's rows in its current sort (`listRows`
-  is the one place both take the ordered list from); at either end the arrow is disabled. A session that is not in
-  the list (opened from elsewhere, or by an id prefix that resolves outside it) says "Not in this list" and has no
-  arrows. Keys: `[` and `]`, and `Esc` closes, after the graph's own Esc has taken back a pinned turn (one Esc, one
-  thing); none of them while a field has focus. The previous and next sessions' details are prefetched once the
-  current one has loaded.
+- **The head**, sticky, is the session's own row of the list (`RowParts.tsx`, shared with the table: `SessionText`,
+  `FolderCell`, `RowGraph`): the text line (harness mark, bold title, muted description, the folder with its copy
+  button for the resume command) and under it the row graph on **the list's linear time axis**. The geometry is the
+  list's: the same cell padding, the structured block's width reserved on the right (the paginator takes the place of
+  the figures: `‹ 12 of 160 ›`, the session's spend in the scope, ✕), and the list's scrollbar width given up, so the
+  axis is the one the list draws for the same scope and width and the session sits at the same x (checked with the
+  panel open and closed). ‹ and › walk the table's rows in its current sort (`listRows` is the one place both take
+  the ordered list from); at either end the arrow is disabled. A session that is not in the list (the scope or the
+  search leaves it out, or an id prefix resolves outside it) says "Not in this list" and has no arrows; its graph is
+  drawn when the range holds it, else a muted line "Outside this range: Sep 7-9" stands in its place. Keys: `[` and
+  `]`, and `Esc` closes, after the graph's own Esc has taken back a pinned turn (one Esc, one thing); none of them
+  while a field has focus. The previous and next sessions' details are prefetched once the current one has loaded.
+  - **The zoom band.** The row graph is linear in time; the main graph and the locator are distorted to give active
+    time room. So the head draws the main graph's effective window (the whole session, or the stretch zoomed to) on
+    the row graph as a band in true time: a faint accent fill with 1 px edges, clipped to the axis, a small ‹ or ›
+    at an edge that runs past it (`windowBand`). It follows the main graph live (drag, Latest, All, keys): the graph
+    reports its window through `onWindow`. A click on the head's row graph zooms the main graph to the same stretch
+    the list's row click opens at (`sessionStretch`, the day or hour under the pointer cut to the session's activity).
+- **Frame.** The body uses the frame of the Overview and Cost, not cards: full-bleed sections, each ending in a
+  hairline, each with a small uppercase heading row (`FrameSection` in `ui/layout.tsx`, which Cost's sections use
+  too) and its content padded under it. **Spend** carries the locator's "Showing ... Latest All" at the right of its
+  heading row (a portal from the strip into the heading); the **turn or agent** section follows it with its own
+  heading row (name, time, duration; ‹ › ✕ at the right).
+- **The zoom never writes the address.** Drag, Latest, All, the keys and the head's click change state only: no URL
+  change, no history entry. `sfrom`/`sto` come in from links (a list row's graph click, an old `/s/` link) and are
+  read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash
+  change; pinning in the page does not write it.
 - **Body**: the session's graph with its key in the Legend panel's Graph tab (the Overview's list fills no tab), and
   the box for the pinned turn or piece of agent work under it (section 9). The zoom window is the user's: toggling the panel resizes the plot and keeps the window
   in time. The graph's vertical frame (`spend/layout.ts`) is built for the width the plot has with the panel open,
   whether it is or not, so a toggle does not move it; going to another session builds a new one. The scroll
   container has `scrollbar-gutter: stable`. An unknown or ambiguous id shows its message (candidates, "No such
-  session") in the focus area, under the paginator row.
+  session") in the focus area, under the head.
 - **The old address** `/s/:harness/:id` (and `/dev/spend/…`) redirects, replacing its entry, to the Overview as it was
   last left (`lastOverview()`, without a session) with `open=` and the hash; its `from`/`to` become `sfrom`/`sto`,
   `pin`, `unit` and `cursor` are carried. Nothing else is special-cased: Moments, the Bead page and search keep
   linking to `/s/…`.
-- Code: `features/overview/focus.ts` (pure: the address, the redirect target, the position in the list),
-  `SessionFocus.tsx`, `SessionView.tsx` (the graph and the pinned box), `TurnBox.tsx`, `thread.ts`.
+- Code: `features/overview/focus.ts` (pure: the address, the redirect target, the position in the list, the
+  "outside this range" line), `RowParts.tsx` (the row's parts), `SessionFocus.tsx`, `SessionView.tsx` (the graph and the pinned box), `TurnBox.tsx`, `thread.ts`.
 
 ### Limit windows (added 2026-11-15, `merlin-6py`)
 
