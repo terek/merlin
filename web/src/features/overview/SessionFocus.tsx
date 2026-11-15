@@ -13,17 +13,15 @@ import type { OverviewLane } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { resumeCommand } from '../../lib/paths'
 import { sessionTitle } from '../../lib/session'
-import { parseTime } from '../../lib/time'
 import { isTyping, useShortcut } from '../../shell/useShortcut'
 import { HarnessIcon, IconButton, Money } from '../../ui'
-import { closedSearch, focusSearch, type Key, outsideNote, positionIn } from './focus'
+import { closedSearch, focusSearch, headRow, type Key, lifeRange, outsideNote, positionIn } from './focus'
 import {
   type Axis,
   bandLabel,
   folderText,
   laneDescription,
   laneHead,
-  lifeSpan,
   sessionKey,
   sessionStretch,
   windowBand,
@@ -144,7 +142,8 @@ export function SessionFocus({
   const dir = lane?.dir ?? detail?.summary.cwd
   const command = resumeCommand(lane?.project ?? detail?.summary.cwd ?? detail?.summary.project, key.id, resume)
   const { axis } = ctx
-  const rowGraph = lane && lifeSpan(lane.startedAt, lane.lastActivityAt, axis) ? lane : undefined
+  // a session with a lane is drawn as the list draws it; the note is for one without a lane, outside the range
+  const rowGraph = lane
   const band = shown && shown.k === own ? shown : null
   const arrow = (to: Key | null, label: string, icon: React.ReactNode) => (
     <IconButton
@@ -176,8 +175,12 @@ export function SessionFocus({
       </IconButton>
     </div>
   )
-  const from = parseTime(lane?.startedAt ?? detail?.summary.startedAt)?.getTime() ?? Number.NaN
-  const to = parseTime(lane?.lastActivityAt ?? detail?.summary.lastActivityAt)?.getTime() ?? from
+  const members = detail?.family.members ?? []
+  const [from, to] = lifeRange(
+    [lane?.startedAt, detail?.summary.startedAt, ...members.map((m) => m.startedAt)],
+    [lane?.lastActivityAt, detail?.summary.lastActivityAt, ...members.map((m) => m.lastActivityAt)],
+  )
+  const below = headRow(lane !== undefined, [from, to], axis)
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: ctx.padRight }}>
@@ -215,7 +218,7 @@ export function SessionFocus({
               {band && <WindowBand axis={axis} lo={band.lo} hi={band.hi} />}
             </div>
           ) : (
-            <p className="py-1 text-meta text-muted">{outsideNote(from, to)}</p>
+            below === 'note' && <p className="py-1 text-meta text-muted">{outsideNote(from, to)}</p>
           )}
         </div>
         <div

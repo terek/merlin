@@ -100,3 +100,26 @@ export function outsideNote(startMs: number, endMs: number): string {
         : `${day(a)} – ${day(b)}${a.getFullYear() === b.getFullYear() ? '' : ` ${b.getFullYear()}`}`
   return `Outside this range: ${text}`
 }
+
+/** The first and last activity (ms) over every time given: the session's own and its family's; NaN when none parses. */
+export function lifeRange(
+  starts: readonly (string | undefined)[],
+  ends: readonly (string | undefined)[],
+): [number, number] {
+  const ms = (l: readonly (string | undefined)[]) =>
+    l.map((s) => (s ? Date.parse(s) : Number.NaN)).filter(Number.isFinite)
+  const a = ms(starts)
+  const b = ms([...ends, ...starts])
+  return a.length ? [Math.min(...a), Math.max(...b)] : [Number.NaN, Number.NaN]
+}
+
+/**
+ * What the head draws under its text line: the row graph for a session that has a lane in this scope (as the list
+ * does, whatever its life says: a lane is in the range because something of it is), the "outside this range" note
+ * for a session without one whose life misses the axis, and nothing for one without a lane whose life overlaps it.
+ */
+export function headRow(hasLane: boolean, life: readonly [number, number], axis: { fromMs: number; toMs: number }) {
+  if (hasLane) return 'graph' as const
+  const [a, b] = life
+  return Number.isFinite(a) && (b < axis.fromMs || a > axis.toMs) ? ('note' as const) : ('none' as const)
+}
