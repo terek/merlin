@@ -44,6 +44,9 @@ type Assembly struct {
 	// (a fork's copy of its parent's calls is not its own); it carries the agent's id, its
 	// spawn turn and the agent turn of that message.
 	Beads []model.BeadEvent
+	// Limits are the refused calls of the main file and the agents, each uuid once, ordered
+	// by time, then limit, then window length. They carry the agent's id.
+	Limits []model.LimitReading
 	// Compactions are the main file's compactions.
 	Compactions []model.Compaction
 	// Cost is the session total: main messages plus every agent's, each message id once.
@@ -248,6 +251,37 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 			return earlier(x.At, y.At)
 		}
 		return x.ToolUseID < y.ToolUseID
+	})
+
+	// Limit readings: the main file's first, then each agent's; a uuid seen before is a copy.
+	seen := map[string]bool{}
+	addLimits := func(ls []LimitRecord, agentID string) {
+		for _, l := range ls {
+			if l.UUID != "" {
+				if seen[l.UUID] {
+					continue
+				}
+				seen[l.UUID] = true
+			}
+			l.AgentID = agentID
+			asm.Limits = append(asm.Limits, l.LimitReading)
+		}
+	}
+	if main != nil {
+		addLimits(main.Limits, "")
+	}
+	for _, a := range ags {
+		addLimits(a.res.Limits, a.id)
+	}
+	sort.SliceStable(asm.Limits, func(i, j int) bool {
+		x, y := asm.Limits[i], asm.Limits[j]
+		if !x.At.Equal(y.At) {
+			return earlier(x.At, y.At)
+		}
+		if x.Limit != y.Limit {
+			return x.Limit < y.Limit
+		}
+		return x.WindowMinutes < y.WindowMinutes
 	})
 
 	// Work dirs of the agents' turns: only the calls of messages the agent owns.

@@ -136,6 +136,7 @@ type Builder struct {
 	prs          []model.PRLink
 	bash         map[string]bashCall // Bash calls without a result yet, by tool_use id
 	beads        []beadCall
+	limits       []LimitRecord
 	lastPrompt   string
 	lastLeaf     string
 
@@ -228,6 +229,7 @@ func (b *Builder) Apply(r *transcript.Record) {
 		}
 	}
 	b.envelope(r)
+	b.quota(r, ts)
 
 	away := false
 	switch r.Type {
@@ -311,6 +313,35 @@ func (b *Builder) envelope(r *transcript.Record) {
 	if f := r.ForkedFrom; f != nil && b.forkedFrom == nil {
 		b.forkedFrom = &model.ForkRef{SessionID: f.SessionID, MessageUUID: f.MessageUUID}
 	}
+}
+
+// quota records a refused call. A record copied in from another session (a session_id that
+// differs from sessionId, or a forkedFrom marker) belongs to that session's digest and is
+// left out.
+func (b *Builder) quota(r *transcript.Record, ts time.Time) {
+	q := r.QuotaLimits
+	if q == nil || q.Status != "rejected" {
+		return
+	}
+	if (r.OtherSessionID != "" && r.OtherSessionID != r.SessionID) || r.ForkedFrom != nil {
+		return
+	}
+	lr := model.LimitReading{At: ts, Limit: q.RateLimitType, WindowMinutes: quotaWindow(q.RateLimitType), Rejected: true}
+	if q.ResetsAt > 0 {
+		lr.ResetsAt = time.Unix(int64(q.ResetsAt), 0).UTC()
+	}
+	b.limits = append(b.limits, LimitRecord{UUID: r.UUID, LimitReading: lr})
+}
+
+// quotaWindow is the length in minutes of the window a rateLimitType names; 0 when unknown.
+func quotaWindow(t string) int {
+	switch {
+	case t == "five_hour":
+		return 300
+	case strings.HasPrefix(t, "seven_day"):
+		return 10080
+	}
+	return 0
 }
 
 func costStateRecord(c *transcript.CostState) CostStateRecord {

@@ -56,7 +56,23 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `messages` | one entry per billed API message, as `Message` |
 | `beads` | the bd (beads issue tracker) calls of the session and its agents that name a bead, as `BeadEvent`, ordered by time, then tool call, then position in the command |
 | `spawnedSessions` | tool calls that started a session which records itself (a bash call running a child Pi without `--no-session`), as `SessionSpawn`, ordered by time, then tool call: `toolUseId`, `turn`, `agentId` (when made inside a subagent), `at`, `endedAt` (zero: no result), `dir` (working directory of the command), `prompts` (the command's prompt arguments, unquoted), `harness` (where the child is expected). Neither session names the other; the catalog links them (kind `spawned`) by directory, start time and exact first prompt |
+| `limits` | what the harness wrote about the subscription's usage limits, as `LimitReading`, ordered by time, then limit, then window length |
 | `diagnostics` | what the parser could not interpret, as `Diagnostics` |
+
+## LimitReading
+
+| key | meaning |
+|---|---|
+| `at` | when the harness wrote it |
+| `limit` | the harness's own name for the limit: Codex `limit_id` (`codex`), Claude Code `rateLimitType` (`five_hour`); omitted when not said |
+| `windowMinutes` | the window's length: Codex `window_minutes`; Claude Code five_hour 300, seven_day* 10080; omitted when not known |
+| `usedPercent` | share of the window used, 0-100; omitted when the harness did not record it (always for Claude Code) |
+| `resetsAt` | when the window resets, UTC; omitted when not known |
+| `plan` | Codex `plan_type` |
+| `rejected` | the harness refused a call at `at` because this limit was reached |
+| `agentId` | the subagent it was written in; omitted for the main agent |
+
+Codex readings are change points only: a reading repeating the previous kept one of the same agent, limit and window (same percentage and plan, `resetsAt` within 120 s) is dropped.
 
 ## SourceFile
 

@@ -12,14 +12,15 @@ Format drift  (by the harness version that wrote the files; a session spanning v
   and 3 other versions with no bad lines and no unknown record types
 
 Coverage  (what each harness package claims, against the sessions indexed; seen is not correct)
-  Claude Code: 35 sessions; 29 parsed, 0 dropped, 0 absent, 0 unknown
+  Claude Code: 35 sessions; 30 parsed, 0 dropped, 1 absent, 0 unknown
     ! session.recaps: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
     ! turns.queued: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
+    ! limits.refusals: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
     ! links.beads: parsed but not seen, seen in 0 of 35 (may be right for a small corpus)
-  Codex: 0 sessions; 22 parsed, 0 dropped, 2 absent, 5 unknown
+  Codex: 0 sessions; 24 parsed, 0 dropped, 2 absent, 5 unknown
     unknown: session.recaps, turns.abandoned, cost.truncated, links.prs, live.registry
-  Pi: 0 sessions; 17 parsed, 1 dropped, 4 absent, 7 unknown
-    unknown: turns.queued, cost.truncated, cost.fast, agents.inbox, links.prs, live.registry, live.hooks
+  Pi: 0 sessions; 17 parsed, 1 dropped, 4 absent, 9 unknown
+    unknown: turns.queued, cost.truncated, cost.fast, limits.usage, limits.refusals, agents.inbox, links.prs, live.registry, live.hooks
 
   merlin doctor --coverage lists every capability
 

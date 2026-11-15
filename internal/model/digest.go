@@ -70,6 +70,9 @@ type SessionDigest struct {
 	// harness by themselves (a bash call running a child Pi that keeps its own session file),
 	// ordered by time, then tool call. The catalog matches them to the sessions they started.
 	SpawnedSessions []SessionSpawn `json:"spawnedSessions,omitempty"`
+	// Limits are what the harness wrote about the subscription's usage limits (windows used,
+	// calls refused), ordered by time, then limit, then window length.
+	Limits []LimitReading `json:"limits,omitempty"`
 
 	Diagnostics Diagnostics `json:"diagnostics"`
 }

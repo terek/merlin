@@ -63,6 +63,10 @@ type FileResult struct {
 	// then the calls still without a result (by time, then tool_use id). MessageID and Turn
 	// are the calling message's id and turn; Assemble sets the agent fields.
 	Beads []model.BeadEvent
+	// Limits are the refused calls of the file (quotaLimits status "rejected"), in file
+	// order. Records copied in from another session are left out. AgentID is empty: Assemble
+	// sets it.
+	Limits []LimitRecord
 	// MsgWork is the work dirs of the calls of each billed message that made any, in message
 	// order. Assemble attributes an agent's to the turn that owns the message.
 	MsgWork []MessageWork
@@ -103,6 +107,13 @@ type FileResult struct {
 
 	Counters    Counters
 	Diagnostics model.Diagnostics
+}
+
+// LimitRecord is a limit reading with the uuid of the record it came from, so that Assemble
+// can keep one reading when a fork agent's file repeats its parent's records.
+type LimitRecord struct {
+	UUID string
+	model.LimitReading
 }
 
 // Counters are per-file record counts.

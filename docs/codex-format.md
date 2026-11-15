@@ -136,6 +136,25 @@ work is taken as `auto` (not observed: the corpus has 0 `compacted` records, see
 Codex 0.137 also writes `event_msg/context_compacted` (24 in the corpus, in 2 of 4 threads); it names
 no call and no trigger, and is not read.
 
+## Usage limits
+
+Every `event_msg/token_count` may carry `payload.rate_limits`: `limit_id` (`codex`; `premium` has
+both windows null), `limit_name`, `primary` and `secondary` windows (`used_percent`,
+`window_minutes`, `resets_at` in unix seconds), `credits`, `individual_limit`, `plan_type`,
+`spend_control_reached` and `rate_limit_reached_type`. In 0.139-0.164 `primary` is the 5-hour
+window (300) and `secondary` the 7-day one (10080). Codex 0.104 wrote the 7-day window as `primary`,
+`secondary: null`, `plan_type: null`, and no `individual_limit` or `rate_limit_reached_type`.
+`rate_limits` may be null or absent. `resets_at` of one window jitters by up to about 20 s between
+calls.
+
+The parser makes one `LimitReading` per non-null window that has a `used_percent` or a
+`resets_at` (`limit` = `limit_id`, `plan` = `plan_type`), and keeps change points only: a reading
+repeating the previous kept one of the same agent, limit and window length (same percentage and
+plan, `resets_at` within 120 s) is dropped. A refused call is a `task_complete` with
+`error.codex_error_info: "usage_limit_exceeded"`; it does not say which limit, and becomes a
+reading with `rejected` and no limit, window or percentage. A subagent thread's readings carry its
+`agentId`.
+
 ## Hooks
 
 What `internal/codex/hooks` writes and reads, checked against Codex 0.164's own `hooks/list`
@@ -159,8 +178,8 @@ What `internal/codex/hooks` writes and reads, checked against Codex 0.164's own 
 
 - Approval decisions: only the policy, the command prefixes approved for the session and the
   approval reviewer threads.
-- A dollar figure: costs are always recomputed from tokens (the plan's usage-limit percentages
-  are in `token_count`, unused).
+- A dollar figure: costs are always recomputed from tokens (the plan's usage-limit
+  percentages are in `token_count`, see Usage limits).
 
 ## Older rollouts
 

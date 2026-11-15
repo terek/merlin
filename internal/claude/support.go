@@ -28,6 +28,9 @@ func Support() harness.Support {
 		"cost.truncated":  harness.P("assistant records written before they finished"),
 		"cost.fast":       harness.P("usage speed of assistant records"),
 
+		"limits.usage":    harness.A("Claude Code 2.1.325 writes plan utilization to the statusline input and the /usage endpoint, not to transcripts; 0 of 4,101 transcripts carry it"),
+		"limits.refusals": harness.P("quotaLimits on 429 rate_limit records, 2.1.267-2.1.323"),
+
 		"compactions.record":  harness.P("compact_boundary system records"),
 		"compactions.summary": harness.P("the isCompactSummary record after the boundary"),
 		"compactions.trigger": harness.P("compactMetadata.trigger"),

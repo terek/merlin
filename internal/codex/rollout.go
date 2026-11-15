@@ -223,6 +223,7 @@ type thread struct {
 	Reports   []reportRec
 	Compacts  []compactRec
 	Beads     []beadRec
+	Limits    []model.LimitReading // token_count rate_limits and refusals, unfiltered
 	Cwds      []string
 	FirstAt   time.Time
 	LastAt    time.Time
@@ -573,6 +574,9 @@ func (p *parser) event(raw json.RawMessage, at time.Time) {
 			}
 		} else if e.Error != nil {
 			tr.ErrorInfo = e.Error.Info
+			if e.Error.Info == "usage_limit_exceeded" {
+				t.Limits = append(t.Limits, model.LimitReading{At: at, Rejected: true})
+			}
 			if tr.ErrorInfo == "" {
 				tr.ErrorInfo = "error"
 			}
@@ -658,7 +662,8 @@ func (p *parser) event(raw json.RawMessage, at time.Time) {
 		}
 	case "token_count":
 		var e struct {
-			Info *struct {
+			RateLimits *rateLimits `json:"rate_limits"`
+			Info       *struct {
 				Last  *usage `json:"last_token_usage"`
 				Total *struct {
 					Total int64 `json:"total_tokens"`
@@ -668,6 +673,9 @@ func (p *parser) event(raw json.RawMessage, at time.Time) {
 		if json.Unmarshal(raw, &e) != nil {
 			t.BadLines++
 			return
+		}
+		if e.RateLimits != nil {
+			t.Limits = append(t.Limits, e.RateLimits.readings(at)...)
 		}
 		if e.Info != nil && e.Info.Last != nil && e.Info.Total != nil {
 			c := countRec{At: at, Turn: p.cur, Model: p.model, Effort: p.effort, Tier: p.tier, Last: *e.Info.Last, Total: e.Info.Total.Total}
@@ -1014,4 +1022,36 @@ func fernet(s string) bool {
 	}
 	b, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(s, "="))
 	return err == nil && len(b) >= 73 && b[0] == 0x80 && (len(b)-57)%16 == 0
+}
+
+// rateLimits is the rate_limits object of a token_count event.
+type rateLimits struct {
+	LimitID   string      `json:"limit_id"`
+	Primary   *rateWindow `json:"primary"`
+	Secondary *rateWindow `json:"secondary"`
+	PlanType  string      `json:"plan_type"`
+}
+
+// rateWindow is one window of rate_limits.
+type rateWindow struct {
+	UsedPercent   *float64 `json:"used_percent"`
+	WindowMinutes int      `json:"window_minutes"`
+	ResetsAt      *int64   `json:"resets_at"`
+}
+
+// readings turns the non-empty windows into readings. A window with neither a percentage
+// nor a reset time says nothing and is skipped.
+func (r *rateLimits) readings(at time.Time) []model.LimitReading {
+	var out []model.LimitReading
+	for _, w := range []*rateWindow{r.Primary, r.Secondary} {
+		if w == nil || (w.UsedPercent == nil && w.ResetsAt == nil) {
+			continue
+		}
+		lr := model.LimitReading{At: at, Limit: r.LimitID, WindowMinutes: w.WindowMinutes, UsedPercent: w.UsedPercent, Plan: r.PlanType}
+		if w.ResetsAt != nil {
+			lr.ResetsAt = time.Unix(*w.ResetsAt, 0).UTC()
+		}
+		out = append(out, lr)
+	}
+	return out
 }

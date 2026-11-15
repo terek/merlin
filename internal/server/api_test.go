@@ -546,7 +546,7 @@ func TestCost(t *testing.T) {
 
 func TestMethodAndRoutes(t *testing.T) {
 	r := newRig(t)
-	for _, p := range []string{"/api/projects", "/api/sessions", "/api/sessions/claude/" + costStateID, "/api/search?q=x", "/api/cost", "/api/events"} {
+	for _, p := range []string{"/api/projects", "/api/sessions", "/api/sessions/claude/" + costStateID, "/api/search?q=x", "/api/cost", "/api/limits", "/api/events"} {
 		for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch} {
 			req, _ := http.NewRequest(m, r.srv.URL+p, nil)
 			resp, err := http.DefaultClient.Do(req)

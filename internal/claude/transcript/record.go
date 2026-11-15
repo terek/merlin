@@ -63,6 +63,15 @@ type ForkedFrom struct {
 	MessageUUID string `json:"messageUuid"`
 }
 
+// QuotaLimits is the envelope's quotaLimits object. Status is "rejected" on a refused call;
+// RateLimitType is five_hour, seven_day, seven_day_opus, seven_day_sonnet,
+// seven_day_overage_included or overage, and may be absent. ResetsAt is unix seconds.
+type QuotaLimits struct {
+	Status        string  `json:"status,omitempty"`
+	ResetsAt      float64 `json:"resetsAt,omitempty"`
+	RateLimitType string  `json:"rateLimitType,omitempty"`
+}
+
 // Origin is the envelope's origin object. Older versions omit it; some versions may write
 // a bare string, which is taken as the Kind.
 type Origin struct {
@@ -113,6 +122,10 @@ type Envelope struct {
 	IsMeta            bool `json:"isMeta,omitempty"`
 	IsCompactSummary  bool `json:"isCompactSummary,omitempty"`
 	IsAPIErrorMessage bool `json:"isApiErrorMessage,omitempty"`
+
+	// QuotaLimits is written on the assistant record of a call the API refused because a
+	// usage limit was reached.
+	QuotaLimits *QuotaLimits `json:"quotaLimits,omitempty"`
 
 	Origin       *Origin `json:"origin,omitempty"`
 	PromptSource string  `json:"promptSource,omitempty"`

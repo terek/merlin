@@ -28,6 +28,9 @@ func Support() harness.Support {
 		"cost.truncated":  harness.U("whether a usage record can be written before its call finished is not known"),
 		"cost.fast":       harness.P("service_tier priority in thread_settings_applied"),
 
+		"limits.usage":    harness.P("token_count rate_limits: one 7-day window in 0.104, 5-hour and 7-day in 0.139-0.164"),
+		"limits.refusals": harness.P("task_complete error usage_limit_exceeded; which limit is not said"),
+
 		"compactions.record":  harness.P("compacted records; 0.137 also writes event_msg context_compacted (24 in the public corpus, 0 compacted records: redacted) which is not read"),
 		"compactions.summary": harness.A("docs/codex-format.md, Compactions: the summary is stored encrypted"),
 		"compactions.trigger": harness.P("manual when no one typed into the turn; auto is inferred; the public corpus has 24 compaction events (context_compacted) and none carries a trigger"),

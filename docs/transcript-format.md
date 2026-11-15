@@ -108,6 +108,24 @@ differs between lines of the same message in 15k cases.)
   that the message answers (98% resolve). It joins a billed message to its request's model,
   effort, thinking mode and cache TTLs.
 
+### 3a. Refused calls (`quotaLimits`)
+
+An assistant record of a call the API refused because a usage limit was reached
+(`isApiErrorMessage: true`, `error: "rate_limit"`, `apiErrorStatus: 429`, model `<synthetic>`)
+carries `quotaLimits`: `status` (`rejected`), `resetsAt` (unix seconds), `rateLimitType`,
+`unifiedRateLimitFallbackAvailable`, `overageStatus`, `overageDisabledReason`, `upgradePaths` and
+`isUsingOverage`. `rateLimitType` is one of the values Claude Code 2.1.325 knows: `five_hour`, `seven_day`, `seven_day_opus`,
+`seven_day_sonnet`, `seven_day_overage_included`, `overage`, and may be absent. Some records repeat
+the object as `apiErrorParams.rate_limit_info`; only `quotaLimits` is read, and the message text
+is never parsed. Records inside a subagent carry `agentId`. Only refusals are recorded; no
+utilization percentage is (none in 4,101 transcripts up to 2.1.325; Claude Code keeps it for the statusline and /usage).
+
+The parser makes a `LimitReading` with `rejected` for each record whose `status` is `rejected`:
+`limit` = `rateLimitType`, `windowMinutes` 300 for `five_hour` and 10080 for `seven_day*`
+(0 otherwise), `resetsAt` from `resetsAt`. A record copied in from another session (`session_id`
+differing from `sessionId`, or a `forkedFrom` marker) is left out, and a record repeated in an
+agent file under the same `uuid` is kept once. Other statuses are ignored.
+
 ## 4. User records
 
 `message.content` is a string or an array of blocks.

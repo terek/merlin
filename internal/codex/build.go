@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 10
+const ParserVersion = 11
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -171,6 +171,7 @@ func (b *builder) build() {
 	b.rollUp()
 	b.messages()
 	b.beads()
+	b.limits()
 	b.describe()
 	b.diagnostics()
 }
@@ -823,6 +824,64 @@ func (b *builder) beads() {
 		}
 		return x.ToolUseID < y.ToolUseID
 	})
+}
+
+// limits lists the limit readings of the main thread and the agents, keeping change
+// points only: a reading is dropped when the previous kept one of the same agent, limit and
+// window length has the same percentage and plan and a reset time within 120 s of it (Codex
+// jitters resets_at between calls). Inherited history is not read, so a fork does not repeat
+// its parent's readings.
+func (b *builder) limits() {
+	var all []model.LimitReading
+	if b.root != nil {
+		all = append(all, b.root.Limits...)
+	}
+	for _, a := range b.agents {
+		for _, r := range a.Limits {
+			r.AgentID = a.Meta.ID
+			all = append(all, r)
+		}
+	}
+	sort.SliceStable(all, func(i, j int) bool { return earlier(all[i].At, all[j].At) })
+	type key struct {
+		agent, limit string
+		window       int
+	}
+	last := map[key]model.LimitReading{}
+	var out []model.LimitReading
+	for _, r := range all {
+		if !r.Rejected {
+			k := key{r.AgentID, r.Limit, r.WindowMinutes}
+			if p, ok := last[k]; ok && samePercent(p.UsedPercent, r.UsedPercent) && p.Plan == r.Plan && resetClose(p.ResetsAt, r.ResetsAt) {
+				continue
+			}
+			last[k] = r
+		}
+		out = append(out, r)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		x, y := out[i], out[j]
+		if !x.At.Equal(y.At) {
+			return earlier(x.At, y.At)
+		}
+		if x.Limit != y.Limit {
+			return x.Limit < y.Limit
+		}
+		return x.WindowMinutes < y.WindowMinutes
+	})
+	b.d.Limits = out
+}
+
+func samePercent(a, b *float64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func resetClose(a, b time.Time) bool {
+	d := a.Sub(b)
+	return d > -120*time.Second && d < 120*time.Second
 }
 
 // ---- session-level fields ---------------------------------------------------------------

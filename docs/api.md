@@ -92,6 +92,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/sessions/{harness}/{id}` | `SessionDetail` |
 | `GET /api/search?q=` | `SearchResult` |
 | `GET /api/cost` | `CostTable` |
+| `GET /api/limits` | `Limits` |
 | `GET /api/overview` | `Overview` (experimental) |
 | `GET /api/moments` | `moments.Report` (experimental) |
 | `GET /api/events` | `text/event-stream` |
@@ -984,6 +985,51 @@ parts. Without `split` nothing changes in the response: no `split` key anywhere.
 `backing.unknown` (omitted when 0) counts the sessions flagged `unknown`. `backing.recorded` (omitted when 0) counts those flagged `recorded`.
 
 (One row shown; the real response has a row per kind.)
+
+## GET /api/limits
+
+The subscription's usage windows (the 5-hour and 7-day plan limits) as the harnesses wrote them,
+merged across sessions, and every call a harness refused because a limit was reached. No
+parameters.
+
+```json
+{
+  "windows": [{
+    "harness": "codex", "limit": "codex", "windowMinutes": 300, "plan": "plus",
+    "resetsAt": "2026-10-01T14:59:48Z", "startsAt": "2026-10-01T09:59:48Z",
+    "firstSeenAt": "2026-10-01T10:10:00Z", "lastSeenAt": "2026-10-01T13:20:00Z",
+    "firstPercent": 20, "maxPercent": 40,
+    "points": [{ "at": "2026-10-01T10:10:00Z", "usedPercent": 20 }, { "at": "2026-10-01T11:40:00Z", "usedPercent": 40 }],
+    "refusals": 0, "seenUSD": 19, "seenSessions": 2
+  }],
+  "refusals": [{
+    "at": "2026-10-01T14:00:00Z", "harness": "claude", "session": { "harness": "claude", "id": "…" },
+    "limit": "five_hour", "windowMinutes": 300, "resetsAt": "2026-10-01T15:00:00Z"
+  }]
+}
+```
+
+`windows` groups the readings that name a limit by harness, `limit` (Codex `limit_id`, Claude Code
+`rateLimitType`) and `windowMinutes`, then clusters them by `resetsAt`: a window ends where the next
+reading's reset time is more than 10 minutes later (Codex's reset time jitters by seconds). A reading
+without a reset time joins no window. `resetsAt` is the earliest of the cluster, `startsAt` is
+`resetsAt` minus `windowMinutes` (absent when the length is not known), `firstSeenAt` and
+`lastSeenAt` bound the readings, `plan` is the last one named. `firstPercent`, `maxPercent` and
+`points` (`usedPercent` 0-100, by time) exist only where the harness recorded a percentage: Codex
+does, Claude Code windows have no percentages, only `refusals` (the count of refused calls) and
+`firstRefusalAt`. `seenUSD` is the spend of the harness's messages in `[startsAt, resetsAt)`, each
+message once (a session's copy of another's history does not count), and `seenSessions` the number
+of sessions that spent in it; it covers only what this machine recorded, so it is a lower bound of
+what the window allowed. Both are absent when `startsAt` is. Windows are ordered by `startsAt` (by
+`resetsAt` when absent), then harness, limit and window length. Codex can move a reset time: a new
+window may begin while an earlier one of the same limit still runs, so windows can overlap and their
+`seenUSD` can count the same message; do not sum `seenUSD` across windows.
+
+`refusals` lists every refused call, by time then session; `limit`, `windowMinutes` and `resetsAt`
+are present when the harness said them (Claude Code does; Codex says only that a limit was reached).
+A scripted run's refusal has no `session` and carries `"scripted": true` instead: scripted runs are
+never listed one by one.
+Both lists are `[]` when empty.
 
 ## GET /api/overview
 

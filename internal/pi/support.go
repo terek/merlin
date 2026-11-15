@@ -34,6 +34,9 @@ func Support() harness.Support {
 		"cost.truncated": harness.U("aborted and error responses can carry tokens; whether the counts are partial is not known"),
 		"cost.fast":      harness.U("a service tier scales Pi's cost for some providers; no field says which calls"),
 
+		"limits.usage":    harness.U("not looked for"),
+		"limits.refusals": harness.U("not looked for"),
+
 		"compactions.record":  harness.P("compaction entries on the current path"),
 		"compactions.summary": harness.P("compaction.summary, whole"),
 		"compactions.trigger": harness.A("docs/pi-format.md, Compaction (from source): a compaction entry has no trigger " +

@@ -1,7 +1,7 @@
 # What each harness supports
 
 Merlin keeps one fixed list of capabilities (`internal/harness/support.go`, about thirty: prompts,
-final texts, tools, files and lines, cost per message, a reported cost, compactions and what they
+final texts, tools, files and lines, cost per message, a reported cost, subscription limits, compactions and what they
 cost, agents, forks, PRs, beads, live registry, hooks, ...). Each harness package declares, in
 `internal/<name>/support.go`, one claim per capability. `merlin doctor` compares the claims with
 the digests.

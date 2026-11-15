@@ -64,6 +64,7 @@ func (b *Builder) Result() *FileResult {
 
 	res.EndState = b.endState()
 	res.Beads = b.beadEvents()
+	res.Limits = slices.Clone(b.limits)
 	billed := b.priceMessages(res)
 	b.buildTurns(res, billed)
 	b.compactionCalls(res)

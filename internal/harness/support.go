@@ -87,6 +87,13 @@ var capabilities = []Capability{
 		return any1(d.Messages, func(m model.Message) bool { return m.Fast })
 	}},
 
+	{"limits.usage", "how much of a subscription usage window was used, and when it resets", func(d *model.SessionDigest) bool {
+		return any1(d.Limits, func(l model.LimitReading) bool { return l.UsedPercent != nil })
+	}},
+	{"limits.refusals", "calls the harness refused because a subscription limit was reached", func(d *model.SessionDigest) bool {
+		return any1(d.Limits, func(l model.LimitReading) bool { return l.Rejected })
+	}},
+
 	{"compactions.record", "that a compaction happened, and when", func(d *model.SessionDigest) bool { return len(d.Compactions) > 0 }},
 	{"compactions.summary", "the summary a compaction wrote", anyCompaction(func(c model.Compaction) bool { return c.Summary != "" })},
 	{"compactions.trigger", "whether a compaction was automatic or manual", anyCompaction(func(c model.Compaction) bool { return c.Trigger != "" })},
