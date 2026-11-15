@@ -10,6 +10,7 @@
 //   ['search', q, filters]                useSearch
 //   ['cost', params]                      useCost
 //   ['moments']                           useMoments
+//   ['limits']                            useLimits
 //   ['overview', params]                  useOverview
 //   ['prices']                            usePrices
 
@@ -30,6 +31,7 @@ import type {
   CostTable,
   GroupDim,
   GroupList,
+  Limits,
   MomentsReport,
   Overview,
   OverviewParams,
@@ -58,6 +60,7 @@ export const queryKeys = {
   search: (q: string, filters: SessionFilters) => ['search', q, filters] as const,
   cost: (params: CostParams) => ['cost', params] as const,
   moments: () => ['moments'] as const,
+  limits: () => ['limits'] as const,
   overview: (params: OverviewParams) => ['overview', params] as const,
   prices: () => ['prices'] as const,
 }
@@ -233,6 +236,15 @@ export function useOverview(params: OverviewParams, enabled = true): UseQueryRes
     queryKey: queryKeys.overview(p),
     queryFn: ({ signal }) => get<Overview>('/api/overview', { ...p }, signal),
     placeholderData: keepPreviousData,
+    enabled,
+  })
+}
+
+/** The subscription's limit windows and the calls a limit refused (`/api/limits`). */
+export function useLimits(enabled = true): UseQueryResult<Limits> {
+  return useQuery({
+    queryKey: queryKeys.limits(),
+    queryFn: ({ signal }) => get<Limits>('/api/limits', undefined, signal),
     enabled,
   })
 }

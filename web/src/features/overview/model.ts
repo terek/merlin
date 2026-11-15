@@ -961,11 +961,22 @@ export function markedNode(nodes: readonly PlaceNode[], key: string, closed: Rea
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-/** The days of a custom range: local days, `YYYY-MM-DD`, both inclusive. */
+/**
+ * The days of a custom range: local days, `YYYY-MM-DD`, both inclusive. A **limit window** is the same scope with
+ * exact instants: `fromMs` and `toMs` (`from` and `to` then name the local days it touches, so the locator and the
+ * day-based code keep working) and the `harness` whose limit it is.
+ */
 export interface CustomRange {
   from: string
   to: string
+  fromMs?: number
+  toMs?: number
+  harness?: string
 }
+
+/** Whether a range is a limit window: exact instants, not whole days. */
+export const isWindowRange = (r: CustomRange | null | undefined): r is CustomRange & { fromMs: number; toMs: number } =>
+  !!r && r.fromMs !== undefined && r.toMs !== undefined
 
 /** The local calendar day `n` days after the local midnight `ms`, as a local midnight (DST-proof). */
 export const addDays = (ms: number, n: number): number => {
@@ -982,16 +993,50 @@ export function parseDay(v: string | null): string | null {
   return localDay(dayStart(v)) === v ? v : null
 }
 
-/** `from` and `to` of the URL: a custom range when both are real days and `from` is not after `to`. */
-export function parseCustom(from: string | null, to: string | null): CustomRange | null {
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
+
+/** An RFC 3339 instant in ms, else null. */
+export function parseInstant(v: string | null): number | null {
+  if (!v || !INSTANT.test(v)) return null
+  const t = Date.parse(v)
+  return Number.isNaN(t) ? null : t
+}
+
+/** A limit window as a range: the instants, the local days they touch, and the harness. */
+export function instantRange(fromMs: number, toMs: number, harness?: string): CustomRange {
+  return {
+    from: localDay(new Date(fromMs)),
+    to: localDay(new Date(Math.max(fromMs, toMs - 1))),
+    fromMs,
+    toMs,
+    ...(harness ? { harness } : {}),
+  }
+}
+
+/**
+ * `from` and `to` of the URL: a custom range when both are real days and `from` is not after `to`; or a limit
+ * window when both are RFC 3339 instants in order (then `harness`, a plain name, goes with it).
+ */
+export function parseCustom(from: string | null, to: string | null, harness?: string | null): CustomRange | null {
+  const fa = parseInstant(from)
+  const ta = parseInstant(to)
+  if (fa !== null && ta !== null) {
+    return fa < ta ? instantRange(fa, ta, harness && /^[A-Za-z][\w-]*$/.test(harness) ? harness : undefined) : null
+  }
   const a = parseDay(from)
   const b = parseDay(to)
   return a && b && a <= b ? { from: a, to: b } : null
 }
 
-/** The URL params of a custom range, and of none (the presets drop them). */
-export const formatCustom = (r: CustomRange | null): { from?: string; to?: string } =>
-  r ? { from: r.from, to: r.to } : { from: undefined, to: undefined }
+const instantText = (ms: number): string => new Date(ms).toISOString().replace('.000Z', 'Z')
+
+/** The URL params of a custom range or window, and of none (the presets drop them, and the harness with them). */
+export const formatCustom = (r: CustomRange | null): { from?: string; to?: string; harness?: string } =>
+  isWindowRange(r)
+    ? { from: instantText(r.fromMs), to: instantText(r.toMs), harness: r.harness }
+    : r
+      ? { from: r.from, to: r.to, harness: undefined }
+      : { from: undefined, to: undefined, harness: undefined }
 
 /** The days a range covers. */
 export const customDays = (r: CustomRange): number =>
@@ -1004,18 +1049,43 @@ export function dayText(day: string, now: Date): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}${y}`
 }
 
-/** The Custom control's label: `May 20 → 10d` (start day, then the length in days). */
-export const customLabel = (r: CustomRange, now: Date): string => `${dayText(r.from, now)} → ${customDays(r)}d`
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const two = (n: number) => String(n).padStart(2, '0')
+
+/** An instant in local time as the limit windows write it: `Fri 14, 10:00`. */
+export function stampText(ms: number): string {
+  const d = new Date(ms)
+  return `${WEEKDAYS[d.getDay()]} ${d.getDate()}, ${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+/** The length of a window, short and rounded: `45m`, `5h`, `7d`. */
+export function windowLength(ms: number): string {
+  const m = ms / MIN
+  if (m < 57.5) return `${Math.max(1, Math.round(m))}m`
+  const h = Math.round(m / 60)
+  return h < 48 ? `${h}h` : `${Math.round(h / 24)}d`
+}
+
+/** The Custom control's label: `May 20 → 10d` (start day, then the length in days); a window `Fri 14, 10:00 → 5h`. */
+export const customLabel = (r: CustomRange, now: Date): string =>
+  isWindowRange(r)
+    ? `${stampText(r.fromMs)} → ${windowLength(r.toMs - r.fromMs)}`
+    : `${dayText(r.from, now)} → ${customDays(r)}d`
 
 /** "between May 20 and May 29", "on May 20": for the empty state. */
 export const customPhrase = (r: CustomRange, now: Date): string =>
-  r.from === r.to ? `on ${dayText(r.from, now)}` : `between ${dayText(r.from, now)} and ${dayText(r.to, now)}`
+  isWindowRange(r)
+    ? `in the window of ${customLabel(r, now)}`
+    : r.from === r.to
+      ? `on ${dayText(r.from, now)}`
+      : `between ${dayText(r.from, now)} and ${dayText(r.to, now)}`
 
 /**
  * What a custom range asks the API for: from local midnight of its first day to the next local midnight after
  * its last, capped at `nowMs`.
  */
 export function customWindow(r: CustomRange, nowMs: number): { fromMs: number; toMs: number } {
+  if (isWindowRange(r)) return { fromMs: r.fromMs, toMs: Math.max(Math.min(r.toMs, nowMs), r.fromMs + MIN) }
   const fromMs = dayStart(r.from).getTime()
   const toMs = Math.min(addDays(dayStart(r.to).getTime(), 1), nowMs)
   return { fromMs, toMs: Math.max(toMs, fromMs + MIN) }

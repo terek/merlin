@@ -1138,6 +1138,7 @@ export interface SessionFilters {
 export interface CostParams {
   by?: CostBy
   split?: CostSplit
+  /** A local day (`2026-11-14`) or an RFC 3339 instant, which cuts per message. */
   since?: string
   until?: string
   project?: string
@@ -1151,6 +1152,8 @@ export interface CostParams {
   in?: string
   q?: string
   limit?: number
+  /** Only this harness's messages (`claude`, `codex`, ...). */
+  harness?: string
 }
 
 // ---- GET /api/prices -------------------------------------------------------------------
@@ -1248,4 +1251,68 @@ export interface OverviewBead {
   parent?: string
   status?: string
   type?: string
+}
+
+// ---- GET /api/limits -------------------------------------------------------------------
+
+/** One reading of a Codex limit: how much of the window was used at a time. */
+export interface LimitPoint {
+  at: string
+  /** 0-100. */
+  usedPercent: number
+}
+
+/** A session that spent a lot inside a limit window (scripted runs are left out). */
+export interface LimitSession {
+  harness: string
+  id: string
+  name?: string
+  title?: string
+  usd: number
+}
+
+/** A usage window of the subscription: the 5-hour or the 7-day limit, per harness (internal/limits). */
+export interface LimitWindow {
+  harness: string
+  /** Codex `limit_id`, Claude Code `rateLimitType` (`five_hour`, `seven_day`). */
+  limit: string
+  windowMinutes: number
+  plan?: string
+  resetsAt: string
+  /** `resetsAt` minus `windowMinutes`; for Claude Code only to within about 10 minutes. */
+  startsAt?: string
+  firstSeenAt: string
+  lastSeenAt: string
+  /** Codex only. */
+  firstPercent?: number
+  maxPercent?: number
+  points?: LimitPoint[]
+  /** Calls the harness refused in this window (Claude Code windows exist only when it refused some). */
+  refusals: number
+  firstRefusalAt?: string
+  /** Spend of the harness's messages in [startsAt, resetsAt): what this machine recorded. */
+  seenUSD?: number
+  seenSessions?: number
+  /** Dollars per point of the limit, only when the window rose at least 10 points. */
+  usdPerPercent?: number
+  /** Up to three sessions by spend inside the window. */
+  topSessions?: LimitSession[]
+  /** Scripted runs' spend inside the window (omitted when 0). */
+  scriptedUSD?: number
+}
+
+/** A call a harness refused because a limit was reached. */
+export interface LimitRefusal {
+  at: string
+  harness: string
+  session?: { harness: string; id: string }
+  scripted?: boolean
+  limit?: string
+  windowMinutes?: number
+  resetsAt?: string
+}
+
+export interface Limits {
+  windows: LimitWindow[]
+  refusals: LimitRefusal[]
 }

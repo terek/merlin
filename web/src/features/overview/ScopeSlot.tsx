@@ -10,7 +10,7 @@ import { cn } from '../../lib/cn'
 import { useNow } from '../../lib/hooks'
 import { ShellSlot } from '../../shell/ShellSlot'
 import { useShortcut } from '../../shell/useShortcut'
-import { IconButton, KeyHint } from '../../ui'
+import { HarnessIcon, IconButton, KeyHint } from '../../ui'
 import {
   type Beads,
   type Brush,
@@ -23,6 +23,7 @@ import {
   drawBrush,
   firstSpendDay,
   formatCustom,
+  isWindowRange,
   monthRange,
   moveBrush,
   parseBy,
@@ -48,7 +49,7 @@ export function useScope() {
   const [sp, setSp] = useSearchParams()
   const range = oneOf<Range>(sp.get('range'), ['1d', '7d', '30d'], '7d')
   // a custom range (both days, in order) wins over `range`
-  const custom = parseCustom(sp.get('from'), sp.get('to'))
+  const custom = parseCustom(sp.get('from'), sp.get('to'), sp.get('harness'))
   const by = parseBy(sp.get('by'))
   const sel = parseIn(sp.get('in'))
   const q = sp.get('q') ?? ''
@@ -67,7 +68,17 @@ export function useScope() {
     else next.set('in', path)
     setSp(next)
   }
-  return { sp, set, select, range, custom, by, sel, q }
+  // a limit window is a place in history too: the instants and the harness, the selection kept
+  const scopeTo = (r: CustomRange) => {
+    const next = new URLSearchParams(sp)
+    next.delete('range')
+    for (const [k, v] of Object.entries(formatCustom(r))) {
+      if (v) next.set(k, v)
+      else next.delete(k)
+    }
+    setSp(next)
+  }
+  return { sp, set, select, scopeTo, range, custom, by, sel, q }
 }
 
 export type Scope = ReturnType<typeof useScope>
@@ -305,8 +316,9 @@ function useRememberedCustom(applied: CustomRange | null): CustomRange | null {
       return null
     }
   })
-  const from = applied?.from
-  const to = applied?.to
+  // a limit window is not remembered: the days it touches are not a range the user chose
+  const from = isWindowRange(applied) ? undefined : applied?.from
+  const to = isWindowRange(applied) ? undefined : applied?.to
   useEffect(() => {
     if (!from || !to) return
     setLast((cur) => (cur?.from === from && cur.to === to ? cur : { from, to }))
@@ -456,7 +468,9 @@ export function ScopeSlot({
                   ? 'Close the timeline'
                   : !shown && remembered
                     ? `Use ${customLabel(remembered, now)}`
-                    : 'Open the timeline'
+                    : isWindowRange(shown)
+                      ? 'A limit window: open the timeline to leave it'
+                      : 'Open the timeline'
               }
               onClick={() => {
                 if (axisOpen) return openSearch()
@@ -467,7 +481,14 @@ export function ScopeSlot({
               className="inline-flex h-full shrink-0 items-center gap-1 whitespace-nowrap pr-1.5 pl-2.5 text-left text-sec hover:text-fg"
             >
               {/* one width for a range label, so that nothing shifts under a drag */}
-              {label ? <span className="inline-block min-w-[13ch]">{customLabel(label, now)}</span> : 'Custom'}
+              {label ? (
+                <span className="inline-flex min-w-[13ch] items-center gap-1.5">
+                  {label.harness && <HarnessIcon harness={label.harness} size={13} />}
+                  {customLabel(label, now)}
+                </span>
+              ) : (
+                'Custom'
+              )}
               {axisOpen ? (
                 <ChevronsLeft size={12} aria-hidden className="text-muted" />
               ) : (

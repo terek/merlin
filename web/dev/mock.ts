@@ -13,6 +13,9 @@ import type {
   CostSplitEntry,
   CostTable,
   Hit,
+  LimitRefusal,
+  Limits,
+  LimitWindow,
   MomentsReport,
   Money,
   Overview,
@@ -574,6 +577,11 @@ function costTable(u: URL): CostTable {
   const since = parseTime('since', u.searchParams.get('since'))
   const until = parseTime('until', u.searchParams.get('until'), true)
   const limit = u.searchParams.has('limit') ? limitParam(u, 0) : by === 'session' ? 100 : 0
+  // a limit window: exact instants, and one harness (the sessions the overview lends to another harness)
+  const harnessF = u.searchParams.get('harness') || undefined
+  const instant = [u.searchParams.get('since'), u.searchParams.get('until')].some((v) => !!v && v.includes('T'))
+  const atOk = (at: number) => !instant || ((since === undefined || at >= since) && (until === undefined || at < until))
+  const hourOf = (at: number) => `${localDay(at)}T${String(new Date(at).getHours()).padStart(2, '0')}`
 
   if (by === 'hour') {
     if (since === undefined || until === undefined)
@@ -591,6 +599,7 @@ function costTable(u: URL): CostTable {
     const p = s.summary
     if (project && project !== p.project && project !== p.projectKey) continue
     if (!placeMatches(place, p)) continue
+    if (harnessF && overviewHarness(p.key.id, p.key.harness) !== harnessF) continue
     if (scope && !scope.keeps(p)) continue
     if (by === 'session') {
       const at = Date.parse(p.lastActivityAt ?? '')
@@ -599,6 +608,7 @@ function costTable(u: URL): CostTable {
     for (const e of s.spend) {
       const day = localDay(e.at)
       if (by !== 'session' && !inDays(day)) continue
+      if (by !== 'session' && !atOk(e.at)) continue
       cs.push({
         session: p.key.id,
         label: p.title,
@@ -606,6 +616,7 @@ function costTable(u: URL): CostTable {
         project: p.project,
         at: p.lastActivityAt,
         day,
+        hour: instant ? hourOf(e.at) : undefined,
         model: e.model,
         kind: p.kind,
         usd: e.usd,
@@ -619,6 +630,7 @@ function costTable(u: URL): CostTable {
       if (!c.call) continue
       const day = localDay(Date.parse(c.at))
       if (by !== 'session' && !inDays(day)) continue
+      if (by !== 'session' && !atOk(Date.parse(c.at))) continue
       const covered = p.cost.flag !== 'estimated'
       cs.push({
         session: p.key.id,
@@ -645,7 +657,7 @@ function costTable(u: URL): CostTable {
     }
   }
   for (const l of ds.scripted) {
-    if (scope?.noScripted) break
+    if (scope?.noScripted || instant || (harnessF && harnessF !== 'claude')) break
     if ((project && l.project !== project) || (by !== 'session' && !inDays(l.day))) continue
     if (by === 'session' && (since !== undefined || until !== undefined) && !dayInRange(l.day, since, until)) continue
     const model = 'claude-haiku-4-5-20251001'
@@ -674,7 +686,7 @@ function costTable(u: URL): CostTable {
     })
   }
 
-  if (by === 'hour') cs = fanOutHours(cs)
+  if (by === 'hour' && !instant) cs = fanOutHours(cs)
   // by=class and by=agent: each contribution stands for its shares. Cache reads dominate tokens but not spend.
   if (by === 'class' || split === 'class') cs = fanOut(cs, 'class', CLASS_SHARES, () => null)
   if (by === 'agent' || split === 'agent')
@@ -704,7 +716,7 @@ function costTable(u: URL): CostTable {
         key: k,
         label: by === 'session' ? c.label : placeDims.includes(by) ? costLabel(by as 'dir', k) : undefined,
         flag: by === 'session' ? c.flag : undefined,
-        harness: by === 'session' && !c.scripted ? 'claude' : undefined,
+        harness: by === 'session' && !c.scripted ? overviewHarness(c.session, 'claude') : undefined,
         project: by === 'session' ? c.project : undefined,
         lastActivityAt: by === 'session' ? c.at : undefined,
         sessions: 0,
@@ -764,6 +776,205 @@ function costTable(u: URL): CostTable {
     backing,
     truncated: truncated || undefined,
   }
+}
+
+// ---- /api/limits -----------------------------------------------------------------------
+
+interface SpendEvent {
+  at: number
+  usd: number
+  id: string
+  harness: string
+}
+
+/**
+ * Subscription windows made from the mock's own spend, so that the Cost and Overview pages agree with them: Codex 5h
+ * windows (clusters of the sessions the overview lends to Codex, a percentage from their spend, the biggest ones full),
+ * a Codex weekly window, a few Claude Code hits (refusals, no percentages), one weekly Claude hit, and one with scripted
+ * runs. Deterministic: a pure function of the dataset.
+ */
+function limits(): Limits {
+  const events: SpendEvent[] = []
+  for (const s of visible()) {
+    const id = s.summary.key.id
+    const harness = overviewHarness(id, s.summary.key.harness)
+    for (const e of s.spend) if (e.model !== '(overhead)') events.push({ at: e.at, usd: e.usd, id, harness })
+  }
+  events.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1))
+  const H = 60 * MIN
+  const rnd = makeRng(4242)
+  const wins: LimitWindow[] = []
+  const refusals: LimitRefusal[] = []
+
+  /** Clusters of one harness's events: each starts at an event (to the 10 minutes) and runs `minutes`. */
+  const cluster = (harness: string, minutes: number) => {
+    const out: { start: number; end: number; ev: SpendEvent[] }[] = []
+    for (const e of events) {
+      if (e.harness !== harness) continue
+      const last = out[out.length - 1]
+      if (last && e.at < last.end) last.ev.push(e)
+      else {
+        const start = Math.floor(e.at / (10 * MIN)) * 10 * MIN
+        out.push({ start, end: start + minutes * MIN, ev: [e] })
+      }
+    }
+    return out
+  }
+  const spendOf = (ev: SpendEvent[]) => ev.reduce((n, e) => n + e.usd, 0)
+  const topOf = (ev: SpendEvent[]) => {
+    const by = new Map<string, number>()
+    for (const e of ev) by.set(e.id, (by.get(e.id) ?? 0) + e.usd)
+    return [...by.entries()]
+      .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+      .slice(0, 3)
+      .map(([id, usd]) => {
+        const sum = ds.byId.get(id)?.summary
+        return {
+          harness: ev.find((e) => e.id === id)?.harness ?? 'claude',
+          id,
+          name: overviewText(id).name,
+          title: sum?.title,
+          usd,
+        }
+      })
+  }
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const refuse = (w: LimitWindow, ev: SpendEvent[], n: number, from: number, to: number) => {
+    const pool = topOf(ev)
+    for (let i = 0; i < n; i++) {
+      const at = Math.round(from + ((to - from) * (i + rnd.next() * 0.8)) / n)
+      const top = pool[i % Math.max(1, pool.length)]
+      refusals.push({
+        at: iso(at),
+        harness: w.harness,
+        session: top ? { harness: top.harness, id: top.id } : undefined,
+        limit: w.limit,
+        windowMinutes: w.windowMinutes,
+        resetsAt: w.resetsAt,
+      })
+    }
+  }
+
+  // Codex, 5h: the biggest windows are full
+  const five = cluster('codex', 300)
+  const spends = five.map((c) => spendOf(c.ev)).sort((a, b) => b - a)
+  const cap = (spends[Math.min(3, spends.length - 1)] ?? 1) * 0.92
+  for (const c of five) {
+    const spent = spendOf(c.ev)
+    const max = Math.min(100, Math.round((spent / cap) * 100))
+    if (max < 8) continue
+    let run = 0
+    const points = c.ev.map((e) => {
+      run += e.usd
+      return { at: iso(e.at), usedPercent: Math.min(100, Math.round((run / cap) * 100)) }
+    })
+    const last = c.ev[c.ev.length - 1].at
+    const w: LimitWindow = {
+      harness: 'codex',
+      limit: 'codex',
+      windowMinutes: 300,
+      plan: 'pro',
+      resetsAt: iso(c.end),
+      startsAt: iso(c.start),
+      firstSeenAt: iso(c.ev[0].at),
+      lastSeenAt: iso(last),
+      firstPercent: points[0].usedPercent,
+      maxPercent: max,
+      points,
+      refusals: 0,
+      seenUSD: spent,
+      seenSessions: new Set(c.ev.map((e) => e.id)).size,
+      usdPerPercent: max >= 10 ? spent / max : undefined,
+      topSessions: topOf(c.ev),
+    }
+    if (max >= 100) {
+      const from = Math.min(c.end - 20 * MIN, last + 6 * MIN)
+      w.refusals = 4 + Math.floor(rnd.next() * 20)
+      w.firstRefusalAt = iso(from)
+      refuse(w, c.ev, w.refusals, from, c.end)
+    }
+    wins.push(w)
+  }
+
+  // Codex, weekly: the busiest week, nearly full
+  const week = cluster('codex', 10080).sort((a, b) => spendOf(b.ev) - spendOf(a.ev))[0]
+  if (week)
+    wins.push({
+      harness: 'codex',
+      limit: 'codex_secondary',
+      windowMinutes: 10080,
+      plan: 'pro',
+      resetsAt: iso(week.end),
+      startsAt: iso(week.start),
+      firstSeenAt: iso(week.ev[0].at),
+      lastSeenAt: iso(week.ev[week.ev.length - 1].at),
+      maxPercent: 93,
+      refusals: 0,
+      seenUSD: spendOf(week.ev),
+      seenSessions: new Set(week.ev.map((e) => e.id)).size,
+      usdPerPercent: spendOf(week.ev) / 93,
+      topSessions: topOf(week.ev),
+    })
+
+  // Claude Code: hits only, with no percentage; the start is to within ten minutes
+  const hits = cluster('claude', 300)
+    .sort((a, b) => spendOf(b.ev) - spendOf(a.ev))
+    .slice(0, 4)
+  hits.forEach((c, i) => {
+    const last = c.ev[c.ev.length - 1].at
+    const from = Math.min(c.end - 15 * MIN, last + 4 * MIN)
+    const w: LimitWindow = {
+      harness: 'claude',
+      limit: 'five_hour',
+      windowMinutes: 300,
+      plan: 'max',
+      resetsAt: iso(c.end),
+      startsAt: iso(c.start),
+      firstSeenAt: iso(from),
+      lastSeenAt: iso(c.end - 10 * MIN),
+      refusals: [3, 12, 40, 7][i],
+      firstRefusalAt: iso(from),
+      seenUSD: spendOf(c.ev),
+      seenSessions: new Set(c.ev.map((e) => e.id)).size,
+      topSessions: topOf(c.ev),
+    }
+    if (i === 0) w.scriptedUSD = 41
+    wins.push(w)
+    refuse(w, c.ev, Math.min(w.refusals, 6), from, c.end)
+    if (i === 0)
+      refusals.push({
+        at: iso(from + 2 * MIN),
+        harness: 'claude',
+        scripted: true,
+        limit: 'five_hour',
+        windowMinutes: 300,
+        resetsAt: w.resetsAt,
+      })
+  })
+  const wk = cluster('claude', 10080).sort((a, b) => spendOf(b.ev) - spendOf(a.ev))[0]
+  if (wk) {
+    const from = wk.end - 2 * 24 * H
+    const w: LimitWindow = {
+      harness: 'claude',
+      limit: 'seven_day',
+      windowMinutes: 10080,
+      plan: 'max',
+      resetsAt: iso(wk.end),
+      startsAt: iso(wk.start),
+      firstSeenAt: iso(from),
+      lastSeenAt: iso(wk.end - 60 * MIN),
+      refusals: 9,
+      firstRefusalAt: iso(from),
+      seenUSD: spendOf(wk.ev),
+      seenSessions: new Set(wk.ev.map((e) => e.id)).size,
+      topSessions: topOf(wk.ev),
+    }
+    wins.push(w)
+    refuse(w, wk.ev, 5, from, wk.end)
+  }
+  wins.sort((a, b) => (a.resetsAt < b.resetsAt ? -1 : a.resetsAt > b.resetsAt ? 1 : a.harness < b.harness ? -1 : 1))
+  refusals.sort((a, b) => (a.at < b.at ? -1 : 1))
+  return { windows: wins, refusals }
 }
 
 // ---- /api/overview (experimental) ------------------------------------------------------
@@ -1285,6 +1496,7 @@ function route(req: Request): Response {
     if (m) return sessionDetail(decodeURIComponent(m[1]), decodeURIComponent(m[2]), u)
     if (p === '/api/search') return json(200, search(u))
     if (p === '/api/cost') return json(200, costTable(u))
+    if (p === '/api/limits') return json(200, limits())
     // A report built by internal/moments from synthetic digests; regenerate it when the registry changes.
     if (p === '/api/overview') return json(200, overview(u))
     if (p === '/api/moments') return json(200, mockMoments)

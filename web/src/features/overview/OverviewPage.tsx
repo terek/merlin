@@ -10,8 +10,8 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import { memo, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useHarness } from '../../api/harnesses'
-import { useOverview, useSearch } from '../../api/queries'
-import type { Overview, OverviewLane, OverviewSpan } from '../../api/types'
+import { useLimits, useOverview, useSearch } from '../../api/queries'
+import type { LimitWindow, Overview, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatDuration, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
@@ -73,10 +73,12 @@ import {
   type Totals,
   tokenScale,
   totalsOf,
+  xOf,
 } from './model'
 import { ScopeSlot, useScope } from './ScopeSlot'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
 import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
+import { lockoutBand, refusalsBySession, refusalTicks, scopeWindows, windowRange, windowTimes } from './windows'
 
 /** The structured block's columns (px) and the cell padding the graph sits in. */
 const COLS = { turns: 64, agents: 70, spend: 84 }
@@ -103,6 +105,8 @@ const TICK_W = 0.75
 const TICK_OPACITY = 0.6
 const RUN_W = 2
 const PAD_TOP = 1
+/** A limit refusal on a row: a red vertical from the top of the row to the baseline. */
+const REFUSAL_W = 1.25
 
 /** The colour a span is drawn in: the Session page's, by kind; a branched session is the main colour. */
 const spanColor = (k: OverviewSpan['kind']): string =>
@@ -127,9 +131,12 @@ interface RowData {
   spans: OverviewSpan[]
   /** A session row: its lifetime is drawn as the faint baseline, and the line, spine and nodes on it. */
   lane?: OverviewLane
+  /** The times (ms) at which a limit refused this session's calls. */
+  refusals?: readonly number[]
 }
 
-const laneData = (l: OverviewLane): RowData => ({
+const laneData = (l: OverviewLane, refusals?: readonly number[]): RowData => ({
+  refusals,
   lives: [l],
   ctx: l.context,
   idle: l.idle,
@@ -160,6 +167,7 @@ function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; pxPerTo
     })
     return midnightXs(axis).filter((x) => spans.some((s) => x >= s[0] && x <= s[1]))
   }, [axis, data.lives])
+  const refused = useMemo(() => (data.refusals ? refusalTicks(data.refusals, axis) : []), [data.refusals, axis])
   const life = useMemo(
     () => (data.lane ? lifeSpan(data.lane.startedAt, data.lane.lastActivityAt, axis) : null),
     [data.lane, axis],
@@ -185,6 +193,14 @@ function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; pxPerTo
           strokeWidth={ACTIVE_W[r.weight]}
         />
       ))}
+      {refused.length > 0 && (
+        <path
+          d={refused.map((x) => `M${x},0V${base}`).join('')}
+          stroke="var(--bad)"
+          strokeWidth={REFUSAL_W}
+          fill="none"
+        />
+      )}
       {spines.map((ks) => {
         const color = spanColor(ks.kind)
         return (
@@ -395,8 +411,11 @@ const SessionRow = memo(function SessionRow({
   note,
   axis,
   pxPerTok,
+  refusals,
 }: {
   l: OverviewLane
+  /** The times (ms) a limit refused this session's calls. */
+  refusals?: readonly number[]
   /** The session's value of the sidebar's key. */
   place: string
   /** Its folder, as shown. */
@@ -446,7 +465,7 @@ const SessionRow = memo(function SessionRow({
             window.open(urlAt(e), '_blank', 'noopener')
           }}
         >
-          <RowGraph data={laneData(l)} axis={axis} pxPerTok={pxPerTok} />
+          <RowGraph data={laneData(l, refusals)} axis={axis} pxPerTok={pxPerTok} />
         </a>
       </div>
       <div
@@ -698,6 +717,8 @@ function Summary({
   costHref,
   axis,
   band,
+  windows,
+  onWindow,
   padRight,
 }: {
   /** The sessions in scope. */
@@ -712,6 +733,9 @@ function Summary({
   axis: Axis
   /** The stretch of the axis under the pointer: a light band, its label in the body colour. */
   band: Band | null
+  /** The limit windows that qualify in the range: their locked-out stretch is a clickable band under the labels. */
+  windows: readonly LimitWindow[]
+  onWindow: (w: LimitWindow) => void
   padRight: number
 }) {
   const data = useMemo((): RowData => {
@@ -727,6 +751,33 @@ function Summary({
         <RowGraph data={data} axis={axis} pxPerTok={scale.pxPerTok} />
         <svg width={axis.width} height={22} className="block" role="img" aria-label="Time axis">
           {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={22} fill="var(--surface-2)" />}
+          {windows.map((w) => {
+            const b = lockoutBand(w, axis.fromMs, axis.toMs)
+            if (!b) return null
+            const x = xOf(axis, b.fromMs)
+            const label = `Scope to this limit window: ${windowTimes(w)}`
+            return (
+              // biome-ignore lint/a11y/useSemanticElements: an SVG rect cannot be a button element
+              <rect
+                key={`${w.harness}/${w.limit}/${w.resetsAt}`}
+                role="button"
+                tabIndex={0}
+                aria-label={label}
+                x={x}
+                y={0}
+                width={Math.max(3, xOf(axis, b.toMs) - x)}
+                height={22}
+                fill="var(--bad-soft)"
+                className="cursor-pointer"
+                onClick={() => onWindow(w)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') onWindow(w)
+                }}
+              >
+                <title>{label}</title>
+              </rect>
+            )
+          })}
           <line x1={0} x2={axis.width} y1={0.5} y2={0.5} stroke="var(--line)" />
           {ticks.map((t) => (
             <g key={t.x}>
@@ -844,6 +895,8 @@ export function OverviewPage() {
               sbOpen={sbOpen}
               onSbOpen={setSbOpen}
               onSort={(k) => set(formatSort(nextSort(sort, k)))}
+              harness={custom?.harness}
+              onWindow={(w) => scope.scopeTo(windowRange(w))}
               costHref={`/cost${scopeSearch(sp)}`}
             />
           )}
@@ -860,7 +913,7 @@ interface Hover {
 }
 
 function Table({
-  o,
+  o: whole,
   by,
   sort,
   term,
@@ -873,6 +926,8 @@ function Table({
   sbOpen,
   onSbOpen,
   onSort,
+  harness,
+  onWindow,
   costHref,
 }: {
   o: Overview
@@ -888,8 +943,21 @@ function Table({
   sbOpen: boolean
   onSbOpen: (open: boolean) => void
   onSort: (k: SortKey) => void
+  /** A limit window's harness: only its sessions are listed (the scripted runs cannot be split, so they go). */
+  harness?: string
+  /** A click on a locked-out band: narrow the scope to that window. */
+  onWindow: (w: LimitWindow) => void
   costHref: string
 }) {
+  const o = useMemo(
+    () =>
+      harness
+        ? { ...whole, lanes: whole.lanes.filter((l) => l.harness === harness), scripted: { sessions: 0, usd: 0 } }
+        : whole,
+    [whole, harness],
+  )
+  const limits = useLimits()
+  const refusals = useMemo(() => refusalsBySession(limits.data?.refusals ?? []), [limits.data])
   // The rows scroll; header and summary do not. The scrollbar takes width from the rows only, so the
   // header and the summary give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -922,6 +990,11 @@ function Table({
   const axis = useMemo(
     () => makeAxis(Date.parse(o.from), Date.parse(o.to), o.slotMs, plotW),
     [o.from, o.to, o.slotMs, plotW],
+  )
+
+  const windows = useMemo(
+    () => scopeWindows(limits.data?.windows ?? [], axis.fromMs, axis.toMs, harness),
+    [limits.data, axis.fromMs, axis.toMs, harness],
   )
 
   // ---- hover: one state, the pointer's x and the place under it ----
@@ -970,6 +1043,7 @@ function Table({
                 note={laneNote(l, sort.key, o.slotMs, by === 'bead' ? o.beads : undefined)}
                 axis={axis}
                 pxPerTok={pxPerTok}
+                refusals={refusals.get(sessionKey(l.harness, l.id))}
               />
             ))}
             {rows.length === 0 && (
@@ -995,6 +1069,8 @@ function Table({
           costHref={costHref}
           axis={axis}
           band={band}
+          windows={windows}
+          onWindow={onWindow}
           padRight={padRight}
         />
       </div>

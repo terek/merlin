@@ -44,6 +44,18 @@ export interface Window {
   since?: string
   /** Last local day, included. */
   until: string
+  /** A limit window shorter than two days: the chart keeps only its clock hours (`hourSpan`). */
+  clock?: { fromMs: number; toMs: number }
+}
+
+const hourKey = (ms: number): string => {
+  const d = new Date(ms)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}`
+}
+
+/** A window's clock hours as local hour keys, both included: the hour holding `fromMs` to the one holding `toMs - 1`. */
+export function hourSpan(fromMs: number, toMs: number): { first: string; last: string } {
+  return { first: hourKey(fromMs), last: hourKey(Math.max(fromMs, toMs - 1)) }
 }
 
 function dayAt(day: string): Date {
@@ -184,7 +196,14 @@ export function makeHourBuckets(rows: CostRow[], window: Window, hours: 1 | 3 | 
     const e = out.get(`${row.key.slice(0, 10)}T${pad2(hour - (hour % hours))}`)
     if (e && Number.isFinite(hour)) addRow(e.b, e.parts, row)
   }
-  return [...out.values()].map(({ b, parts }) => ({ ...b, parts: [...parts.values()].sort(bySize) }))
+  const span = window.clock && hourSpan(window.clock.fromMs, window.clock.toMs)
+  return [...out.values()]
+    .filter(({ b }) => {
+      if (!span) return true
+      const last = `${b.key.slice(0, 11)}${pad2(Number(b.key.slice(11, 13)) + hours - 1)}`
+      return last >= span.first && b.key <= span.last
+    })
+    .map(({ b, parts }) => ({ ...b, parts: [...parts.values()].sort(bySize) }))
 }
 
 /** The models that get a segment of their own: the eight with the most spend over the buckets, (overhead) apart. */

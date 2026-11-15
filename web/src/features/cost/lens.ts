@@ -4,7 +4,7 @@ import type { CostRow } from '../../api/types'
 import { formatMoney } from '../../lib/format'
 import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
-import { type CustomRange, daysBetween } from '../overview/model'
+import { type CustomRange, daysBetween, instantRange, isWindowRange } from '../overview/model'
 
 const OLD_KEYS = ['project', 'repocut', 'beadcut']
 
@@ -44,11 +44,21 @@ export function migrateCostSearch(
   return next
 }
 
-/** The days just before a window, as many as it has: the period a change is measured against. */
+/**
+ * The days just before a window, as many as it has: the period a change is measured against. A limit window's is
+ * the same length just before it (same harness).
+ */
 export function previousWindow(w: CustomRange): CustomRange {
+  if (isWindowRange(w)) return instantRange(w.fromMs - (w.toMs - w.fromMs), w.fromMs, w.harness)
   const from = dayStart(w.from)
   const n = daysBetween(from.getTime(), dayStart(w.to).getTime()) + 1
   return { from: localDay(daysBefore(from, n)), to: localDay(daysBefore(from, 1)) }
+}
+
+/** What `/api/cost` is asked for a range: its local days, or a limit window's instants (the end capped at `nowMs`). */
+export function costRange(r: CustomRange, nowMs = Number.POSITIVE_INFINITY): { since: string; until: string } {
+  if (!isWindowRange(r)) return { since: r.from, until: r.to }
+  return { since: new Date(r.fromMs).toISOString(), until: new Date(Math.min(r.toMs, nowMs)).toISOString() }
 }
 
 /** The number of days in a window. */
@@ -63,11 +73,13 @@ export function changeAgainst(
   cur: number,
   prev: number,
   days: number,
+  /** What the period before is called, when it is not whole days: "the 5h before". */
+  before?: string,
 ): { pct: number; text: string; title: string; up: boolean } | null {
   if (!(prev > 0)) return null
   const delta = cur - prev
   const pct = (delta / prev) * 100
-  const period = days === 1 ? 'the day before' : `the ${days} days before`
+  const period = before ?? (days === 1 ? 'the day before' : `the ${days} days before`)
   const sign = delta < 0 ? '−' : '+'
   const rounded = Math.round(Math.abs(pct))
   return {

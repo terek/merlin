@@ -4,7 +4,7 @@
 
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useCost, useOverview, usePrices } from '../../api/queries'
+import { useCost, useLimits, useOverview, usePrices } from '../../api/queries'
 import type { CostRow, CostTable } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { backingLowerBound, backingSentence, lowerBoundNote, unknownNote } from '../../lib/cost'
@@ -23,20 +23,25 @@ import {
   firstSpendDay,
   formatCustom,
   inferHome,
+  isWindowRange,
   keepSelection,
   placeItems,
   presetRange,
   selectLanes,
   totalsOf,
+  windowLength,
 } from '../overview/model'
 import { ScopeSlot, useScope } from '../overview/ScopeSlot'
 import { Sidebar, useSidebarOpen } from '../overview/Sidebar'
+import { scopeWindows } from '../overview/windows'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
+import { Limits } from './LimitsSection'
 import {
   cascade,
   changeAgainst,
   classSentence,
   concentration,
+  costRange,
   type ExtraLine,
   migrateCostSearch,
   previousWindow,
@@ -101,8 +106,19 @@ export function CostPage() {
 
   // the scope's days, whole local days as on the Overview
   const days = custom ?? presetRange(range, now)
-  const win: Window = { since: days.from, until: days.to }
-  const scoped = { since: days.from, until: days.to, place: sel === null ? undefined : by, in: sel ?? undefined }
+  const win: Window = {
+    since: days.from,
+    until: days.to,
+    clock: isWindowRange(days) && days.toMs - days.fromMs < 2 * 86_400_000 ? days : undefined,
+  }
+  const harness = custom?.harness
+  const nowMs = now.getTime()
+  const scoped = {
+    ...costRange(days, nowMs),
+    harness,
+    place: sel === null ? undefined : by,
+    in: sel ?? undefined,
+  }
 
   const head = useCost({ by: 'kind', ...scoped }, { enabled: ready })
   // the bars: hours up to 14 days (`by=hour` answers no more), days beyond (weeks are days added up)
@@ -118,7 +134,7 @@ export function CostPage() {
   // the period before: as many days just before the window, the same scope
   const before = previousWindow(days)
   const prev = useCost(
-    { by: 'model', since: before.from, until: before.to, place: scoped.place, in: scoped.in },
+    { by: 'model', ...costRange(before), harness, place: scoped.place, in: scoped.in },
     { enabled: ready },
   )
 
@@ -129,15 +145,25 @@ export function CostPage() {
     { from: new Date(w.fromMs).toISOString(), to: new Date(w.toMs).toISOString(), slot: '1d' },
     ready,
   )
-  const lanes = overview.data?.lanes
+  // under a limit window's harness only that harness's sessions are the places; scripted runs are not placed
+  const lanes = useMemo(
+    () => (harness ? overview.data?.lanes.filter((l) => l.harness === harness) : overview.data?.lanes),
+    [overview.data, harness],
+  )
   const beads = overview.data?.beads
   const home = useMemo(() => inferHome(lanes?.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [lanes])
   const tree = useMemo(() => buildPlaceTree(placeItems(lanes ?? [], by, beads), by, home), [lanes, by, beads, home])
   const all = useMemo(() => totalsOf(lanes ?? []), [lanes])
 
+  const limits = useLimits(ready).data
+  const windows = useMemo(
+    () => scopeWindows(limits?.windows ?? [], w.fromMs, w.toMs, harness),
+    [limits, w.fromMs, w.toMs, harness],
+  )
+
   const prevByModel = useMemo(() => new Map((prev.data?.rows ?? []).map((r) => [r.key, r.totalUSD])), [prev.data])
   // what the places leave out of the total, so that the sidebar adds up to it
-  const scripted = overview.data?.scripted
+  const scripted = harness ? undefined : overview.data?.scripted
   const overhead = byModel.data?.rows.find((r) => r.key === OVERHEAD)?.totalUSD ?? 0
   const extras = useMemo(
     () =>
@@ -159,7 +185,12 @@ export function CostPage() {
   const empty = head.data !== undefined && head.data.rows.length === 0 && head.data.total.totalUSD === 0
   const change =
     byModel.data && prev.data
-      ? changeAgainst(byModel.data.total.totalUSD, prev.data.total.totalUSD, windowDays(days))
+      ? changeAgainst(
+          byModel.data.total.totalUSD,
+          prev.data.total.totalUSD,
+          windowDays(days),
+          isWindowRange(days) ? `the ${windowLength(days.toMs - days.fromMs)} before` : undefined,
+        )
       : null
 
   return (
@@ -206,6 +237,8 @@ export function CostPage() {
                 )
               }
             />
+
+            <Limits windows={windows} sp={sp} onWindow={scope.scopeTo} />
 
             <Section
               title={sectionTitle(grain)}

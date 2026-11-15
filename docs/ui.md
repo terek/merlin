@@ -769,6 +769,26 @@ pages never disagree and switching tabs keeps it.
   nothing" (and the harness's own per-call figures where there are any), the backing sentence (exact, partial,
   estimated; unknown, lower bound) and the arithmetic of the sidebar. There is no reported / attributed split anywhere
   else on the page.
+- **Limits** (`LimitsSection.tsx`, helpers `worth.ts`), directly under the headline strip, in the same section style,
+  shown only when `useLimits()` (`GET /api/limits`) has qualifying windows overlapping the scope (`scopeWindows`: calls
+  were refused, or `maxPercent` of 90 or more; the scope's harness only under a window scope), newest first. Columns:
+  **Window** (harness icon, the limit in words, `5h` or `Weekly`, the plan muted, the times `Fri 14, 10:00–15:00`, a
+  week `Nov 7 → Nov 14`, a Claude Code start with a "≈" prefix when it is only known to within ten minutes), **Used**
+  (Codex `maxPercent`, bold red at 100; Claude Code "hit"), **Locked out** (`resetsAt` minus `firstRefusalAt`, rounded as
+  the session graph's breaks, or a muted dash), **Spent** (`seenUSD`, with a "≥" sign for Claude Code, whose
+  windows hold only what this machine recorded), **Biggest sessions** (`topSessions`, each a link to its Session page,
+  ellipsis-cut as one line; then a muted "+ scripted $41" for `scriptedUSD`). A click on the row narrows the scope to
+  the window (a history entry, the page kept); "sessions →" at its end opens the Overview on the same window with
+  `sort=spend`. Under the table, one sentence per harness and limit that has data: Codex "A Codex 5h window is worth
+  about $11 at API prices (1% ≈ $0.11, median of the 6 windows in this range)" (from `usdPerPercent`, the median of the qualifying windows in this range only, never all history; each Codex row has its own "1% ≈ $0.11 in this window" in its Spent title), Claude Code "ran out after at
+  least $47 (median of 4 hits; spend this machine recorded)". Figures are medians; `seenUSD` is never summed across
+  windows, which can overlap and count a message twice.
+- **A limit window as the scope.** `from` and `to` as RFC 3339 instants (`2026-11-13T10:00:00Z`, UTC, no
+  milliseconds) and `harness` (`codex`, `claude`) instead of local days; `range` is absent. `CustomRange` carries the
+  instants (`fromMs`, `toMs`) and the harness beside the local days it touches. Cost sends the instants as `since` and
+  `until` (the end capped at now) and `harness` on every request, the previous period is the window's own length just
+  before ("+180% on the 5h before"), the sidebar lists only that harness's sessions and the scripted lines go. The chart
+  stays in whole local days (by the hour for a day).
 - The Overview tab is the way back to the sessions (it keeps the scope); the Overview's footer Spend figure links here with it.
 - **Empty**: "Nothing was spent between May 20 and May 29." (the Overview's phrase), with "Clear the selection" when a
   selection emptied it.
@@ -1006,6 +1026,25 @@ The table only ever lists sessions.
     closed folder is marked (`markedNode`).
   - One state (x, place) at table level; rows are memoised and take no hover props. Pure helpers in
     `model.ts`: `bandAt`, `blockWidth`.
+
+### Limit windows (added 2026-11-15, `merlin-6py`)
+
+A subscription limit window is a scope like a Custom range, but with exact instants and a harness: the Overview lists
+the sessions that ate it and Cost shows what the money went to. No page and no group rows of its own.
+
+- **Scope.** `from`/`to` as RFC 3339 instants plus `harness` (section 10 has the shape). `parseCustom` reads it (instants in
+  order, harness a plain name), `formatCustom` writes it, so any preset, a brush or a typed range leaves it (and drops the
+  harness). It is never remembered (`useRememberedCustom` skips it) and not offered under Custom. `scope.scopeTo(range)`
+  pushes it as a history entry. The pill reads the window as `Fri 14, 10:00 → 5h` with the harness's icon (13 px) before
+  it; its title says the timeline opens it up to leave. The lanes are filtered to the harness on the client (the daemon's
+  Overview has no harness filter) and the scripted line goes. Helpers (`windows.ts`): `qualifies`, `scopeWindows`,
+  `windowRange`, `lockoutText`, `limitName`, `windowTimes`.
+- **Refusal ticks.** A session row's graph gets a red (`--bad`) 1.25 px vertical tick, from the row's top to its baseline,
+  at each call that session had refused in the range (`refusals` of `/api/limits`, by session; `refusalTicks` merges those
+  closer than 3 px). Scripted runs' refusals have no row.
+- **Locked-out bands.** In the summary's date axis, under the labels, each qualifying window's locked-out stretch
+  (`firstRefusalAt` to `resetsAt`, clipped to the range) is a `--bad-soft` band. It is a button with the title "Scope
+  to this limit window: Fri 14, 10:00–15:00"; everything else in the graph stays non-interactive.
 
 ## 11. As built
 
