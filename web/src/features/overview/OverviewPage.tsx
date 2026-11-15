@@ -15,10 +15,11 @@ import type { LimitWindow, Overview, OverviewLane, OverviewSpan } from '../../ap
 import { cn } from '../../lib/cn'
 import { formatDuration, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
-import { resumeCommand, sessionPath } from '../../lib/paths'
+import { resumeCommand } from '../../lib/paths'
 import { scopeSearch } from '../../lib/scope'
 import { copyText, HarnessIcon, Money, QueryBoundary, Skeleton } from '../../ui'
 import { COLOR, CTX_FILL, elbowPath, WORKFLOW_DASH } from '../spend/TimeView'
+import { focusSearch, type Key, parseOpen } from './focus'
 import {
   ACTIVE_W,
   type Axis,
@@ -53,6 +54,7 @@ import {
   laneHead,
   laneScale,
   lifeSpan,
+  listRows,
   makeAxis,
   midnightXs,
   nextSort,
@@ -66,12 +68,9 @@ import {
   presetRange,
   type Sort,
   type SortKey,
-  searchLanes,
-  selectLanes,
   sessionKey,
   sessionStretchUrl,
   slotX,
-  sortLanes,
   spineLanes,
   stepAreaPath,
   sumLanes,
@@ -81,6 +80,7 @@ import {
   xOf,
 } from './model'
 import { ScopeSlot, useScope } from './ScopeSlot'
+import { SessionFocus } from './SessionFocus'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
 import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
 import { lockoutBand, refusalsBySession, refusalTicks, scopeWindows, windowRange, windowTimes } from './windows'
@@ -465,8 +465,11 @@ const SessionRow = memo(function SessionRow({
   axis,
   pxPerTok,
   refusals,
+  search,
 }: {
   l: OverviewLane
+  /** The Overview's query now: opening the session keeps it. */
+  search: string
   /** The times (ms) a limit refused this session's calls. */
   refusals?: readonly number[]
   /** The session's value of the sidebar's key. */
@@ -480,15 +483,16 @@ const SessionRow = memo(function SessionRow({
   const head = laneHead(l)
   const navigate = useNavigate()
   const command = resumeCommand(l.project, l.id, useHarness(l.harness).resume)
+  const openHref = `/${focusSearch(search, l)}`
   const urlAt = (e: React.MouseEvent<HTMLAnchorElement>) =>
-    sessionStretchUrl(l, axis, e.clientX - e.currentTarget.getBoundingClientRect().left)
+    sessionStretchUrl(l, axis, e.clientX - e.currentTarget.getBoundingClientRect().left, search)
   return (
     <div data-place={place} className={cn('flex border-line border-t first:border-t-0', HOVER)}>
       <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
         <SessionText
           mark={<HarnessIcon harness={l.harness} size={13} />}
           head={
-            <Link to={sessionPath(l)} className="font-semibold text-fg hover:underline">
+            <Link to={openHref} className="font-semibold text-fg hover:underline">
               {head}
             </Link>
           }
@@ -498,7 +502,7 @@ const SessionRow = memo(function SessionRow({
           folder={<FolderCell text={folder} path={l.dir || 'No folder'} command={command} />}
         />
         <a
-          href={sessionPath(l)}
+          href={openHref}
           tabIndex={-1}
           aria-label={`Open ${head} at a day`}
           className="block cursor-pointer"
@@ -892,6 +896,9 @@ export function OverviewPage() {
   const scope = useScope()
   const { sp, set, select, range, custom, by, sel, q } = scope
   const sort = useMemo(() => parseSort(sp.get('sort'), sp.get('dir')), [sp])
+  // `open=<harness>:<id>`: the session shown in place of the list
+  const openParam = sp.get('open')
+  const open = useMemo(() => parseOpen(openParam), [openParam])
   const [sbOpen, setSbOpen] = useSidebarOpen()
 
   const term = q.trim()
@@ -937,7 +944,8 @@ export function OverviewPage() {
       <div className="flex min-h-0 flex-1 flex-col">
         <QueryBoundary
           query={query}
-          isEmpty={(o) => o.lanes.length === 0 && o.scripted.sessions === 0}
+          // with a session open the list is behind it: an empty one is still where "not in this list" is said
+          isEmpty={(o) => open === null && o.lanes.length === 0 && o.scripted.sessions === 0}
           empty={<div className="p-6 text-muted">{`Nothing ran ${customPhrase(days, now)}.`}</div>}
           skeleton={<Skeleton className="m-3 h-64" />}
         >
@@ -958,6 +966,8 @@ export function OverviewPage() {
               onSbOpen={setSbOpen}
               onSort={(k) => set(formatSort(nextSort(sort, k)))}
               harness={custom?.harness}
+              open={open}
+              sp={sp}
               onWindow={(w) => scope.scopeTo(windowRange(w))}
               costHref={`/cost${scopeSearch(sp)}`}
             />
@@ -991,6 +1001,8 @@ function Table({
   harness,
   onWindow,
   costHref,
+  open,
+  sp,
 }: {
   o: Overview
   by: By
@@ -1010,6 +1022,9 @@ function Table({
   /** A click on a locked-out band: narrow the scope to that window. */
   onWindow: (w: LimitWindow) => void
   costHref: string
+  /** The session open in place of the list. */
+  open: Key | null
+  sp: URLSearchParams
 }) {
   const o = useMemo(
     () =>
@@ -1029,9 +1044,11 @@ function Table({
   // the plot is sized for where the sidebar will be, not for the width it has while it slides
   const plotW = Math.max(240, pageW - (sbOpen ? SIDEBAR_W : STRIP_W) - padRight - BLOCK_W - 2 * CELL_PAD)
   // the search narrows the sessions; the tree shows these, the table and the summary what the selection leaves
-  const found = useMemo(() => searchLanes(o.lanes, term, hits), [o.lanes, term, hits])
-  const scope = useMemo(() => selectLanes(found, sel, by, o.beads), [found, sel, by, o.beads])
-  const rows = useMemo(() => sortLanes(scope, sort, home, { by, beads: o.beads }), [scope, sort, home, by, o.beads])
+  const { found, scope, rows } = useMemo(
+    () => listRows(o.lanes, { term, hits, sel, by, beads: o.beads, sort, home }),
+    [o.lanes, term, hits, sel, by, o.beads, sort, home],
+  )
+  const search = sp.toString()
   const totals = useMemo(() => totalsOf(scope), [scope])
   const all = useMemo(() => totalsOf(found), [found])
   const tree = useMemo(() => buildPlaceTree(placeItems(found, by, o.beads), by, home), [found, by, home, o.beads])
@@ -1086,55 +1103,65 @@ function Table({
         hover={sbOpen && hover ? hover.place : null}
         onSelect={onSelect}
       />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header sort={sort} onSort={onSort} padRight={padRight} />
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {open && <SessionFocus open={open} rows={rows} sp={sp} />}
+        {/* the list stays laid out and mounted under the session (hidden, not removed): its width, its scroll position
+            and its rows are where they were when it comes back */}
         <div
-          ref={scrollRef}
-          id="overview-rows"
-          className="min-h-0 flex-1 overflow-y-auto"
-          onMouseMove={onMove}
-          onMouseLeave={() => setHover(null)}
+          className={cn('flex min-h-0 min-w-0 flex-1 flex-col', open && 'invisible absolute inset-0')}
+          aria-hidden={open ? true : undefined}
+          inert={open ? true : undefined}
         >
-          <div ref={innerRef} className="relative">
-            {rows.map((l) => (
-              <SessionRow
-                key={`${l.harness}/${l.id}`}
-                l={l}
-                place={placeOf(l, by, o.beads)}
-                folder={folderText(l.dir, home)}
-                note={laneNote(l, sort.key, o.slotMs, by === 'bead' ? o.beads : undefined)}
-                axis={axis}
-                pxPerTok={pxPerTok}
-                refusals={refusals.get(sessionKey(l.harness, l.id))}
-              />
-            ))}
-            {rows.length === 0 && (
-              <div className="p-6 text-muted">
-                {searching ? `No sessions match “${term}”` : 'Nothing'}
-                {sel !== null && ` under ${displayPath(sel, home, by)}`}
-                {searching ? '' : ' in this range'}.{' '}
-                {sel !== null && (
-                  <button type="button" onClick={() => onSelect(null)} className="text-accent hover:underline">
-                    Clear the selection
-                  </button>
-                )}
-              </div>
-            )}
+          <Header sort={sort} onSort={onSort} padRight={padRight} />
+          <div
+            ref={scrollRef}
+            id="overview-rows"
+            className="min-h-0 flex-1 overflow-y-auto"
+            onMouseMove={onMove}
+            onMouseLeave={() => setHover(null)}
+          >
+            <div ref={innerRef} className="relative">
+              {rows.map((l) => (
+                <SessionRow
+                  key={`${l.harness}/${l.id}`}
+                  l={l}
+                  place={placeOf(l, by, o.beads)}
+                  folder={folderText(l.dir, home)}
+                  note={laneNote(l, sort.key, o.slotMs, by === 'bead' ? o.beads : undefined)}
+                  axis={axis}
+                  pxPerTok={pxPerTok}
+                  refusals={refusals.get(sessionKey(l.harness, l.id))}
+                  search={search}
+                />
+              ))}
+              {rows.length === 0 && (
+                <div className="p-6 text-muted">
+                  {searching ? `No sessions match “${term}”` : 'Nothing'}
+                  {sel !== null && ` under ${displayPath(sel, home, by)}`}
+                  {searching ? '' : ' in this range'}.{' '}
+                  {sel !== null && (
+                    <button type="button" onClick={() => onSelect(null)} className="text-accent hover:underline">
+                      Clear the selection
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+          <Summary
+            lanes={scope}
+            slots={o.slots}
+            totals={totals}
+            title={`${plural(totals.sessions, searching ? 'matching session' : 'session')}${where}`}
+            scripted={!searching && sel === null && o.scripted.sessions > 0 ? o.scripted : undefined}
+            costHref={costHref}
+            axis={axis}
+            band={band}
+            windows={windows}
+            onWindow={onWindow}
+            padRight={padRight}
+          />
         </div>
-        <Summary
-          lanes={scope}
-          slots={o.slots}
-          totals={totals}
-          title={`${plural(totals.sessions, searching ? 'matching session' : 'session')}${where}`}
-          scripted={!searching && sel === null && o.scripted.sessions > 0 ? o.scripted : undefined}
-          costHref={costHref}
-          axis={axis}
-          band={band}
-          windows={windows}
-          onWindow={onWindow}
-          padRight={padRight}
-        />
       </div>
     </div>
   )

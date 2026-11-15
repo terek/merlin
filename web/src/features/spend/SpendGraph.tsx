@@ -8,6 +8,7 @@ import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
 import { formatCount, formatDuration, formatMoney, formatTokens, plural } from '../../lib/format'
 import { firstLine } from '../../lib/paths'
 import { unwrapMachineText } from '../../lib/wrapper'
+import { PanelTab, usePanelInset } from '../../shell/Panel'
 import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
@@ -66,6 +67,8 @@ export interface SpendGraphProps {
   initialWindow?: Partial<Win>
   /** The session the page is about: its main row is marked in the plot. */
   current?: SessionKey
+  /** The key goes to the Graph tab of the legend panel instead of under the plot. */
+  keyInPanel?: boolean
 }
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
@@ -251,7 +254,9 @@ export function SpendGraph({
   initialCursor,
   initialWindow,
   current,
+  keyInPanel,
 }: SpendGraphProps) {
+  const inset = usePanelInset()
   const [cursor, setCursor] = useState<Pin | null>(
     initialCursor !== undefined && tree.branches[home]?.model.cols[initialCursor]
       ? { branch: home, col: initialCursor }
@@ -407,10 +412,17 @@ export function SpendGraph({
             onSelectUnit={onSelectUnit}
             onKey={onKey}
             current={current}
+            frameInset={keyInPanel ? inset : 0}
             turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
           />
         </div>
-        <Legend facts={facts} />
+        {keyInPanel ? (
+          <PanelTab id="graph" title="Graph">
+            <Legend facts={facts} stacked />
+          </PanelTab>
+        ) : (
+          <Legend facts={facts} />
+        )}
       </div>
     </Card>
   )

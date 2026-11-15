@@ -104,6 +104,9 @@ export function PanelButton() {
   )
 }
 
+/** The panel's width (px), its border included. */
+export const PANEL_W = 300
+
 function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(() => window.innerWidth < OVERLAY_BELOW)
   useEffect(() => {
@@ -169,4 +172,14 @@ export function PanelColumn() {
       </div>
     </aside>
   )
+}
+
+/**
+ * What the panel takes from the page when it is shut: PANEL_W while it could be open (it has a tab and pushes the
+ * page), else 0. A page adds it to the width it builds what must not jump when the panel is toggled for.
+ */
+export function usePanelInset(): number {
+  const { open, tabs } = usePanel()
+  const narrow = useNarrow()
+  return !narrow && tabs.length > 0 && !open ? PANEL_W : 0
 }

@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- A session opens inside the Overview, with previous and next in the list (`[` and `]`, Esc closes); its legend is in the Legend panel. Old session links land there.
 - A Legend panel at the right of the web UI (the button in the top bar, or `l`); Cost's colour key moved into it.
 - Context depth in the web UI: the Overview has a Peak column (the largest context a session reached, who held it, and what was spent in calls at 200k or more; sortable) and marks deep sub-agents; Cost can stack its bars by Depth and has a Context depth section with a Who × Depth table.
 - Sessions whose last call was refused at a subscription usage limit are marked refused instead of mid-turn, and the scripted run counts (projects and Cost) say how many of those runs were refused.

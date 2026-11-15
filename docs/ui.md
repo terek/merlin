@@ -82,10 +82,10 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 
 | Route | Page | State kept in the URL |
 |---|---|---|
-| `/` | Overview (section 10b): one table of sessions over a day, week or month, each row with a text line and a small graph of its context and the agents it launched, scoped by a tree of their places, with a summary of the scope | `range`, `from`, `to`, `by` (`dir`, `checkout`, `repo`, `remote`, `bead`), `in` (the selected place), `q`, `sort`, `dir` |
+| `/` | Overview (section 10b): one table of sessions over a day, week or month, each row with a text line and a small graph of its context and the agents it launched, scoped by a tree of their places, with a summary of the scope | `range`, `from`, `to`, `by` (`dir`, `checkout`, `repo`, `remote`, `bead`), `in` (the selected place), `q`, `sort`, `dir`; `open=<harness>:<id>` with `sfrom`, `sto` (a session in place) |
 | `/overview` | Redirects to `/`, the query string kept | |
 | `/sessions` | Sessions (section 8) | `project`, `state`, `kind`, `q` (search), `since` |
-| `/s/:harness/:id` | Session | `#t<index>` pins a turn, `#a<agentId>` opens an agent's work, `#c<index>` pins a compaction's turn |
+| `/s/:harness/:id` | Redirects into the Overview with the session open (section 10b, "A session in place") | `#t<index>`, `#a<agentId>`, `#c<index>` are carried over; `from`, `to` become `sfrom`, `sto` |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
 | `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
@@ -312,6 +312,13 @@ page draws them: a session and every session forked or continued from it are one
   ›" links. `Esc` clears.
 
 ## 9. Session page (`/s/:harness/:id`)
+
+*Since 2026-11-15 the page lives in the Overview's focus (section 10b, "A session in place"; epic `merlin-bj5`).
+`/s/:harness/:id` only redirects. What the focus shows of what follows: the graph (its key in the Legend
+panel's Graph tab) and the pinned turn's `TurnInspector`. Not carried over: the header, the resume box (the
+paginator has a copy button), the decision panel, the top decisions, the family strip and the diagnostics; the
+box under the graph is rebuilt in `merlin-bj5.3`, and the rest of this section stays until then. The zoom is
+`sfrom`/`sto`.*
 
 The page answers "which of my decisions cost the most", for a session and every session forked or
 continued from it: they are one tree, and the page is the same whichever member it is opened on.
@@ -1055,6 +1062,41 @@ The table only ever lists sessions.
     closed folder is marked (`markedNode`).
   - One state (x, place) at table level; rows are memoised and take no hover props. Pure helpers in
     `model.ts`: `bandAt`, `blockWidth`.
+
+### A session in place (added 2026-11-15, `merlin-bj5.2`)
+
+A session opens inside the Overview, in the list it was clicked in. The address is the Overview's plus
+`open=<harness>:<id>` (the scope parameters stay as they are); the session's own zoom is `sfrom`/`sto` (the
+Overview's `from`/`to` are its scope), and its hash targets (`#t<n>`, `#a<agentId>`, `#c<n>`) work as they did.
+A click on a row's head or text opens it whole; a click on its graph opens it on that stretch (`sfrom`, `sto`).
+Cost's Limits "biggest sessions" open in the window's scope, sorted by spend. Every open, previous/next and close is
+a history entry, so Back is the undo.
+
+- **The main area** (right of the sidebar) shows the focus instead of the table; the sidebar and the top bar's scope
+  controls stay. The table stays mounted under it (`visibility: hidden`, laid out, so its width and scroll position
+  are where they were): closing gives the list back without a refetch or a jump. **Any scope change closes the
+  focus** (a sidebar place, the range, a Custom or limit window, the search, the Organise-by key): the writers of
+  those parameters drop `open`, `sfrom`, `sto` (and the development `pin`, `unit`, `cursor`) and the hash
+  (`withoutFocus`, `useScope`).
+- **Paginator row**, sticky, one line: `‹ 12 of 160 ›`, the harness icon, the title, the session's spend in the
+  scope, a copy button for the resume command, and ✕. ‹ and › walk the table's rows in its current sort (`listRows`
+  is the one place both take the ordered list from); at either end the arrow is disabled. A session that is not in
+  the list (opened from elsewhere, or by an id prefix that resolves outside it) says "Not in this list" and has no
+  arrows. Keys: `[` and `]`, and `Esc` closes, after the graph's own Esc has taken back a pinned turn (one Esc, one
+  thing); none of them while a field has focus. The previous and next sessions' details are prefetched once the
+  current one has loaded.
+- **Body**: the session's graph with its key in the Legend panel's Graph tab (the Overview's list fills no tab), and
+  the pinned turn under it. The zoom window is the user's: toggling the panel resizes the plot and keeps the window
+  in time. The graph's vertical frame (`spend/layout.ts`) is built for the width the plot has with the panel open,
+  whether it is or not, so a toggle does not move it; going to another session builds a new one. The scroll
+  container has `scrollbar-gutter: stable`. An unknown or ambiguous id shows its message (candidates, "No such
+  session") in the focus area, under the paginator row.
+- **The old address** `/s/:harness/:id` (and `/dev/spend/…`) redirects, replacing its entry, to the Overview as it was
+  last left (`lastOverview()`, without a session) with `open=` and the hash; its `from`/`to` become `sfrom`/`sto`,
+  `pin`, `unit` and `cursor` are carried. Nothing else is special-cased: Moments, the Bead page and search keep
+  linking to `/s/…`.
+- Code: `features/overview/focus.ts` (pure: the address, the redirect target, the position in the list),
+  `SessionFocus.tsx`, `features/spend/SessionPage.tsx` (`SessionView`).
 
 ### Limit windows (added 2026-11-15, `merlin-6py`)
 

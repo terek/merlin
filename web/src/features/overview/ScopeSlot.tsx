@@ -8,6 +8,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useCost } from '../../api/queries'
 import { cn } from '../../lib/cn'
 import { useNow } from '../../lib/hooks'
+import { FOCUS_KEYS, withoutFocus } from '../../lib/scope'
 import { ShellSlot } from '../../shell/ShellSlot'
 import { useShortcut } from '../../shell/useShortcut'
 import { HarnessIcon, IconButton, KeyHint } from '../../ui'
@@ -53,24 +54,29 @@ export function useScope() {
   const by = parseBy(sp.get('by'))
   const sel = parseIn(sp.get('in'))
   const q = sp.get('q') ?? ''
+  // a session open in the Overview closes with any change of scope (the hash goes with it: the search is all we
+  // write); closing is a place in history, so back brings the session back
+  const closing = FOCUS_KEYS.some((k) => sp.has(k))
+  const fresh = () => withoutFocus(sp)
   const set = (changes: Record<string, string | null | undefined>) => {
-    const next = new URLSearchParams(sp)
+    // the order of the list is not the scope: sorting keeps a session open (it is only reachable with none)
+    const next = Object.keys(changes).every((k) => k === 'sort' || k === 'dir') ? new URLSearchParams(sp) : fresh()
     for (const [k, v] of Object.entries(changes)) {
       if (!v) next.delete(k)
       else next.set(k, v)
     }
-    setSp(next, { replace: true })
+    setSp(next, { replace: !closing })
   }
   // the selection is a place in history: back and forward walk through it
   const select = (path: string | null) => {
-    const next = new URLSearchParams(sp)
+    const next = fresh()
     if (path === null) next.delete('in')
     else next.set('in', path)
     setSp(next)
   }
   // a limit window is a place in history too: the instants and the harness, the selection kept
   const scopeTo = (r: CustomRange) => {
-    const next = new URLSearchParams(sp)
+    const next = fresh()
     next.delete('range')
     for (const [k, v] of Object.entries(formatCustom(r))) {
       if (v) next.set(k, v)

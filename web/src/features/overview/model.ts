@@ -4,10 +4,10 @@
 
 import type { GroupDim, OverviewBead, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
 import { formatMoney } from '../../lib/format'
-import { sessionPath } from '../../lib/paths'
 import { homeOf } from '../../lib/places'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
 import { HOLD_MS } from '../spend/timeline'
+import { focusSearch } from './focus'
 
 const MIN = 60_000
 const HOUR = 3_600_000
@@ -1275,15 +1275,21 @@ export function clipToActivity(l: OverviewLane, axis: Axis, a: number, b: number
 }
 
 /**
- * Where a click at x on a session's graph goes: the Session page with the stretch under the pointer as its
- * window (`from`, `to`), cut to the session's activity in it; the plain session path outside the plot.
+ * Where a click at x on a session's graph goes: the Overview as it is (`search`) with the session open on the
+ * stretch under the pointer as its window (`sfrom`, `sto`), cut to the session's activity in it; the session whole
+ * outside the plot.
  */
-export function sessionStretchUrl(l: OverviewLane, axis: Axis, x: number): string {
-  const base = sessionPath({ harness: l.harness, id: l.id })
+export function sessionStretchUrl(
+  l: OverviewLane,
+  axis: Axis,
+  x: number,
+  search: string | URLSearchParams = '',
+): string {
+  const key = { harness: l.harness, id: l.id }
   const t = bandTimes(axis, x)
-  if (!t) return base
+  if (!t) return `/${focusSearch(search, key)}`
   const [a, b] = clipToActivity(l, axis, t.fromMs, t.toMs)
-  return `${base}?${new URLSearchParams({ from: new Date(a).toISOString(), to: new Date(b).toISOString() })}`
+  return `/${focusSearch(search, key, { from: new Date(a).toISOString(), to: new Date(b).toISOString() })}`
 }
 
 /** A mark under the locator's strip: its x, label and whether it is a month's first day. */
@@ -1341,4 +1347,23 @@ export function monthRange(s: Strip, dayIndex: number, today: Date): CustomRange
   const todayMs = dayStart(localDay(today)).getTime()
   const last = Math.max(first, Math.min(lastOfMonth, stripLast, todayMs))
   return { from: localDay(new Date(first)), to: localDay(new Date(last)) }
+}
+
+/** What the list shows, in the order the table draws it: the one place both the table and the focus take it from. */
+export function listRows(
+  lanes: readonly OverviewLane[],
+  o: {
+    term: string
+    hits?: ReadonlySet<string>
+    sel: string | null
+    by: By
+    beads?: Beads
+    sort: Sort
+    home: string | undefined
+  },
+): { found: OverviewLane[]; scope: OverviewLane[]; rows: OverviewLane[] } {
+  const found = searchLanes([...lanes], o.term, o.hits)
+  const scope = selectLanes(found, o.sel, o.by, o.beads)
+  const rows = sortLanes(scope, o.sort, o.home, { by: o.by, beads: o.beads })
+  return { found, scope, rows }
 }

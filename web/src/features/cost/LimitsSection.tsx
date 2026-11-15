@@ -6,16 +6,23 @@ import { Link } from 'react-router-dom'
 import type { LimitWindow } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatMoney } from '../../lib/format'
-import { sessionPath } from '../../lib/paths'
 import { HarnessIcon, Money } from '../../ui'
+import { openValue } from '../overview/focus'
 import { type CustomRange, formatCustom } from '../overview/model'
 import { limitName, lockoutMs, lockoutText, windowRange, windowTimes } from '../overview/windows'
 import { sessionLabel, worthSentences } from './worth'
 
 const HEAD = 'text-faint text-meta uppercase tracking-wide'
 
-/** The Overview's address for a window: its instants and harness, the spend sort, the current place kept. */
-export function windowSessionsHref(sp: URLSearchParams, r: CustomRange): string {
+/**
+ * The Overview's address for a window: its instants and harness, the spend sort, the current place kept; with
+ * `open`, that session open in it.
+ */
+export function windowSessionsHref(
+  sp: URLSearchParams,
+  r: CustomRange,
+  open?: { harness: string; id: string },
+): string {
   const out = new URLSearchParams()
   for (const k of ['by', 'in']) {
     const v = sp.get(k)
@@ -24,6 +31,7 @@ export function windowSessionsHref(sp: URLSearchParams, r: CustomRange): string 
   const f = formatCustom(r)
   if (f) for (const [k, v] of Object.entries(f)) if (v) out.set(k, v)
   out.set('sort', 'spend')
+  if (open) out.set('open', openValue(open))
   return `/?${out.toString()}`
 }
 
@@ -126,7 +134,7 @@ function Row({ w, sp, onWindow }: { w: LimitWindow; sp: URLSearchParams; onWindo
             <span key={`${s.harness}/${s.id}`}>
               {i > 0 && ', '}
               <Link
-                to={sessionPath(s)}
+                to={windowSessionsHref(sp, range, s)}
                 onClick={(e) => e.stopPropagation()}
                 className="text-fg hover:text-accent hover:underline"
                 title={`${sessionLabel(s)}: ${s.usd.toFixed(2)} USD`}

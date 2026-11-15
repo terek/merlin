@@ -240,10 +240,10 @@ export function Breakdown({ data, hover, onHover }: BreakdownProps) {
 
   return (
     <section
-      className="mb-3 flex items-start text-sec tabular-nums"
+      className="mb-3 flex flex-wrap items-start gap-y-2 text-sec tabular-nums"
       aria-label="The spend in three bars: by who, by token class, by model tier"
     >
-      <div className="relative min-w-0 flex-1">
+      <div className="relative min-w-[18rem] flex-1">
         <div ref={track} style={{ marginRight: PRICE_ROOM }}>
           {rows.map((row) => (
             <div key={row.key} className="h-7 py-0.5">

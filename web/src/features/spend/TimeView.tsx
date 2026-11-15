@@ -234,6 +234,8 @@ export interface TimePlotProps {
   turnLines: ReactNode
   /** The session the page is about: its main row is marked "this session". */
   current?: SessionKey
+  /** Width (px) to take off the plot's for the vertical frame: what a shut side panel would take. */
+  frameInset?: number
 }
 
 /** Where a branch leaves its parent's row: a dot (a fork, with the context it copied), a ring (a continuation). */
@@ -281,6 +283,7 @@ export function TimePlot({
   onKey,
   turnLines,
   current,
+  frameInset = 0,
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
@@ -310,7 +313,9 @@ export function TimePlot({
     const sw = selectedUnit ? swarmOfUnit(timeline.lanes, swarms, selectedUnit.branch, selectedUnit.id) : undefined
     if (sw) setOpen((o) => (o.has(sw.id) ? o : new Set(o).add(sw.id)))
   }, [selectedUnit, timeline, swarms])
-  // the vertical frame, of the whole session: it does not move with the window
+  // the vertical frame, of the whole session: it does not move with the window, nor with a panel beside the page
+  // (`frameInset` is the width the panel takes when it is shut, so that the frame is built for the same width)
+  const frameX1 = Math.max(X0 + 80, X1 - frameInset)
   const frame = useMemo(
     () =>
       buildFrame(
@@ -318,10 +323,10 @@ export function TimePlot({
         swarms,
         open,
         X0,
-        X1,
+        frameX1,
         tree.branches.map((b) => b.overhead.length > 0),
       ),
-    [timeline, swarms, open, X1, tree],
+    [timeline, swarms, open, frameX1, tree],
   )
   const { strips, height, cTicks, kCtx } = frame
   // the y-ranges a break's veil covers: the rows, never an overhead strip (cut around each one)

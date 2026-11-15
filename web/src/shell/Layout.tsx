@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from './ErrorBoundary'
 import { lensLinks, rememberOverview, rememberScope } from './lastOverview'
 import { PanelColumn, PanelProvider, usePanel } from './Panel'
-import { SessionSlot } from './SessionSlot'
 import { SlotProvider } from './ShellSlot'
 import { TopBar } from './TopBar'
 import { useShortcut } from './useShortcut'
@@ -21,7 +20,6 @@ function Shell() {
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
   const main = useRef<HTMLElement>(null)
-  const onSession = useMatch('/s/:harness/:id') !== null
   const links = lensLinks(pathname, search)
   useShortcut('g o', () => navigate(links.overview))
   useShortcut('g s', () => navigate('/sessions'))
@@ -46,7 +44,6 @@ function Shell() {
     <SlotProvider>
       <div className="flex h-dvh flex-col overflow-hidden">
         <TopBar />
-        {onSession && <SessionSlot />}
         <div className="relative flex min-h-0 flex-1">
           <main ref={main} tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-auto outline-none">
             <ErrorBoundary resetKey={pathname}>

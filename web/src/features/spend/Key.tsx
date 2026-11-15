@@ -111,8 +111,8 @@ const base = (color = 'var(--faint)') => (
   <line x1={0} x2={W} y1={B + 0.5} y2={B + 0.5} stroke={color} strokeWidth={0.75} />
 )
 
-/** The key's groups, in three columns under the plot (fewer where the card is narrower than about 900px). */
-export function Legend({ facts }: { facts: KeyFacts }) {
+/** The key's groups, in three columns under the plot (fewer where the card is narrower than about 900px); `stacked`: one column, for the side panel. */
+export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean }) {
   const id = useId().replace(/[^a-zA-Z0-9-]/g, '')
   const f = facts
   const held = (strong: boolean) => {
@@ -499,7 +499,11 @@ export function Legend({ facts }: { facts: KeyFacts }) {
   }
   return (
     <aside
-      className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] items-start gap-x-6 border-t border-line pt-3 text-meta text-muted"
+      className={
+        stacked
+          ? 'text-meta text-muted'
+          : 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(17rem,1fr))] items-start gap-x-6 border-t border-line pt-3 text-meta text-muted'
+      }
       aria-label="Key: how the marks of the graph look"
     >
       <div>{group('Sessions and agents')}</div>

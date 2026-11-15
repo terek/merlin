@@ -3,10 +3,11 @@ import { UiGallery } from './dev/UiGallery'
 import { BeadPage } from './features/beads/BeadPage'
 import { CostPage } from './features/cost/CostPage'
 import { MomentsPage } from './features/moments/MomentsPage'
+import { legacyTarget } from './features/overview/focus'
 import { OverviewPage } from './features/overview/OverviewPage'
 import { SessionsPage } from './features/sessions/SessionsPage'
-import { SessionPage } from './features/spend/SessionPage'
 import { Layout } from './shell/Layout'
+import { lastOverview } from './shell/lastOverview'
 import { NotFound } from './shell/NotFound'
 
 /** The prototype's old address, kept for links made while it was one. */
@@ -14,6 +15,16 @@ function SpendRedirect() {
   const { harness = '', id = '' } = useParams()
   const { search, hash } = useLocation()
   return <Navigate replace to={`/s/${encodeURIComponent(harness)}/${encodeURIComponent(id)}${search}${hash}`} />
+}
+
+/**
+ * The Session page's old address, `/s/:harness/:id`: the Overview as it was last left, with the session open
+ * (docs/ui.md section 10b). Its zoom, `#t`/`#a`/`#c` targets and development parameters come along.
+ */
+function SessionRedirect() {
+  const { harness = '', id = '' } = useParams()
+  const { search, hash } = useLocation()
+  return <Navigate replace to={legacyTarget(lastOverview(), { harness, id }, search, hash)} />
 }
 
 /** The Overview's old address: `/`, the query string kept. */
@@ -52,7 +63,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="sessions" element={<SessionsPage />} />
-        <Route path="s/:harness/:id" element={<SessionPage />} />
+        <Route path="s/:harness/:id" element={<SessionRedirect />} />
         <Route path="bead/:id" element={<BeadPage />} />
         <Route path="cost" element={<CostPage />} />
         <Route path="overview" element={<OverviewRedirect />} />

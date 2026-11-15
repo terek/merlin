@@ -1,4 +1,4 @@
-import { scopeSearch } from '../lib/scope'
+import { scopeSearch, withoutFocus } from '../lib/scope'
 
 // The last Overview address visited in this tab (path and query), for the Session page's back link.
 
@@ -11,7 +11,9 @@ export const isOverviewPath = (pathname: string): boolean => pathname === '/'
 export function rememberOverview(pathname: string, search: string, store: Pick<Storage, 'setItem'> = sessionStorage) {
   if (!isOverviewPath(pathname)) return
   try {
-    store.setItem(KEY, pathname + search)
+    // a session open in the Overview is not part of the address to come back to
+    const q = withoutFocus(search).toString()
+    store.setItem(KEY, q ? `${pathname}?${q}` : pathname)
   } catch {
     // storage unavailable: the back link falls back to `/`
   }

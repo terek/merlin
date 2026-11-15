@@ -162,21 +162,26 @@ export function useTrees(filters: SessionFilters): UseInfiniteQueryResult<{ page
   })
 }
 
+/** The query of one session (what `useSession` runs), for a prefetch. */
+export function sessionQuery(harness: string, id: string, messages = false) {
+  return {
+    queryKey: queryKeys.session(harness, id, messages),
+    queryFn: ({ signal }: { signal: AbortSignal }) =>
+      get<SessionDetail>(
+        `/api/sessions/${encodeURIComponent(harness)}/${encodeURIComponent(id)}`,
+        messages ? { messages: 1 } : undefined,
+        signal,
+      ),
+  }
+}
+
 /** One session; `id` may be a unique prefix. A 409 ambiguous_id error carries `candidates`. */
 export function useSession(
   harness: string,
   id: string,
   opts: { messages?: boolean } = {},
 ): UseQueryResult<SessionDetail> {
-  return useQuery({
-    queryKey: queryKeys.session(harness, id, opts.messages),
-    queryFn: ({ signal }) =>
-      get<SessionDetail>(
-        `/api/sessions/${encodeURIComponent(harness)}/${encodeURIComponent(id)}`,
-        opts.messages ? { messages: 1 } : undefined,
-        signal,
-      ),
-  })
+  return useQuery(sessionQuery(harness, id, opts.messages))
 }
 
 /** Full-text search. Disabled (and `data` undefined) while `q` is shorter than 2 characters. */

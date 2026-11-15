@@ -1070,18 +1070,21 @@ describe('a click on a row graph', () => {
   })
 
   test('the URL', () => {
-    const url = sessionStretchUrl(l, axis, at(2))
+    const url = sessionStretchUrl(l, axis, at(2), '?range=30d&in=%2Fwork')
     const [path, query] = url.split('?')
-    expect(path).toBe('/s/claude/abc%201')
+    expect(path).toBe('/')
     const q = new URLSearchParams(query)
-    expect(q.get('from')).toBe(new Date(2026, 10, 9, 10).toISOString())
-    expect(q.get('to')).toBe(new Date(2026, 10, 9, 13).toISOString())
+    expect(q.get('range')).toBe('30d')
+    expect(q.get('in')).toBe('/work')
+    expect(q.get('open')).toBe('claude:abc 1')
+    expect(q.get('sfrom')).toBe(new Date(2026, 10, 9, 10).toISOString())
+    expect(q.get('sto')).toBe(new Date(2026, 10, 9, 13).toISOString())
     // a day it did nothing on still opens that day
     const idle = new URLSearchParams(sessionStretchUrl(l, axis, at(5)).split('?')[1])
-    expect(idle.get('from')).toBe(new Date(2026, 10, 12).toISOString())
-    expect(idle.get('to')).toBe(new Date(2026, 10, 13).toISOString())
+    expect(idle.get('sfrom')).toBe(new Date(2026, 10, 12).toISOString())
+    expect(idle.get('sto')).toBe(new Date(2026, 10, 13).toISOString())
     // outside the plot: the session whole
-    expect(sessionStretchUrl(l, axis, -5)).toBe('/s/claude/abc%201')
+    expect(sessionStretchUrl(l, axis, -5)).toBe('/?open=claude%3Aabc+1')
   })
 })
 
