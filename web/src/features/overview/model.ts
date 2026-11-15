@@ -3,6 +3,7 @@
 // a row and what the pointer is near. OverviewPage.tsx draws what this returns (docs/ui.md section 10b).
 
 import type { GroupDim, OverviewBead, OverviewLane, OverviewSlot, OverviewSpan } from '../../api/types'
+import { formatMoney } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { homeOf } from '../../lib/places'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
@@ -271,12 +272,60 @@ export function lifeSpan(
 export type By = GroupDim | 'bead'
 export const BYS: readonly By[] = ['dir', 'checkout', 'repo', 'remote', 'bead']
 
+/** A call is deep when its context is this many tokens or more (api.md, "Peak and deep"). */
+export const DEEP_CONTEXT = 200_000
+
+/** The scope's largest peak and the sum of its lanes' deep spend (the summary's cell). */
+export const depthOf = (lanes: readonly OverviewLane[]): { peak: number; deepUSD: number } =>
+  lanes.reduce((t, l) => ({ peak: Math.max(t.peak, l.peak ?? 0), deepUSD: t.deepUSD + (l.deepUSD ?? 0) }), {
+    peak: 0,
+    deepUSD: 0,
+  })
+
+const HOLDER_WORD: Record<string, string> = {
+  subagent: 'sub-agent',
+  teammate: 'teammate',
+  fork: 'fork',
+  workflow: 'workflow agent',
+  review: 'review agent',
+}
+
+/** Who holds a lane's peak: an agent with a span (its kind and name), an agent without (its kind) or the main thread. */
+export function peakHolder(l: OverviewLane): { kind?: string; name?: string; text: string } {
+  if (l.peakAgentId) {
+    const sp = l.spans.find((x) => x.agentId === l.peakAgentId)
+    if (sp) {
+      const word = HOLDER_WORD[sp.kind] ?? sp.kind
+      return { kind: sp.kind, name: sp.title, text: sp.title ? `${word} "${sp.title}"` : word }
+    }
+  }
+  if (l.peakAgentKind) return { kind: l.peakAgentKind, text: HOLDER_WORD[l.peakAgentKind] ?? l.peakAgentKind }
+  return { text: 'main thread' }
+}
+
+const clock = (iso: string): string => {
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/** The peak cell's title: "Peak 262k, held by sub-agent "Explore" at 10:05 · $31.40 spent in calls at 200k or more". */
+export function peakTitle(l: OverviewLane): string {
+  if (!l.peak) return ''
+  const at = l.peakAt ? ` at ${clock(l.peakAt)}` : ''
+  const deep = l.deepUSD ? ` · ${formatMoney(l.deepUSD)} spent in calls at 200k or more` : ''
+  return `Peak ${peakText(l.peak)}, held by ${peakHolder(l).text}${at}${deep}`
+}
+
+/** A peak as it reads in the column: whole thousands (`408k`), one decimal from a million (`1.1M`). */
+export const peakText = (n: number): string =>
+  n < 999_500 ? `${Math.round(n / 1000)}k` : `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+
 /** The beads of a response (`Overview.beads`), by id. */
 export type Beads = Readonly<Record<string, OverviewBead>>
 
 /** The column a table is sorted by. */
-export type SortKey = 'start' | 'last' | 'active' | 'turns' | 'agents' | 'spend' | 'key'
-export const SORT_KEYS: readonly SortKey[] = ['start', 'last', 'active', 'turns', 'agents', 'spend', 'key']
+export type SortKey = 'start' | 'last' | 'active' | 'turns' | 'agents' | 'peak' | 'spend' | 'key'
+export const SORT_KEYS: readonly SortKey[] = ['start', 'last', 'active', 'turns', 'agents', 'peak', 'spend', 'key']
 export interface Sort {
   key: SortKey
   desc: boolean
@@ -394,13 +443,18 @@ export function sortLanes(
             ? l.turns
             : s.key === 'agents'
               ? l.agents
-              : l.usd
+              : s.key === 'peak'
+                ? (l.peak ?? 0)
+                : l.usd
   return [...lanes].sort((a, b) =>
     s.key === 'key'
       ? byPlace(lanePlace(a), lanePlace(b), s.desc, byBead ? comparePath(idLess) : comparePlace) ||
         cmp(b.usd, a.usd) ||
         cmp(a.id, b.id)
-      : (s.desc ? -1 : 1) * cmp(val(a), val(b)) || cmp(b.usd, a.usd) || cmp(a.id, b.id),
+      : (s.desc ? -1 : 1) * cmp(val(a), val(b)) ||
+        (s.key === 'peak' ? cmp(b.deepUSD ?? 0, a.deepUSD ?? 0) : 0) ||
+        cmp(b.usd, a.usd) ||
+        cmp(a.id, b.id),
   )
 }
 
@@ -510,6 +564,8 @@ export interface KindSpine {
   kind: Kind
   /** Verticals of the spawns that do not start a run (the run's elbow is its first spawn's), x in px. */
   ticks: number[]
+  /** The x of the spawns of agents that peaked at 200k or more (drawn heavier). */
+  deepTicks: number[]
   runs: SpineRun[]
 }
 
@@ -528,7 +584,7 @@ export function spineLanes(spans: OverviewSpan[] | undefined, axis: Axis): KindS
         const clipped = start < axis.fromMs
         const x0 = Math.max(0, xOf(axis, start))
         const x1 = Math.min(axis.width, Math.max(xOf(axis, Date.parse(s.end)), x0 + MIN_SPINE))
-        return { x0, x1, clipped }
+        return { x0, x1, clipped, deep: (s.peak ?? 0) >= DEEP_CONTEXT }
       })
       .filter((l) => l.x0 < axis.width && l.x1 >= 0)
       .sort((a, b) => a.x0 - b.x0 || b.x1 - a.x1)
@@ -536,7 +592,7 @@ export function spineLanes(spans: OverviewSpan[] | undefined, axis: Axis): KindS
     if (isBranch(kind)) {
       // a branched session is its own row: only where it began, a vertical (and the page's node)
       const xs = [...new Set(lives.filter((l) => !l.clipped).map((l) => r1(l.x0)))]
-      if (xs.length > 0) out.push({ kind, ticks: xs, runs: [] })
+      if (xs.length > 0) out.push({ kind, ticks: xs, deepTicks: [], runs: [] })
       continue
     }
     const runs: SpineRun[] = []
@@ -559,7 +615,8 @@ export function spineLanes(spans: OverviewSpan[] | undefined, axis: Axis): KindS
       seen.add(k)
       ticks.push(r1(s.x))
     }
-    out.push({ kind, ticks, runs })
+    const deepTicks = [...new Set(lives.filter((l) => l.deep && !l.clipped).map((l) => r1(l.x0)))]
+    out.push({ kind, ticks, deepTicks, runs })
   }
   return out
 }
@@ -713,13 +770,16 @@ export interface Layout {
   pad: number
   turns: number
   agents: number
+  /** The Peak column; absent: no such column. */
+  peak?: number
   spend: number
   /** The gap between the block's columns. */
   gap: number
 }
 
 /** The width of the structured block: its left rule, the padding and the three columns with their gaps. */
-export const blockWidth = (L: Layout): number => 1 + 2 * L.pad + L.turns + L.agents + L.spend + 2 * L.gap
+export const blockWidth = (L: Layout): number =>
+  1 + 2 * L.pad + L.turns + L.agents + (L.peak ?? 0) + L.spend + (L.peak === undefined ? 2 : 3) * L.gap
 
 export interface Band {
   x0: number

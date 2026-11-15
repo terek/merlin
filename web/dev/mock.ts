@@ -421,6 +421,8 @@ interface Contribution {
   /** by=class or by=agent: the part of the spend this contribution stands for. */
   class?: string
   agent?: string
+  /** by=depth: the context band of the calls this contribution stands for. */
+  depth?: string
   /** by=hour: local hour key, 2026-11-13T14. */
   hour?: string
   session: string
@@ -519,6 +521,49 @@ function fanOut(
   return out
 }
 
+const DEPTH_BANDS = ['0-100k', '100k-200k', '200k-500k', '500k+']
+const depthBand = (ctx: number) => (ctx < 100_000 ? 0 : ctx < 200_000 ? 1 : ctx < 500_000 ? 2 : 3)
+const depthRank = (k: string) => (k === '(overhead)' ? 99 : DEPTH_BANDS.indexOf(k))
+
+/**
+ * by=depth: each session contribution stands for the bands of the session's own synthetic calls (the ones the
+ * Overview's peak and deep figures come from), of that local day and, when it has an agent part, of that part.
+ */
+function fanOutDepth(cs: Contribution[]): Contribution[] {
+  const out: Contribution[] = []
+  for (const c of cs) {
+    if (c.model === '(overhead)') {
+      out.push({ ...c, depth: '(overhead)' })
+      continue
+    }
+    const sess = c.scripted ? undefined : ds.sessions.find((x) => x.summary.key.id === c.session)
+    const msgs = sess ? overviewSession(sess).msgs.filter((m) => m.usd > 0) : []
+    const ofPart = (m: OvMsg) => !c.agent || c.agent === '(unsplit)' || (c.agent === 'agents') === !!m.agent
+    let pick = msgs.filter((m) => ofPart(m) && localDay(m.at) === c.day)
+    if (pick.length === 0) pick = msgs.filter(ofPart)
+    const band = [0, 0, 0, 0]
+    for (const m of pick) band[depthBand(m.agent ? (m.peak ?? 0) : m.ctx)] += m.usd
+    let sum = band[0] + band[1] + band[2] + band[3]
+    if (sum === 0) {
+      band[0] = 1
+      sum = 1
+    }
+    let first = true
+    band.forEach((b, i) => {
+      if (b === 0 && !(first && i === 0)) return
+      out.push({
+        ...c,
+        depth: DEPTH_BANDS[i],
+        usd: (c.usd * b) / sum,
+        count: first ? c.count : 0,
+        comp: first ? c.comp : undefined,
+      })
+      first = false
+    })
+  }
+  return out
+}
+
 /** How a working day's spend lies over the 24 local hours: little at night, a morning and an afternoon hump. */
 const HOUR_SHAPE = (() => {
   const w = Array.from(
@@ -557,6 +602,7 @@ function costTable(u: URL): CostTable {
       'kind',
       'class',
       'agent',
+      'depth',
       'session',
       'dir',
       'checkout',
@@ -568,9 +614,9 @@ function costTable(u: URL): CostTable {
     throw new BadRequest(
       `by=${JSON.stringify(by)}: use project, day, hour, model, kind, class, agent, session, dir, checkout, repo, remote or branch`,
     )
-  const split = u.searchParams.get('split') as 'project' | 'model' | 'kind' | 'class' | 'agent' | null
-  if (split && !['project', 'model', 'kind', 'class', 'agent'].includes(split))
-    throw new BadRequest(`split=${JSON.stringify(split)}: use project, model, kind, class or agent`)
+  const split = u.searchParams.get('split') as 'project' | 'model' | 'kind' | 'class' | 'agent' | 'depth' | null
+  if (split && !['project', 'model', 'kind', 'class', 'agent', 'depth'].includes(split))
+    throw new BadRequest(`split=${JSON.stringify(split)}: use project, model, kind, class, agent or depth`)
   const project = u.searchParams.get('project') || undefined
   const place = placeFilterOf(u)
   const scope = scopeOf(u)
@@ -691,22 +737,25 @@ function costTable(u: URL): CostTable {
   if (by === 'class' || split === 'class') cs = fanOut(cs, 'class', CLASS_SHARES, () => null)
   if (by === 'agent' || split === 'agent')
     cs = fanOut(cs, 'agent', AGENT_SHARES, (c) => (c.scripted ? 'main' : c.model === '(overhead)' ? '(unsplit)' : null))
+  if (by === 'depth' || split === 'depth') cs = fanOutDepth(cs)
 
   const placeDims = ['dir', 'checkout', 'repo', 'remote', 'branch']
   const keyOf = (c: Contribution, dim: CostBy | 'project' | 'model' | 'kind' | 'class' | 'agent'): string =>
-    dim === 'hour'
-      ? (c.hour ?? '')
-      : dim === 'class'
-        ? (c.class ?? '')
-        : dim === 'agent'
-          ? (c.agent ?? '')
-          : dim === 'session'
-            ? c.session
-            : placeDims.includes(dim) && c.summary
-              ? costKey(dim as 'dir', c.summary)
-              : placeDims.includes(dim)
-                ? ''
-                : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
+    dim === 'depth'
+      ? (c.depth ?? '')
+      : dim === 'hour'
+        ? (c.hour ?? '')
+        : dim === 'class'
+          ? (c.class ?? '')
+          : dim === 'agent'
+            ? (c.agent ?? '')
+            : dim === 'session'
+              ? c.session
+              : placeDims.includes(dim) && c.summary
+                ? costKey(dim as 'dir', c.summary)
+                : placeDims.includes(dim)
+                  ? ''
+                  : (c[dim as 'project' | 'day' | 'model' | 'kind'] as string)
   const rows = new Map<string, CostRow & { ids: Set<string>; parts: Map<string, CostSplitEntry> }>()
   for (const c of cs) {
     const k = keyOf(c, by)
@@ -744,12 +793,18 @@ function costTable(u: URL): CostTable {
   let out: CostRow[] = [...rows.values()].map(({ ids, parts, ...row }) => ({
     ...row,
     sessions: by === 'session' ? Math.max(1, row.sessions) : ids.size + row.sessions,
-    split: split ? [...parts.values()].sort((a, b) => b.totalUSD - a.totalUSD) : undefined,
+    split: split
+      ? [...parts.values()].sort(
+          split === 'depth' ? (a, b) => depthRank(a.key) - depthRank(b.key) : (a, b) => b.totalUSD - a.totalUSD,
+        )
+      : undefined,
   }))
   out =
     by === 'day' || by === 'hour'
       ? out.sort((a, b) => (a.key < b.key ? -1 : 1))
-      : out.sort((a, b) => Number(a.key === '(unsplit)') - Number(b.key === '(unsplit)') || b.totalUSD - a.totalUSD)
+      : by === 'depth'
+        ? out.sort((a, b) => depthRank(a.key) - depthRank(b.key))
+        : out.sort((a, b) => Number(a.key === '(unsplit)') - Number(b.key === '(unsplit)') || b.totalUSD - a.totalUSD)
   const total: Money = { totalUSD: 0, reportedUSD: 0, attributedUSD: 0 }
   for (const c of cs) {
     addMoney(total, c.usd, c.reported)
@@ -1014,6 +1069,9 @@ interface OvMsg {
   at: number
   usd: number
   ctx: number
+  /** A call of an agent (the main thread's has none): the agent and the context it carried. */
+  agent?: OvAgent
+  peak?: number
 }
 
 /** One generated agent of a session. */
@@ -1022,6 +1080,10 @@ interface OvAgent {
   start: number
   end: number
   title: string
+  /** Its id on the lane; a review agent has no span but still holds a peak. */
+  id: string
+  /** Not listed as a span. */
+  hidden?: boolean
 }
 
 /** A session as the overview sees it: calls (main agent has ctx > 0), turn starts and agents. */
@@ -1067,6 +1129,10 @@ function overviewSession(s: Sess): OvSession {
   const hit = overviewCache.get(id)
   if (hit) return hit
   const r = makeRng([...id].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7))
+  const hash = (x: string) => [...x].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 11)
+  const idHash = hash(id)
+  // some main threads run on past 200k with no auto-compact
+  const cap = idHash % 4 === 0 ? 200_000 + ((idHash >> 3) % 120_000) : 190_000
   const noNights = /merlin/.test(`${s.summary.cwd ?? ''} ${s.summary.project}`)
   const out: OvSession = { sess: s, msgs: [], turns: [], agents: [] }
   let t = s.summary.startedAt ? Date.parse(s.summary.startedAt) : 0
@@ -1086,7 +1152,7 @@ function overviewSession(s: Sess): OvSession {
     for (let c = 0; c < calls; c++) {
       t += r.int(12, 70) * 1000
       ctx += r.int(800, 7000)
-      if (ctx > 190_000) ctx = r.int(30_000, 50_000)
+      if (ctx > cap) ctx = r.int(30_000, 50_000)
       const w = 0.3 + r.next() * (ctx / 100_000)
       weights.push(w)
       out.msgs.push({ at: t, usd: w, ctx })
@@ -1098,9 +1164,20 @@ function overviewSession(s: Sess): OvSession {
       for (let a = 0; a < n; a++) {
         const st = t + r.int(0, burst ? 100_000 : 40_000)
         const len = kind === 'workflow' ? r.int(5, 40) * MIN : r.int(1, 14) * MIN
-        out.agents.push({ kind, start: st, end: st + len, title: `${r.pick(AGENT_TITLES)} ${a + 1}` })
-        weights.push(0.5)
-        out.msgs.push({ at: st + len, usd: 0.5, ctx: 0 })
+        const agent: OvAgent = {
+          kind,
+          start: st,
+          end: st + len,
+          title: `${r.pick(AGENT_TITLES)} ${a + 1}`,
+          id: `a${(hash(`${id}:${out.agents.length}`) % 0xfffff).toString(16).padStart(5, '0')}`,
+        }
+        out.agents.push(agent)
+        // about half the agents run deep (250k to 700k), the rest stay under 180k; a deep call costs more
+        const h = hash(agent.id)
+        const peak = h % 2 === 0 ? 250_000 + ((h >> 4) % 450_000) : 40_000 + ((h >> 4) % 140_000)
+        const w = peak >= 200_000 ? 8 : 0.5
+        weights.push(w)
+        out.msgs.push({ at: st + len, usd: w, ctx: 0, agent, peak })
       }
     }
     // the pause before the next turn
@@ -1108,6 +1185,20 @@ function overviewSession(s: Sess): OvSession {
     t += p < 0.2 ? r.int(1, 4) * MIN : p < 0.88 ? r.int(6, 40) * MIN : r.int(70, 240) * MIN
     if (noNights && (localHour(t) < 9 || localHour(t) >= 23)) t = nextMorning(t, r)
     if (t > ds.now) break
+  }
+  // now and then a review agent (listed as no span) holds the session's largest context
+  if (idHash % 23 === 0 && out.msgs.length > 2) {
+    const mid = out.msgs[Math.floor(out.msgs.length / 2)]
+    const review: OvAgent = {
+      kind: 'subagent',
+      start: mid.at,
+      end: mid.at,
+      title: 'review',
+      id: 'rv0001',
+      hidden: true,
+    }
+    weights.push(3)
+    out.msgs.push({ at: mid.at + 5000, usd: 3, ctx: 0, agent: review, peak: 300_000 + (idHash % 180_000) })
   }
   const sum = weights.reduce((a, b) => a + b, 0) || 1
   out.msgs.forEach((m) => {
@@ -1120,6 +1211,7 @@ function overviewSession(s: Sess): OvSession {
       start: first,
       end: out.msgs[out.msgs.length - 1].at,
       title: s.summary.title ?? '',
+      id: '',
     }
   }
   overviewCache.set(id, out)
@@ -1252,14 +1344,40 @@ function overview(u: URL): Overview {
       if (v > 0) active[i] = 1
     })
     const sid = { harness: overviewHarness(s.summary.key.id, s.summary.key.harness), id: s.summary.key.id }
-    const agents = os.agents.filter((a) => a.end >= from && a.start < to)
-    const spans: OverviewSpan[] = agents.map((a) => ({
-      kind: a.kind,
-      start: new Date(a.start).toISOString(),
-      end: new Date(a.end).toISOString(),
-      session: sid,
-      title: a.title,
-    }))
+    const agents = os.agents.filter((a) => a.end >= from && a.start < to && !a.hidden)
+    // peak and deep over the calls in range: the main thread's and every agent's
+    let peak = 0
+    let peakMsg: OvMsg | undefined
+    let deep = 0
+    const agentCalls = new Map<string, { peak: number; deep: number }>()
+    for (const m of os.msgs) {
+      if (!inRange(m.at)) continue
+      const c = m.agent ? (m.peak ?? 0) : m.ctx
+      if (c > peak) {
+        peak = c
+        peakMsg = m
+      }
+      if (c >= 200_000) deep += m.usd
+      if (m.agent) {
+        const a = agentCalls.get(m.agent.id) ?? { peak: 0, deep: 0 }
+        a.peak = Math.max(a.peak, c)
+        if (c >= 200_000) a.deep += m.usd
+        agentCalls.set(m.agent.id, a)
+      }
+    }
+    const spans: OverviewSpan[] = agents.map((a) => {
+      const c = agentCalls.get(a.id)
+      return {
+        kind: a.kind,
+        start: new Date(a.start).toISOString(),
+        end: new Date(a.end).toISOString(),
+        session: sid,
+        title: a.title,
+        agentId: a.id,
+        peak: c?.peak || undefined,
+        deepUSD: c && c.deep > 0 ? r2(c.deep) : undefined,
+      }
+    })
     const b = os.branch
     if (b && b.end >= from && b.start < to)
       spans.push({
@@ -1297,6 +1415,11 @@ function overview(u: URL): Overview {
       idle: cut(idle),
       active: cut(active),
       spans,
+      peak: peak || undefined,
+      peakAt: peakMsg ? new Date(peakMsg.at).toISOString() : undefined,
+      peakAgentId: peakMsg?.agent?.id,
+      peakAgentKind: peakMsg?.agent?.hidden ? 'review' : undefined,
+      deepUSD: deep > 0 ? r2(Math.min(deep, total)) : undefined,
     })
   }
   lanes.sort((x, y) => y.usd - x.usd || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0))

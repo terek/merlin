@@ -921,7 +921,8 @@ export type CostBy =
   | 'bead'
   | 'family'
   | 'session'
-export type CostSplit = 'project' | 'model' | 'kind' | 'class' | 'agent'
+  | 'depth'
+export type CostSplit = 'project' | 'model' | 'kind' | 'class' | 'agent' | 'depth'
 
 /** One slice of a row when the table is requested with `split=`. */
 export interface CostSplitEntry extends Money {
@@ -1198,6 +1199,12 @@ export interface OverviewSpan {
   /** The session that launched it (for a branched session, itself). */
   session: { harness: string; id: string }
   title?: string
+  /** The agent's id (not on a branched session). */
+  agentId?: string
+  /** Largest context of the agent's own calls in the range. */
+  peak?: number
+  /** Spend of its calls at 200k context or more. */
+  deepUSD?: number
 }
 
 /** A lane's arrays are trimmed: index j is slot `slot0 + j`; outside them everything is zero. */
@@ -1231,6 +1238,15 @@ export interface OverviewLane {
   idle: number[]
   active: number[]
   spans: OverviewSpan[]
+  /** Largest context of any call the lane counts, agents included; absent when 0. */
+  peak?: number
+  peakAt?: string
+  /** The agent that holds the peak; absent for the main thread. Matches a span's `agentId`. */
+  peakAgentId?: string
+  /** Kind of that agent, set only when no span lists it (review agents). */
+  peakAgentKind?: string
+  /** Spend of calls at 200k context or more; absent when 0. */
+  deepUSD?: number
 }
 
 export interface Overview {

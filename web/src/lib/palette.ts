@@ -127,3 +127,18 @@ const TIER: Record<string, string> = {
 export function tierColor(key: string): string {
   return TIER[key] ?? OTHER
 }
+
+/**
+ * The context-depth bands, one sequential ramp in `--depth` (a sienna no model, class or tier uses): shallow is the
+ * lightest, `500k+` the strongest. `(overhead)` stays the hatch.
+ */
+const DEPTH: Record<string, string> = {
+  '0-100k': 'color-mix(in srgb, var(--depth) 22%, var(--surface))',
+  '100k-200k': 'color-mix(in srgb, var(--depth) 48%, var(--surface))',
+  '200k-500k': 'color-mix(in srgb, var(--depth) 76%, var(--surface))',
+  '500k+': 'var(--depth)',
+}
+
+export function depthColor(key: string): string {
+  return DEPTH[key] ?? OTHER
+}

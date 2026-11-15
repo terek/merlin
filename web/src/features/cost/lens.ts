@@ -5,6 +5,7 @@ import { formatMoney } from '../../lib/format'
 import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
 import { type CustomRange, daysBetween, instantRange, isWindowRange } from '../overview/model'
+import { DEPTH_STACK } from './model'
 
 const OLD_KEYS = ['project', 'repocut', 'beadcut']
 
@@ -166,6 +167,54 @@ export function whoTierSentence(rows: readonly WhoTierRow[]): string | null {
   if (a !== null) return `Sub-agents ran on heavy models for ${a}% of their spend.`
   if (m !== null) return `The main thread ran on heavy models for ${m}% of its spend.`
   return null
+}
+
+/** One row of Who × Depth: the dollars of the main thread, the agents or the unsplit spend, by context band. */
+export interface WhoDepthRow {
+  key: string
+  total: number
+  /** In `DEPTH_STACK` order. */
+  bands: number[]
+  /** The reported spend no call explains: it has no context, so no band. */
+  overhead: number
+}
+
+/** `by=agent&split=depth` rows with their bands in order. Rows with no spend are left out. */
+export function whoByDepth(rows: readonly CostRow[]): WhoDepthRow[] {
+  const out: WhoDepthRow[] = []
+  for (const r of rows) {
+    const row: WhoDepthRow = { key: r.key, total: r.totalUSD, bands: DEPTH_STACK.map(() => 0), overhead: 0 }
+    for (const p of r.split ?? []) {
+      const i = DEPTH_STACK.indexOf(p.key)
+      if (p.key === '(overhead)') row.overhead += p.totalUSD
+      else if (i >= 0) row.bands[i] += p.totalUSD
+    }
+    if (row.total > 0) out.push(row)
+  }
+  return out
+}
+
+/**
+ * What the depth figures say, in one sentence: the share of the spend that was in calls carrying 200k or more and
+ * who made most of it; with spend at 500k or more, a second clause with its dollars and the agents' part. null
+ * when there is no spend.
+ */
+export function depthSentence(rows: readonly WhoDepthRow[]): string | null {
+  const total = rows.reduce((n, r) => n + r.total, 0)
+  if (!(total > 0)) return null
+  const deepOf = (r?: WhoDepthRow) => (r ? r.bands[2] + r.bands[3] : 0)
+  const deep = rows.reduce((n, r) => n + deepOf(r), 0)
+  if (!(deep > 0)) return 'No call carried 200k or more.'
+  const main = deepOf(rows.find((r) => r.key === 'main'))
+  const agents = deepOf(rows.find((r) => r.key === 'agents'))
+  const [who, part] = agents >= main ? ['sub-agents', agents] : ['the main thread', main]
+  let out = `${pctOf(deep, total)}% of the spend was in calls carrying 200k or more; ${who} made ${pctOf(part, deep)}% of it.`
+  const top = rows.reduce((n, r) => n + r.bands[3], 0)
+  if (top > 0) {
+    const a = rows.find((r) => r.key === 'agents')?.bands[3] ?? 0
+    out += ` ${formatMoney(top)} at 500k or more, ${formatMoney(a)} of it by sub-agents.`
+  }
+  return out
 }
 
 /**

@@ -13,7 +13,7 @@ import { useHarness } from '../../api/harnesses'
 import { useLimits, useOverview, useSearch } from '../../api/queries'
 import type { LimitWindow, Overview, OverviewLane, OverviewSpan } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatDuration, plural } from '../../lib/format'
+import { formatDuration, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { resumeCommand, sessionPath } from '../../lib/paths'
 import { scopeSearch } from '../../lib/scope'
@@ -35,6 +35,8 @@ import {
   chooseSlot,
   customPhrase,
   customWindow,
+  DEEP_CONTEXT,
+  depthOf,
   displayPath,
   fitLabels,
   fitTail,
@@ -56,6 +58,9 @@ import {
   nextSort,
   oneLine,
   parseSort,
+  peakHolder,
+  peakText,
+  peakTitle,
   placeItems,
   placeOf,
   presetRange,
@@ -81,7 +86,7 @@ import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
 import { lockoutBand, refusalsBySession, refusalTicks, scopeWindows, windowRange, windowTimes } from './windows'
 
 /** The structured block's columns (px) and the cell padding the graph sits in. */
-const COLS = { turns: 64, agents: 70, spend: 84 }
+const COLS = { turns: 64, agents: 70, peak: 72, spend: 84 }
 const CELL_PAD = 12
 const GAP = 8
 /** The sidebar beside the rows (px, its right border included), and the strip it folds to. */
@@ -103,6 +108,8 @@ const IDLE_FILL = 0.2
 /** The thin vertical of a spawn. */
 const TICK_W = 0.75
 const TICK_OPACITY = 0.6
+/** The spawn tick of an agent that peaked at 200k or more: heavier and fully opaque. */
+const DEEP_TICK_W = 1.5
 const RUN_W = 2
 const PAD_TOP = 1
 /** A limit refusal on a row: a red vertical from the top of the row to the baseline. */
@@ -214,6 +221,14 @@ function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; pxPerTo
                 fill="none"
               />
             )}
+            {ks.deepTicks.length > 0 && (
+              <path
+                d={ks.deepTicks.map((x) => `M${x},${base}V${laneY}`).join('')}
+                stroke={color}
+                strokeWidth={DEEP_TICK_W}
+                fill="none"
+              />
+            )}
             {ks.runs.map((r) => {
               const rad = Math.min(6, LANE_DEPTH)
               return (
@@ -303,16 +318,53 @@ function SessionText({
   )
 }
 
-/** The block's one line: turns, agents and spend. */
+/**
+ * The Peak cell: the largest context as tokens, right-aligned, a dot before it in the holder's colour (a span's
+ * kind colour, neutral for an agent with no span, none for the main thread), and the deep spend under it.
+ */
+function PeakCell({ peak, deepUSD, dot, title }: { peak: number; deepUSD: number; dot?: string; title?: string }) {
+  return (
+    <span className="flex shrink-0 flex-col items-end" style={{ width: COLS.peak }} title={title || undefined}>
+      {peak > 0 ? (
+        <span
+          className={cn('inline-flex items-center gap-1 tabular-nums', peak >= DEEP_CONTEXT ? 'text-fg' : 'text-muted')}
+        >
+          {dot && <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: dot }} />}
+          {peakText(peak)}
+        </span>
+      ) : (
+        <span className="text-faint">{'–'}</span>
+      )}
+      {deepUSD > 0 && (
+        <span className="text-meta text-muted leading-none">
+          <Money usd={deepUSD} />
+        </span>
+      )}
+    </span>
+  )
+}
+
+/** The lane's peak cell. */
+function lanePeak(l: OverviewLane) {
+  const h = peakHolder(l)
+  const sp = l.peakAgentId ? l.spans.find((x) => x.agentId === l.peakAgentId) : undefined
+  const dot = sp ? spanColor(sp.kind) : h.kind ? 'var(--muted)' : undefined
+  return <PeakCell peak={l.peak ?? 0} deepUSD={l.deepUSD ?? 0} dot={dot} title={peakTitle(l)} />
+}
+
+/** The block's one line: turns, agents, peak and spend. */
 function BlockFigures({
   turns,
   agents,
+  peak,
   usd,
   usdHref,
   className,
 }: {
   turns: number
   agents: number
+  /** The Peak cell. */
+  peak: ReactNode
   usd: number
   /** Where the spend figure leads (Cost, for the same scope). */
   usdHref?: string
@@ -323,6 +375,7 @@ function BlockFigures({
     <div className={cn('flex items-baseline text-sec', className)} style={{ columnGap: GAP }}>
       <Num w={COLS.turns}>{count(turns)}</Num>
       <Num w={COLS.agents}>{count(agents)}</Num>
+      {peak}
       <Num w={COLS.spend}>
         {usdHref ? (
           <Link to={usdHref} title="The spend of this scope on the Cost page" className="hover:underline">
@@ -472,7 +525,7 @@ const SessionRow = memo(function SessionRow({
         className="flex shrink-0 flex-col justify-center border-line border-l"
         style={{ width: BLOCK_W, paddingInline: CELL_PAD }}
       >
-        <BlockFigures turns={l.turns} agents={l.agents} usd={l.usd} />
+        <BlockFigures turns={l.turns} agents={l.agents} peak={lanePeak(l)} usd={l.usd} />
       </div>
     </div>
   )
@@ -692,6 +745,7 @@ function Header({ sort, onSort, padRight }: { sort: Sort; onSort: (k: SortKey) =
         <div className="flex w-full" style={{ paddingInline: CELL_PAD, columnGap: GAP }}>
           <Th {...th} col="turns" label="Turns" w={COLS.turns} title="Sort by turns" />
           <Th {...th} col="agents" label="Agents" w={COLS.agents} rule title="Sort by agents launched" />
+          <Th {...th} col="peak" label="Peak" w={COLS.peak} rule title="Sort by the largest context any call carried" />
           <Th {...th} col="spend" label="Spend" w={COLS.spend} rule title="Sort by spend" />
         </div>
       </div>
@@ -743,6 +797,7 @@ function Summary({
     return { ctx: sum.context, idle: sum.idle, active: [], offset: 0, lives: lanes, spans: [] }
   }, [lanes, slots])
   const scale = useMemo(() => tokenScale([data.ctx, data.idle]), [data])
+  const depth = useMemo(() => depthOf(lanes), [lanes])
   const ticks = fitLabels(axisTicks(axis), axis.width)
   const inBand = (x: number) => !!band && x >= band.x0 - 0.5 && x < band.x1 - 0.5
   return (
@@ -804,6 +859,13 @@ function Summary({
           className="font-medium"
           turns={totals.turns}
           agents={totals.agents}
+          peak={
+            <PeakCell
+              peak={depth.peak}
+              deepUSD={depth.deepUSD}
+              title={`Largest peak in this scope${depth.deepUSD > 0 ? ` · ${formatMoney(depth.deepUSD)} spent in calls at 200k or more` : ''}`}
+            />
+          }
           usd={totals.usd}
           usdHref={costHref}
         />

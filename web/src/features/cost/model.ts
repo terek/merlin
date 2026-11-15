@@ -8,6 +8,7 @@ import {
   COMPACTION_WARM,
   classColor,
   compareModels,
+  depthColor,
   HATCH,
   modelColor,
   OTHER,
@@ -232,16 +233,23 @@ export const CLASS_STACK: string[] = ['cacheRead', 'cacheWrite', 'output', 'inpu
  * By model, by who (main thread or agents), by price class, by model tier, or the estimated compaction calls on
  * their own. The URL's `stack` is the same word.
  */
-export type Stack = 'model' | 'who' | 'class' | 'tier' | 'compaction'
+export type Stack = 'model' | 'who' | 'class' | 'tier' | 'depth' | 'compaction'
 
 export function parseStack(s: string | null): Stack {
-  return s === 'compaction' || s === 'class' || s === 'who' || s === 'tier' ? s : 'model'
+  return s === 'compaction' || s === 'class' || s === 'who' || s === 'tier' || s === 'depth' ? s : 'model'
 }
 
 /** The `split` a stack's bars are read from: tiers and models both come from the models. */
-export function splitOf(stack: Stack): 'model' | 'class' | 'agent' {
-  return stack === 'class' ? 'class' : stack === 'who' ? 'agent' : 'model'
+export function splitOf(stack: Stack): 'model' | 'class' | 'agent' | 'depth' {
+  return stack === 'class' ? 'class' : stack === 'who' ? 'agent' : stack === 'depth' ? 'depth' : 'model'
 }
+
+/** The context bands of `split=depth`, shallow first (the bottom of a stack). */
+export const DEPTH_STACK: string[] = ['0-100k', '100k-200k', '200k-500k', '500k+']
+
+/** How a band is written: `<100k`, `100–200k`, `200–500k`, `500k+`. */
+export const depthLabel = (key: string): string =>
+  key === '0-100k' ? '<100k' : key.replace(/^(\d+)k-(\d+k)$/, '$1–$2')
 
 /** Main thread first (bottom), then the agents, then what no message explains. */
 export const WHO_STACK: string[] = ['main', 'agents', '(unsplit)']
@@ -278,6 +286,13 @@ export function stackOf(b: Bucket, stack: Stack, top: string[], prices?: Prices)
   if (stack === 'who') {
     const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
     return WHO_STACK.map((key) => ({ key, color: whoColor(key), usd: usd.get(key) ?? 0 })).filter((s) => s.usd > 0)
+  }
+  if (stack === 'depth') {
+    // shallow at the bottom, the deepest on top; the reported spend no call explains stays the hatch
+    const usd = new Map(b.parts.map((p) => [p.key, p.totalUSD]))
+    return [...DEPTH_STACK, OVERHEAD]
+      .map((key) => ({ key, color: key === OVERHEAD ? HATCH : depthColor(key), usd: usd.get(key) ?? 0 }))
+      .filter((s) => s.usd > 0)
   }
   if (stack === 'tier') {
     // heavy at the bottom; the reported spend no model explains stays the hatch, as in the model stack

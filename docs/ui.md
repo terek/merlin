@@ -728,11 +728,12 @@ pages never disagree and switching tabs keeps it.
   Sep`). The hover names the bar ("Fri 13, 14:00–17:00"). A click selects the days: an hour bar selects its day.
   The bars are stacked by model (`split=model`), the top eight models coloured
   and the rest grouped as "other"; hovering a bar lists that day's split. A switch at the right of the section header
-  changes the stack (URL `stack=model|who|class|tier|compaction`) to **Who** (`split=agent`: main thread, series-1,
+  changes the stack (URL `stack=model|who|class|tier|depth|compaction`) to **Who** (`split=agent`: main thread, series-1,
   and sub-agents, series-2, as the Session page's kind colours; spend no message carries last, grey), **price class**
   (`split=class`: cache reads, cache writes, output, uncached input), **Tier** (`split=model` grouped by `tierOf`
   with the price table: heavy at the bottom in `--series-4`, mid 58 % and light 28 % of it, unpriced grey, as the
-  Session page's tier ramp; `(overhead)` stays the hatch) or to
+  Session page's tier ramp; `(overhead)` stays the hatch), **Depth** (`split=depth`: the context each call carried,
+  four bands bottom up `<100k`, `100–200k`, `200–500k`, `500k+` in one sienna ramp, `(overhead)` the hatch) or to
   **compactions** (`stack=compaction`), which keeps the axis and the bars of the other stacks (the day's spend) and
   draws each bar empty, a faint fill and an outline, with only what the compaction calls cost coloured at its bottom
   (cold in red, warm in amber, at least 2 px) and a dot above each bar that has compactions (red when one
@@ -746,15 +747,22 @@ pages never disagree and switching tabs keeps it.
   is the full hue, the next 65 % and older ones 40 % (mixed into the surface). Stacks run heavy to light, bottom up. The
   price classes keep the Session page's hues (output violet, cache read teal, cache write orange, uncached input
   grey, `(unsplit)` a fainter grey). Pink is the cache miss and no model ever gets it; compactions are amber when warm
-  and red when cold; `(overhead)` is the hatch.
+  and red when cold; `(overhead)` is the hatch. Depth is one sequential ramp of `--depth` (sienna, a hue no model or
+  class uses) mixed into the surface at 22 / 48 / 76 / 100 % for the four bands (`depthColor`).
+- **Context depth**, a full-width section under the chart: **Who × Depth** (rows main thread, sub-agents, not split;
+  columns `<100k`, `100–200k`, `200–500k`, `500k+`, Overhead as in Who × Tier, Total; `by=agent&split=depth`) and a
+  computed sentence: "41% of the spend was in calls carrying 200k or more; sub-agents made 60% of it.", plus, only when
+  500k+ is non-zero, "$517 at 500k or more, $464 of it by sub-agents." A call's depth is its input plus cache reads and
+  writes; 200k or more is deep.
 - **Tables**, a grid of columns separated by vertical hairlines (three when wide, two, then one), each in the
   Overview's table style (uppercase muted header row, tabular figures right-aligned): **Model** (Total and, wide
   enough, a muted ▲/▼ with the percentage against the period before, its dollars on hover; the `(overhead)` row
   explained in a footnote), **Price class** (cache reads, cache writes, output, uncached input, `(unsplit)` last, with
   one computed sentence from the dollars alone), **Kind** and, under it, **Who × Tier** (rows main thread, sub-agents
-  and not split; columns heavy, mid, light, the unpriced only when non-zero, and overhead only when the not-split row
-  has some; dollars from `by=agent&split=model` grouped by tier; one sentence from the figures: "Sub-agents ran on
-  heavy models for 52% of their spend; the main thread for 71%."). The figures are `by=class` and `by=agent`
+  and not split; columns heavy, mid, light, the unpriced only when non-zero, and overhead only when the main thread or
+  the sub-agents have some (the not-split row is overhead alone, its total says it); dollars from `by=agent&split=model` grouped by tier; one sentence from the figures: "Sub-agents ran on
+  heavy models for 52% of their spend; the main thread for 71%."). Both Who tables share `WhoMatrix`: auto layout,
+  no wrapping, the Who column at least 6 rem, so "Main thread" is never cut in the narrow third column. The figures are `by=class` and `by=agent`
   ([api.md](api.md)). Every table adds up to the total, and its share bars are a **cascade**: a faint full-width track
   per row, each row's segment starting where the row above ended, so reading down the segments walk once across the
   width (Model rows in the model's colour, Price class in the class's, Kind and Agents in the accent; at least 2
@@ -886,7 +894,7 @@ The table only ever lists sessions.
   parts: **top, fixed**, the one-line column header; **middle, scrolls**, the rows; **bottom, fixed**, the
   summary. Every part has the same two blocks: the **session column** (takes the width that is left; the plot
   is exactly its inner width, 12 px of padding each side) and the **structured block** (a 1 px rule on its
-  left, 12 px padding, then Turns 64, Agents 70, Spend 84, 8 px between). The scrollbar of the
+  left, 12 px padding, then Turns 64, Agents 70, Peak 72, Spend 84, 8 px between). The scrollbar of the
   middle takes width from the rows only, so the header and the summary give up as much (padding right) and the
   columns, the graphs and the axis stay exactly above one another.
 - **Row** (one per session in scope). Session column: the text line on top, the graph under it. The text line
@@ -903,8 +911,12 @@ The table only ever lists sessions.
   resume command** (`resumeCommand(dir, id, harness.resume)`, as the Session page's resume box; `copyText` from
   `ui/controls.tsx`): the title is "Copy: <command>", the text reads "Copied" for 1.2 s, the session does not
   open. A harness with no resume template leaves the folder plain text. Structured block: one line, centred
-  vertically in the two-line row: Turns, Agents and Spend (right-aligned, tabular, `<Money>`; all counts in
-  the range).
+  vertically in the two-line row: Turns, Agents, Peak and Spend (right-aligned, tabular, `<Money>`; all counts in
+  the range). **Peak** is the largest context the session reached, in whole thousands (`262k`, `1.1M` from a million, `peakText`) with a 6 px dot in the span-kind
+  colour of the agent that held it (a muted dot when the holder has no span, none for the main thread) and, when
+  above $0, the `deepUSD` (spend in calls at 200k or more) under it in small muted type; the figure is body colour at
+  200k or more, muted below. Title: "Peak 262k, held by sub-agent \"Explore\" at 10:05 · $31.40 spent in calls at 200k
+  or more" ("main thread" when no agent holds it).
 - **Click on the graph.** The graph is a link: a click opens the Session page at the stretch under the pointer
   (`/s/:harness/:id?from=<ISO>&to=<ISO>`): the local day, or in a range of two days or less the hour (`bandAt`),
   cut to the session's own activity in it (`clipToActivity`; a stretch where it did nothing opens as it is).
@@ -924,21 +936,21 @@ The table only ever lists sessions.
   END labels. Three sort buttons sit on it: **START** before the drawn session's left end (`sort=start`),
   **END** after its right end (`sort=last`, last activity) and **LENGTH** over the middle, knocked out of the
   drawing (`sort=active`: the slots with a call running times the slot, from the lane's `active`); all three
-  start descending. Structured block: **Turns**, **Agents**, **Spend** over their columns on the same line.
+  start descending. Structured block: **Turns**, **Agents**, **Peak**, **Spend** over their columns on the same line.
   Every sortable header of the block is centred in its cell with an arrow slot of the same width (12 px) on both sides; the
   arrow draws in the left one, so a label does not move when it becomes the sort. A tiny rule (1 px,
   `border-line`, 55 % of the height) stands between adjacent header cells.
 - **Sorting.** A click sorts by that column in its own first direction; a click on the active column flips
-  it. `sort` is `start`, `last`, `active`, `turns`, `agents`, `spend` or `key` (absent: `last`, the last
+  it. `sort` is `start`, `last`, `active`, `turns`, `agents`, `peak`, `spend` or `key` (absent: `last`, the last
   activity, newest first; an old `session` reads as `start`); `dir` is `asc` / `desc` (absent: the column's own
-  start, descending, but ascending for `key`). Ties by spend, then id. **FOLDER** (`sort=key`) orders the sessions by their folder line in the
+  start, descending, but ascending for `key`). Ties by spend, then id (`peak`: by `deepUSD`, spend, id). **FOLDER** (`sort=key`) orders the sessions by their folder line in the
   sidebar's order: segment by segment, case-insensitive (`comparePlace`), so `~/work/merlin` sits right after
   `~/work` and before `~/work/yimple`; no folder last whichever way.
 - **Summary** (the footer, sticky). Session column: the scope's **aggregate graph**, the lanes' trimmed
   `context` and `idle` summed into dense arrays (`sumLanes`), drawn as the summed context area over the summed
   idle area on a token scale of its own, with the day lines inside the lifetimes of its sessions (no baseline,
   session line or spine lane), and directly under it the **date axis**. Structured block, centred: on the top
-  line the totals of Turns, Agents and Spend of the scope (`totalsOf`), under them in small type "102 sessions"
+  line the totals of Turns, Agents and Spend of the scope (`totalsOf`) and the largest Peak with the summed `deepUSD` (`depthOf`), under them in small type "102 sessions"
   (its `title` says what the scope is: "25 matching sessions in ~/acme") and, only while there is no search and
   no selection, the scripted runs ("· 913 scripted runs · $5.36", faint).
 - **Time axis: linear.** Wall-clock time maps linearly to x over the whole range. Midnight ticks and day
@@ -955,7 +967,7 @@ The table only ever lists sessions.
   - a faint **baseline** over the session's lifetime (its start to its last activity, clipped to the range),
     and on it the **session line** where it ran (`active > 0`);
   - **one spine lane**, 7 px under the baseline (omitted when the session launched nothing). Every agent gets a
-    thin vertical (0.75 px) from the baseline to the lane at its start, so a burst of spawns reads as a comb.
+    thin vertical (0.75 px) from the baseline to the lane at its start, so a burst of spawns reads as a comb. A span whose peak is 200k or more draws its tick at 1.5 px and full opacity.
     Per kind (sub-agent, teammate, fork, workflow dashed) the lives `[start, max(end, start + 10 px)]` are
     merged into runs when they overlap or lie under 4 px apart; a run is the mirrored J, its elbow at the first
     spawn. A forked or continued session is not on the lane: its own row gets a vertical in the main colour

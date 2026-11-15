@@ -15,6 +15,7 @@ import { Money } from '../../ui'
 import {
   type Bucket,
   barTotal,
+  depthLabel,
   hourLabelEvery,
   hourTick,
   hourTitle,
@@ -46,6 +47,7 @@ export function segmentLabel(key: string): string {
   if (key === 'mid') return 'Mid models'
   if (key === 'light') return 'Light models'
   if (key === 'unknown') return 'Unpriced models'
+  if (key === '0-100k' || key === '100k-200k' || key === '200k-500k' || key === '500k+') return depthLabel(key)
   if (key === 'compaction-warm') return 'At the warm-cache price'
   if (key === 'compaction-cold') return 'Extra for a cold cache'
   return modelLabel(key)

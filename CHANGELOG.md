@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Context depth in the web UI: the Overview has a Peak column (the largest context a session reached, who held it, and what was spent in calls at 200k or more; sortable) and marks deep sub-agents; Cost can stack its bars by Depth and has a Context depth section with a Who × Depth table.
 - The Overview's data carries the peak context of each session and of each sub-agent (and how much was spent on calls past 200k tokens), and Cost can group spend by context depth (0-100k, 100k-200k, 200k-500k, 500k+).
 - `/api/cost` takes exact instants for `since` and `until` and a `harness` filter, and each usage window in `/api/limits` now reports the same total Cost does over it, the scripted share, its three biggest sessions and what a percentage point cost.
 - Subscription limit windows show up where you already look: Cost has a Limits section (each window that ran out or came close, how long it locked you out, what was spent in it and on which sessions, and what a window is worth at API prices); a row narrows Cost or the Overview to that window and one harness, the Overview draws red ticks where a session's calls were refused and a band where you were locked out.

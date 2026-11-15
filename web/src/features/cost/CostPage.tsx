@@ -11,9 +11,9 @@ import { backingLowerBound, backingSentence, lowerBoundNote, unknownNote } from 
 import { formatCount, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
 import { modelLabel } from '../../lib/models'
-import { classColor, HATCH, modelColor, tierColor } from '../../lib/palette'
+import { classColor, depthColor, HATCH, modelColor, tierColor } from '../../lib/palette'
 import { scopeSearch } from '../../lib/scope'
-import type { Prices } from '../../lib/tiers'
+import type { Prices, Tier } from '../../lib/tiers'
 import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
   buildPlaceTree,
@@ -42,13 +42,14 @@ import {
   classSentence,
   concentration,
   costRange,
+  depthSentence,
   type ExtraLine,
   migrateCostSearch,
   previousWindow,
   sidebarExtras,
   sidebarGap,
   tierColumns,
-  type WhoTierRow,
+  whoByDepth,
   whoByTier,
   whoTierSentence,
   windowDays,
@@ -58,6 +59,8 @@ import {
   bucketDay,
   bucketsFor,
   CLASS_STACK,
+  DEPTH_STACK,
+  depthLabel,
   grainFor,
   isHourly,
   OVERHEAD,
@@ -131,6 +134,7 @@ export function CostPage() {
   const byModel = useCost({ by: 'model', ...scoped }, { enabled: ready })
   const byClass = useCost({ by: 'class', ...scoped }, { enabled: ready })
   const byAgentModel = useCost({ by: 'agent', split: 'model', ...scoped }, { enabled: ready })
+  const byAgentDepth = useCost({ by: 'agent', split: 'depth', ...scoped }, { enabled: ready })
   // the period before: as many days just before the window, the same scope
   const before = previousWindow(days)
   const prev = useCost(
@@ -261,6 +265,11 @@ export function CostPage() {
                       title: 'Stack by what the model costs: heavy, mid and light models, heavy at the bottom',
                     },
                     {
+                      value: 'depth',
+                      label: 'Depth',
+                      title: 'Stack by the context the call carried: under 100k at the bottom, 500k or more on top',
+                    },
+                    {
                       value: 'compaction',
                       label: 'Compactions',
                       title:
@@ -281,6 +290,10 @@ export function CostPage() {
                   />
                 )}
               </QueryBoundary>
+            </Section>
+
+            <Section title="Context depth">
+              <WhoDepth query={byAgentDepth} />
             </Section>
 
             <div className="grid grid-cols-[repeat(auto-fit,minmax(380px,1fr))] overflow-hidden border-line border-b">
@@ -549,10 +562,69 @@ function legendOf(buckets: Bucket[], stack: Stack, top: string[], prices?: Price
         ? WHO_STACK
         : stack === 'tier'
           ? ['heavy', 'mid', 'light', 'unknown', OVERHEAD]
-          : stack === 'compaction'
-            ? ['compaction-warm', 'compaction-cold']
-            : [...top, 'other', OVERHEAD]
+          : stack === 'depth'
+            ? [...DEPTH_STACK, OVERHEAD]
+            : stack === 'compaction'
+              ? ['compaction-warm', 'compaction-cold']
+              : [...top, 'other', OVERHEAD]
   return order.filter((k) => seen.has(k)).map((key) => ({ key, color: seen.get(key) as string }))
+}
+
+const whoLabel = (key: string) => (key === 'main' ? 'Main thread' : key === 'agents' ? 'Sub-agents' : 'Not split')
+
+/**
+ * The table Who × Tier and Who × Depth share: a row per main thread, sub-agents and not split; a column per tier or
+ * band, the overhead only when the main thread or the sub-agents have some (not split is overhead alone), and the total. The Who column keeps the width of "Main thread".
+ */
+function WhoMatrix<R extends { key: string; total: number; overhead: number }>({
+  rows,
+  cols,
+  value,
+  testId,
+}: {
+  rows: R[]
+  cols: { key: string; color: string; label: string; keepCase?: boolean }[]
+  value: (r: R, col: string) => number
+  testId: string
+}) {
+  // the not-split row is overhead alone, its total says it: the column only when the main thread or the agents have some
+  const overhead = rows.some((r) => r.overhead > 0 && (r.key === 'main' || r.key === 'agents'))
+  const dash = <span className="text-faint">{'–'}</span>
+  return (
+    <table className="w-full whitespace-nowrap text-sec" data-testid={testId}>
+      <thead>
+        <tr className={cn(HEAD, 'h-9')}>
+          <th className="min-w-24 pr-1 pl-4 text-left font-normal">Who</th>
+          {cols.map((c) => (
+            <th key={c.key} className="px-1 text-right font-normal">
+              <span className={cn('inline-flex items-center gap-1', c.keepCase && 'normal-case')}>
+                <Swatch color={c.color} />
+                {c.label}
+              </span>
+            </th>
+          ))}
+          {overhead && <th className="px-1 text-right font-normal">Overhead</th>}
+          <th className="pr-4 pl-1 text-right font-normal">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key} className="h-[34px]" data-testid={`who-${r.key}`}>
+            <td className="pr-1 pl-4 text-fg">{whoLabel(r.key)}</td>
+            {cols.map((c) => (
+              <td key={c.key} className="px-1 text-right">
+                {value(r, c.key) > 0 ? <Money usd={value(r, c.key)} /> : dash}
+              </td>
+            ))}
+            {overhead && <td className="px-1 text-right">{r.overhead > 0 ? <Money usd={r.overhead} /> : dash}</td>}
+            <td className="pr-4 pl-1 text-right">
+              <Money usd={r.total} />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 }
 
 /**
@@ -569,53 +641,57 @@ function WhoTier({ query, prices }: { query: CutQuery; prices?: Prices }) {
     >
       {(d) => {
         const rows = whoByTier(d.rows, prices)
-        const cols = tierColumns(rows)
-        const overhead = rows.some((r) => r.overhead > 0)
+        const cols = tierColumns(rows).map((t) => ({
+          key: t,
+          color: tierColor(t),
+          label: segmentLabel(t).replace(' models', ''),
+        }))
         const sentence = whoTierSentence(rows)
-        const label = (r: WhoTierRow) =>
-          r.key === 'main' ? 'Main thread' : r.key === 'agents' ? 'Sub-agents' : 'Not split'
         return (
           <div className="@container" data-testid="who-tier">
-            <table className="w-full table-fixed text-sec">
-              <thead>
-                <tr className={cn(HEAD, 'h-9')}>
-                  <th className="px-4 text-left font-normal">Who</th>
-                  {cols.map((t) => (
-                    <th key={t} className="w-16 px-1 text-right font-normal">
-                      <span className="inline-flex items-center gap-1">
-                        <Swatch color={tierColor(t)} />
-                        {segmentLabel(t).replace(' models', '')}
-                      </span>
-                    </th>
-                  ))}
-                  {overhead && <th className="w-16 px-1 text-right font-normal">Overhead</th>}
-                  <th className="w-20 px-2 pr-4 text-right font-normal">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.key} className="h-[34px]" data-testid={`who-${r.key}`}>
-                    <td className="truncate px-4 text-body">{label(r)}</td>
-                    {cols.map((t) => (
-                      <td key={t} className="px-1 text-right">
-                        {r.tiers[t] > 0 ? <Money usd={r.tiers[t]} /> : <span className="text-faint">–</span>}
-                      </td>
-                    ))}
-                    {overhead && (
-                      <td className="px-1 text-right">
-                        {r.overhead > 0 ? <Money usd={r.overhead} /> : <span className="text-faint">–</span>}
-                      </td>
-                    )}
-                    <td className="px-2 pr-4 text-right">
-                      <Money usd={r.total} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <WhoMatrix rows={rows} cols={cols} value={(r, t) => r.tiers[t as Tier]} testId="who-tier-table" />
             <p className="px-4 pt-1 pb-3 text-meta text-muted">
               {sentence} The main thread is the messages with no agent; reported spend no message carries is not split.
               A model’s tier is its input price: heavy from $4 per million tokens, light up to $1.
+            </p>
+          </div>
+        )
+      }}
+    </QueryBoundary>
+  )
+}
+
+/**
+ * Who × Depth: dollars of the main thread and the sub-agents by the context of the call that made them
+ * (`by=agent&split=depth`), and one sentence of what the figures show.
+ */
+function WhoDepth({ query }: { query: CutQuery }) {
+  return (
+    <QueryBoundary
+      query={query}
+      skeleton={<SkeletonRows rows={3} height={28} />}
+      empty={<EmptyState title="Nothing in this range" />}
+      isEmpty={(d) => d.rows.length === 0}
+    >
+      {(d) => {
+        const rows = whoByDepth(d.rows)
+        const cols = DEPTH_STACK.map((k) => ({ key: k, color: depthColor(k), label: depthLabel(k), keepCase: true }))
+        const sentence = depthSentence(rows)
+        return (
+          <div data-testid="who-depth">
+            <div className="max-w-[560px]">
+              <WhoMatrix
+                rows={rows}
+                cols={cols}
+                value={(r, k) => r.bands[DEPTH_STACK.indexOf(k)]}
+                testId="who-depth-table"
+              />
+            </div>
+            <p className="max-w-[110ch] px-4 pt-1 text-sec">{sentence}</p>
+            <p className="max-w-[110ch] px-4 pt-1 pb-3 text-meta text-muted">
+              Every call reads its whole context again, so what a call costs grows with it. A call’s context is its
+              input plus cache reads and writes; calls at 200k or more are the deep ones. Reported spend no call carries
+              is not split.
             </p>
           </div>
         )
