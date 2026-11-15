@@ -4,7 +4,7 @@
 // No dollars, no tokens: the graph and its hover carry those.
 
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { Fragment, type ReactNode, useState } from 'react'
+import { createContext, Fragment, type ReactNode, useContext, useState } from 'react'
 import type { Agent, InboxMessage, QueuedPrompt, Turn } from '../../api/types'
 import { agentRole, ROLE_LABEL } from '../../lib/agent'
 import { cn } from '../../lib/cn'
@@ -32,6 +32,9 @@ import {
 } from './thread'
 
 const FOLD = 12
+
+/** The names of the session's agents, by id: a message that says only which agent it is about is named by it. */
+const AgentNames = createContext<ReadonlyMap<string, Agent>>(new Map())
 
 function When({ at, className }: { at?: string; className?: string }) {
   const d = parseTime(at)
@@ -88,7 +91,9 @@ const NONE = <p className="text-sec text-faint">No text.</p>
 /** A message a machine delivered: sender (a link when it is one of the session's agents), kind, text. */
 function InboxBlock({ m, onOpenAgent }: { m: InboxMessage; onOpenAgent: (agentId: string) => void }) {
   const body = m.encrypted && !m.text ? '' : unwrapMachineText(inboxBody(m)).body
-  const from = m.from || 'a teammate'
+  const named = useContext(AgentNames)
+  const about = m.agentId ? named.get(m.agentId) : undefined
+  const from = m.from || (about ? agentLabel(about) : m.kind === 'task' ? 'A background task' : 'A teammate')
   return (
     <Said
       who={
@@ -473,6 +478,14 @@ function AgentWork({
 
 /** The box under the graph: a pinned turn, or a piece of agent work. */
 export function TurnBox({ unit, ...rest }: TurnBoxProps) {
+  return (
+    <AgentNames.Provider value={rest.model.agentsById}>
+      <Inner unit={unit} {...rest} />
+    </AgentNames.Provider>
+  )
+}
+
+function Inner({ unit, ...rest }: TurnBoxProps) {
   if (unit) {
     return (
       <AgentWork
