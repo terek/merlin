@@ -15,7 +15,7 @@ import { classColor, depthColor, HATCH, modelColor, tierColor } from '../../lib/
 import { scopeSearch } from '../../lib/scope'
 import type { Prices, Tier } from '../../lib/tiers'
 import { PanelTab } from '../../shell/Panel'
-import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
+import { EmptyState, FrameSection, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
   buildPlaceTree,
   customPhrase,
@@ -365,17 +365,7 @@ export function CostPage() {
 }
 
 /** A section of the pane: the Overview's column-header style label, an action at the right, a hairline under. */
-function Section({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="border-line border-b">
-      <div className="flex min-h-9 items-center justify-between gap-3 px-4 pt-2">
-        <h2 className={HEAD}>{title}</h2>
-        {actions}
-      </div>
-      <div className="px-4 pt-1 pb-3">{children}</div>
-    </section>
-  )
-}
+const Section = FrameSection
 
 function Headline({
   query,

@@ -340,3 +340,32 @@ export function DataTable<T>({
     </table>
   )
 }
+
+/** The small uppercase heading of a framed section (the Cost page's, the session focus's). */
+export const FRAME_HEAD = 'text-faint text-meta uppercase tracking-wide'
+
+/**
+ * A full-bleed section of a page's frame: a small uppercase heading row with `actions` at the right, the content
+ * padded under it, a hairline at the bottom. No border, no corners, no margin around it.
+ */
+export function FrameSection({
+  title,
+  actions,
+  children,
+  className,
+}: {
+  title: ReactNode
+  actions?: ReactNode
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <section className={cn('border-line border-b', className)}>
+      <div className="flex min-h-9 items-center justify-between gap-3 px-4 pt-2">
+        <h2 className={cn(FRAME_HEAD, 'flex min-w-0 flex-wrap items-center gap-x-2')}>{title}</h2>
+        {actions}
+      </div>
+      <div className="px-4 pt-1 pb-3">{children}</div>
+    </section>
+  )
+}
