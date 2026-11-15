@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/terek/merlin/internal/catalog"
 	"github.com/terek/merlin/internal/harness"
 	"github.com/terek/merlin/internal/model"
 )
@@ -11,6 +12,22 @@ import (
 // HarnessList is the body of GET /api/harnesses.
 type HarnessList struct {
 	Harnesses []harness.Info `json:"harnesses"`
+}
+
+// knownHarness reports whether name is a configured harness or has sessions in the catalog.
+func (a *API) knownHarness(cat *catalog.Catalog, name string) bool {
+	for _, in := range a.o.Harnesses {
+		if in.Name == name {
+			return true
+		}
+	}
+	found := false
+	cat.Each(func(d *model.SessionDigest) {
+		if d.Harness == name {
+			found = true
+		}
+	})
+	return found
 }
 
 // handleHarnesses describes every configured harness, and every other harness that has

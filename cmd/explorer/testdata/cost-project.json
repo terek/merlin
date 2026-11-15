@@ -68,9 +68,9 @@
       "key": "/home/dev/acme/subbg",
       "label": "subbg",
       "sessions": 1,
-      "totalUSD": 0.02408,
+      "totalUSD": 0.024080000000000004,
       "reportedUSD": 0,
-      "attributedUSD": 0.02408
+      "attributedUSD": 0.024080000000000004
     },
     {
       "key": "/home/dev/acme/plain",
@@ -226,9 +226,9 @@
     }
   ],
   "total": {
-    "totalUSD": 0.6375099999999998,
+    "totalUSD": 0.63751,
     "reportedUSD": 0.1311,
-    "attributedUSD": 0.5064100000000002,
+    "attributedUSD": 0.5064100000000001,
     "compactions": {
       "calls": 3,
       "cold": 0,

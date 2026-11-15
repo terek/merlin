@@ -395,6 +395,10 @@ type Filter struct {
 	// DayFrom and DayTo (local dates, inclusive) restrict rollups and scripted lines to
 	// spend on those days. They do not select sessions.
 	DayFrom, DayTo string
+	// From and To (instants) restrict rollups to spend with From <= minute < To, where a fact's
+	// minute is the UTC minute of its message and both bounds are rounded down to the minute. They
+	// combine with DayFrom/DayTo. A fact without a time passes only when both are zero.
+	From, To time.Time
 	// Repo keeps the sessions that count under a repository (its git common dir), Checkout
 	// those under a checkout and Remote those under a remote; NoneFilter selects the sessions
 	// with none. Touched widens the most specific of them from the primary value to every value

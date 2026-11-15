@@ -35,6 +35,12 @@ func parseTime(name, s string, loc *time.Location, end bool) (time.Time, error) 
 	return time.Time{}, fmt.Errorf("%s=%q: use an RFC 3339 time (2026-10-01T09:30:00Z) or a date (2026-10-01)", name, s)
 }
 
+// isInstant reports whether s is an RFC 3339 instant (a time of day), not a date.
+func isInstant(s string) bool {
+	_, err := time.Parse(time.RFC3339, s)
+	return err == nil
+}
+
 // timeRange reads since and until.
 func (a *API) timeRange(q url.Values) (since, until time.Time, err error) {
 	if s := q.Get("since"); s != "" {

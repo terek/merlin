@@ -53,6 +53,18 @@ func (f Filter) dayIn(day string) bool {
 	return (f.DayFrom == "" || day >= f.DayFrom) && (f.DayTo == "" || day <= f.DayTo)
 }
 
+// minuteIn reports whether a fact is inside the filter's instant range From <= minute < To,
+// both bounds rounded down to the minute. Facts without a time only pass an unbounded range.
+func (f Filter) minuteIn(x fact) bool {
+	if f.From.IsZero() && f.To.IsZero() {
+		return true
+	}
+	if x.day == "" {
+		return false
+	}
+	return (f.From.IsZero() || x.minute >= minuteOf(f.From)) && (f.To.IsZero() || x.minute < minuteOf(f.To))
+}
+
 // selected returns the facts of the sessions passing f, in fact order. Liveness is not
 // consulted: rollups ignore f.States.
 func (v *view) selected(f Filter) []fact {
@@ -64,7 +76,7 @@ func (v *view) selected(f Filter) []fact {
 		if x.s != last {
 			last, ok = x.s, f.selects(x.s, "")
 		}
-		if ok && f.dayIn(x.day) {
+		if ok && f.dayIn(x.day) && f.minuteIn(x) {
 			out = append(out, x)
 		}
 	}
@@ -280,8 +292,12 @@ func (r Row) Key(d Dim) string {
 // Total returns the spend of the sessions selected by f: the sum of their best costs
 // (restricted to the days in f when DayFrom/DayTo are set).
 func (c *Catalog) Total(f Filter) Money {
-	var m Money
 	v, _, f := c.prepare(f, false)
+	return v.total(f)
+}
+
+func (v *view) total(f Filter) Money {
+	var m Money
 	for _, x := range v.selected(f) {
 		m.add(x.reported, x.attributed, x.recorded, x.billed)
 		m.Compactions.add(x.comp)

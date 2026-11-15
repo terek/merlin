@@ -517,6 +517,13 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		a.paramError(w, err)
 		return
 	}
+	if h := q.Get("harness"); h != "" {
+		if !a.knownHarness(cat, h) {
+			a.badParam(w, "harness=%q: not a known harness (see /api/harnesses)", h)
+			return
+		}
+		f.Harness = h
+	}
 	out := CostTable{By: by, Split: split, Project: f.Project, Rows: []CostRow{}}
 	if !since.IsZero() {
 		out.Since = &since
@@ -536,6 +543,14 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		}
 		if !until.IsZero() {
 			f.DayTo = a.dayOf(until.Add(-time.Nanosecond))
+		}
+		// A bound given as an instant cuts the spend exactly (to the minute); a date keeps the
+		// local day range above.
+		if isInstant(q.Get("since")) {
+			f.From = since
+		}
+		if isInstant(q.Get("until")) {
+			f.To = until
 		}
 	}
 	listing := cat.List(f, catalog.Liveness{})

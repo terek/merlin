@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,8 +54,9 @@ func TestLimitsMergeCodexWindows(t *testing.T) {
 		t.Errorf("points = %+v", w.Points)
 	}
 	// resetsAt is 12 s early, so the window starts 12 s early too: a0 (5 min before) is out.
-	if w.SeenUSD == nil || *w.SeenUSD != 19 || w.SeenSessions != 2 {
-		t.Errorf("seen = %v over %d sessions, want 19 over 2", w.SeenUSD, w.SeenSessions)
+	// Bounds are applied to the minute: the window ends at 14:59, so a2 (14:59:00) is out.
+	if w.SeenUSD == nil || *w.SeenUSD != 17 || w.SeenSessions != 2 {
+		t.Errorf("seen = %v over %d sessions, want 17 over 2", w.SeenUSD, w.SeenSessions)
 	}
 	if n := l.Windows[1]; !n.ResetsAt.Equal(r2) || *n.SeenUSD != 40 || n.SeenSessions != 2 { // a3 (at the reset of the first window) opens the second
 		t.Errorf("later window = %+v", n)
@@ -119,5 +121,92 @@ func TestLimitsScriptedRefusalNamesNoSession(t *testing.T) {
 	b, _ := json.Marshal(l.Refusals)
 	if want := `[{"at":"` + at(10).Format(time.RFC3339) + `","harness":"claude","scripted":true,"limit":"five_hour","windowMinutes":300,"resetsAt":"` + at(300).Format(time.RFC3339) + `"}]`; string(b) != want {
 		t.Errorf("refusals = %s\nwant       %s", b, want)
+	}
+}
+
+// A window's figures come from the Cost code path: seenUSD is Total over (harness, window), the
+// scripted run counts in it but is never listed, and another harness's spend stays out.
+func TestLimitsSeenFromCost(t *testing.T) {
+	setZone(t, "UTC")
+	r := at(300) // the window runs [at(0), at(300))
+	c := New()
+	c.Upsert(limitSession("codex", "A", 0, []model.LimitReading{codexRead(5, 0, r), codexRead(250, 40, r)}, msgSpec{"a1", 10, 10, 0}))
+	c.Upsert(limitSession("codex", "B", 0, nil, msgSpec{"b1", 20, 5, 0}))
+	c.Upsert(limitSession("codex", "C", 0, nil, msgSpec{"c1", 100, 3, 0}))
+	c.Upsert(limitSession("codex", "E", 0, nil, msgSpec{"e1", 110, 3, 0}))
+	c.Upsert(limitSession("codex", "D", 0, nil, msgSpec{"d1", 260, 2, 0}))
+	s := limitSession("codex", "S", 0, nil, msgSpec{"s1", 30, 100, 0})
+	s.Kind = model.KindSDK
+	c.Upsert(s)
+	c.Upsert(limitSession("claude", "X", 0, nil, msgSpec{"x1", 20, 64, 0}))
+	// A second window, 0 to 5 percent.
+	r2 := at(600)
+	c.Upsert(limitSession("codex", "F", 310, []model.LimitReading{codexRead(310, 0, r2), codexRead(400, 5, r2)}, msgSpec{"f1", 350, 7, 0}))
+
+	l := c.Limits()
+	if len(l.Windows) != 2 {
+		t.Fatalf("windows = %+v", l.Windows)
+	}
+	w := l.Windows[0]
+	f := Filter{Harness: "codex", From: w.StartsAt, To: w.ResetsAt}
+	want := c.Total(f).TotalUSD
+	wantNear(t, "total", want, 123) // 10+5+3+3+2+100, no Claude spend
+	if w.SeenUSD == nil || !near(*w.SeenUSD, want) || w.SeenSessions != 6 {
+		t.Errorf("seen = %v over %d sessions, want %v over 6", w.SeenUSD, w.SeenSessions, want)
+	}
+	wantNear(t, "scripted", w.ScriptedUSD, 100)
+	if len(w.TopSessions) != 3 || w.TopSessions[0].ID != "A" || w.TopSessions[1].ID != "B" || w.TopSessions[2].ID != "C" ||
+		w.TopSessions[0].USD != 10 || w.TopSessions[0].Harness != "codex" || w.TopSessions[0].Title != "session A" {
+		t.Errorf("top = %+v", w.TopSessions)
+	}
+	for _, ts := range w.TopSessions {
+		if ts.ID == "S" {
+			t.Errorf("a scripted run is listed: %+v", w.TopSessions)
+		}
+	}
+	// 0 -> 40 percent: the cost from the first to the last reading per point.
+	if w.UsdPerPercent == nil {
+		t.Fatal("no usdPerPercent for a 0 -> 40 window")
+	}
+	between := c.Total(Filter{Harness: "codex", From: at(5), To: at(250)}).TotalUSD
+	wantNear(t, "usdPerPercent", *w.UsdPerPercent, between/40)
+	if n := l.Windows[1]; n.UsdPerPercent != nil || n.ScriptedUSD != 0 || len(n.TopSessions) != 1 {
+		t.Errorf("0 -> 5 window = %+v", n)
+	}
+	b, _ := json.Marshal(l.Windows[1])
+	if !json.Valid(b) || !containsNot(string(b), "usdPerPercent", "scriptedUSD") {
+		t.Errorf("window json = %s", b)
+	}
+	b, _ = json.Marshal(w)
+	t.Logf("window: %s", b)
+
+	// A window with no spend lists no sessions: [] not null.
+	e := New()
+	e.Upsert(limitSession("codex", "Z", 0, []model.LimitReading{codexRead(5, 0, r)}))
+	b, _ = json.Marshal(e.Limits().Windows[0].TopSessions)
+	if string(b) != "[]" {
+		t.Errorf("topSessions = %s", b)
+	}
+}
+
+func containsNot(s string, words ...string) bool {
+	for _, w := range words {
+		if strings.Contains(s, w) {
+			return false
+		}
+	}
+	return true
+}
+
+// A session with no spend inside the window is neither counted nor listed.
+func TestLimitsTopSkipsZeroSpend(t *testing.T) {
+	setZone(t, "UTC")
+	r := at(300)
+	c := New()
+	c.Upsert(limitSession("codex", "A", 0, []model.LimitReading{codexRead(10, 0, r)}, msgSpec{"a1", 20, 5, 0}))
+	c.Upsert(limitSession("codex", "Z", 30, []model.LimitReading{codexRead(40, 1, r)}, msgSpec{"z1", 50, 0, 0}))
+	w := c.Limits().Windows
+	if len(w) != 1 || w[0].SeenSessions != 1 || len(w[0].TopSessions) != 1 || w[0].TopSessions[0].ID != "A" {
+		t.Errorf("windows = %+v", w)
 	}
 }

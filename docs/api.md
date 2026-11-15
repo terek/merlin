@@ -866,7 +866,8 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 | Parameter | Meaning |
 |---|---|
 | `by` | `project` (default), `dir` (the folder, [location.md](location.md) §7; `project` is the start directory), `day`, `hour`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
-| `since`, `until` | for every `by` except `session`: a range of local days (spend is bucketed by day; a time of day is rounded to its day). For `by=session`: bounds on last activity |
+| `since`, `until` | for every `by` except `session`: a date (`2026-11-14`) is a range of local days (inclusive, spend is bucketed by day). An RFC 3339 instant with a time (`2026-11-14T10:00:00Z`) bounds the spend exactly: a message counts when `since` <= its time < `until`; instant bounds are applied to the minute (a bound inside a minute is rounded down to the minute, so a message in the minute of `until` is out and one in the minute of `since` is in). The two may be mixed. `by=day` and `by=hour` rows still bucket by local day and hour; only the bounds become exact. A reported window's overhead is cut at the same grain, in proportion to the covered spend inside the range. For `by=session`: bounds on last activity, date or instant |
+| `harness` | keep only that harness's sessions (`claude`, `codex`, ...; a name `/api/harnesses` lists or a harness with sessions); a 400 for another. Works with every `by` |
 | `project`, `repo`, `checkout`, `remote`, `touched`, `branch`, `bead` | as for `/api/sessions` (the same parser reads them) |
 | `place`, `in` | the Overview's scope: `place` is `dir` (default), `checkout`, `repo`, `remote` or `bead`; `in` is a path in it. Keeps the sessions whose **primary** value of that key (the one `/api/overview` puts on its lanes: `dir`, `checkout`, `repo`, `remote`, `bead`) sits at or under `in`, matched segment-wise (`dir`, `checkout` and `remote` split on `/`; a repository's trailing `.git` or `.bare` does not count; a bead's value is its path `prefix/root/…/bead`, the chain of `beads` in the overview). `in=-` selects the sessions with no value. With `in` the scripted runs are out (`backing.scriptedRuns` is 0), as on the Overview. A 400 for another `place` |
 | `q` | the Overview's search: a session matches when its name, title, id, recap, first prompt or last prompt contains the term (case-insensitive), or, for a term of two or more characters, when `/api/search` (its default limit of 50) has it among its hits. Scripted runs are out. Combines with `place` and `in` |
@@ -1000,7 +1001,12 @@ parameters.
     "firstSeenAt": "2026-10-01T10:10:00Z", "lastSeenAt": "2026-10-01T13:20:00Z",
     "firstPercent": 20, "maxPercent": 40,
     "points": [{ "at": "2026-10-01T10:10:00Z", "usedPercent": 20 }, { "at": "2026-10-01T11:40:00Z", "usedPercent": 40 }],
-    "refusals": 0, "seenUSD": 19, "seenSessions": 2
+    "refusals": 0, "seenUSD": 17, "seenSessions": 2,
+    "topSessions": [
+      { "harness": "codex", "id": "B", "title": "session B", "usd": 16 },
+      { "harness": "codex", "id": "A", "title": "session A", "usd": 1 }
+    ],
+    "usdPerPercent": 0.85
   }],
   "refusals": [{
     "at": "2026-10-01T14:00:00Z", "harness": "claude", "session": { "harness": "claude", "id": "…" },
@@ -1017,10 +1023,20 @@ without a reset time joins no window. `resetsAt` is the earliest of the cluster,
 `lastSeenAt` bound the readings, `plan` is the last one named. `firstPercent`, `maxPercent` and
 `points` (`usedPercent` 0-100, by time) exist only where the harness recorded a percentage: Codex
 does, Claude Code windows have no percentages, only `refusals` (the count of refused calls) and
-`firstRefusalAt`. `seenUSD` is the spend of the harness's messages in `[startsAt, resetsAt)`, each
-message once (a session's copy of another's history does not count), and `seenSessions` the number
-of sessions that spent in it; it covers only what this machine recorded, so it is a lower bound of
-what the window allowed. Both are absent when `startsAt` is. Windows are ordered by `startsAt` (by
+`firstRefusalAt`. `seenUSD` is the Cost total of the harness over `[startsAt, resetsAt)`: the same
+figure `/api/cost?harness=<harness>&since=<startsAt>&until=<resetsAt>` gives as its `total`
+(instants, so applied to the minute; each message once, a session's copy of another's history does
+not count; scripted runs included, as on Cost). `seenSessions` is the number of sessions that spent
+in it (Cost's `sessions`). It covers only what this machine recorded, so it is a lower bound of
+what the window allowed. Both are absent when `startsAt` is. `scriptedUSD` (omitted when 0) is the
+part of `seenUSD` that scripted runs spent. `topSessions` lists up to three sessions with the most
+spend inside the window, as `{ "harness", "id", "name"?, "title"?, "usd" }` (`name` and `title` as the
+session listing gives them, omitted when empty; `usd` is the session's spend inside the window only),
+largest first, then harness and id. Scripted runs are never listed one by one, so they are never in
+it; it is `[]` when there are none (and when `startsAt` is absent). `usdPerPercent`
+(omitted otherwise) exists only for a window with percentage points: when its last point gained at
+least 10 percentage points over its first, it is the Cost total of the harness over `[first.at,
+last.at)` divided by the points gained, the dollars one percentage point cost. Windows are ordered by `startsAt` (by
 `resetsAt` when absent), then harness, limit and window length. Codex can move a reset time: a new
 window may begin while an earlier one of the same limit still runs, so windows can overlap and their
 `seenUSD` can count the same message; do not sum `seenUSD` across windows.

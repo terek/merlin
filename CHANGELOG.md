@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- `/api/cost` takes exact instants for `since` and `until` and a `harness` filter, and each usage window in `/api/limits` now reports the same total Cost does over it, the scripted share, its three biggest sessions and what a percentage point cost.
 - `merlin doctor` and a new `GET /api/limits` know about subscription limits: the 5-hour and 7-day windows Codex records (how much was used, when it resets), the calls Codex and Claude Code refused at a limit, and what this machine spent inside each window.
 - Cost draws a day or two by the hour and a week by three hours (up to two weeks by six), and can stack its bars by who spent (main thread or sub-agents) or by model tier (heavy, mid, light); the Agents table is now Who × Tier, the main thread and the sub-agents against the tiers of the models they ran on.
 - Cost colours each model the same way on every scope: by family (Opus blue, Sonnet orange, Haiku teal, Fable violet) with older versions lighter, never by rank, so pink is only ever the cache miss; warm compactions are amber, cold ones red, and the price classes use the Session page's colours.
