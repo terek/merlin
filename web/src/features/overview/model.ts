@@ -1286,10 +1286,37 @@ export function sessionStretchUrl(
   search: string | URLSearchParams = '',
 ): string {
   const key = { harness: l.harness, id: l.id }
+  const w = sessionStretch(l, axis, x)
+  if (!w) return `/${focusSearch(search, key)}`
+  return `/${focusSearch(search, key, { from: new Date(w[0]).toISOString(), to: new Date(w[1]).toISOString() })}`
+}
+
+/** The stretch a click at x on a session's graph opens: the day (hour) under it cut to the session's activity; null outside the plot. */
+export function sessionStretch(l: OverviewLane, axis: Axis, x: number): [number, number] | null {
   const t = bandTimes(axis, x)
-  if (!t) return `/${focusSearch(search, key)}`
-  const [a, b] = clipToActivity(l, axis, t.fromMs, t.toMs)
-  return `/${focusSearch(search, key, { from: new Date(a).toISOString(), to: new Date(b).toISOString() })}`
+  return t ? clipToActivity(l, axis, t.fromMs, t.toMs) : null
+}
+
+/** A window of time drawn on the row's linear axis: its x range clipped to the axis, and which edges ran past it. */
+export interface WindowBand {
+  x0: number
+  x1: number
+  /** The window starts before the axis. */
+  before: boolean
+  /** The window ends after the axis. */
+  after: boolean
+}
+
+/** The width a band keeps at least (px), so that a window of a few minutes is still a visible line. */
+const MIN_BAND = 2
+
+/** `[lo, hi]` (ms) on `axis`, clipped to it; null when it lies wholly outside (or is not a window). */
+export function windowBand(axis: Axis, lo: number, hi: number): WindowBand | null {
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo) return null
+  if (hi < axis.fromMs || lo > axis.toMs) return null
+  const x0 = Math.max(0, xOf(axis, lo))
+  const x1 = Math.min(axis.width, Math.max(xOf(axis, hi), x0 + MIN_BAND))
+  return { x0: Math.min(x0, axis.width - MIN_BAND), x1, before: lo < axis.fromMs, after: hi > axis.toMs }
 }
 
 /** A mark under the locator's strip: its x, label and whether it is a month's first day. */

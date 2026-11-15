@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { withoutFocus } from '../../lib/scope'
-import { closedSearch, focusSearch, legacyTarget, openValue, parseOpen, positionIn } from './focus'
+import { closedSearch, focusSearch, legacyTarget, openValue, outsideNote, parseOpen, positionIn } from './focus'
 import { listRows } from './model'
 
 const rows = ['a', 'b', 'c'].map((id) => ({ harness: 'claude', id }))
@@ -112,5 +112,18 @@ describe('the list the focus walks', () => {
     const r = listRows(lanes, { term: '', sel: null, by, sort: { key: 'spend', desc: true }, home: undefined })
     expect(r.rows.map((l) => l.id)).toEqual(['b', 'c', 'a'])
     expect(positionIn(r.rows, { harness: 'claude', id: 'c' })?.n).toBe(2)
+  })
+})
+
+describe('outsideNote', () => {
+  const at = (m: number, d: number, y = 2026) => new Date(y, m, d, 12).getTime()
+  test('a day, days in a month, across months', () => {
+    expect(outsideNote(at(8, 7), at(8, 7))).toBe('Outside this range: Sep 7')
+    expect(outsideNote(at(8, 7), at(8, 9))).toBe('Outside this range: Sep 7–9')
+    expect(outsideNote(at(8, 30), at(9, 2))).toBe('Outside this range: Sep 30 – Oct 2')
+    expect(outsideNote(at(11, 30), at(0, 2, 2027))).toBe('Outside this range: Dec 30 – Jan 2 2027')
+  })
+  test('without dates', () => {
+    expect(outsideNote(Number.NaN, Number.NaN)).toBe('Outside this range')
   })
 })

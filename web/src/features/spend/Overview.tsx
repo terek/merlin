@@ -4,6 +4,7 @@
 // handle to resize it, click a day to snap to it; ← → move the window by its own width (a day at a
 // time when it is a day).
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { formatDuration, formatMoney } from '../../lib/format'
 import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
@@ -62,6 +63,8 @@ export interface OverviewProps {
   pinnedT?: number
   /** The last work episode: what "Latest" goes back to. */
   latest: Win
+  /** Where the "Showing … Latest All" line goes (a heading row); it stays above the strip when there is none. */
+  controlsHost?: HTMLElement | null
 }
 
 /** The strip's time axis at a width: the whole tree, idle time squeezed out. */
@@ -73,7 +76,7 @@ type Drag =
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
-export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: OverviewProps) {
+export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, controlsHost }: OverviewProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
@@ -212,37 +215,43 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest }: O
   const to = Math.min(eff.hi, timeline.t1)
   const sameDay = new Date(from).toDateString() === new Date(to).toDateString()
 
+  const showing = (
+    <div className="flex min-h-5 items-baseline gap-x-3 overflow-hidden whitespace-nowrap text-sec normal-case tracking-normal">
+      <span className="text-muted">Showing</span>
+      <span className="font-medium">
+        {whole
+          ? 'the whole session'
+          : dayOfWin >= 0
+            ? longDate(days[dayOfWin].date)
+            : sameDay
+              ? `${longDate(from)} ${clock(from)}–${clock(to)}`
+              : `${longDate(from)} ${clock(from)} – ${longDate(to)} ${clock(to)}`}
+      </span>
+      <span className="text-muted">{formatDuration(eff.hi - eff.lo)}</span>
+      <span className="font-mono">{formatMoney(spent)}</span>
+      <button
+        type="button"
+        onClick={() => onWin(latest)}
+        className="cursor-pointer text-accent hover:underline focus-visible:underline"
+      >
+        Latest
+      </button>
+      <button
+        type="button"
+        onClick={() => onWin({ lo: bounds.t0, hi: bounds.t1 })}
+        className="cursor-pointer text-accent hover:underline focus-visible:underline"
+      >
+        All
+      </button>
+      {!controlsHost && (
+        <span className="truncate text-faint">drag to select a range, drag the window or its edges, click a date</span>
+      )}
+    </div>
+  )
+
   return (
     <div className="mb-3">
-      <div className="flex min-h-5 items-baseline gap-x-3 overflow-hidden whitespace-nowrap text-sec">
-        <span className="text-muted">Showing</span>
-        <span className="font-medium">
-          {whole
-            ? 'the whole session'
-            : dayOfWin >= 0
-              ? longDate(days[dayOfWin].date)
-              : sameDay
-                ? `${longDate(from)} ${clock(from)}–${clock(to)}`
-                : `${longDate(from)} ${clock(from)} – ${longDate(to)} ${clock(to)}`}
-        </span>
-        <span className="text-muted">{formatDuration(eff.hi - eff.lo)}</span>
-        <span className="font-mono">{formatMoney(spent)}</span>
-        <button
-          type="button"
-          onClick={() => onWin(latest)}
-          className="cursor-pointer text-accent hover:underline focus-visible:underline"
-        >
-          Latest
-        </button>
-        <button
-          type="button"
-          onClick={() => onWin({ lo: bounds.t0, hi: bounds.t1 })}
-          className="cursor-pointer text-accent hover:underline focus-visible:underline"
-        >
-          All
-        </button>
-        <span className="truncate text-faint">drag to select a range, drag the window or its edges, click a date</span>
-      </div>
+      {controlsHost ? createPortal(showing, controlsHost) : showing}
       <div
         ref={wrap}
         role="slider"

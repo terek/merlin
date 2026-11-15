@@ -72,7 +72,7 @@ import {
   totalsOf,
   xOf,
 } from './model'
-import { FolderCell, IDLE_FILL, laneData, type RowData, RowGraph, SessionText, spanColor } from './RowParts'
+import { CELL_PAD, FolderCell, IDLE_FILL, laneData, type RowData, RowGraph, SessionText, spanColor } from './RowParts'
 import { ScopeSlot, useScope } from './ScopeSlot'
 import { SessionFocus } from './SessionFocus'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
@@ -89,7 +89,6 @@ import {
 
 /** The structured block's columns (px) and the cell padding the graph sits in. */
 const COLS = { turns: 64, agents: 70, peak: 72, spend: 84 }
-const CELL_PAD = 12
 const GAP = 8
 /** The sidebar beside the rows (px, its right border included), and the strip it folds to. */
 const LAYOUT: Layout = { pad: CELL_PAD, gap: GAP, ...COLS }
@@ -849,7 +848,14 @@ function Table({
         onSelect={onSelect}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {open && <SessionFocus open={open} rows={rows} sp={sp} />}
+        {open && (
+          <SessionFocus
+            open={open}
+            rows={rows}
+            sp={sp}
+            ctx={{ lanes: o.lanes, axis, pxPerTok, padRight, blockW: BLOCK_W, home, refusals, lockouts }}
+          />
+        )}
         {/* the list stays laid out and mounted under the session (hidden, not removed): its width, its scroll position
             and its rows are where they were when it comes back */}
         <div

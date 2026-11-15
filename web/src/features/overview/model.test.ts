@@ -72,6 +72,7 @@ import {
   type SortKey,
   searchLanes,
   selectLanes,
+  sessionStretch,
   sessionStretchUrl,
   slotX,
   sortLanes,
@@ -84,6 +85,7 @@ import {
   totalsOf,
   underPath,
   visibleRows,
+  windowBand,
   xOf,
 } from './model'
 
@@ -1083,8 +1085,38 @@ describe('a click on a row graph', () => {
     const idle = new URLSearchParams(sessionStretchUrl(l, axis, at(5)).split('?')[1])
     expect(idle.get('sfrom')).toBe(new Date(2026, 10, 12).toISOString())
     expect(idle.get('sto')).toBe(new Date(2026, 10, 13).toISOString())
+    // the click that zooms in place is the same stretch
+    expect(sessionStretch(l, axis, at(2))).toEqual([
+      new Date(2026, 10, 9, 10).getTime(),
+      new Date(2026, 10, 9, 13).getTime(),
+    ])
+    expect(sessionStretch(l, axis, -5)).toBeNull()
     // outside the plot: the session whole
     expect(sessionStretchUrl(l, axis, -5)).toBe('/?open=claude%3Aabc+1')
+  })
+})
+
+describe('a window drawn on the row graph', () => {
+  const ax = makeAxis(0, 100 * HOUR, HOUR, 1000)
+  test('inside the axis: its true place, no marks', () => {
+    expect(windowBand(ax, 10 * HOUR, 20 * HOUR)).toEqual({ x0: 100, x1: 200, before: false, after: false })
+  })
+  test('clipped to the axis, with the edge that ran past it marked', () => {
+    expect(windowBand(ax, -5 * HOUR, 20 * HOUR)).toEqual({ x0: 0, x1: 200, before: true, after: false })
+    expect(windowBand(ax, 90 * HOUR, 120 * HOUR)).toEqual({ x0: 900, x1: 1000, before: false, after: true })
+    expect(windowBand(ax, -HOUR, 101 * HOUR)).toEqual({ x0: 0, x1: 1000, before: true, after: true })
+  })
+  test('wholly outside, or not a window: nothing', () => {
+    expect(windowBand(ax, -9 * HOUR, -HOUR)).toBeNull()
+    expect(windowBand(ax, 101 * HOUR, 110 * HOUR)).toBeNull()
+    expect(windowBand(ax, 20 * HOUR, 10 * HOUR)).toBeNull()
+    expect(windowBand(ax, Number.NaN, 10 * HOUR)).toBeNull()
+  })
+  test('a very short window is still a visible line, and stays on the axis', () => {
+    const b = windowBand(ax, 50 * HOUR, 50 * HOUR + MIN)
+    expect(b?.x1 !== undefined && b.x0 !== undefined && b.x1 - b.x0).toBeGreaterThanOrEqual(2)
+    const edge = windowBand(ax, 100 * HOUR, 100 * HOUR)
+    expect(edge && edge.x1 <= 1000 && edge.x1 - edge.x0 >= 2).toBe(true)
   })
 })
 

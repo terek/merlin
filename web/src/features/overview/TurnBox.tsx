@@ -12,7 +12,7 @@ import { formatDuration, plural } from '../../lib/format'
 import { inboxBody } from '../../lib/inbox'
 import { fullTime, parseTime, timeOfDay } from '../../lib/time'
 import { unwrapMachineText } from '../../lib/wrapper'
-import { Badge, Card, Clamp, IconButton, ModelName, PlainText, Prose } from '../../ui'
+import { Badge, Clamp, FrameSection, IconButton, ModelName, PlainText, Prose } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
 import { kindColor } from '../spend/marks'
@@ -259,11 +259,11 @@ function MainTurn({
   const next = at >= 0 && at < own.length - 1 ? own[at + 1] : undefined
   const marks = turnMarks(t)
   return (
-    <Card
+    <FrameSection
       title={
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sec normal-case tracking-normal">
           {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
-          <span>Turn {col.index}</span>
+          <span className="text-faint text-meta uppercase tracking-wide">Turn {col.index}</span>
           {started && (
             <time className="font-normal text-muted" title={fullTime(started)}>
               {timeOfDay(started)}
@@ -276,7 +276,7 @@ function MainTurn({
         </span>
       }
       actions={
-        <>
+        <div className="flex shrink-0 items-center gap-1">
           <IconButton
             label="Previous turn"
             disabled={prev === undefined}
@@ -290,7 +290,7 @@ function MainTurn({
           <IconButton label="Unpin the turn" onClick={() => onPin(null)}>
             <X size={14} />
           </IconButton>
-        </>
+        </div>
       }
     >
       <div className="space-y-3">
@@ -310,7 +310,7 @@ function MainTurn({
           <p className="text-sec text-muted">{noReply(t)}</p>
         )}
       </div>
-    </Card>
+    </FrameSection>
   )
 }
 
@@ -378,12 +378,12 @@ function AgentWork({
   const reached = reachedLine(u.reports)
   const role = ROLE_LABEL[agentRole(a)]
   return (
-    <Card
+    <FrameSection
       title={
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sec normal-case tracking-normal">
           {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
           <KindIcon agent={a} color={kindColor(a)} />
-          <span>{label}</span>
+          <span className="font-medium text-fg">{label}</span>
           {a.description && (
             <span className="max-w-[48ch] truncate font-normal text-muted" title={a.description}>
               {a.description}
@@ -407,7 +407,7 @@ function AgentWork({
         </span>
       }
       actions={
-        <IconButton label="Close the agent's work" onClick={() => onSelectUnit(null)}>
+        <IconButton label="Close the agent's work" onClick={() => onSelectUnit(null)} className="shrink-0">
           <X size={14} />
         </IconButton>
       }
@@ -472,7 +472,7 @@ function AgentWork({
           </p>
         )}
       </div>
-    </Card>
+    </FrameSection>
   )
 }
 

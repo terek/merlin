@@ -79,3 +79,24 @@ export function positionIn(rows: readonly Key[], key: Key): Position | null {
   const at = (j: number): Key | null => (rows[j] ? { harness: rows[j].harness, id: rows[j].id } : null)
   return { n: i + 1, total: rows.length, prev: at(i - 1), next: at(i + 1) }
 }
+
+const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * What the head says in place of the row's graph when the session lies outside the list's range: "Outside this
+ * range: Sep 7–9" (one day: "Sep 7"; across months: "Sep 30 – Oct 2"). Local days, like the list's axis.
+ */
+export function outsideNote(startMs: number, endMs: number): string {
+  if (!Number.isFinite(startMs)) return 'Outside this range'
+  const a = new Date(startMs)
+  const b = new Date(Number.isFinite(endMs) ? Math.max(endMs, startMs) : startMs)
+  const day = (d: Date) => `${MONTH[d.getMonth()]} ${d.getDate()}`
+  const same = a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+  const text =
+    same && a.getDate() === b.getDate()
+      ? day(a)
+      : same
+        ? `${day(a)}–${b.getDate()}`
+        : `${day(a)} – ${day(b)}${a.getFullYear() === b.getFullYear() ? '' : ` ${b.getFullYear()}`}`
+  return `Outside this range: ${text}`
+}

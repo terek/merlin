@@ -36,11 +36,15 @@ function Loaded({
   details,
   missing,
   address,
+  onWindow,
+  zoomTo,
 }: {
   home: SessionDetail
   details: SessionDetail[]
   missing: number
   address: Address
+  onWindow?: (lo: number, hi: number) => void
+  zoomTo?: { lo: number; hi: number; n: number }
 }) {
   const params = new URLSearchParams(address.search)
   const tree = useMemo(() => buildTree(details), [details])
@@ -131,9 +135,9 @@ function Loaded({
   )
 
   return (
-    <div className="space-y-4 p-4">
+    <div>
       {missing > 0 && (
-        <p className="text-sec text-warn">
+        <p className="border-line border-b px-4 py-2 text-sec text-warn">
           {missing === 1 ? 'One session' : `${missing} sessions`} of this tree could not be loaded.
         </p>
       )}
@@ -149,8 +153,10 @@ function Loaded({
         initialWindow={{ lo: parseTime(params.get('sfrom')), hi: parseTime(params.get('sto')) }}
         keyInPanel
         lockouts={lockouts}
+        onWindow={onWindow}
+        zoomTo={zoomTo}
       />
-      <div ref={opened} className="scroll-mt-4 space-y-4">
+      <div ref={opened} className="scroll-mt-12">
         {branch && col && pinned && (
           <TurnBox
             key={`${pinned.branch}/${col.index}`}
@@ -173,7 +179,17 @@ function Loaded({
 }
 
 /** Loads every session of the family of `home`, with its messages. */
-function Family({ home, address }: { home: SessionDetail; address: Address }) {
+function Family({
+  home,
+  address,
+  onWindow,
+  zoomTo,
+}: {
+  home: SessionDetail
+  address: Address
+  onWindow?: (lo: number, hi: number) => void
+  zoomTo?: { lo: number; hi: number; n: number }
+}) {
   const others = home.family.members.map((m) => m.key).filter((k) => !same(k, home.summary.key))
   const results = useQueries({
     queries: others.map((k) => ({
@@ -200,6 +216,8 @@ function Family({ home, address }: { home: SessionDetail; address: Address }) {
       details={details.length ? details : [home]}
       missing={others.length - loaded.length}
       address={address}
+      onWindow={onWindow}
+      zoomTo={zoomTo}
     />
   )
 }
@@ -225,7 +243,7 @@ function Candidates({ list, hrefFor }: { list: Candidate[]; hrefFor: (key: Sessi
 
 function PageSkeleton() {
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 px-4 py-3">
       <Skeleton className="h-8 w-2/3" />
       <Skeleton className="h-4 w-1/2" />
       <SkeletonRows rows={4} height={72} />
@@ -242,10 +260,14 @@ export interface SessionViewProps {
   hash: string
   /** Where a candidate of an ambiguous id leads: the Overview with it open. */
   hrefFor: (key: SessionKey) => string
+  /** Told the window the graph shows (ms): the focus's head draws it on the row's own axis. */
+  onWindow?: (lo: number, hi: number) => void
+  /** Zoom the graph to this stretch (ms) when `n` changes. */
+  zoomTo?: { lo: number; hi: number; n: number }
 }
 
 /** The session the Overview has open: its graph, and the pinned turn under it. */
-export function SessionView({ harness, id, search, hash, hrefFor }: SessionViewProps) {
+export function SessionView({ harness, id, search, hash, hrefFor, onWindow, zoomTo }: SessionViewProps) {
   const query = useSession(harness, id, { messages: true })
   useDocumentTitle(query.data ? sessionTitle(query.data.summary) : undefined)
 
@@ -271,7 +293,7 @@ export function SessionView({ harness, id, search, hash, hrefFor }: SessionViewP
   if (err) return <ErrorState error={err} onRetry={() => void query.refetch()} />
   return (
     <QueryBoundary query={query} skeleton={<PageSkeleton />}>
-      {(d) => <Family home={d} address={{ search, hash }} />}
+      {(d) => <Family home={d} address={{ search, hash }} onWindow={onWindow} zoomTo={zoomTo} />}
     </QueryBoundary>
   )
 }

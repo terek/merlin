@@ -25,6 +25,9 @@ import {
 import { useWidth } from './useWidth'
 import { type LockoutSpan, refusalTicks } from './windows'
 
+/** The padding a row's cell keeps on each side of the graph (px). */
+export const CELL_PAD = 12
+
 /** The idle context's fill: the main colour, severely tinted. */
 export const IDLE_FILL = 0.2
 /** The thin vertical of a spawn. */
