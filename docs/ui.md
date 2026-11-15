@@ -311,31 +311,23 @@ page draws them: a session and every session forked or continued from it are one
   sessions, the header says so and each hit names its session. `continuedIn` is shown as "also in
   ›" links. `Esc` clears.
 
-## 9. Session page (`/s/:harness/:id`)
+## 9. A session in the Overview's focus (`/s/:harness/:id` redirects here)
 
-*Since 2026-11-15 the page lives in the Overview's focus (section 10b, "A session in place"; epic `merlin-bj5`).
-`/s/:harness/:id` only redirects. What the focus shows of what follows: the graph (its key in the Legend
-panel's Graph tab) and the pinned turn's `TurnInspector`. Not carried over: the header, the resume box (the
-paginator has a copy button), the decision panel, the top decisions, the family strip and the diagnostics; the
-box under the graph is rebuilt in `merlin-bj5.3`, and the rest of this section stays until then. The zoom is
-`sfrom`/`sto`.*
+*Since 2026-11-15 the Session page lives in the Overview's focus (section 10b, "A session in place"; epic
+`merlin-bj5`). `/s/:harness/:id` only redirects. What is left of it is two things: the **graph** (its key in the Legend
+panel's Graph tab) and, under it, the **box** for the pinned turn or piece of agent work (`TurnBox.tsx`). The header,
+the resume box, the family strip, the banners, the diagnostics, the decision panel and the list of the most expensive
+decisions were removed (the paginator has a copy button for the resume command; the Cost page ranks decisions). The
+zoom is `sfrom`/`sto`.*
 
-The page answers "which of my decisions cost the most", for a session and every session forked or
-continued from it: they are one tree, and the page is the same whichever member it is opened on.
-Code in `features/spend/` (bead `merlin-t8s.34`; the design history is on `merlin-t8s.27`). The
-page loads every member of `family.members` with `?messages=1`; dollars are recomputed from the
-messages' token counts with prices fitted per model (the web has no price table).
+The focus answers "what happened in this session, and what did it cost", for a session and every session forked or
+continued from it: they are one tree, and the focus is the same whichever member it is opened on.
+Code in `features/spend/` (the graph; bead `merlin-t8s.34`, design history on `merlin-t8s.27`) and
+`features/overview/` (`SessionView.tsx`, the box). The view loads every member of `family.members` with `?messages=1`;
+dollars are recomputed from the messages' token counts with prices fitted per model (the web has no price table).
 
-From top to bottom:
+From top to bottom, the graph and then the box:
 
-- **Header**: state, title, end state; project, branch, started, last activity, wall time, id, then
-  a link per PR the session opened or linked (`#12`, opens in a new tab); the
-  tree's total (Claude Code's figure for every member) and this session's own share; prompts,
-  turns, agents, tool calls, lines added and removed; "fork of" / "continued in" links; a line when
-  the messages add up to a different figure than Claude Code reported. Banners when the transcript
-  files are gone or the digest could not be built.
-- **Resume** box: `cd <cwd> && claude --resume <id>` with a copy button; when the session is not a
-  leaf it says so and links the leaves of the family instead. Hidden when the files are gone.
 - **Spend graph** (`SpendGraph.tsx` the card, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
   by when it happened. At the top the **breakdown** of the spend as three bars (below); then a line adding up the compactions, the strip,
@@ -583,18 +575,10 @@ From top to bottom:
   - hover reads the clock, the context of the row under the pointer and the slot's spend; between
     two turns it reads "between turns 0 and 1: main agent idle 38 min" and pins nothing. A click
     pins the turn or selects the piece of work; arrow keys move by turn.
-- **What is pinned, in the graph and below it**: each panel under the graph wears the graph's mark
-  for what it opens (`marks.tsx`), so that the two can be matched at a glance:
-  - the pinned turn's **decision**: its bracket turns into a thick accent line, and its turns are
-    lightly tinted across the session's rows. The decision panel has the same thick line along its
-    top, its title bar the same light tint, and a small bracket before its title; in "Your most
-    expensive decisions" the decision's row has that line and tint too;
-  - the **pinned turn**: tinted on its row with a marker over it. The turn card's title bar has the
-    tint and the marker; in the decision panel, its step is tinted;
-  - the **selected piece of work**: its frame's top is drawn heavy over it. Under the turn card it
-    opens with a title bar that is that box (tint, outline, dashed for a workflow, notched for a
-    fork), and its row in the lists is boxed the same way. Agent icons on the page take their kind's
-    colour.
+- **What is pinned, in the graph**: the pinned turn is tinted on its row with a marker over it, and its decision's
+  bracket turns into a thick accent line with its turns lightly tinted across the session's rows (`marks.tsx` holds
+  the opacities and the colour of an agent's kind); the selected piece of work has its frame's top drawn heavy.
+  The box under the graph does not repeat these marks: it says what the turn or the work was, not what it cost.
 - **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
   switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the
   plots draw spend as thin uniform lines): **three horizontal stacked bars**, one per partition of the same dollars
@@ -640,19 +624,28 @@ From top to bottom:
   turn or a piece of work shows the chips by who. The timeline keeps for each call its model and
   tier, and for each row its **model runs** (consecutive calls on one model, `{ t0, t1, model, tier }`)
   and its main model, for drawing the weight of a line by model;
-- **Decision panel**: the pinned turn's decision, its total split by who, then every step and every
-  piece of agent work in it, most expensive first, and the compactions after its turns. A decision
-  is only "everything between two typed prompts": work an earlier prompt asked for is counted where
-  it ran, and the page says so rather than claiming the prompt caused it.
-- **Turn card**: the pinned turn's prompt (machine-delivered messages parsed, `lib/inbox.ts`), the
-  prompts typed or delivered while it ran, the reply, the compaction after it (`lib/compaction.ts`),
-  what the main agent paid for by token class, its cache misses in words, the work launched in it
-  and the reports that came in; a selected piece of work opens under it with what it was asked,
-  what it paid for and the agent's detail (`features/agents/AgentDetail`).
-- **Your most expensive decisions**: the top ten of the tree, always shown; a click pins the
-  decision and scrolls back to the graph.
-- **Sessions in this tree** (more than one member): title, relation, time, cost, "resume here" on
-  the leaves. **Diagnostics**, collapsed.
+- **The box under the graph** (`TurnBox.tsx`; pure parts in `thread.ts`; bead `merlin-bj5.3`): one card, as wide as the
+  graph, shown while a turn or a piece of agent work is pinned. It reads as the conversation: who said what, in
+  order, with times, and **no dollars, tokens or cost bars** (the graph and its hover carry those). Texts are
+  rendered as markdown (`Prose`) and fold at 12 lines with "show more"; a typed prompt is plain text; lines are
+  capped at 100ch.
+  - **A pinned main turn**: a head line (`Turn 12`, its time and duration, marks for interrupted, abandoned or a
+    slash command, ‹ › to the previous and next turn of the session, ✕ to unpin); the **prompt**, with who it came
+    from (you typed it; a teammate wrote; a background task reported; a wake-up; ...), its text, and each delivered
+    `inbox` message as a block with its sender (a link that pins that agent's work when `agentId` is set), its kind
+    (message, task result, idle, assignment) and time, prompts that arrived while the turn ran in place (`queued`),
+    "N images"; one line of **what it did** (`18 tool calls (Edit 6, Bash 5, Read 4, …) · 3 files · launched
+    reviewer, Explore`, the agents being links that open their work); the **reply** (`finalText`, whole), or "No
+    reply (interrupted)".
+  - **A pinned piece of agent work** (an agent and one of its `turns[]`): a head line (the agent's name, its
+    description, its role and model, its time, its status, ✕ back to the turn); "Launched in turn 12" and "reached
+    the main agent in turn 15" (links; `Unit.launch` and `Unit.reports`); the **exchange** as a thread, oldest first:
+    for each of the agent's turns the request (the main agent's prompt, or the message that set it working again,
+    with its sender) and the response (`finalText`). The pinned turn is open, the others are one folded line each
+    (sender, first line, time) that open on a click. A one-shot sub-agent is one request and one response. A prompt
+    the harness keeps encrypted (Codex) says so. Then what it did in a line, and its own sub-agents as links.
+  - The two address forms (`#t<n>`, `#a<id>`) and the Esc behaviour (one Esc takes the pin back, the next closes the
+    session) are unchanged.
 
 Addresses: `#t<n>` pins turn n (a copied turn on the session that ran it), `#a<agentId>` opens that
 agent's piece of work (a nested agent opens the piece it is inside), `#c<n>` pins the turn of
@@ -693,8 +686,7 @@ apart (`acme/main`, `ops/main`); `lib/places.ts` `placeLabels` does it for the r
 the Session page, and leaves unique names short. Remotes in the rail, the Cost cut and the filter chip show
 without their host (`github.com/acme/app` as `acme/app`, a local path as its last two directories;
 `remoteLabels`), because a truncated row would read only the shared host; two remotes that would get one
-label keep their whole string, and the tooltip and every link hold the whole remote. The Session page
-header shows remotes whole. The repository chip looks
+label keep their whole string, and the tooltip and every link hold the whole remote.  The repository chip looks
 its name up in `/api/repos` and, until that loads, uses `repoName`, the rule of `repos.Name` in Go.
 
 A grouping filter that the rail does not show (collapsed, or another grouping) is a chip in the
@@ -704,12 +696,6 @@ the checkout, remote or repository chip also clears `touched`, so no orphan is l
 (`clearPlace` in `features/sessions/model.ts`). An old `worktree=` is not read and is dropped at the
 next change. Tree rows show the first two beads their sessions worked on (status dot and id) and how
 many more.
-
-The Session page header has a line for where the session worked (`places`): the checkout, repository
-and remote it counts under, then "also" and the other values it touched (three, then "+N more"), each
-linking to the Sessions page grouped by it with `touched=1` so the session you came from is in the
-list; then its branches with their cost when there are several, and its beads (six, then "more") with
-the cost spent on each and "no bead" for the rest.
 
 ## 10. Cost page (`/cost`)
 
@@ -1086,7 +1072,7 @@ a history entry, so Back is the undo.
   thing); none of them while a field has focus. The previous and next sessions' details are prefetched once the
   current one has loaded.
 - **Body**: the session's graph with its key in the Legend panel's Graph tab (the Overview's list fills no tab), and
-  the pinned turn under it. The zoom window is the user's: toggling the panel resizes the plot and keeps the window
+  the box for the pinned turn or piece of agent work under it (section 9). The zoom window is the user's: toggling the panel resizes the plot and keeps the window
   in time. The graph's vertical frame (`spend/layout.ts`) is built for the width the plot has with the panel open,
   whether it is or not, so a toggle does not move it; going to another session builds a new one. The scroll
   container has `scrollbar-gutter: stable`. An unknown or ambiguous id shows its message (candidates, "No such
@@ -1096,7 +1082,7 @@ a history entry, so Back is the undo.
   `pin`, `unit` and `cursor` are carried. Nothing else is special-cased: Moments, the Bead page and search keep
   linking to `/s/…`.
 - Code: `features/overview/focus.ts` (pure: the address, the redirect target, the position in the list),
-  `SessionFocus.tsx`, `features/spend/SessionPage.tsx` (`SessionView`).
+  `SessionFocus.tsx`, `SessionView.tsx` (the graph and the pinned box), `TurnBox.tsx`, `thread.ts`.
 
 ### Limit windows (added 2026-11-15, `merlin-6py`)
 
