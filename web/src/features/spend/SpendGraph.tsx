@@ -27,6 +27,7 @@ import {
   unitUnrecorded,
 } from './model'
 import { Overview, stripAxis } from './Overview'
+import { useMappingSource } from './TimeMapping'
 import { TimePlot } from './TimeView'
 import {
   boundsOf,
@@ -270,6 +271,7 @@ export function SpendGraph({
   zoomTo,
 }: SpendGraphProps) {
   const inset = usePanelInset()
+  const mapping = useMappingSource()
   const [cursor, setCursor] = useState<Pin | null>(
     initialCursor !== undefined && tree.branches[home]?.model.cols[initialCursor]
       ? { branch: home, col: initialCursor }
@@ -391,38 +393,8 @@ export function SpendGraph({
   }
 
   return (
-    <FrameSection title="Spend" actions={<div ref={setLocator} className="flex min-w-0 flex-1 justify-end" />}>
-      <div className="min-w-0">
-        <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} keyInPanel={keyInPanel} />
-        {unrecordedRuns > 0 && (
-          <p
-            className="mb-2 flex items-center gap-1.5 text-sec text-muted"
-            title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
-          >
-            <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
-            <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
-          </p>
-        )}
-        {compactions.calls + compactions.unknown > 0 && (
-          <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
-            <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
-            <span className={compactions.cold > 0 ? 'text-bad' : undefined}>
-              Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
-            </span>
-            {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
-            {compactions.inAgents > 0 && (
-              <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
-            )}
-            <span className="text-muted">
-              {compactions.unknown > 0 && compactions.calls > 0 && `${compactions.unknown} more without an estimate. `}
-              {compactions.calls === 0
-                ? 'The harness recorded no estimate of their calls.'
-                : compactions.recorded === compactions.calls
-                  ? 'Recorded by the harness; already in the figures on this page.'
-                  : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
-            </span>
-          </p>
-        )}
+    <>
+      <div className={mapping ? 'px-4 pt-8' : 'px-4 pt-2'}>
         <div ref={stripRef}>
           <Overview
             timeline={timeline}
@@ -435,46 +407,85 @@ export function SpendGraph({
             controlsHost={locator}
           />
         </div>
-        <div className="relative">
-          <TimePlot
-            tree={tree}
-            timeline={timeline}
-            range={eff}
-            pinned={valid(pinned) ? pinned : null}
-            cursor={cur}
-            selectedUnit={selectedUnit}
-            hoverUnit={hoverUnit}
-            onCursor={setCursor}
-            onHoverUnit={setHoverUnit}
-            onPin={onPin}
-            onSelectUnit={onSelectUnit}
-            onKey={onKey}
-            current={current}
-            lockouts={lockouts}
-            frameInset={keyInPanel ? inset : 0}
-            shortHint={keyInPanel}
-            turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
-          />
-        </div>
-        {keyInPanel ? (
-          <PanelTab id="graph" title="Graph">
-            <section className="mb-4">
-              <h4 className="mb-1.5 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">Spend bars</h4>
-              <BreakdownKey data={breakdown} hover={hoverPart} onHover={setHoverPart} stacked />
-            </section>
-            <Legend facts={facts} stacked />
-            <section className="mt-3 border-line border-t pt-3 text-meta text-muted">
-              <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">How to read</h4>
-              <p>
-                Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click
-                pins it and opens it below. Context per call above each baseline, spend below it, each on one scale.
-              </p>
-            </section>
-          </PanelTab>
-        ) : (
-          <Legend facts={facts} />
-        )}
       </div>
-    </FrameSection>
+      <FrameSection title="Spend" actions={<div ref={setLocator} className="flex min-w-0 flex-1 justify-end" />}>
+        <div className="min-w-0">
+          <div className="relative">
+            <TimePlot
+              tree={tree}
+              timeline={timeline}
+              range={eff}
+              pinned={valid(pinned) ? pinned : null}
+              cursor={cur}
+              selectedUnit={selectedUnit}
+              hoverUnit={hoverUnit}
+              onCursor={setCursor}
+              onHoverUnit={setHoverUnit}
+              onPin={onPin}
+              onSelectUnit={onSelectUnit}
+              onKey={onKey}
+              current={current}
+              lockouts={lockouts}
+              frameInset={keyInPanel ? inset : 0}
+              shortHint={keyInPanel}
+              turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
+            />
+          </div>
+          <div className="mt-4" data-testid="spend-breakdown">
+            <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} keyInPanel={keyInPanel} />
+            {unrecordedRuns > 0 && (
+              <p
+                className="mb-2 flex items-center gap-1.5 text-sec text-muted"
+                title="The harness kept no record of these agents' calls, so their spend is unknown, not $0. Every figure here is at least that much; the percentages are of the spend that is known."
+              >
+                <span aria-hidden className="inline-block h-0 w-2.5 shrink-0 border-t border-dashed border-muted" />
+                <span>{plural(unrecordedRuns, 'sub-agent run')} not recorded</span>
+              </p>
+            )}
+            {compactions.calls + compactions.unknown > 0 && (
+              <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sec">
+                <span aria-hidden className="inline-block h-3 w-0 border-l-2 border-bad" />
+                <span className={compactions.cold > 0 ? 'text-bad' : undefined}>
+                  Compactions: {compactions.calls > 0 ? tallyLine(compactions) : `${compactions.unknown}`}
+                </span>
+                {compactions.cold > 0 && <span className="text-muted">({warmLine(compactions)})</span>}
+                {compactions.inAgents > 0 && (
+                  <span className="text-muted">{compactions.inAgents} of them inside agents' own conversations.</span>
+                )}
+                <span className="text-muted">
+                  {compactions.unknown > 0 &&
+                    compactions.calls > 0 &&
+                    `${compactions.unknown} more without an estimate. `}
+                  {compactions.calls === 0
+                    ? 'The harness recorded no estimate of their calls.'
+                    : compactions.recorded === compactions.calls
+                      ? 'Recorded by the harness; already in the figures on this page.'
+                      : 'Estimated, since the harness does not record the call; not in any figure on this page.'}
+                </span>
+              </p>
+            )}
+          </div>
+          {keyInPanel ? (
+            <PanelTab id="graph" title="Graph">
+              <section className="mb-4">
+                <h4 className="mb-1.5 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">Spend bars</h4>
+                <BreakdownKey data={breakdown} hover={hoverPart} onHover={setHoverPart} stacked />
+              </section>
+              <Legend facts={facts} stacked />
+              <section className="mt-3 border-line border-t pt-3 text-meta text-muted">
+                <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">How to read</h4>
+                <p>
+                  Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given.
+                  Click pins it and opens it below. Context per call above each baseline, spend below it, each on one
+                  scale.
+                </p>
+              </section>
+            </PanelTab>
+          ) : (
+            <Legend facts={facts} />
+          )}
+        </div>
+      </FrameSection>
+    </>
   )
 }

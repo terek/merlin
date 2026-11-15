@@ -338,9 +338,9 @@ From top to bottom, the graph and then the box:
 
 - **Spend graph** (`SpendGraph.tsx` the section, `TimeView.tsx` the plot, numbers in `timeline.ts`;
   bead `merlin-t8s.36`): wall-clock time across, local, so that a stretch of the session can be found
-  by when it happened. At the top the **breakdown** of the spend as three bars (below); then a line adding up the compactions, the strip,
-  the **readout** above the plot, and the plot. All of that is the section's content, at its full width (the strip and the plot
-  measure it), with the plot's **key** under the plot.
+  by when it happened. The full-session strip comes first, then the **readout** above the plot and the plot.
+  The **breakdown** of spend as three bars (below), unrecorded-work notes and compaction totals follow the plot.
+  All of that uses the section's full width (the strip and the plot measure it), with the plot's **key** below.
   - the **readout** is one block of a fixed height (4 lines, so nothing under the pointer moves the graph).
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
@@ -1091,10 +1091,19 @@ a history entry, so Back is the undo.
     at an edge that runs past it (`windowBand`). It follows the main graph live (drag, Latest, All, keys): the graph
     reports its window through `onWindow`. A click on the head's row graph zooms the main graph to the same stretch
     the list's row click opens at (`sessionStretch`, the day or hour under the pointer cut to the session's activity).
+  - **Time mapping.** Thin, muted connections join matching local day boundaries on the head's linear axis and
+    the full-session locator's compressed axis; an intraday overlap uses hours or finer clock boundaries. Only
+    timestamps within both ranges connect, with marks thinned on both axes (at most eight). The connections measure
+    the real graph elements and the locator's own `stripAxis`, so the reserved paginator, scrollbar, sidebar and
+    Legend panel do not skew them. A 32 px channel above the locator keeps lines clear of the controls; it is absent
+    without a summary graph. The overlay takes no pointer events and hides when the locator scrolls under the sticky
+    head. Loading and session changes clear the previous locator (`TimeMapping.tsx`, `mappingBoundaries.ts`).
 - **Frame.** The body uses the frame of the Overview and Cost, not cards: full-bleed sections, each ending in a
   hairline, each with a small uppercase heading row (`FrameSection` in `ui/layout.tsx`, which Cost's sections use
-  too) and its content padded under it. **Spend** carries the locator's "Showing ... Latest All" at the right of its
-  heading row (a portal from the strip into the heading); the **turn or agent** section follows it with its own
+  too) and its content padded under it. The full-session locator sits directly below the sticky summary and its
+  mapping channel. **Spend** carries the locator's "Showing ... Latest All" at the right of its heading row immediately
+  below the locator (a portal from the strip into the heading); its detail graph comes next, then the spend bars and
+  associated notes. The **turn or agent** section follows it with its own
   heading row (name, time, duration; ‹ › ✕ at the right).
 - **The zoom never writes the address.** Drag, Latest, All, the keys and the head's click change state only: no URL
   change, no history entry. `sfrom`/`sto` come in from links (a list row's graph click, an old `/s/` link) and are

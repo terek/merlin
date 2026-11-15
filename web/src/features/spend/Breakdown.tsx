@@ -1,4 +1,4 @@
-// The structure of the spend, at the top of the Spend card: three bars of linear shares, one per partition
+// The structure of the spend, below the detailed graph: three bars of linear shares, one per partition
 // of the same dollars (by who, by token class, by model tier), and to their right the names of their parts,
 // as three narrow columns (swatch and name only; the figures are in each part's hover title). What is counted is what the plot shows (the effective window).
 //

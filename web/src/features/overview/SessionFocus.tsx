@@ -5,7 +5,7 @@
 
 import { useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useHarness } from '../../api/harnesses'
 import { sessionQuery, useSession } from '../../api/queries'
@@ -15,6 +15,7 @@ import { resumeCommand } from '../../lib/paths'
 import { sessionTitle } from '../../lib/session'
 import { isTyping, useShortcut } from '../../shell/useShortcut'
 import { HarnessIcon, IconButton, Money } from '../../ui'
+import { TimeMapping } from '../spend/TimeMapping'
 import { closedSearch, focusSearch, headRow, type Key, lifeRange, outsideNote, positionIn } from './focus'
 import {
   type Axis,
@@ -142,6 +143,11 @@ export function SessionFocus({
   const dir = lane?.dir ?? detail?.summary.cwd
   const command = resumeCommand(lane?.project ?? detail?.summary.cwd ?? detail?.summary.project, key.id, resume)
   const { axis } = ctx
+  const summaryGraph = useRef<HTMLDivElement>(null)
+  const mappingAxis = useMemo(
+    () => (lane ? { lo: axis.fromMs, hi: axis.toMs, x: (t: number) => (t - axis.fromMs) * axis.pxPerMs } : null),
+    [lane, axis],
+  )
   // a session with a lane is drawn as the list draws it; the note is for one without a lane, outside the range
   const rowGraph = lane
   const band = shown && shown.k === own ? shown : null
@@ -182,7 +188,7 @@ export function SessionFocus({
   )
   const below = headRow(lane !== undefined, [from, to], axis)
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <TimeMapping key={`${open.harness}:${open.id}`} source={summaryGraph} axis={mappingAxis}>
       <div className="flex shrink-0 border-line border-b bg-surface" style={{ paddingRight: ctx.padRight }}>
         <div className="min-w-0 flex-1 overflow-hidden pb-1" style={{ paddingInline: CELL_PAD }}>
           <SessionText
@@ -195,6 +201,10 @@ export function SessionFocus({
           />
           {rowGraph ? (
             <div
+              ref={summaryGraph}
+              data-testid="focus-summary-axis"
+              data-from-ms={axis.fromMs}
+              data-to-ms={axis.toMs}
               className="relative cursor-pointer"
               style={{ width: axis.width }}
               onMouseMove={(e) => {
@@ -241,6 +251,6 @@ export function SessionFocus({
           zoomTo={ask && ask.k === own ? ask : undefined}
         />
       </div>
-    </div>
+    </TimeMapping>
   )
 }

@@ -6,6 +6,7 @@
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDuration, formatMoney } from '../../lib/format'
+import { useTimeMapping } from './TimeMapping'
 import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
   axisSpans,
@@ -88,6 +89,12 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
   const x1 = Math.max(x0 + 80, width - PAD)
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
   const axis = useMemo(() => stripAxis(timeline, width), [timeline, width])
+  const svg = useRef<SVGSVGElement>(null)
+  const mappingAxis = useMemo(
+    () => ({ lo: timeline.t0, hi: timeline.wait ?? timeline.t1, x: axis.x }),
+    [timeline, axis],
+  )
+  useTimeMapping(svg, mappingAxis)
 
   const env = useMemo(() => contextEnvelope(timeline, axis, COL), [timeline, axis])
   const peak = Math.max(1, ...env)
@@ -266,6 +273,10 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
         className="mt-1 rounded-badge"
       >
         <svg
+          ref={svg}
+          data-testid="session-locator-axis"
+          data-from-ms={mappingAxis.lo}
+          data-to-ms={mappingAxis.hi}
           width={width}
           height={H}
           role="img"
