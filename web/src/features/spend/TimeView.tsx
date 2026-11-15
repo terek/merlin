@@ -24,6 +24,9 @@
 //              life, weighted by model tier, faint, full for the work in focus; the reports of that
 //              work are dashed lines to the turns they came in
 //   breaks     time in which nothing ran is squeezed into a narrow band, with its length on the axis
+//   lockouts   a subscription limit's lockout (first refused call to reset) is a light red block behind
+//              every row, across breaks too (the veil there is red, not the page's); a break inside one
+//              is labelled in red and says which limit; its left edge is the first refused call
 //   overhead   under a session's rows, a hatched band over each reported window for what the harness
 //              reported and no message explains: labelled with its dollars, on no scale, as it belongs
 //              to the whole window and not to any slot, turn or agent in it
@@ -41,6 +44,7 @@ import type { SessionKey } from '../../api/types'
 import { callLine, idleText } from '../../lib/compaction'
 import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
+import { type LockoutSpan, lockoutTitle } from '../overview/windows'
 import {
   AXIS_H,
   BRACKET_H,
@@ -238,6 +242,8 @@ export interface TimePlotProps {
   frameInset?: number
   /** The reading hint is in the side panel: say only what depends on the data. */
   shortHint?: boolean
+  /** The lockouts of the session's harness (merged; anything outside the axis is left out). */
+  lockouts?: readonly LockoutSpan[]
 }
 
 /** Where a branch leaves its parent's row: a dot (a fork, with the context it copied), a ring (a continuation). */
@@ -287,6 +293,7 @@ export function TimePlot({
   current,
   frameInset = 0,
   shortHint,
+  lockouts,
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
@@ -332,6 +339,15 @@ export function TimePlot({
     [timeline, swarms, open, frameX1, tree],
   )
   const { strips, height, cTicks, kCtx } = frame
+  // the lockouts that show on the axis, as blocks of it (the axis clamps what lies outside)
+  const lockBlocks = useMemo(() => {
+    const a = axis.pieces[0].t0
+    const b = axis.pieces[axis.pieces.length - 1].t1
+    return (lockouts ?? [])
+      .filter((l) => l.toMs > a && l.fromMs < b)
+      .map((l) => ({ ...l, x0: axis.x(l.fromMs), x1: axis.x(l.toMs) }))
+      .filter((l) => l.x1 - l.x0 >= 0.5)
+  }, [lockouts, axis])
   // the y-ranges a break's veil covers: the rows, never an overhead strip (cut around each one)
   const veilSpans: [number, number][] = []
   {
@@ -1299,6 +1315,10 @@ export function TimePlot({
 
   // the labels along the top, left to right, each where it does not run into the one before: clock
   // times (with the date where it changes), and how long each break was
+  // the lockout that holds most of a break (half of it or more), if any
+  function lockOf(b: { t0: number; t1: number }): LockoutSpan | undefined {
+    return lockBlocks.find((l) => Math.min(l.toMs, b.t1) - Math.max(l.fromMs, b.t0) >= (b.t1 - b.t0) / 2)
+  }
   const multiDay = dateOf(tl.t0) !== dateOf(tl.t1)
   const ticks = clockTicks(axis, 70)
   const axisLabels = [
@@ -1307,8 +1327,15 @@ export function TimePlot({
       x: axis.x(t),
       text: multiDay && (i === 0 || dateOf(t) !== dateOf(ticks[i - 1])) ? `${dateOf(t)} ${clock(t)}` : clock(t),
       gap: false,
+      locked: false,
     })),
-    ...axis.breaks.map((b) => ({ key: `b${b.t0}`, x: (b.x0 + b.x1) / 2, text: gapText(b.t1 - b.t0), gap: true })),
+    ...axis.breaks.map((b) => ({
+      key: `b${b.t0}`,
+      x: (b.x0 + b.x1) / 2,
+      text: gapText(b.t1 - b.t0),
+      gap: true,
+      locked: lockOf(b) !== undefined,
+    })),
   ]
     .sort((a, b) => a.x - b.x)
     .filter(
@@ -1444,6 +1471,12 @@ export function TimePlot({
         className={`relative mt-1 rounded-badge ${hot ? 'cursor-pointer' : 'cursor-crosshair'}`}
       >
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
+          {/* limit lockouts: a light red block behind everything, across breaks too */}
+          {lockBlocks.map((l) => (
+            <rect key={`l${l.fromMs}`} x={l.x0} y={0} width={l.x1 - l.x0} height={height} fill="var(--bad-soft)">
+              <title>{lockoutTitle(l)}</title>
+            </rect>
+          ))}
           {/* breaks: idle time left out, a light dotted stretch of the time axis (its length is written above it) */}
           {axis.breaks.map((b) => (
             <g key={b.t0}>
@@ -1458,7 +1491,14 @@ export function TimePlot({
               />
               {/* room for the pointer to find its tooltip */}
               <rect x={b.x0} y={0} width={Math.max(0, b.x1 - b.x0)} height={AXIS_H - 2} fill="transparent" />
-              <title>{`${formatDuration(b.t1 - b.t0)} in which nothing ran, left out`}</title>
+              <title>
+                {(() => {
+                  const l = lockOf(b)
+                  return l
+                    ? `${lockoutTitle(l)}; ${formatDuration(b.t1 - b.t0)} in which nothing ran, left out`
+                    : `${formatDuration(b.t1 - b.t0)} in which nothing ran, left out`
+                })()}
+              </title>
             </g>
           ))}
           {ticks.map((t) => (
@@ -1480,7 +1520,7 @@ export function TimePlot({
               y={11}
               textAnchor="middle"
               fontSize={l.gap ? 9.5 : 10}
-              fill={l.gap ? 'var(--faint)' : 'var(--muted)'}
+              fill={l.locked ? 'var(--bad)' : l.gap ? 'var(--faint)' : 'var(--muted)'}
             >
               {l.text}
             </text>
@@ -1539,18 +1579,20 @@ export function TimePlot({
           {connectors}
           {/* a break's veil: the page colour over what crosses it, so that it fades without a band of its own */}
           {axis.breaks.flatMap((b) =>
-            veilSpans.map(([y0, y1]) => (
-              <rect
-                key={`v${b.t0}-${y0}`}
-                x={b.x0 + 3}
-                y={y0}
-                width={b.x1 - b.x0 - 6}
-                height={y1 - y0}
-                fill="var(--surface)"
-                opacity={BREAK_VEIL}
-                pointerEvents="none"
-              />
-            )),
+            veilSpans.flatMap(([y0, y1]) =>
+              veilPieces(b.x0 + 3, b.x1 - 3, lockBlocks).map(([x0, x1, locked]) => (
+                <rect
+                  key={`v${b.t0}-${y0}-${x0}`}
+                  x={x0}
+                  y={y0}
+                  width={x1 - x0}
+                  height={y1 - y0}
+                  fill={locked ? 'var(--bad-soft)' : 'var(--surface)'}
+                  opacity={BREAK_VEIL}
+                  pointerEvents="none"
+                />
+              )),
+            ),
           )}
           {labels}
           {crossX !== undefined && (
@@ -1606,6 +1648,26 @@ function OverheadText({ o }: { o: Overhead }) {
       one turn or agent
     </span>
   )
+}
+
+/** [x0, x1) cut at the lockout blocks: the pieces, each flagged with whether it lies inside a lockout. */
+function veilPieces(
+  x0: number,
+  x1: number,
+  blocks: readonly { x0: number; x1: number }[],
+): [number, number, boolean][] {
+  const out: [number, number, boolean][] = []
+  let x = x0
+  for (const b of [...blocks].sort((a, c) => a.x0 - c.x0)) {
+    if (b.x1 <= x || b.x0 >= x1) continue
+    if (b.x0 > x) out.push([x, b.x0, false])
+    const a = Math.max(x, b.x0)
+    const e = Math.min(x1, b.x1)
+    out.push([a, e, true])
+    x = e
+  }
+  if (x < x1) out.push([x, x1, false])
+  return out
 }
 
 /** A break's length, short and rounded: "15m", "40m", "8h", "21h", "3d". */

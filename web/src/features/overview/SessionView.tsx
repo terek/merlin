@@ -9,7 +9,7 @@ import { SearchX } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { get, isApiError } from '../../api/client'
-import { queryKeys, useSession } from '../../api/queries'
+import { queryKeys, useLimits, useSession } from '../../api/queries'
 import type { Candidate, SessionDetail, SessionKey } from '../../api/types'
 import { useDocumentTitle } from '../../lib/hooks'
 import { sessionTitle } from '../../lib/session'
@@ -20,6 +20,7 @@ import { parseHash, resolveTarget } from '../spend/session'
 import { parseTime } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
 import { TurnBox } from './TurnBox'
+import { lockoutSpans } from './windows'
 
 const num = (s: string | null) => (s !== null && s !== '' && Number.isFinite(Number(s)) ? Number(s) : null)
 const same = (a: SessionKey, b: SessionKey) => a.harness === b.harness && a.id === b.id
@@ -116,6 +117,18 @@ function Loaded({
   }, [pinned, unit])
 
   const multi = tree.branches.length > 1
+  // the harness's limit lockouts (the plot clips them to its axis)
+  const limits = useLimits()
+  const lockouts = useMemo(
+    () =>
+      lockoutSpans(
+        limits.data?.windows ?? [],
+        home.summary.key.harness,
+        Number.NEGATIVE_INFINITY,
+        Number.POSITIVE_INFINITY,
+      ),
+    [limits.data, home.summary.key.harness],
+  )
 
   return (
     <div className="space-y-4 p-4">
@@ -135,6 +148,7 @@ function Loaded({
         initialCursor={num(params.get('cursor')) ?? undefined}
         initialWindow={{ lo: parseTime(params.get('sfrom')), hi: parseTime(params.get('sto')) }}
         keyInPanel
+        lockouts={lockouts}
       />
       <div ref={opened} className="scroll-mt-4 space-y-4">
         {branch && col && pinned && (

@@ -83,7 +83,16 @@ import { ScopeSlot, useScope } from './ScopeSlot'
 import { SessionFocus } from './SessionFocus'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
 import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
-import { lockoutBand, refusalsBySession, refusalTicks, scopeWindows, windowRange, windowTimes } from './windows'
+import {
+  type LockoutSpan,
+  lockoutBand,
+  lockoutSpans,
+  refusalsBySession,
+  refusalTicks,
+  scopeWindows,
+  windowRange,
+  windowTimes,
+} from './windows'
 
 /** The structured block's columns (px) and the cell padding the graph sits in. */
 const COLS = { turns: 64, agents: 70, peak: 72, spend: 84 }
@@ -140,10 +149,13 @@ interface RowData {
   lane?: OverviewLane
   /** The times (ms) at which a limit refused this session's calls. */
   refusals?: readonly number[]
+  /** The lockouts of the session's harness: drawn behind the row, over the session's life only. */
+  lockouts?: readonly LockoutSpan[]
 }
 
-const laneData = (l: OverviewLane, refusals?: readonly number[]): RowData => ({
+const laneData = (l: OverviewLane, refusals?: readonly number[], lockouts?: readonly LockoutSpan[]): RowData => ({
   refusals,
+  lockouts,
   lives: [l],
   ctx: l.context,
   idle: l.idle,
@@ -180,9 +192,25 @@ function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; pxPerTo
     [data.lane, axis],
   )
 
+  // the lockouts, cut to the session's life: a session merely open in the same hours does not turn red
+  const locked = useMemo(() => {
+    const l = data.lane
+    if (!l || !life || !data.lockouts?.length) return []
+    const a = Date.parse(l.startedAt ?? '')
+    const b = l.lastActivityAt ? Date.parse(l.lastActivityAt) : a
+    return data.lockouts.flatMap((s) => {
+      const x0 = Math.max(life[0], xOf(axis, Math.max(s.fromMs, a)))
+      const x1 = Math.min(life[1], xOf(axis, Math.min(s.toMs, b)))
+      return x1 > x0 ? [[x0, x1] as const] : []
+    })
+  }, [data.lane, data.lockouts, life, axis])
+
   return (
     // biome-ignore lint/a11y/noSvgWithoutTitle: decoration; the row's text is the content
     <svg width={axis.width} height={height} className="pointer-events-none block select-none" aria-hidden>
+      {locked.map(([x0, x1]) => (
+        <rect key={x0} x={x0} y={0} width={x1 - x0} height={base} fill="var(--bad-soft)" />
+      ))}
       {midnights.map((x) => (
         <line key={x} x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={1} opacity={0.6} />
       ))}
@@ -465,6 +493,7 @@ const SessionRow = memo(function SessionRow({
   axis,
   pxPerTok,
   refusals,
+  lockouts,
   search,
 }: {
   l: OverviewLane
@@ -472,6 +501,8 @@ const SessionRow = memo(function SessionRow({
   search: string
   /** The times (ms) a limit refused this session's calls. */
   refusals?: readonly number[]
+  /** The lockouts of its harness. */
+  lockouts?: readonly LockoutSpan[]
   /** The session's value of the sidebar's key. */
   place: string
   /** Its folder, as shown. */
@@ -522,7 +553,7 @@ const SessionRow = memo(function SessionRow({
             window.open(urlAt(e), '_blank', 'noopener')
           }}
         >
-          <RowGraph data={laneData(l, refusals)} axis={axis} pxPerTok={pxPerTok} />
+          <RowGraph data={laneData(l, refusals, lockouts)} axis={axis} pxPerTok={pxPerTok} />
         </a>
       </div>
       <div
@@ -1035,6 +1066,12 @@ function Table({
   )
   const limits = useLimits()
   const refusals = useMemo(() => refusalsBySession(limits.data?.refusals ?? []), [limits.data])
+  const lockouts = useMemo(() => {
+    const out = new Map<string, LockoutSpan[]>()
+    for (const h of new Set((limits.data?.windows ?? []).map((w) => w.harness)))
+      out.set(h, lockoutSpans(limits.data?.windows ?? [], h, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY))
+    return out
+  }, [limits.data])
   // The rows scroll; header and summary do not. The scrollbar takes width from the rows only, so the
   // header and the summary give up as much (padRight) and the columns and the date axis stay aligned.
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -1131,6 +1168,7 @@ function Table({
                   axis={axis}
                   pxPerTok={pxPerTok}
                   refusals={refusals.get(sessionKey(l.harness, l.id))}
+                  lockouts={lockouts.get(l.harness)}
                   search={search}
                 />
               ))}

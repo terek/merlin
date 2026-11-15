@@ -12,6 +12,7 @@ import { PanelTab, usePanelInset } from '../../shell/Panel'
 import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
+import type { LockoutSpan } from '../overview/windows'
 import { Breakdown, BreakdownKey, type Hover, useBreakdown } from './Breakdown'
 import { keyFacts, Legend } from './Key'
 import { kindColor } from './marks'
@@ -69,6 +70,8 @@ export interface SpendGraphProps {
   current?: SessionKey
   /** The key goes to the Graph tab of the legend panel instead of under the plot. */
   keyInPanel?: boolean
+  /** The lockouts of the session's harness (drawn in the plot). */
+  lockouts?: readonly LockoutSpan[]
 }
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
@@ -255,6 +258,7 @@ export function SpendGraph({
   initialWindow,
   current,
   keyInPanel,
+  lockouts,
 }: SpendGraphProps) {
   const inset = usePanelInset()
   const [cursor, setCursor] = useState<Pin | null>(
@@ -412,6 +416,7 @@ export function SpendGraph({
             onSelectUnit={onSelectUnit}
             onKey={onKey}
             current={current}
+            lockouts={lockouts}
             frameInset={keyInPanel ? inset : 0}
             shortHint={keyInPanel}
             turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}

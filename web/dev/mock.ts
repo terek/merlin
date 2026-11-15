@@ -1027,6 +1027,58 @@ function limits(): Limits {
     wins.push(w)
     refuse(w, wk.ev, 5, from, wk.end)
   }
+  // Two Claude Code lockouts made to fit one session's own calls: one session stops at a 5h limit, waits it out (a
+  // break on its graph) and resumes after the reset; another keeps calling inside the lockout (extra usage).
+  const own = new Map<string, number[]>()
+  for (const e of events) if (e.harness === 'claude') own.set(e.id, [...(own.get(e.id) ?? []), e.at])
+  const lockWindow = (id: string, from: number, reset: number, refused: number[]) => {
+    const w: LimitWindow = {
+      harness: 'claude',
+      limit: 'five_hour',
+      windowMinutes: 300,
+      plan: 'max',
+      resetsAt: iso(reset),
+      startsAt: iso(reset - 5 * H),
+      firstSeenAt: iso(from),
+      lastSeenAt: iso(reset - 10 * MIN),
+      refusals: refused.length,
+      firstRefusalAt: iso(from),
+    }
+    wins.push(w)
+    for (const at of refused)
+      refusals.push({
+        at: iso(at),
+        harness: 'claude',
+        session: { harness: 'claude', id },
+        limit: w.limit,
+        windowMinutes: w.windowMinutes,
+        resetsAt: w.resetsAt,
+      })
+    lockSessions.push(id)
+  }
+  const lockSessions: string[] = []
+  const byCalls = [...own.entries()].sort((a, b) => b[1].length - a[1].length || (a[0] < b[0] ? -1 : 1))
+  // waited out: the first long pause (50 minutes to 4 hours) in a busy session
+  for (const [id, ts] of byCalls) {
+    const at = ts.sort((a, b) => a - b)
+    const i = at.findIndex((t, k) => k > 0 && t - at[k - 1] >= 50 * MIN && t - at[k - 1] <= 4 * H)
+    if (i < 0) continue
+    lockWindow(id, at[i - 1] + 3 * MIN, at[i] - 2 * MIN, [
+      at[i - 1] + 3 * MIN,
+      at[i - 1] + 9 * MIN,
+      at[i - 1] + 21 * MIN,
+    ])
+    break
+  }
+  // calls through the lockout: a stretch of five calls over 20 minutes to 3 hours, the lockout over all but the first
+  for (const [id, ts] of byCalls) {
+    if (lockSessions.includes(id)) continue
+    const at = ts.sort((a, b) => a - b)
+    const i = at.findIndex((t, k) => k + 4 < at.length && at[k + 4] - t >= 20 * MIN && at[k + 4] - t <= 3 * H)
+    if (i < 0) continue
+    lockWindow(id, at[i] + MIN, at[i + 4] + 25 * MIN, [at[i] + MIN, at[i] + 5 * MIN])
+    break
+  }
   wins.sort((a, b) => (a.resetsAt < b.resetsAt ? -1 : a.resetsAt > b.resetsAt ? 1 : a.harness < b.harness ? -1 : 1))
   refusals.sort((a, b) => (a.at < b.at ? -1 : 1))
   return { windows: wins, refusals }

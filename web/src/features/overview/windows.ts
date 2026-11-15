@@ -112,3 +112,47 @@ export function refusalsBySession(refusals: readonly LimitRefusal[]): Map<string
   }
   return out
 }
+
+/** One locked-out stretch of a harness: windows' lockouts that overlap or touch merged, clipped to the asked range. */
+export interface LockoutSpan {
+  fromMs: number
+  toMs: number
+  /** When the lockout really ends (the latest reset among `windows`), whatever the clipping. */
+  untilMs: number
+  /** The windows whose lockouts it covers, in the order they began. */
+  windows: LimitWindow[]
+}
+
+/** The lockouts of `harness`'s windows (firstRefusalAt to resetsAt) clipped to [fromMs, toMs), merged, sorted. */
+export function lockoutSpans(
+  windows: readonly LimitWindow[],
+  harness: string,
+  fromMs: number,
+  toMs: number,
+): LockoutSpan[] {
+  const bands = windows
+    .filter((w) => w.harness === harness)
+    .flatMap((w) => {
+      const b = lockoutBand(w, fromMs, toMs)
+      return b ? [{ ...b, w }] : []
+    })
+    .sort((a, b) => a.fromMs - b.fromMs || a.toMs - b.toMs)
+  const out: LockoutSpan[] = []
+  for (const b of bands) {
+    const last = out[out.length - 1]
+    const until = Date.parse(b.w.resetsAt)
+    if (last && b.fromMs <= last.toMs) {
+      last.toMs = Math.max(last.toMs, b.toMs)
+      last.untilMs = Math.max(last.untilMs, until)
+      last.windows.push(b.w)
+    } else out.push({ fromMs: b.fromMs, toMs: b.toMs, untilMs: until, windows: [b.w] })
+  }
+  return out
+}
+
+/** A lockout in words: `Locked out by the 5h and Weekly limits until Fri 14, 15:00`. */
+export function lockoutTitle(s: Pick<LockoutSpan, 'untilMs' | 'windows'>): string {
+  const names = [...new Set(s.windows.map(limitName))]
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0]
+  return `Locked out by the ${list} limit${names.length > 1 ? 's' : ''} until ${stampText(s.untilMs)}`
+}
