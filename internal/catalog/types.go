@@ -360,6 +360,9 @@ type ScriptedLine struct {
 	Project string `json:"project"`
 	Day     string `json:"day"`
 	Count   int    `json:"count"`
+	// Refused is how many of Count ended on a call refused at a usage limit and made no
+	// billed call: runs that never got past the limit. They stay in Count.
+	Refused int `json:"refused,omitempty"`
 	Money
 }
 

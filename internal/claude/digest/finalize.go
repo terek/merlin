@@ -291,6 +291,8 @@ func (b *Builder) endState() model.EndState {
 			return model.EndClean
 		}
 		return model.EndMidTurn
+	case tailRefused:
+		return model.EndRefused
 	case tailPrompt, tailToolResult:
 		return model.EndMidTurn
 	}

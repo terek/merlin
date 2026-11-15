@@ -19,7 +19,10 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
   The harnesses are `claude` (Claude Code) and `codex` (Codex CLI).
 - **Scripted runs** (`kind: "sdk"`, one-shot `claude -p` calls) are never listed, searched or
   matched by id prefix. They appear only in aggregate: `scripted` lines in the session list, the
-  `sdk` row of `/api/cost?by=kind`, `scriptedRuns` in `/api/projects`.
+  `sdk` row of `/api/cost?by=kind`, `scriptedRuns` in `/api/projects`. A scripted run whose only
+  call was refused at a subscription usage limit (end state `refused`, no message) is still counted
+  there, and also in `refusedRuns` (omitted when 0) beside each `scriptedRuns`, and in `refused` on a
+  `scripted` line.
 - **Cost.** `bestUSD` is the figure to show and to sum. `flag` says how it is backed:
   `exact` (the harness reported it for the whole session), `partial` (reported, but some owned
   spend lies outside the reported windows and is recomputed from tokens), `estimated` (nothing
@@ -146,7 +149,7 @@ times the multipliers; `fastMultiplier` applies to fast-mode calls of the models
 ## GET /api/projects
 
 Projects with session counts, last activity and cost, most recently active first. No parameters.
-`cost` is the sum of the best costs of the project's sessions plus its scripted runs. A project is
+`scriptedRuns` counts the project's scripted runs; `refusedRuns` (omitted when 0) is how many of them were only a call refused at a usage limit. `cost` is the sum of the best costs of the project's sessions plus its scripted runs. A project is
 a directory: sessions of every harness started there are counted together, and `harnesses` lists
 which (`harness` and `projectKey` are those of the first in name order). Filtering `/api/sessions`
 or `/api/cost` by `project` (the directory) selects them all. `unknownSessions` (omitted when 0)
@@ -218,7 +221,9 @@ apply to `/api/groups`, `/api/search` and `/api/cost` too. The old `worktree=` i
 `total` counts all sessions matching the filters, over all pages. `nextCursor` is set while more
 follow; it encodes a position (last activity, key), so paging stays correct when sessions are
 added or removed meanwhile. `scripted` holds the per-project, per-day aggregate lines of scripted
-runs and is filled on the first page (no `cursor`) only.
+runs and is filled on the first page (no `cursor`) only. A line's `count` is the scripted sessions
+that started that day; `refused` (omitted when 0) is how many of them ended refused at a usage limit
+without a call of their own.
 
 `state` in a summary is `busy`, `idle`, `recent` or `ended`. `lineage` is the brief form: the
 parent (if the session starts with a copy of another session's history), how many children copied
@@ -889,7 +894,9 @@ the figure, scripted runs included. A row's `sessions` (and `sessions`) counts t
 spent something inside the row, so a scripted run that made no API call (it ended before the first
 request; it has a reported window of $0 and no messages) is in none of them; `backing.scriptedRuns`
 counts every scripted run that started in the range, such runs included. The two figures differ by
-exactly those runs: on one real history 2,529 of 3,132 scripted runs had spend, the other 603 none.
+exactly those runs: on one real history 2,529 of 3,132 scripted runs had spend, the other 603 none;
+the runs without spend include those refused at a usage limit, which `backing.refusedRuns` (omitted
+when 0) counts (it is part of `scriptedRuns`, not in addition to it).
 
 ```json
 {

@@ -66,9 +66,15 @@ export function StateDot({
   return <span role="img" aria-label={state} title={STATE_TITLE[state]} className={cn(slot, look, className)} />
 }
 
-/** `interrupted` is a red badge, `mid-turn` an amber "stopped mid-turn"; clean and unknown show nothing. */
+/** `interrupted` and `refused` are red badges, `mid-turn` an amber "stopped mid-turn"; clean and unknown show nothing. */
 export function EndStateBadge({ endState }: { endState: EndState | undefined }) {
   if (endState === 'interrupted') return <Badge tone="bad">interrupted</Badge>
+  if (endState === 'refused')
+    return (
+      <Badge tone="bad" title="the last call was refused at a usage limit">
+        refused
+      </Badge>
+    )
   if (endState === 'mid-turn')
     return (
       <Badge tone="warn" title="The transcript stops in the middle of work">

@@ -158,7 +158,7 @@ One component, `<Money>`, renders every dollar figure, so the rules hold everywh
 | Thing | Values and look |
 |---|---|
 | Session `state` | `busy` filled green dot, pulsing; `idle` hollow green dot; `recent` grey dot; `ended` no dot |
-| Session `endState` | `clean` nothing; `interrupted` red "interrupted"; `mid-turn` amber "stopped mid-turn"; `unknown` nothing |
+| Session `endState` | `clean` nothing; `interrupted` red "interrupted"; `refused` red "refused" (tooltip "the last call was refused at a usage limit"); `mid-turn` amber "stopped mid-turn"; `unknown` nothing |
 | Agent `status` | `completed` check; `open` amber "open" (no terminal marker); `killed` red "killed" |
 | Turn `origin` | `human` no badge (the default); every other origin a small grey badge with its name |
 | Lineage | a session that is not a `leaf` shows "continued in ›" and is dimmed in lists |

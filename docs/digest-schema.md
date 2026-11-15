@@ -42,7 +42,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `slug` | the harness's short slug for the session |
 | `startedAt` | time of the first record |
 | `lastActivityAt` | time of the last record |
-| `endState` | how the last turn ended: `clean`, `interrupted`, `mid-turn`, `unknown` |
+| `endState` | how the last turn ended: `clean`, `interrupted`, `refused` (the last turn ended on a call refused at a subscription usage limit), `mid-turn`, `unknown` |
 | `recaps` | the harness's own "where things stand" notes, as `Recap` |
 | `prs` | the pull requests the session created or linked, as `PRLink`: each once, at its first link, ordered by time then URL (Claude Code `pr-link` records, main transcript only) |
 | `lineage` | explicit fork and copy markers, as `Lineage` |

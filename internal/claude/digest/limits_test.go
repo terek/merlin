@@ -1,11 +1,14 @@
 package digest
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/terek/merlin/internal/model"
 )
 
 const limitsMain = `{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-09-18T20:30:00.000Z","sessionId":"S","cwd":"/home/dev/acme","version":"2.1.277","message":{"role":"user","content":"Go."}}
@@ -44,5 +47,42 @@ func TestRejectedQuotaLimits(t *testing.T) {
 	}
 	if !b.Rejected || b.Limit != "seven_day_opus" || b.WindowMinutes != 10080 || b.AgentID != "ag1" {
 		t.Errorf("agent reading = %+v", b)
+	}
+}
+
+const refusedLine = `{"type":"assistant","uuid":"%s","parentUuid":"%s","timestamp":"%s","sessionId":"S","isApiErrorMessage":true,"error":"rate_limit","apiErrorStatus":429,"quotaLimits":{"status":"rejected","resetsAt":1789774200,"rateLimitType":"five_hour"},"message":{"model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"You have hit a limit."}]}}`
+
+const refusalPrompt = `{"type":"user","uuid":"u1","parentUuid":null,"timestamp":"2026-09-18T20:30:00.000Z","sessionId":"S","cwd":"/home/dev/acme","version":"2.1.277","message":{"role":"user","content":"Go."}}`
+
+const refusalAnswer = `{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-09-18T20:31:00.000Z","sessionId":"S","message":{"id":"msg_1","model":"claude-sonnet-4-5","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Done."}],"usage":{"input_tokens":10,"output_tokens":5}}}`
+
+func TestRefusedEndState(t *testing.T) {
+	refusal := func(id, parent, ts string) string { return fmt.Sprintf(refusedLine, id, parent, ts) }
+	tests := []struct {
+		name  string
+		lines []string
+		want  model.EndState
+		msgs  int
+	}{
+		{"refusal only", []string{refusalPrompt, refusal("e1", "u1", "2026-09-18T20:30:01.000Z")}, model.EndRefused, 0},
+		{"after normal work", []string{refusalPrompt, refusalAnswer,
+			`{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-09-18T20:32:00.000Z","sessionId":"S","message":{"role":"user","content":"More."}}`,
+			refusal("e1", "u2", "2026-09-18T20:32:01.000Z")}, model.EndRefused, 1},
+		{"answered later", []string{refusalPrompt, refusal("e1", "u1", "2026-09-18T20:30:01.000Z"),
+			strings.Replace(refusalAnswer, `"parentUuid":"u1"`, `"parentUuid":"e1"`, 1)}, model.EndClean, 1},
+		{"interrupted after", []string{refusalPrompt, refusal("e1", "u1", "2026-09-18T20:30:01.000Z"),
+			`{"type":"user","uuid":"u2","parentUuid":"e1","timestamp":"2026-09-18T20:31:00.000Z","sessionId":"S","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]}}`}, model.EndInterrupted, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "S.jsonl")
+			if err := os.WriteFile(p, []byte(strings.Join(tc.lines, "\n")+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			d := buildFile(t, p)
+			if d.EndState != tc.want || len(d.Messages) != tc.msgs {
+				t.Errorf("end state %q with %d messages, want %q and %d", d.EndState, len(d.Messages), tc.want, tc.msgs)
+			}
+		})
 	}
 }

@@ -101,8 +101,8 @@ type FileResult struct {
 
 	// EndState says how the file ends: clean (the last assistant message stopped with
 	// end_turn and nothing conversational follows), interrupted (the last turn was
-	// interrupted), mid-turn (it ends on a prompt, a tool_use or a tool_result), or
-	// unknown (no conversation records).
+	// interrupted), refused (it ends on a call refused at a usage limit), mid-turn (it ends on
+	// a prompt, a tool_use or a tool_result), or unknown (no conversation records).
 	EndState model.EndState
 
 	Counters    Counters

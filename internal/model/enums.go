@@ -95,6 +95,7 @@ const (
 	EndClean       EndState = "clean"       // the agent finished its answer
 	EndInterrupted EndState = "interrupted" // the user interrupted
 	EndMidTurn     EndState = "mid-turn"    // the files stop in the middle of work
+	EndRefused     EndState = "refused"     // the last turn ended on a call refused at a subscription usage limit
 	EndUnknown     EndState = "unknown"
 )
 

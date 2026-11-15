@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -677,5 +678,51 @@ func TestScaleEstimates(t *testing.T) {
 	c.Windows[0].EstimateScale = nil
 	if got := scaleEstimates(msgs, &c); &got[0] != &msgs[0] {
 		t.Error("copied without a change")
+	}
+}
+
+func TestRefusedRuns(t *testing.T) {
+	mk := func(id string, startMin int, refused bool) *model.SessionDigest {
+		d := &model.SessionDigest{
+			SchemaVersion: model.SchemaVersion, Harness: "claude", ID: id, ProjectKey: "key-p", Project: "/p", Cwd: "/p",
+			Kind: model.KindSDK, EndState: model.EndClean,
+			StartedAt:      time.Date(2026, 9, 1, 10, startMin, 0, 0, time.UTC),
+			LastActivityAt: time.Date(2026, 9, 1, 10, startMin+1, 0, 0, time.UTC),
+		}
+		if refused {
+			d.EndState = model.EndRefused
+		}
+		return d
+	}
+	for _, c := range []struct {
+		name    string
+		digests []*model.SessionDigest
+		want    int
+	}{
+		{"one refused", []*model.SessionDigest{mk("a", 0, false), mk("b", 5, true)}, 1},
+		{"none refused", []*model.SessionDigest{mk("a", 0, false), mk("b", 5, false)}, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := newRig(t)
+			r.cat = catalog.New()
+			r.cat.SetLocation(testZone)
+			for _, d := range c.digests {
+				r.cat.Upsert(d)
+			}
+			var pl ProjectList
+			var ct CostTable
+			r.get("/api/projects", &pl)
+			r.get("/api/cost?by=day", &ct)
+			if len(pl.Projects) != 1 || pl.Projects[0].ScriptedRuns != 2 || pl.Projects[0].RefusedRuns != c.want ||
+				ct.Backing.ScriptedRuns != 2 || ct.Backing.RefusedRuns != c.want {
+				t.Fatalf("projects %+v, backing %+v", pl.Projects, ct.Backing)
+			}
+			pj, _ := json.Marshal(pl.Projects[0])
+			bj, _ := json.Marshal(ct.Backing)
+			t.Logf("project %s\nbacking %s", pj, bj)
+			if has := strings.Contains(string(pj), "refusedRuns") || strings.Contains(string(bj), "refusedRuns"); has != (c.want > 0) {
+				t.Errorf("refusedRuns key present = %v, want %v", has, c.want > 0)
+			}
+		})
 	}
 }

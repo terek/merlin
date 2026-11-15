@@ -95,6 +95,7 @@ func (a *API) handleProjects(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, l := range pf.Scripted {
 			p.ScriptedRuns += l.Count
+			p.RefusedRuns += l.Refused
 			p.Cost.ReportedUSD += l.ReportedUSD
 			p.Cost.AttributedUSD += l.AttributedUSD
 			p.Cost.RecordedUSD += l.RecordedUSD
@@ -700,6 +701,7 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, s := range listing.Scripted {
 		out.Backing.ScriptedRuns += s.Count
+		out.Backing.RefusedRuns += s.Refused
 	}
 	a.json(w, http.StatusOK, out)
 }

@@ -40,6 +40,7 @@ const (
 	tailPrompt
 	tailToolResult
 	tailAssistant
+	tailRefused // an assistant record the API refused at a usage limit
 )
 
 // turnState is the mutable form of a turn.
@@ -229,12 +230,15 @@ func (b *Builder) Apply(r *transcript.Record) {
 		}
 	}
 	b.envelope(r)
-	b.quota(r, ts)
+	refused := b.quota(r, ts)
 
 	away := false
 	switch r.Type {
 	case transcript.TypeAssistant:
 		b.assistant(r, ts, pos)
+		if refused {
+			b.tail = tailRefused
+		}
 		if r.UUID != "" {
 			b.lastConv = r.UUID
 		}
@@ -317,20 +321,21 @@ func (b *Builder) envelope(r *transcript.Record) {
 
 // quota records a refused call. A record copied in from another session (a session_id that
 // differs from sessionId, or a forkedFrom marker) belongs to that session's digest and is
-// left out.
-func (b *Builder) quota(r *transcript.Record, ts time.Time) {
+// left out. It reports whether the record was kept as a refused call.
+func (b *Builder) quota(r *transcript.Record, ts time.Time) bool {
 	q := r.QuotaLimits
 	if q == nil || q.Status != "rejected" {
-		return
+		return false
 	}
 	if (r.OtherSessionID != "" && r.OtherSessionID != r.SessionID) || r.ForkedFrom != nil {
-		return
+		return false
 	}
 	lr := model.LimitReading{At: ts, Limit: q.RateLimitType, WindowMinutes: quotaWindow(q.RateLimitType), Rejected: true}
 	if q.ResetsAt > 0 {
 		lr.ResetsAt = time.Unix(int64(q.ResetsAt), 0).UTC()
 	}
 	b.limits = append(b.limits, LimitRecord{UUID: r.UUID, LimitReading: lr})
+	return true
 }
 
 // quotaWindow is the length in minutes of the window a rateLimitType names; 0 when unknown.

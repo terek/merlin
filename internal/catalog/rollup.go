@@ -339,7 +339,11 @@ func (v *view) scripted(f Filter) []ScriptedLine {
 	}
 	for _, s := range v.sessions {
 		if s.d.Kind == model.KindSDK && f.selects(s, "") && f.dayIn(v.day(s.d.StartedAt)) {
-			line(key{s.project, v.day(s.d.StartedAt)}).Count++
+			l := line(key{s.project, v.day(s.d.StartedAt)})
+			l.Count++
+			if s.d.EndState == model.EndRefused && len(s.d.Messages) == 0 {
+				l.Refused++
+			}
 		}
 	}
 	for _, x := range v.selected(f) {

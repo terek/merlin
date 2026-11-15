@@ -85,7 +85,7 @@
   "resume": "cd /home/dev/acme/s13a-continuation && claude --resume 13131313-0000-4000-8000-000000000002",
   "digest": {
     "schemaVersion": 2,
-    "parserVersion": 20,
+    "parserVersion": 21,
     "pricesVersion": "<prices>",
     "source": [
       {

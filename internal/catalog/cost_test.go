@@ -1,6 +1,8 @@
 package catalog
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -656,5 +658,31 @@ func TestMoneyWithoutRecordedSpend(t *testing.T) {
 		if in.Cost.Flag == CostBilled || in.Cost.Flag == CostRecorded {
 			t.Errorf("%s flag %q", in.Key.ID, in.Cost.Flag)
 		}
+	}
+}
+
+// Of the scripted runs of a day, those refused at a usage limit with no call of their own
+// are counted apart; they stay in Count, and a day without any has no refusals.
+func TestScriptedRefused(t *testing.T) {
+	c := New()
+	ok := syn("claude", "ok", "/p", 1, 2, nil, msgSpec{"m1", 1, 0.5, 0})
+	ok.Kind = model.KindSDK
+	refused := syn("claude", "refused", "/p", 3, 4, nil)
+	refused.Kind, refused.EndState = model.KindSDK, model.EndRefused
+	later := syn("claude", "later", "/p", 24*60+1, 24*60+2, nil, msgSpec{"m2", 24*60 + 1, 0.5, 0})
+	later.Kind = model.KindSDK
+	spentThenRefused := syn("claude", "spent", "/p", 24*60+3, 24*60+4, nil, msgSpec{"m3", 24*60 + 3, 0.5, 0})
+	spentThenRefused.Kind, spentThenRefused.EndState = model.KindSDK, model.EndRefused
+	for _, d := range []*model.SessionDigest{ok, refused, later, spentThenRefused} {
+		c.Upsert(d)
+	}
+	lines := c.Scripted(Filter{})
+	if len(lines) != 2 || lines[0].Count != 2 || lines[0].Refused != 1 || lines[1].Count != 2 || lines[1].Refused != 0 {
+		t.Fatalf("lines = %+v, want 2 runs and 1 refused, then 2 runs and none", lines)
+	}
+	b, _ := json.Marshal(lines)
+	t.Logf("%s", b)
+	if strings.Count(string(b), `"refused"`) != 1 {
+		t.Errorf("refused key must appear on the first line only: %s", b)
 	}
 }

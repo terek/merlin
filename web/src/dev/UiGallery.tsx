@@ -238,6 +238,7 @@ export function UiGallery() {
           <Row label="EndStateBadge">
             <EndStateBadge endState="interrupted" />
             <EndStateBadge endState="mid-turn" />
+            <EndStateBadge endState="refused" />
             <EndStateBadge endState="clean" />
             <span className="text-sec text-faint">(clean shows nothing)</span>
           </Row>

@@ -3,6 +3,8 @@ package codex
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/terek/merlin/internal/model"
 )
 
 func win(pct float64, minutes int, resets int64) map[string]any {
@@ -99,5 +101,17 @@ func TestLimitReadingsOfSubagents(t *testing.T) {
 	}
 	if len(ids) != 3 || ids[0] != "" || ids[1] != "A" || ids[2] != "A" {
 		t.Fatalf("agent ids = %q, limits %+v", ids, d.Limits)
+	}
+}
+
+func TestRefusedEndState(t *testing.T) {
+	home := t.TempDir()
+	newRollout(t).meta("R", "R", "vscode", nil).
+		start(1, "r1", "", "user").ctx(1, "r1", "m", nil).user(1, "Go.", 0).
+		event(70, map[string]any{"type": "task_complete", "turn_id": "r1", "duration_ms": 1000,
+			"error": map[string]any{"message": "limit", "codex_error_info": "usage_limit_exceeded"}}).
+		write(home, "rollout-2026-10-01T09-00-00-R.jsonl")
+	if d := build(t, home, "R"); d.EndState != model.EndRefused {
+		t.Errorf("end state = %q, want refused", d.EndState)
 	}
 }

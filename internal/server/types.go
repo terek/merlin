@@ -179,8 +179,9 @@ type ProjectSummary struct {
 	ProjectKey     string        `json:"projectKey"`
 	Harnesses      []string      `json:"harnesses"`
 	Project        string        `json:"project"`
-	Sessions       int           `json:"sessions"`     // interactive and background
-	ScriptedRuns   int           `json:"scriptedRuns"` // counted, never listed
+	Sessions       int           `json:"sessions"`              // interactive and background
+	ScriptedRuns   int           `json:"scriptedRuns"`          // counted, never listed
+	RefusedRuns    int           `json:"refusedRuns,omitempty"` // of ScriptedRuns, those refused at a usage limit
 	LastActivityAt time.Time     `json:"lastActivityAt,omitzero"`
 	Cost           catalog.Money `json:"cost"`
 	// UnknownSessions counts the sessions whose cost is unknown (flag unknown); a project in
@@ -343,6 +344,8 @@ type CostBacking struct {
 	// Unknown counts sessions with work but no billed message: their cost is unknown, not 0.
 	Unknown      int `json:"unknown,omitempty"`
 	ScriptedRuns int `json:"scriptedRuns"`
+	// RefusedRuns is how many of ScriptedRuns were refused at a usage limit and did nothing else.
+	RefusedRuns int `json:"refusedRuns,omitempty"`
 	// LowerBound counts the sessions, of any flag, whose best cost is a lower bound.
 	LowerBound int `json:"lowerBound,omitempty"`
 	// UnrecordedAgents counts the agent runs, across those sessions, that left no record of

@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 11
+const ParserVersion = 12
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -930,6 +930,8 @@ func (b *builder) describe() {
 				d.EndState = model.EndInterrupted
 			case last.ErrorInfo == "":
 				d.EndState = model.EndClean
+			case last.ErrorInfo == "usage_limit_exceeded":
+				d.EndState = model.EndRefused
 			}
 		}
 	} else if len(cwds) > 0 {
