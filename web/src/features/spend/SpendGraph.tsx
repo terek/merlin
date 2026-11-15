@@ -12,7 +12,7 @@ import { PanelTab, usePanelInset } from '../../shell/Panel'
 import { Card, ModelName } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
-import { Breakdown, type Hover, useBreakdown } from './Breakdown'
+import { Breakdown, BreakdownKey, type Hover, useBreakdown } from './Breakdown'
 import { keyFacts, Legend } from './Key'
 import { kindColor } from './marks'
 import {
@@ -356,7 +356,7 @@ export function SpendGraph({
   return (
     <Card title="Spend">
       <div className="min-w-0">
-        <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} />
+        <Breakdown data={breakdown} hover={hoverPart} onHover={setHoverPart} keyInPanel={keyInPanel} />
         {unrecordedRuns > 0 && (
           <p
             className="mb-2 flex items-center gap-1.5 text-sec text-muted"
@@ -413,12 +413,24 @@ export function SpendGraph({
             onKey={onKey}
             current={current}
             frameInset={keyInPanel ? inset : 0}
+            shortHint={keyInPanel}
             turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}
           />
         </div>
         {keyInPanel ? (
           <PanelTab id="graph" title="Graph">
+            <section className="mb-4">
+              <h4 className="mb-1.5 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">Spend bars</h4>
+              <BreakdownKey data={breakdown} hover={hoverPart} onHover={setHoverPart} stacked />
+            </section>
             <Legend facts={facts} stacked />
+            <section className="mt-3 border-line border-t pt-3 text-meta text-muted">
+              <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">How to read</h4>
+              <p>
+                Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click
+                pins it and opens it below. Context per call above each baseline, spend below it, each on one scale.
+              </p>
+            </section>
           </PanelTab>
         ) : (
           <Legend facts={facts} />

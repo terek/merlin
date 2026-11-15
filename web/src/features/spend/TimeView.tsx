@@ -236,6 +236,8 @@ export interface TimePlotProps {
   current?: SessionKey
   /** Width (px) to take off the plot's for the vertical frame: what a shut side panel would take. */
   frameInset?: number
+  /** The reading hint is in the side panel: say only what depends on the data. */
+  shortHint?: boolean
 }
 
 /** Where a branch leaves its parent's row: a dot (a fork, with the context it copied), a ring (a continuation). */
@@ -284,6 +286,7 @@ export function TimePlot({
   turnLines,
   current,
   frameInset = 0,
+  shortHint,
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
@@ -1350,11 +1353,17 @@ export function TimePlot({
           facts on the first line, the turn or piece of work under the next three */}
       <div className="h-[4.75rem] overflow-hidden text-sec text-muted" aria-live="polite">
         {!band && !under && !turnLines ? (
-          <div className="text-faint">
-            Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click pins
-            it and opens it below. Context per call above each baseline, spend per {slotText(slot)} below it, each on
-            one scale (the tallest bar is {formatMoney(maxSlot)}).
-          </div>
+          shortHint ? (
+            <div className="text-faint">
+              Spend per {slotText(slot)}, the tallest bar is {formatMoney(maxSlot)}.
+            </div>
+          ) : (
+            <div className="text-faint">
+              Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click
+              pins it and opens it below. Context per call above each baseline, spend per {slotText(slot)} below it,
+              each on one scale (the tallest bar is {formatMoney(maxSlot)}).
+            </div>
+          )
         ) : (
           <>
             <div className="flex items-baseline gap-x-3 overflow-hidden whitespace-nowrap">

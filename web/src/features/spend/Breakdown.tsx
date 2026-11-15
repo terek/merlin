@@ -229,12 +229,14 @@ export interface BreakdownProps {
   data: BreakdownData
   hover: Hover | null
   onHover: (h: Hover | null) => void
+  /** The names of the bars' parts are drawn elsewhere (`BreakdownKey`, in the side panel). */
+  keyInPanel?: boolean
 }
 
-export function Breakdown({ data, hover, onHover }: BreakdownProps) {
+export function Breakdown({ data, hover, onHover, keyInPanel }: BreakdownProps) {
   const track = useRef<HTMLDivElement>(null)
   const width = useWidth(track)
-  const { rows, overhead, winTotal, wholeTotal, partial } = data
+  const { rows, winTotal, wholeTotal, partial } = data
   const lenWhole = Math.round(lengthShare(wholeTotal) * width)
   const inner = Math.max(0, lenWhole - 2) // inside the rectangle's 1 px outline
 
@@ -279,36 +281,48 @@ export function Breakdown({ data, hover, onHover }: BreakdownProps) {
           {partial && <span className="text-muted">of {formatMoney(wholeTotal)}</span>}
         </div>
       </div>
-      {/* the names: three columns as narrow as their longest name, side by side, a heading each; the swatches
-          line up in each. The overhead (in every bar) ends the last column, once. */}
-      <div className="flex shrink-0 items-start gap-x-5 pl-5 text-meta text-muted">
-        {rows.map((row, i) => (
-          <div key={row.key}>
-            <h4 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wide text-faint">{row.head}</h4>
-            <ul className="space-y-0.5">
-              {row.all.map((s) => (
-                <Name
-                  key={s.key}
-                  row={row.key}
-                  s={s}
-                  tip={tipOf(row.head, s, winTotal, partial)}
-                  hover={hover}
-                  onHover={onHover}
-                />
-              ))}
-              {i === rows.length - 1 && (
-                <Name
-                  row="kind"
-                  s={overhead}
-                  tip={tipOf('Overhead', overhead, winTotal, partial)}
-                  hover={hover}
-                  onHover={onHover}
-                />
-              )}
-            </ul>
-          </div>
-        ))}
-      </div>
+      {!keyInPanel && <BreakdownKey data={data} hover={hover} onHover={onHover} />}
     </section>
+  )
+}
+
+/** The names of the three bars' parts, with their swatches; `stacked`: one column per group, for the side panel. */
+export function BreakdownKey({ data, hover, onHover, stacked }: BreakdownProps & { stacked?: boolean }) {
+  const { rows, overhead, winTotal, partial } = data
+  // the names: three columns as narrow as their longest name, side by side, a heading each; the swatches
+  // line up in each. The overhead (in every bar) ends the last column, once.
+  return (
+    <div
+      className={
+        stacked ? 'space-y-3 text-meta text-muted' : 'flex shrink-0 items-start gap-x-5 pl-5 text-meta text-muted'
+      }
+    >
+      {rows.map((row, i) => (
+        <div key={row.key}>
+          <h4 className="mb-1 text-[0.6875rem] font-medium uppercase tracking-wide text-faint">{row.head}</h4>
+          <ul className="space-y-0.5">
+            {row.all.map((s) => (
+              <Name
+                key={s.key}
+                row={row.key}
+                s={s}
+                tip={tipOf(row.head, s, winTotal, partial)}
+                hover={hover}
+                onHover={onHover}
+              />
+            ))}
+            {i === rows.length - 1 && (
+              <Name
+                row="kind"
+                s={overhead}
+                tip={tipOf('Overhead', overhead, winTotal, partial)}
+                hover={hover}
+                onHover={onHover}
+              />
+            )}
+          </ul>
+        </div>
+      ))}
+    </div>
   )
 }
