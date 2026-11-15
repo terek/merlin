@@ -7,6 +7,7 @@ import { formatCount } from '../lib/format'
 import { availableToShow, releaseUrl } from '../lib/version'
 import { IconButton } from '../ui'
 import { lensLinks } from './lastOverview'
+import { PanelButton } from './Panel'
 import { SlotTarget } from './ShellSlot'
 import { nextTheme, useTheme } from './theme'
 import { useShortcut } from './useShortcut'
@@ -155,6 +156,7 @@ export function TopBar() {
         </NavLink>
       </nav>
       <div className="flex items-center gap-1">
+        <PanelButton />
         <ThemeControl />
         <StatusButton />
       </div>

@@ -14,6 +14,7 @@ import { modelLabel } from '../../lib/models'
 import { classColor, depthColor, HATCH, modelColor, tierColor } from '../../lib/palette'
 import { scopeSearch } from '../../lib/scope'
 import type { Prices, Tier } from '../../lib/tiers'
+import { PanelTab } from '../../shell/Panel'
 import { EmptyState, Money, QueryBoundary, SegmentedControl, Skeleton, SkeletonRows } from '../../ui'
 import {
   buildPlaceTree,
@@ -213,7 +214,7 @@ export function CostPage() {
         onSelect={select}
         extra={extras}
       />
-      <div className="min-w-0 flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
         {empty ? (
           <div className="p-6 text-muted">
             Nothing was spent {customPhrase(days, now)}
@@ -487,27 +488,17 @@ function ChartBody({
   if (buckets.length === 0) return <EmptyState title="No days in this range" />
   return (
     <div className="space-y-2">
+      <PanelTab id="cost" title="Cost">
+        <CostKey stack={stack} legend={legend} />
+      </PanelTab>
       <DayChart buckets={buckets} stack={stack} top={top} prices={prices} onSelect={onPick} />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sec text-muted">
-        {legend.map((l) => (
-          <span key={l.key} className="inline-flex items-center gap-1.5">
-            <Swatch color={l.color} />
-            {segmentLabel(l.key)}
-          </span>
-        ))}
-        {stack === 'compaction' && legend.length > 0 && (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-muted" aria-hidden />
-            <span className="size-2 rounded-full bg-bad" aria-hidden />a day with compactions (red: one ran cold)
-          </span>
-        )}
-        {weekly && <span className="ml-auto text-faint">One bar per week (Mon to Sun)</span>}
-        {hours && (
-          <span className="ml-auto text-faint">
-            One bar per {hours === 1 ? 'hour' : `${hours} hours`}; a click selects its day
-          </span>
-        )}
-      </div>
+      {(weekly || hours) && (
+        <p className="text-faint text-sec">
+          {weekly
+            ? 'One bar per week (Mon to Sun)'
+            : `One bar per ${hours === 1 ? 'hour' : `${hours} hours`}; a click selects its day`}
+        </p>
+      )}
       <CompactionNote buckets={buckets} always={stack === 'compaction'} />
     </div>
   )
@@ -549,6 +540,71 @@ function CompactionNote({ buckets, always }: { buckets: Bucket[]; always: boolea
       )}
       . With a warm cache every time: ~{formatMoney(warm)}.
     </p>
+  )
+}
+
+const STACK_HEAD: Record<Stack, string> = {
+  model: 'By model',
+  who: 'Who',
+  class: 'Price class',
+  tier: 'Tier',
+  depth: 'Depth',
+  compaction: 'Compactions',
+}
+
+/** A muted second line for the categories whose meaning is not in their name. */
+const GIST: Record<string, string> = {
+  cacheRead: 'Context read back from the cache; the cheap one, and usually the most tokens.',
+  cacheWrite: 'Context written to the cache the first time, at a premium.',
+  output: 'What the model wrote.',
+  input: 'Prompt tokens that missed the cache.',
+  heavy: 'The costliest models.',
+  mid: 'Models in the middle of the price range.',
+  light: 'The cheapest models.',
+  unknown: 'No price known, so no dollars here.',
+  '0-100k': 'Context the call carried, input plus cache.',
+  '500k+': 'The deepest calls: each re-reads half a million tokens or more.',
+  'compaction-warm': 'What a compaction costs when the cache is still warm (a cache read).',
+  'compaction-cold': 'The extra when the cache had gone cold and the context was read at full price.',
+}
+
+/**
+ * Cost's colour key, in the legend panel: the stack in view, its categories top of the bars first (so the list
+ * reads like the bars), then the marks that apply.
+ */
+function CostKey({ stack, legend }: { stack: Stack; legend: { key: string; color: string }[] }) {
+  const rows = [...legend].reverse()
+  return (
+    <div data-testid="cost-key" className="space-y-3 text-sec">
+      <div className={HEAD}>{STACK_HEAD[stack]}</div>
+      <ul className="m-0 list-none space-y-2 p-0">
+        {rows.map((l) => (
+          <li key={l.key} className="flex items-start gap-2">
+            <span className="mt-[5px]">
+              <Swatch color={l.color} />
+            </span>
+            <span className="min-w-0">
+              <span className="text-fg">
+                {l.key === OVERHEAD ? 'Not in any session’s messages' : segmentLabel(l.key)}
+              </span>
+              {GIST[l.key] && <span className="block text-muted">{GIST[l.key]}</span>}
+            </span>
+          </li>
+        ))}
+        {stack === 'compaction' && rows.length > 0 && (
+          <li className="flex items-start gap-2">
+            <span className="mt-[5px] inline-flex gap-0.5">
+              <span className="size-2 rounded-full bg-muted" aria-hidden />
+              <span className="size-2 rounded-full bg-bad" aria-hidden />
+            </span>
+            <span className="min-w-0 text-fg">
+              A day with compactions
+              <span className="block text-muted">Red: one of them ran cold.</span>
+            </span>
+          </li>
+        )}
+      </ul>
+    </div>
   )
 }
 

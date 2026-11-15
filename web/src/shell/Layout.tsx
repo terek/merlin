@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from './ErrorBoundary'
 import { lensLinks, rememberOverview, rememberScope } from './lastOverview'
+import { PanelColumn, PanelProvider, usePanel } from './Panel'
 import { SessionSlot } from './SessionSlot'
 import { SlotProvider } from './ShellSlot'
 import { TopBar } from './TopBar'
@@ -9,6 +10,14 @@ import { useShortcut } from './useShortcut'
 
 /** The top bar and the routed page. `g o`, `g s`, `g c` and `g m` switch pages. */
 export function Layout() {
+  return (
+    <PanelProvider>
+      <Shell />
+    </PanelProvider>
+  )
+}
+
+function Shell() {
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
   const main = useRef<HTMLElement>(null)
@@ -18,6 +27,8 @@ export function Layout() {
   useShortcut('g s', () => navigate('/sessions'))
   useShortcut('g c', () => navigate(links.cost))
   useShortcut('g m', () => navigate('/moments'))
+  const panel = usePanel()
+  useShortcut('l', () => panel.setOpen(!panel.open), { enabled: panel.tabs.length > 0 })
   useEffect(() => {
     rememberOverview(pathname, search)
     rememberScope(pathname, search)
@@ -36,11 +47,14 @@ export function Layout() {
       <div className="flex h-dvh flex-col overflow-hidden">
         <TopBar />
         {onSession && <SessionSlot />}
-        <main ref={main} tabIndex={-1} className="min-h-0 flex-1 overflow-auto outline-none">
-          <ErrorBoundary resetKey={pathname}>
-            <Outlet />
-          </ErrorBoundary>
-        </main>
+        <div className="relative flex min-h-0 flex-1">
+          <main ref={main} tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-auto outline-none">
+            <ErrorBoundary resetKey={pathname}>
+              <Outlet />
+            </ErrorBoundary>
+          </main>
+          <PanelColumn />
+        </div>
       </div>
     </SlotProvider>
   )

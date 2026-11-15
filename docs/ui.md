@@ -246,9 +246,18 @@ One bar, 44px: **brand, the page's slot, the tabs, the theme and status buttons*
   version and "X available" (a link to that release's page; the tooltip says `merlin upgrade` installs it and
   `merlin autoupgrade` keeps Merlin up to date; not while the "updated" notice is up, nor when X is the version
   running).
+- **The legend panel** (added 2026-11-15, `merlin-bj5.1`): a column at the right of main, 300 px, full height under
+  the bar, `bg-surface`, a left border, its own scroll. It pushes main (main narrows; the Cost chart follows its
+  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal, as
+  `ShellSlot`); the known ids, in order, are `graph` ("Graph") and `cost` ("Cost"). Only filled tabs show; the one
+  picked by hand wins while it stays filled, else the one filled last; a single tab shows its title in place of
+  a strip. The **Legend button** (`PanelRight`, before the theme button, pressed while open) shows only while the
+  page filled a tab (the Overview fills none); `l` toggles it (not while typing), Escape does not close it. Open or
+  closed is kept per viewer in `localStorage` (`shell.legend`); with no choice it starts open at 1400 px or wider.
+  The rules are in `shell/panel-model.ts`.
 - **Indexing**: while `pending > 0`, a thin accent line along the bar's bottom edge, as wide as done / seen,
   its tooltip "indexing 120 / 3,355 · n unchanged · n failed". Nothing otherwise.
-- **Shortcuts**: `g o` Overview, `g s` Sessions, `g c` Cost, `g m` Moments; `/` focuses the search on the
+- **Shortcuts**: `g o` Overview, `g s` Sessions, `g c` Cost, `g m` Moments, `l` the legend panel (where a page filled it); `/` focuses the search on the
   Overview (expanding it) and on Sessions.
 
 ## 8. Sessions page (`/sessions`)
@@ -714,6 +723,14 @@ pages never disagree and switching tabs keeps it.
   history entry) is where the selection lives; then one white pane, edge to edge, that scrolls inside itself (the
   document never scrolls). Its sections are separated by the Overview's hairline and labelled in its column-header style
   (small, uppercase, muted).
+- **The key lives in the legend panel** (section 7), the **Cost** tab, not under the chart. Under a heading naming the
+  stack in view (By model, Who, Price class, Tier, Depth, Compactions; it follows the switch) it lists the
+  categories with their swatches, the top of the bars first so the list reads like the bars, a muted second line
+  where the name does not say enough (price classes, tiers, depth bands); then the marks that apply: the overhead
+  hatch ("Not in any session's messages") and, on Compactions, the two dots (muted: a day with compactions; red: one
+  ran cold). Under the chart stay only the grain ("One bar per 3 hours; a click selects its day", "One bar per
+  week") and the compaction sentence. The tables' swatch headers (Who × Tier, Who × Depth) and the Limits section stay
+  in the pane.
 - **Headline strip**, no caption (the range capsule and the sidebar already say what the scope is): the total
   large, the change against the same number of days just before the window ("+34% on the 30 days before", the dollars
   on hover; one more `by=model` request for that window, hidden when it spent nothing) and a concentration link, "13
