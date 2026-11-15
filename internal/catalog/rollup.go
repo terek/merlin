@@ -128,6 +128,10 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 				for i := range parts {
 					parts[i].k.model = x.model
 				}
+			case ByDepth:
+				for i := range parts {
+					parts[i].k.depth = DepthNames[x.depth]
+				}
 			case ByKind:
 				for i := range parts {
 					parts[i].k.kind = string(x.s.d.Kind)
@@ -217,7 +221,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 			if a == nil {
 				a = &acc{row: Row{Project: p.k.project, Dir: p.k.dir, Day: p.k.day, Hour: p.k.hour, Model: p.k.model, Kind: p.k.kind,
 					Repo: p.k.repo, Checkout: p.k.checkout, Remote: p.k.remote, Branch: p.k.branch, Bead: p.k.bead,
-					Family: p.k.family, Class: p.k.class, Agent: p.k.agent}}
+					Family: p.k.family, Class: p.k.class, Agent: p.k.agent, Depth: p.k.depth}}
 				rows[p.k] = a
 				keys = append(keys, p.k)
 			}
@@ -249,7 +253,7 @@ func (c *Catalog) Rollup(f Filter, dims ...Dim) []Row {
 }
 
 // rkey is the key of a rollup row: one value per dimension.
-type rkey struct{ project, dir, day, hour, model, kind, repo, checkout, remote, branch, bead, family, class, agent string }
+type rkey struct{ project, dir, day, hour, model, kind, repo, checkout, remote, branch, bead, family, class, agent, depth string }
 
 // get picks the value of one dimension.
 func (k rkey) get(d Dim) string {
@@ -280,13 +284,15 @@ func (k rkey) get(d Dim) string {
 		return k.class
 	case ByAgent:
 		return k.agent
+	case ByDepth:
+		return k.depth
 	}
 	return k.family
 }
 
 // Key is the row's value along a dimension.
 func (r Row) Key(d Dim) string {
-	return rkey{r.Project, r.Dir, r.Day, r.Hour, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent}.get(d)
+	return rkey{r.Project, r.Dir, r.Day, r.Hour, r.Model, r.Kind, r.Repo, r.Checkout, r.Remote, r.Branch, r.Bead, r.Family, r.Class, r.Agent, r.Depth}.get(d)
 }
 
 // Total returns the spend of the sessions selected by f: the sum of their best costs

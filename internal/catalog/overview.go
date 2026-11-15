@@ -105,24 +105,40 @@ type OverviewLane struct {
 	Remote   string `json:"remote,omitempty"`
 	// Bead is the bead holding the largest share of the session's bead-attributed cost (the `bead` key of
 	// the groups); "" for a session on none.
-	Bead           string         `json:"bead,omitempty"`
-	StartedAt      time.Time      `json:"startedAt,omitzero"`
-	LastActivityAt time.Time      `json:"lastActivityAt,omitzero"`
-	USD            float64        `json:"usd"`
-	Turns          int            `json:"turns"`
-	Agents         int            `json:"agents"`
-	Slot0          int            `json:"slot0"`
-	Context        []int64        `json:"context"`
-	Idle           []int64        `json:"idle"`
-	Active         []int          `json:"active"`
-	Spans          []OverviewSpan `json:"spans"`
+	Bead           string    `json:"bead,omitempty"`
+	StartedAt      time.Time `json:"startedAt,omitzero"`
+	LastActivityAt time.Time `json:"lastActivityAt,omitzero"`
+	USD            float64   `json:"usd"`
+	Turns          int       `json:"turns"`
+	Agents         int       `json:"agents"`
+	Slot0          int       `json:"slot0"`
+	// Peak is the largest context of any owned call in the range, the main agent's and every
+	// agent's (Tokens.Context); PeakAt is when (the earliest on a tie). PeakAgentID is the agent
+	// that made that call (a span's AgentID), omitted for the main thread; a compaction call counts
+	// as the main thread. PeakAgentKind is the digest's kind of that agent (subagent, review...), set
+	// only when the lane lists no span with that AgentID (a review agent), so that the UI can name it. DeepUSD is the usd of the calls whose
+	// context is deep (DeepContext or more), counted as USD is.
+	Peak          int64          `json:"peak,omitempty"`
+	PeakAt        time.Time      `json:"peakAt,omitzero"`
+	PeakAgentID   string         `json:"peakAgentId,omitempty"`
+	PeakAgentKind string         `json:"peakAgentKind,omitempty"`
+	DeepUSD       float64        `json:"deepUSD,omitempty"`
+	Context       []int64        `json:"context"`
+	Idle          []int64        `json:"idle"`
+	Active        []int          `json:"active"`
+	Spans         []OverviewSpan `json:"spans"`
 }
 
 // OverviewSpan is work a session launched, with its life: one agent of Kind (subagent,
 // teammate, fork or workflow), or one branched session (session-fork or continuation). Start
 // and End are not clipped to the range.
 type OverviewSpan struct {
-	Kind    string     `json:"kind"`
+	Kind string `json:"kind"`
+	// AgentID is the agent's id, for an agent span; Peak and DeepUSD are over that agent's owned
+	// calls in the range (not clipped like Start and End).
+	AgentID string     `json:"agentId,omitempty"`
+	Peak    int64      `json:"peak,omitempty"`
+	DeepUSD float64    `json:"deepUSD,omitempty"`
 	Start   time.Time  `json:"start"`
 	End     time.Time  `json:"end"`
 	Session SessionRef `json:"session"`
@@ -156,6 +172,20 @@ type ovSess struct {
 	held  []bool  // context held, or a message of its own, in the slot
 	idle  []int64 // largest idle context held in the slot, 0 where ctx > 0
 	total float64
+	// Peak and deep: the lane's, over every owned call in the range; per, by agent id (real ids:
+	// a compaction agent has its own entry, though the lane counts its calls as the main thread's).
+	deep      float64
+	peakCtx   int64
+	peakAt    time.Time
+	peakAgent string
+	peakKind  string
+	per       map[string]*agentPeak
+}
+
+// agentPeak is what one agent's owned calls in the range carried.
+type agentPeak struct {
+	peak int64
+	deep float64
 }
 
 // Overview computes the rollup. Lanes come ordered by usd, largest first, then id.
@@ -196,6 +226,10 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		o := &ovSess{s: s}
 		var main []*model.Message // the main agent's owned messages
 		seen := false
+		kinds := make(map[string]model.AgentKind, len(s.d.Agents))
+		for k := range s.d.Agents {
+			kinds[s.d.Agents[k].ID] = s.d.Agents[k].Kind
+		}
 		for _, m := range s.own {
 			if m.AgentID == "" {
 				main = append(main, m)
@@ -209,10 +243,12 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 				o.ctx, o.held, o.idle = make([]int64, n), make([]bool, n), make([]int64, n)
 			}
 			o.held[i] = true
-			o.total += m.USD
+			usd := m.USD
 			if m.EstimatedUSD > 0 && covered(s.windows, m.At) < 0 {
-				o.total += m.EstimatedUSD // the output a truncated message is missing: in the session's own cost, outside a window
+				usd += m.EstimatedUSD // the output a truncated message is missing: in the session's own cost, outside a window
 			}
+			o.total += usd
+			o.addCall(m, usd, kinds[m.AgentID])
 		}
 		if !seen {
 			continue
@@ -225,7 +261,18 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 		o.holdContext(main, from, slot)
 		l := OverviewLane{Harness: s.key.Harness, ID: s.key.ID, Title: s.info.Title,
 			StartedAt: s.d.StartedAt.UTC(), LastActivityAt: s.d.LastActivityAt.UTC(), USD: o.total,
+			Peak: o.peakCtx, PeakAt: o.peakAt, PeakAgentID: o.peakAgent, PeakAgentKind: o.peakKind, DeepUSD: o.deep,
 			Spans: sortedSpans(overviewSpans(s, from, to))}
+		for _, sp := range l.Spans {
+			if sp.AgentID != "" && sp.AgentID == l.PeakAgentID {
+				l.PeakAgentKind = "" // the row has a span to name it
+			}
+		}
+		for i := range l.Spans {
+			if p := o.per[l.Spans[i].AgentID]; p != nil && l.Spans[i].AgentID != "" {
+				l.Spans[i].Peak, l.Spans[i].DeepUSD = p.peak, p.deep
+			}
+		}
 		l.Dir, l.Checkout, l.Repo, l.Remote, l.Bead = fv.placeValues(s)
 		l.Project = s.project
 		inherited := make(map[int]bool, len(s.info.InheritedTurns))
@@ -272,6 +319,37 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 	return out, nil
 }
 
+// addCall counts one owned call in the range: its context against the lane's peak and its usd
+// against deep when the context is deep. A compaction agent's call is the main thread's context
+// read once more: it is the main thread's for the lane, and its own agent's for a span.
+func (o *ovSess) addCall(m *model.Message, usd float64, kind model.AgentKind) {
+	ctx := m.Tokens.Context()
+	deep := ctx >= DeepContext
+	if o.per == nil {
+		o.per = map[string]*agentPeak{}
+	}
+	if m.AgentID != "" {
+		p := o.per[m.AgentID]
+		if p == nil {
+			p = &agentPeak{}
+			o.per[m.AgentID] = p
+		}
+		p.peak = max(p.peak, ctx)
+		if deep {
+			p.deep += usd
+		}
+	}
+	if deep {
+		o.deep += usd
+	}
+	if ctx > o.peakCtx || ctx == o.peakCtx && ctx > 0 && m.At.Before(o.peakAt) {
+		o.peakCtx, o.peakAt, o.peakAgent, o.peakKind = ctx, m.At.UTC(), m.AgentID, string(kind)
+		if m.AgentID == "" || kind == model.AgentCompact {
+			o.peakAgent, o.peakKind = "", ""
+		}
+	}
+}
+
 // holdContext fills ctx and held from the session's main-agent owned messages: a call's
 // prompt tokens are held from its time until the next call if that is within OverviewHold,
 // else only at the call itself. If the next call comes later than that but within
@@ -296,7 +374,7 @@ func (o *ovSess) holdContext(main []*model.Message, from time.Time, slot time.Du
 		if k+1 < len(main) && main[k+1].At.Sub(m.At) <= OverviewHold {
 			end = main[k+1].At
 		}
-		c := m.Input + m.CacheRead + m.CacheWrite5m + m.CacheWrite1h
+		c := m.Tokens.Context()
 		for i := max(slotOf(m.At), 0); i <= min(slotOf(end), n-1); i++ {
 			o.ctx[i] = max(o.ctx[i], c)
 			o.held[i] = true
@@ -391,7 +469,7 @@ func overviewSpans(s *sess, from, to time.Time) []OverviewSpan {
 	var spans []*OverviewSpan
 	for _, l := range ls {
 		title := cmp.Or(l.a.Description, l.a.Name, l.a.AgentType)
-		spans = append(spans, &OverviewSpan{Kind: l.kind, Start: l.start.UTC(), End: l.end.UTC(), Session: ref, Title: title})
+		spans = append(spans, &OverviewSpan{AgentID: l.a.ID, Kind: l.kind, Start: l.start.UTC(), End: l.end.UTC(), Session: ref, Title: title})
 	}
 	var out []OverviewSpan
 	for _, sp := range spans {

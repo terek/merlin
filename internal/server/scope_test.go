@@ -2,7 +2,10 @@ package server
 
 import (
 	"net/url"
+	"slices"
 	"testing"
+
+	"github.com/terek/merlin/internal/catalog"
 )
 
 // laneSum is the Overview's usd of the lanes whose dir sits under in (and which match q).
@@ -87,7 +90,7 @@ func TestClassAndAgentTablesAddUp(t *testing.T) {
 	for _, extra := range []string{"", "&place=dir&in=/main", "&q=thing", "&place=dir&in=/other&q=title"} {
 		var plain CostTable
 		r.get("/api/cost?by=model"+days+extra, &plain)
-		for _, by := range []string{"class", "agent"} {
+		for _, by := range []string{"class", "agent", "depth"} {
 			var ct CostTable
 			if code := r.get("/api/cost?by="+by+days+extra, &ct); code != 200 {
 				t.Fatalf("%s%s: %d", by, extra, code)
@@ -115,5 +118,35 @@ func TestClassAndAgentTablesAddUp(t *testing.T) {
 	var ct CostTable
 	if code := r.get("/api/cost?by=model&split=class"+days, &ct); code != 200 {
 		t.Errorf("by=model&split=class: %d", code)
+	}
+}
+
+// by=depth: rows are the bands in order, (overhead) last; split=depth works from the other side.
+func TestCostByDepth(t *testing.T) {
+	r := ovRig(t)
+	const days = "&since=2026-12-26&until=2027-01-01"
+	var ct CostTable
+	if code := r.get("/api/cost?by=depth&split=agent"+days, &ct); code != 200 {
+		t.Fatalf("by=depth: %d", code)
+	}
+	prev := -1
+	for _, row := range ct.Rows {
+		i := slices.Index(catalog.DepthNames[:], row.Key)
+		if i == 0 {
+			i = len(catalog.DepthNames)
+		}
+		if i < 0 || i < prev {
+			t.Errorf("row %q out of band order: %+v", row.Key, ct.Rows)
+		}
+		prev = i
+	}
+	var plain, sp CostTable
+	r.get("/api/cost?by=model"+days, &plain)
+	r.get("/api/cost?by=model&split=depth"+days, &sp)
+	if !near(ct.Total.TotalUSD, plain.Total.TotalUSD) || len(sp.Rows) == 0 || len(sp.Rows[0].Split) == 0 || sp.Rows[0].Split[0].Key != "0-100k" {
+		t.Errorf("total %v vs %v; split %+v", ct.Total.TotalUSD, plain.Total.TotalUSD, sp.Rows)
+	}
+	if code := r.get("/api/cost?by=depth&split=depth"+days, &ct); code != 400 {
+		t.Errorf("by=depth&split=depth: %d", code)
 	}
 }

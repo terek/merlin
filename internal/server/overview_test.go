@@ -97,7 +97,7 @@ func TestOverviewRoute(t *testing.T) {
 	}
 	// The agent (a zero-length span: no end, no messages) and the fork b.
 	t1 := testNow.Add(-3 * time.Hour)
-	if want := []catalog.OverviewSpan{{Kind: "subagent", Start: t1.Add(time.Minute), End: t1.Add(time.Minute),
+	if want := []catalog.OverviewSpan{{Kind: "subagent", AgentID: "ag", Start: t1.Add(time.Minute), End: t1.Add(time.Minute),
 		Session: catalog.SessionRef{Harness: "claude", ID: "a"}}}; !reflect.DeepEqual(a.Spans, want) {
 		t.Errorf("a spans %+v, want %+v", a.Spans, want)
 	}

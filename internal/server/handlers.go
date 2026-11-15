@@ -435,13 +435,22 @@ var costDims = map[string]catalog.Dim{"project": catalog.ByProject, "day": catal
 	"kind": catalog.ByKind, "repo": catalog.ByRepo, "branch": catalog.ByBranch, "bead": catalog.ByBead,
 	"family": catalog.ByFamily, "checkout": catalog.ByCheckout, "remote": catalog.ByRemote,
 	"dir":   catalog.ByDir, // the folder, not the start directory
-	"class": catalog.ByClass, "agent": catalog.ByAgent}
+	"class": catalog.ByClass, "agent": catalog.ByAgent, "depth": catalog.ByDepth}
 
 // maxHourDays is the longest range of local days by=hour answers.
 const maxHourDays = 14
 
 // unsplitKey is the row of spend no token (by=class) or message (by=agent) explains.
 const unsplitKey = "(unsplit)"
+
+// depthRank orders the rows of by=depth by band, (overhead) last.
+func depthRank(key string) int {
+	i := slices.Index(catalog.DepthNames[:], key)
+	if i == 0 {
+		return len(catalog.DepthNames)
+	}
+	return i
+}
 
 // rowKey is the value of a rollup row along the named dimension.
 func rowKey(dim string, r catalog.Row) string { return r.Key(costDims[dim]) }
@@ -459,15 +468,15 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 	split := q.Get("split")
 	dim, isDim := costDims[by]
 	if !isDim && by != "session" {
-		a.badParam(w, "by=%q: use project, dir, day, hour, model, kind, class, agent, repo, checkout, remote, branch, bead, family or session", by)
+		a.badParam(w, "by=%q: use project, dir, day, hour, model, kind, class, agent, depth, repo, checkout, remote, branch, bead, family or session", by)
 		return
 	}
 	var splitDim catalog.Dim
 	if split != "" {
 		sd, ok := costDims[split]
 		switch {
-		case !ok || split != "project" && split != "model" && split != "kind" && split != "class" && split != "agent":
-			a.badParam(w, "split=%q: use project, model, kind, class or agent", split)
+		case !ok || split != "project" && split != "model" && split != "kind" && split != "class" && split != "agent" && split != "depth":
+			a.badParam(w, "split=%q: use project, model, kind, class, agent or depth", split)
 			return
 		case by == "session":
 			a.badParam(w, "split cannot be combined with by=session")
@@ -600,6 +609,9 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 			}
 			for _, ps := range parts {
 				sort.SliceStable(ps, func(i, j int) bool {
+					if split == "depth" {
+						return depthRank(ps[i].Key) < depthRank(ps[j].Key)
+					}
 					if u, v := ps[i].Key == unsplitKey, ps[j].Key == unsplitKey; u != v {
 						return v
 					}
@@ -628,6 +640,11 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 				row.Key = r.Class
 			case "agent":
 				row.Key = r.Agent
+			case "depth":
+				row.Key = r.Depth
+				if r.Depth == catalog.OverheadDepth {
+					row.Label = "overhead: reported, in no transcript"
+				}
 			case "kind":
 				row.Key = r.Kind
 				if r.Kind == string(model.KindSDK) {
@@ -643,7 +660,9 @@ func (a *API) handleCost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if by == "day" || by == "hour" {
+	if by == "depth" {
+		sort.SliceStable(out.Rows, func(i, j int) bool { return depthRank(out.Rows[i].Key) < depthRank(out.Rows[j].Key) })
+	} else if by == "day" || by == "hour" {
 		sort.SliceStable(out.Rows, func(i, j int) bool { return out.Rows[i].Key < out.Rows[j].Key })
 	} else {
 		sort.SliceStable(out.Rows, func(i, j int) bool {

@@ -319,6 +319,8 @@ const (
 	ByDir
 	// ByHour groups by local hour (2006-01-02T15, Row.Hour); the spend is the ByDay spend, finer.
 	ByHour
+	// ByDepth groups by the context band of the call (depth.go); overhead has none.
+	ByDepth
 )
 
 // facet reports whether the dimension needs the groupings.
@@ -341,6 +343,7 @@ type Row struct {
 	Family   string `json:"family,omitempty"` // the root bead of the family
 	Class    string `json:"class,omitempty"`  // by=class: input, output, cacheRead, cacheWrite or (unsplit)
 	Agent    string `json:"agent,omitempty"`  // by=agent: main, agents or (unsplit)
+	Depth    string `json:"depth,omitempty"`  // by=depth: 0-100k, 100k-200k, 200k-500k, 500k+ or (overhead)
 	Sessions int    `json:"sessions"`
 	// UnrecordedAgents is how many agent runs the harness kept no record of, in the sessions
 	// behind the row (SessionCost.UnrecordedAgents; a session that spans several rows counts in

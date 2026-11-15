@@ -78,3 +78,7 @@ func (c *Cost) addModel(model string, add ModelCost) {
 	mc.USD += add.USD
 	c.ByModel[model] = mc
 }
+
+// Context is the size of the prompt a call carried: input, cache reads and cache writes. Every
+// harness stores its input as uncached input plus cached reads, so this is right for all of them.
+func (t Tokens) Context() int64 { return t.Input + t.CacheRead + t.CacheWrite5m + t.CacheWrite1h }

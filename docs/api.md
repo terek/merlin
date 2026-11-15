@@ -865,14 +865,14 @@ Cost rollups. Totals are the same for every `by`: they add up to the sum of best
 
 | Parameter | Meaning |
 |---|---|
-| `by` | `project` (default), `dir` (the folder, [location.md](location.md) §7; `project` is the start directory), `day`, `hour`, `model`, `kind`, `class`, `agent`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
+| `by` | `project` (default), `dir` (the folder, [location.md](location.md) §7; `project` is the start directory), `day`, `hour`, `model`, `kind`, `class`, `agent`, `depth`, `repo` `checkout`, `remote`, `branch`, `bead`, `family` or `session`. A row of `repo`, `checkout` or `remote` with key `""` is labelled `no repository`, `no checkout` or `no remote` |
 | `since`, `until` | for every `by` except `session`: a date (`2026-11-14`) is a range of local days (inclusive, spend is bucketed by day). An RFC 3339 instant with a time (`2026-11-14T10:00:00Z`) bounds the spend exactly: a message counts when `since` <= its time < `until`; instant bounds are applied to the minute (a bound inside a minute is rounded down to the minute, so a message in the minute of `until` is out and one in the minute of `since` is in). The two may be mixed. `by=day` and `by=hour` rows still bucket by local day and hour; only the bounds become exact. A reported window's overhead is cut at the same grain, in proportion to the covered spend inside the range. For `by=session`: bounds on last activity, date or instant |
 | `harness` | keep only that harness's sessions (`claude`, `codex`, ...; a name `/api/harnesses` lists or a harness with sessions); a 400 for another. Works with every `by` |
 | `project`, `repo`, `checkout`, `remote`, `touched`, `branch`, `bead` | as for `/api/sessions` (the same parser reads them) |
 | `place`, `in` | the Overview's scope: `place` is `dir` (default), `checkout`, `repo`, `remote` or `bead`; `in` is a path in it. Keeps the sessions whose **primary** value of that key (the one `/api/overview` puts on its lanes: `dir`, `checkout`, `repo`, `remote`, `bead`) sits at or under `in`, matched segment-wise (`dir`, `checkout` and `remote` split on `/`; a repository's trailing `.git` or `.bare` does not count; a bead's value is its path `prefix/root/…/bead`, the chain of `beads` in the overview). `in=-` selects the sessions with no value. With `in` the scripted runs are out (`backing.scriptedRuns` is 0), as on the Overview. A 400 for another `place` |
 | `q` | the Overview's search: a session matches when its name, title, id, recap, first prompt or last prompt contains the term (case-insensitive), or, for a term of two or more characters, when `/api/search` (its default limit of 50) has it among its hits. Scripted runs are out. Combines with `place` and `in` |
 | `limit` | cut the rows (1 to 500). Default: none; `by=session` defaults to 100. `total` is not affected; `truncated` says rows were cut |
-| `split` | `project`, `model`, `kind`, `class` or `agent`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
+| `split` | `project`, `model`, `kind`, `class`, `agent` or `depth`: break every row down by a second dimension (see below). Must differ from `by`; a 400 with `by=session`, with another value (`day` included), or equal to `by` |
 
 Rows are ordered by cost, largest first; `by=day` and `by=hour` are chronological. `by=hour` has one row per local
 clock hour with spend, `key` `2026-11-13T14` (the daemon's time zone; the repeated hour of a 25-hour day is one row);
@@ -931,6 +931,19 @@ exactly those runs: on one real history 2,529 of 3,132 scripted runs had spend, 
   }
 }
 ```
+
+### By depth
+
+`by=depth` (or `split=depth`) groups the spend by the **context** of the call that made it: `input + cacheRead +
+cacheWrite5m + cacheWrite1h` of the message, the prompt it carried (the same figure the Overview's `context` and
+`peak` use; for Codex its uncached input plus its cached reads). The bands are fixed for every model and harness:
+`0-100k` (below 100,000 tokens), `100k-200k`, `200k-500k` and `500k+`; a context of exactly 200,000 is in
+`200k-500k`. A call is **deep** when its context is 200,000 or more, the last two bands. Rows come in band order,
+not by cost, and take every filter, `harness` and instant `since`/`until` included. The `(overhead)` row, last, is
+the reported spend no message explains: it has no call, so no band (a compaction call estimated by Merlin takes the
+band of its context, and none when its token count is unknown; it adds no spend, only its `compactions` tally).
+The rows add up to the same `total` as any other `by`. A lane's `deepUSD` on `/api/overview` over the same scope
+(sessions, range) equals the `200k-500k` row plus the `500k+` row: `(overhead)` is not in either.
 
 ### By class and by agent
 
@@ -1081,6 +1094,18 @@ call's `at` until the next call. A gap of more than 1 hour, and the time after t
 nothing. A lane's `idle` in a slot is the largest idle context held at any moment of it, **0 in a slot where
 its `context` is above 0** (context wins). Idle is not `active`.
 
+**Peak and deep.** A lane's `peak` is the largest context (as defined above) of any call it counts: the owned
+messages whose `at` is in the range, the main agent's and every agent's, unlike the `context` graph, which counts the
+main agent only. It is omitted when 0. `peakAt` is the time of that call (the earliest on a tie). `peakAgentId` is the
+agent that made it, omitted when the main thread holds the peak; it matches the `agentId` of a span. A compaction
+call (a `compact` agent's) is the main thread's context read once more, so it counts as the main thread: it can hold
+the peak, with no `peakAgentId`. `peakAgentKind` (`review`, ...) is the digest's kind of the agent that holds the
+peak, and is set only when the lane lists no span with that `peakAgentId` (review agents have none), so the row can
+still name it. `deepUSD` is the `usd` (with the same `estimatedUSD` rule as the lane's `usd`) of those calls whose
+context is **deep**, 200,000 or more; omitted when 0. A span of an agent carries `agentId`, and `peak` and `deepUSD`
+over that agent's own calls inside the range (an agent that started before the range is listed, but only its calls
+in the range count); omitted when 0. Spans of a branched session have no `agentId`.
+
 **Counts.** `turns` is the number of the session's own turns (not those inherited from a parent session) that
 started in the range; `agents` the number of its agent spans (the kinds `subagent`, `teammate`, `fork`,
 `workflow`, not branched sessions) that started in the range: an agent that started before the range and runs
@@ -1134,10 +1159,11 @@ of its root, as `beads.Prefix`).
       "firstPrompt": { "turn": 0, "at": "2026-11-05T04:41:37Z", "text": "Refactor the …", "truncated": false },
       "lastPrompt": { "turn": 21, "at": "2026-11-10T21:20:00Z", "text": "ship it", "truncated": false },
       "usd": 96.2, "turns": 22, "agents": 14,
+      "peak": 262000, "peakAt": "2026-11-05T10:05:00Z", "peakAgentId": "a7c1", "deepUSD": 31.4,
       "slot0": 2,
       "context": [84000, 151000, "…"], "idle": [0, 0, 151000, "…"], "active": [1, 1, "…"],
       "spans": [
-        { "kind": "subagent", "start": "2026-11-05T10:02:11Z", "end": "2026-11-05T10:09:40Z",
+        { "kind": "subagent", "agentId": "a7c1", "peak": 262000, "deepUSD": 31.4, "start": "2026-11-05T10:02:11Z", "end": "2026-11-05T10:09:40Z",
           "session": { "harness": "claude", "id": "394b4c16-…" }, "title": "Explore" }
       ]
     }

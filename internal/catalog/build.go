@@ -31,6 +31,7 @@ type sess struct {
 type fact struct {
 	s          *sess
 	day, model string
+	depth      int8  // context band of the call (depth0k...), depthNone for overhead
 	hour       int8  // local clock hour 0-23 of the message; -1 when the fact has no day
 	minute     int64 // the message's UTC minute (Unix seconds / 60, rounded down); meaningful only when day != ""
 	reported   float64
@@ -569,6 +570,7 @@ func (v *view) costs() {
 			hour       int8
 			minute     int64
 			cov        bool
+			depth      int8
 		}
 		var order []key
 		sums := make(map[key]float64)
@@ -581,7 +583,7 @@ func (v *view) costs() {
 		var priced, recorded, billed int // owned messages with a price, and of those the harness's own figure
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)
-			k := key{v.day(m.At), m.Model, v.hour(m.At), minuteOf(m.At), wi >= 0}
+			k := key{v.day(m.At), m.Model, v.hour(m.At), minuteOf(m.At), wi >= 0, callDepth(m.Tokens)}
 			if _, ok := sums[k]; !ok {
 				order = append(order, k)
 			}
@@ -657,7 +659,7 @@ func (v *view) costs() {
 			}
 			t := tally(cp.Call, covered(s.windows, cp.At) >= 0)
 			c.Compactions.add(t)
-			v.facts = append(v.facts, fact{s: s, day: v.day(cp.At), hour: v.hour(cp.At), minute: minuteOf(cp.At), model: cp.Call.Model, comp: t})
+			v.facts = append(v.facts, fact{s: s, day: v.day(cp.At), hour: v.hour(cp.At), minute: minuteOf(cp.At), model: cp.Call.Model, comp: t, depth: compactionDepth(cp.Call)})
 		}
 		for k := range s.d.Compactions {
 			cp := &s.d.Compactions[k]
@@ -674,7 +676,7 @@ func (v *view) costs() {
 			}
 		}
 		for _, k := range order {
-			f := fact{s: s, day: k.day, hour: k.hour, minute: k.minute, model: k.model, cls: *clsSums[k], ag: *agSums[k]}
+			f := fact{s: s, day: k.day, hour: k.hour, minute: k.minute, model: k.model, depth: k.depth, cls: *clsSums[k], ag: *agSums[k]}
 			if k.cov {
 				f.reported = sums[k]
 			} else {
@@ -759,6 +761,14 @@ func (v *view) costs() {
 			v.diag.Scripted++
 		}
 	}
+}
+
+// compactionDepth is the band of a compaction call's context, none when it has no token count.
+func compactionDepth(c *model.CompactionCall) int8 {
+	if c.InputTokens <= 0 {
+		return depthNone
+	}
+	return depthBand(c.InputTokens)
 }
 
 // hasWorkWithoutMessages reports a session that billed no message yet shows work: a turn

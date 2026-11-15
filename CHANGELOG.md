@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The Overview's data carries the peak context of each session and of each sub-agent (and how much was spent on calls past 200k tokens), and Cost can group spend by context depth (0-100k, 100k-200k, 200k-500k, 500k+).
 - `/api/cost` takes exact instants for `since` and `until` and a `harness` filter, and each usage window in `/api/limits` now reports the same total Cost does over it, the scripted share, its three biggest sessions and what a percentage point cost.
 - Subscription limit windows show up where you already look: Cost has a Limits section (each window that ran out or came close, how long it locked you out, what was spent in it and on which sessions, and what a window is worth at API prices); a row narrows Cost or the Overview to that window and one harness, the Overview draws red ticks where a session's calls were refused and a band where you were locked out.
 - `merlin doctor` and a new `GET /api/limits` know about subscription limits: the 5-hour and 7-day windows Codex records (how much was used, when it resets), the calls Codex and Claude Code refused at a limit, and what this machine spent inside each window.
