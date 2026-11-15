@@ -128,6 +128,13 @@ A dense, calm developer tool. Content first; chrome is thin. One accent colour. 
 - **Empty, loading, error.** Every data region has all three: a skeleton or spinner after 200 ms,
   an empty state that says what would make it non-empty, and an error state showing the API's
   `error.message` with a retry button.
+- **A sentence first (merlin-403).** Each view answers "where have my tokens gone?" on its first
+  screen with one sentence computed from the person's own data. The sentence names something they
+  can act on and sizes it in dollars or in % of a limit window: "$31 was in calls at 200k+, most
+  of it in sub-agent Explore", not "keep your context small". Each clause is a link into an
+  existing view (a scope, a sort, a session), and it names the mark or column it explains, so the
+  sentence also teaches how to read the view, and the second visit needs no hint. A clause below
+  its threshold is left out rather than padded. A figure that is only a floor says so (`≥`).
 
 ### How cost is written
 
