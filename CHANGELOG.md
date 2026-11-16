@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-16
+
 - An open session groups its summary, full-session locator and detailed graph together, with matching time boundaries connected between the summary and locator; spend breakdown bars follow the graph.
 - A session whose project directory was renamed no longer shows its stale copy: its spend and limit hits after the rename are counted.
 - A subscription limit's lockout (first refused call to the reset) is one striped red mark everywhere: behind the rows of the sessions it touched in the Overview (the whole lockout, so a session that stopped at the refusal shows the wait), in the summary's axis and across the session graph, breaks included (the break names the limit and when it lifts; a session a limit stopped now has its axis run on to the reset); calls made inside it draw over the mark, and the legend lists it.
