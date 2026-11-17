@@ -133,7 +133,7 @@ func TestAutoUpgradeSkips(t *testing.T) {
 			if l.count(tc.want) != 1 {
 				t.Errorf("want one %q line, log:\n%s", tc.want, l.text())
 			}
-			if rel.downloads != 0 || au.wasInstalled() || !strings.Contains(contents(t, real), "merlin "+tc.current) {
+			if au.wasInstalled() || !strings.Contains(contents(t, real), "merlin "+tc.current) {
 				t.Error("something was installed")
 			}
 		})

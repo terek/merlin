@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { availableToShow, initialVersion, releaseUrl, seeAvailable, seeVersion } from './version'
+import { availableToShow, initialVersion, releaseUrl, seeAvailable, seeVersion, shouldReload } from './version'
 
 describe('seeVersion', () => {
   test('the first version is remembered, not an update', () => {
@@ -27,29 +27,33 @@ describe('seeVersion', () => {
 describe('seeAvailable', () => {
   test('an update event sets it, the same one again changes nothing', () => {
     const s = seeAvailable(initialVersion, '1.1.0')
-    expect(s.available).toBe('1.1.0')
+    expect(s.available).toEqual({ version: '1.1.0', state: 'available' })
     expect(seeAvailable(s, '1.1.0')).toBe(s)
   })
   test('a newer one replaces it; an empty version clears it', () => {
     let s = seeAvailable(initialVersion, '1.1.0')
     s = seeAvailable(s, '1.2.0')
-    expect(s.available).toBe('1.2.0')
+    expect(s.available?.version).toBe('1.2.0')
     expect(seeAvailable(s, '').available).toBeNull()
     expect(seeAvailable(initialVersion, '')).toBe(initialVersion)
   })
   test('it does not disturb the loaded and updated versions', () => {
     let s = seeVersion(initialVersion, '1.0.0')
     s = seeAvailable(s, '1.1.0')
-    expect(s).toEqual({ loaded: '1.0.0', updatedTo: null, available: '1.1.0' })
+    expect(s).toEqual({ loaded: '1.0.0', updatedTo: null, available: { version: '1.1.0', state: 'available' } })
     expect(seeVersion(s, '1.0.0')).toBe(s)
-    expect(seeVersion(s, '1.1.0')).toEqual({ loaded: '1.0.0', updatedTo: '1.1.0', available: '1.1.0' })
+    expect(seeVersion(s, '1.1.0')).toEqual({
+      loaded: '1.0.0',
+      updatedTo: '1.1.0',
+      available: { version: '1.1.0', state: 'available' },
+    })
   })
 })
 
 describe('availableToShow', () => {
   const loaded = seeVersion(initialVersion, '1.0.0')
   test('shows a newer release', () => {
-    expect(availableToShow(seeAvailable(loaded, '1.1.0'))).toBe('1.1.0')
+    expect(availableToShow(seeAvailable(loaded, '1.1.0'))).toEqual({ version: '1.1.0', state: 'available' })
   })
   test('shows nothing without one', () => {
     expect(availableToShow(loaded)).toBeNull()
@@ -61,6 +65,36 @@ describe('availableToShow', () => {
   })
   test('hides the version the daemon runs', () => {
     expect(availableToShow(seeAvailable(loaded, '1.0.0'))).toBeNull()
+  })
+})
+
+describe('update state', () => {
+  const loaded = seeVersion(initialVersion, '1.0.0')
+  test('state and reason are carried; a change replaces them', () => {
+    const s = seeAvailable(loaded, '1.1.0', 'blocked', 'run: sudo merlin upgrade')
+    expect(s.available).toEqual({ version: '1.1.0', state: 'blocked', reason: 'run: sudo merlin upgrade' })
+    expect(seeAvailable(s, '1.1.0', 'blocked', 'run: sudo merlin upgrade')).toBe(s)
+    expect(seeAvailable(s, '1.1.0', 'ready').available).toEqual({ version: '1.1.0', state: 'ready' })
+  })
+  test('the hidden rules hold for every state', () => {
+    const s = seeAvailable(loaded, '1.1.0', 'ready')
+    expect(availableToShow(s)?.state).toBe('ready')
+    expect(availableToShow(seeVersion(s, '1.1.0'))).toBeNull()
+    expect(availableToShow(seeAvailable(loaded, '1.0.0', 'ready'))).toBeNull()
+  })
+  test('an empty version clears the state', () => {
+    expect(seeAvailable(seeAvailable(loaded, '1.1.0', 'ready'), '').available).toBeNull()
+  })
+})
+
+describe('shouldReload', () => {
+  const loaded = seeVersion(initialVersion, '1.0.0')
+  test('only the installing tab, only for the version it asked for', () => {
+    const updated = seeVersion(loaded, '1.1.0')
+    expect(shouldReload(updated, '1.1.0')).toBe(true)
+    expect(shouldReload(updated, null)).toBe(false)
+    expect(shouldReload(updated, '1.2.0')).toBe(false)
+    expect(shouldReload(loaded, '1.1.0')).toBe(false)
   })
 })
 

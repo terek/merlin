@@ -3,8 +3,16 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { keyString } from '../lib/session'
-import { initialVersion, seeAvailable, seeVersion, type VersionState } from '../lib/version'
+import {
+  initialVersion,
+  seeAvailable,
+  seeVersion,
+  shouldReload,
+  type UpdateState,
+  type VersionState,
+} from '../lib/version'
 import { applyEvent } from './cache'
+import { upgrade } from './client'
 import type { EventMap, ScanProgress, SessionKey } from './types'
 
 export type Connection = 'connecting' | 'live' | 'offline'
@@ -53,15 +61,21 @@ export class EventStore {
     this.setConnection('live')
   }
   setVersion(seen: string) {
-    const next = seeVersion(this.version, seen)
-    if (next === this.version) return
-    this.version = next
-    this.emit()
+    this.setVersionState(seeVersion(this.version, seen))
   }
-  setAvailable(seen: string) {
-    const next = seeAvailable(this.version, seen)
+  setAvailable(seen: string, state?: UpdateState, reason?: string) {
+    this.setVersionState(seeAvailable(this.version, seen, state, reason))
+  }
+  /** The version this tab asked the daemon to install; it reloads once the daemon reports it. */
+  installing: string | null = null
+  startInstall(version: string) {
+    this.installing = version
+    if (shouldReload(this.version, version)) location.reload()
+  }
+  private setVersionState(next: VersionState) {
     if (next === this.version) return
     this.version = next
+    if (shouldReload(next, this.installing)) location.reload()
     this.emit()
   }
   setProgress(p: ScanProgress) {
@@ -143,7 +157,8 @@ export function EventsProvider({ children, url = '/api/events' }: { children: Re
           return
         }
         if (name === 'update') {
-          store.setAvailable((data as EventMap['update']).version)
+          const u = data as EventMap['update']
+          store.setAvailable(u.version, u.state, u.reason)
           return
         }
         if (name === 'scan-progress') {
@@ -175,6 +190,15 @@ export function useConnection(): Connection {
 export function useVersion(): VersionState {
   const s = useStore()
   return useSyncExternalStore(s.subscribe, () => s.version)
+}
+
+/** Asks the daemon to install `version`; the page reloads itself once the daemon reports it. Throws ApiError. */
+export function useInstall(): (version: string) => Promise<void> {
+  const s = useStore()
+  return async (version) => {
+    await upgrade(version)
+    s.startInstall(version)
+  }
 }
 
 /** The latest scan-progress event, or null before the first. Indexing is under way while `pending > 0`. */

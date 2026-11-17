@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- When a new release is out, the status light at the top right pulses; its menu installs the update with one click (Merlin downloads it ahead of time) and the page reloads on the new version.
 - An open session no longer lists limit lockouts as lines of text above its graph; its locator shows them softly, as the graph does.
 - An open session's head carries the session's locator, pinned while you scroll, in place of the small row graph; a click anywhere on the locator selects that day (midnight to midnight, for sessions longer than a day; a whole idle day belongs to the next), the hover shows exactly that day, and day boundaries are easier to see.
 - A click anywhere on an Overview row opens the session whole; a click on its small graph no longer opens it on that one day.

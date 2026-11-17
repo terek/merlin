@@ -2,8 +2,11 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"mime"
 	"net"
 	"net/http"
 	"strings"
@@ -44,10 +47,15 @@ type Options struct {
 	// Version is the daemon's version, announced by a hello event at the start of every
 	// /api/events stream; empty sends no hello.
 	Version string
-	// Available returns a newer release than Version that was found and not installed, ""
-	// for none; nil means never. /api/events tells every stream with an update event: after
-	// hello when there is one, then whenever the answer changes (looked at every StateInterval).
-	Available func() string
+	// Update returns the newer release than Version that was found and not installed (the
+	// zero value for none); nil means never. /api/events tells every stream with an update
+	// event: after hello when there is one, then whenever the answer changes (looked at
+	// every StateInterval).
+	Update func() UpdateEvent
+	// Install, when set, enables POST /api/upgrade: it installs release version and returns
+	// once the new binary is in place; the caller then restarts the daemon. An error that
+	// satisfies errors.Is(err, ErrConflict) answers 409, any other 500. Nil: no such route.
+	Install func(ctx context.Context, version string) error
 	// Now is the clock for liveness; nil means time.Now. Handlers read no other clock.
 	Now func() time.Time
 	// Location buckets days and parses date-only parameters; nil means time.Local.
@@ -97,6 +105,9 @@ func New(o Options) *API {
 	a.route("/api/overview", a.handleOverview)
 	a.route("/api/moments", a.handleMoments)
 	a.route("/api/events", a.handleEvents)
+	if a.o.Install != nil {
+		a.routeWrite("/api/upgrade", a.handleUpgrade)
+	}
 	a.route("/api/", func(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, http.StatusNotFound, CodeNotFound, "no such endpoint: "+r.URL.Path)
 	})
@@ -129,6 +140,47 @@ func (a *API) route(pattern string, h http.HandlerFunc) {
 		h(w, r)
 	})
 }
+
+// routeWrite registers h, a state-changing route: POST only, behind the Host guard, and
+// only for a request that a page served by this daemon made (Origin must be http://<Host>:
+// a page on another site cannot forge it) and that says it is JSON (a cross-site form
+// cannot send that without a preflight).
+func (a *API) routeWrite(pattern string, h http.HandlerFunc) {
+	a.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		if !localHost(r.Host) {
+			a.fail(w, http.StatusForbidden, CodeForbiddenHost, "Host must be 127.0.0.1 or localhost")
+			return
+		}
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", "POST")
+			a.fail(w, http.StatusMethodNotAllowed, CodeMethodNotAllowed, r.URL.Path+" takes POST only")
+			return
+		}
+		if r.Header.Get("Origin") != "http://"+r.Host {
+			a.fail(w, http.StatusForbidden, CodeForbiddenOrigin, "Origin must be http://"+r.Host)
+			return
+		}
+		if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+			a.fail(w, http.StatusUnsupportedMediaType, CodeUnsupportedMedia, "Content-Type must be application/json")
+			return
+		}
+		h(w, r)
+	})
+}
+
+// ErrConflict is what an Options.Install error wraps to say the request does not fit the
+// state of things (nothing to install, another version, already installing): 409.
+var ErrConflict = errors.New("conflict")
+
+// Conflict returns an error with the given message that is an ErrConflict.
+func Conflict(format string, args ...any) error {
+	return conflictError(fmt.Sprintf(format, args...))
+}
+
+type conflictError string
+
+func (e conflictError) Error() string        { return string(e) }
+func (e conflictError) Is(target error) bool { return target == ErrConflict }
 
 // localHost reports whether a Host header names the loopback interface the daemon listens
 // on. Anything else is a request that reached us under another name (DNS rebinding).

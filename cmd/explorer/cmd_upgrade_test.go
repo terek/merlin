@@ -125,6 +125,7 @@ func installed(t *testing.T, current string) string {
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(prefetches.Wait) // background downloads end before the directory goes
 	setVar(t, &version, current)
 	setVar(t, &executablePath, func() (string, error) { return link, nil })
 	setVar(t, &healthURL, func() string { return "" })

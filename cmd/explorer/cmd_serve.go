@@ -96,7 +96,6 @@ func runServe(args []string) int {
 	au := newAutoUpgrader(home, *noUpgrade)
 	opts.Upgrade, opts.UpgradeInterval = au.run, *upgradeEvery
 	opts.BinaryChanged = au.binaryChanged
-	opts.Available = au.available
 	if !*noHooks {
 		// Hooks are opt-in (merlin hooks install). Once any of a harness's are there, serve
 		// keeps its set complete and pointing at this binary.
@@ -121,7 +120,7 @@ func runServe(args []string) int {
 		return fail(err)
 	}
 
-	d.Handle("/api/", server.New(apiOptions(d, pricer)).Handler())
+	d.Handle("/api/", server.New(apiOptions(d, pricer, au)).Handler())
 	d.Handle("/", webui.Handler())
 	if fancy {
 		printServeBanner(pe, *port, home)
@@ -255,11 +254,18 @@ func refreshHooks(t hookTarget) (string, error) {
 
 // apiOptions wires the JSON API to the daemon: its catalog, its event bus, the indexing
 // counters of its engine and the registry of running sessions.
-func apiOptions(d *daemon.Daemon, pricer *pricing.Table) server.Options {
+func apiOptions(d *daemon.Daemon, pricer *pricing.Table, au *autoUpgrader) server.Options {
 	return server.Options{
-		Prices:    pricer,
-		Version:   version,
-		Available: d.Available,
+		Prices:  pricer,
+		Version: version,
+		Update:  au.update,
+		Install: func(ctx context.Context, v string) error {
+			if err := au.installNow(ctx, v); err != nil {
+				return err
+			}
+			d.Restart() // does not block; Run lets this response out before it closes the listener
+			return nil
+		},
 		Catalog:   d.Catalog,
 		Subscribe: d.Events().Subscribe,
 		Harnesses: harnessInfos(),

@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -16,6 +19,7 @@ import (
 	"time"
 
 	"github.com/terek/merlin/internal/config"
+	"github.com/terek/merlin/internal/server"
 )
 
 // How `merlin serve` keeps itself on the latest release. The daemon package only asks
@@ -29,7 +33,21 @@ const (
 	defaultUpgradeInterval = 4 * time.Hour
 	startupCheckTimeout    = 5 * time.Second // the version check; a missing network must not hold up startup
 	downloadTimeout        = 2 * time.Minute
+
+	nextPrefix = ".merlin.next-" // a release downloaded ahead of time: <dir of the binary>/.merlin.next-<version>
 )
+
+// Update states, as the API reports them (server.UpdateEvent.State).
+const (
+	stateAvailable   = "available"
+	stateDownloading = "downloading"
+	stateReady       = "ready"
+	stateInstalling  = "installing"
+	stateBlocked     = "blocked"
+)
+
+// prefetches counts the background downloads in flight, for tests to wait on.
+var prefetches sync.WaitGroup
 
 // execBinary replaces the process; a seam so tests can capture the call.
 var execBinary = syscall.Exec
@@ -43,8 +61,18 @@ type autoUpgrader struct {
 	logged map[string]bool
 
 	avail     string  // a newer release that was found and not installed (guarded by mu)
+	state     string  // one of the state constants while avail is set (guarded by mu)
+	reason    string  // why blocked, or why the last download failed (guarded by mu)
 	installed bool    // this process put a new binary in place (guarded by mu)
 	baseline  fileSig // the installed binary as it was when serve started (BinaryChanged only)
+
+	// opMu serializes staging and installing: a release is downloaded by one at a time.
+	opMu      sync.Mutex
+	logf      func(string, ...any) // the daemon's, from the last run (guarded by mu)
+	fetching  string               // the version a background download is for (guarded by mu)
+	installOp bool                 // an install is under way or done (guarded by mu)
+	stagedV   string               // the version held in .merlin.next-<v>, and its sha256 (guarded by mu)
+	stagedSum string
 }
 
 type fileSig struct {
@@ -55,6 +83,9 @@ type fileSig struct {
 func newAutoUpgrader(home string, off bool) *autoUpgrader {
 	a := &autoUpgrader{home: home, off: off, logged: map[string]bool{}}
 	a.baseline, _ = a.sig()
+	if dest, err := resolveDest(); err == nil {
+		clearNext(filepath.Dir(dest)) // what a previous process left
+	}
 	return a
 }
 
@@ -153,6 +184,9 @@ func latestPatch(ctx context.Context, cur string, bad []string) (string, error) 
 // turned auto-upgrade on still learns that a release exists. A development build checks
 // nothing.
 func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool {
+	a.mu.Lock()
+	a.logf = logf
+	a.mu.Unlock()
 	if isDevVersion(version) {
 		a.once(logf, "auto-upgrade: off (development build "+version+")")
 		a.setAvailable("")
@@ -207,6 +241,9 @@ func (a *autoUpgrader) run(ctx context.Context, logf func(string, ...any)) bool 
 	}
 	if known {
 		a.report(logf, pol, latest)
+		if v := a.available(); v != "" {
+			a.prefetch(ctx, logf, v)
+		}
 	}
 	return false
 }
@@ -219,19 +256,14 @@ func (a *autoUpgrader) install(ctx context.Context, logf func(string, ...any), t
 		a.once(logf, "auto-upgrade: "+err.Error())
 		return false
 	}
-	if p, err := os.CreateTemp(filepath.Dir(dest), ".merlin.probe.*"); err != nil {
-		if errors.Is(err, os.ErrPermission) {
-			a.once(logf, fmt.Sprintf("auto-upgrade: cannot install (cannot write to %s; run: sudo %s upgrade)", filepath.Dir(dest), dest))
-		} else {
-			a.once(logf, "auto-upgrade: cannot install ("+err.Error()+")")
-		}
+	if reason := writeProblem(dest); reason != "" {
+		a.once(logf, "auto-upgrade: cannot install ("+reason+")")
 		return false
-	} else {
-		p.Close()
-		os.Remove(p.Name())
 	}
 	logf("auto-upgrade: %s -> %s available", version, target)
 
+	a.opMu.Lock()
+	defer a.opMu.Unlock()
 	dctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 	staged, err := stageRelease(dctx, dest, target)
@@ -244,8 +276,10 @@ func (a *autoUpgrader) install(ctx context.Context, logf func(string, ...any), t
 		logf("auto-upgrade: %v", err)
 		return false
 	}
+	clearNext(filepath.Dir(dest))
 	a.mu.Lock()
 	a.installed = true
+	a.stagedV, a.stagedSum = "", ""
 	a.mu.Unlock()
 	logf("auto-upgrade: installed %s at %s (previous kept as %s)", target, dest, prevName)
 	return true
@@ -269,16 +303,255 @@ func (a *autoUpgrader) report(logf func(string, ...any), pol config.UpgradePolic
 
 func (a *autoUpgrader) setAvailable(v string) {
 	a.mu.Lock()
-	a.avail = v
-	a.mu.Unlock()
+	defer a.mu.Unlock()
+	if a.installOp {
+		return // an install is under way: the daemon is about to restart
+	}
+	if v == "" {
+		a.avail, a.state, a.reason = "", "", ""
+		return
+	}
+	if v != a.avail {
+		a.avail, a.state, a.reason = v, stateAvailable, ""
+		if a.stagedV == v {
+			a.state = stateReady
+		}
+	}
 }
 
-// available is Options.Available: the newest release, newer than this binary, that the
-// last check found and did not install; "" for none.
+// available is the newest release, newer than this binary, that the last check found and
+// did not install; "" for none.
 func (a *autoUpgrader) available() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.avail
+}
+
+// update is server.Options.Update: the available release and what can be done with it.
+func (a *autoUpgrader) update() server.UpdateEvent {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.avail == "" {
+		return server.UpdateEvent{}
+	}
+	return server.UpdateEvent{Version: a.avail, State: a.state, Reason: a.reason}
+}
+
+// writeProblem says why a release cannot be installed next to dest ("" when it can): the
+// directory must take a new file, which is how an install and a download begin.
+func writeProblem(dest string) string {
+	dir := filepath.Dir(dest)
+	p, err := os.CreateTemp(dir, ".merlin.probe.*")
+	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			return fmt.Sprintf("cannot write to %s; run: sudo %s upgrade", dir, dest)
+		}
+		return err.Error()
+	}
+	p.Close()
+	os.Remove(p.Name())
+	return ""
+}
+
+// clearNext removes every release downloaded ahead of time from dir.
+func clearNext(dir string) {
+	m, _ := filepath.Glob(filepath.Join(dir, nextPrefix+"*"))
+	for _, f := range m {
+		os.Remove(f)
+	}
+}
+
+func fileSum(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// stage downloads release v next to dest as .merlin.next-<v> and records its sha256; any
+// other .merlin.next-* goes. The caller holds opMu.
+func (a *autoUpgrader) stage(ctx context.Context, dest, v string) error {
+	dctx, cancel := context.WithTimeout(ctx, downloadTimeout)
+	defer cancel()
+	staged, err := stageRelease(dctx, dest, v)
+	if err != nil {
+		return err
+	}
+	sum, err := fileSum(staged)
+	if err != nil {
+		os.Remove(staged)
+		return err
+	}
+	dir := filepath.Dir(dest)
+	clearNext(dir)
+	if err := os.Rename(staged, filepath.Join(dir, nextPrefix+v)); err != nil {
+		os.Remove(staged)
+		return err
+	}
+	a.mu.Lock()
+	a.stagedV, a.stagedSum = v, sum
+	a.mu.Unlock()
+	return nil
+}
+
+// stagedIntact reports whether .merlin.next-<v> is there and is byte for byte what stage
+// recorded. The caller holds opMu.
+func (a *autoUpgrader) stagedIntact(dest, v string) bool {
+	a.mu.Lock()
+	want, ok := a.stagedSum, a.stagedV == v
+	a.mu.Unlock()
+	if !ok {
+		return false
+	}
+	got, err := fileSum(filepath.Join(filepath.Dir(dest), nextPrefix+v))
+	return err == nil && got == want
+}
+
+// prefetch gets release v ready to install, in the background (a check must not wait for
+// a download): the state becomes "downloading", then "ready", or "blocked" when the
+// directory of the binary cannot take a file. A failed download is logged once per version
+// and leaves "available", with the reason; the next check, or a click, tries again.
+func (a *autoUpgrader) prefetch(ctx context.Context, logf func(string, ...any), v string) {
+	if isDevVersion(version) {
+		return
+	}
+	dest, err := resolveDest()
+	if err != nil {
+		return
+	}
+	a.mu.Lock()
+	if a.installOp || a.avail != v {
+		a.mu.Unlock()
+		return
+	}
+	a.mu.Unlock()
+	if reason := writeProblem(dest); reason != "" {
+		a.mu.Lock()
+		if !a.installOp && a.avail == v {
+			a.state, a.reason = stateBlocked, reason
+		}
+		a.mu.Unlock()
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.installOp || a.avail != v || a.fetching != "" {
+		return
+	}
+	if a.state == stateBlocked {
+		a.state, a.reason = stateAvailable, ""
+	}
+	if a.stagedV == v {
+		a.state = stateReady
+		return
+	}
+	a.fetching, a.state = v, stateDownloading
+	prefetches.Add(1)
+	go func() {
+		defer prefetches.Done()
+		a.opMu.Lock()
+		defer a.opMu.Unlock()
+		var err error
+		a.mu.Lock()
+		skip := a.installOp // an install took over while this waited
+		a.mu.Unlock()
+		if !skip && !a.stagedIntact(dest, v) {
+			err = a.stage(ctx, dest, v)
+		}
+		a.mu.Lock()
+		a.fetching = ""
+		if !a.installOp && a.avail == v {
+			if err != nil {
+				a.state, a.reason = stateAvailable, err.Error()
+			} else {
+				a.state, a.reason = stateReady, ""
+			}
+		}
+		a.mu.Unlock()
+		if err != nil {
+			a.once(logf, fmt.Sprintf("update: downloading %s failed: %v", v, err))
+		}
+	}()
+}
+
+// installNow is the web UI's install button: put release v, the available one, in place
+// and report it; the caller restarts the daemon. It uses the release downloaded ahead of
+// time when that is still byte for byte what was downloaded, and downloads again otherwise
+// (the request waits). Refusals wrap server.ErrConflict.
+func (a *autoUpgrader) installNow(ctx context.Context, v string) error {
+	if isDevVersion(version) {
+		return server.Conflict("this is a development build (%s); it does not upgrade itself", version)
+	}
+	a.mu.Lock()
+	switch {
+	case a.installOp:
+		a.mu.Unlock()
+		return server.Conflict("an install is already under way")
+	case a.avail == "":
+		a.mu.Unlock()
+		return server.Conflict("nothing to install")
+	case a.avail != v:
+		avail := a.avail
+		a.mu.Unlock()
+		return server.Conflict("%s is not the available release (%s is)", v, avail)
+	case a.state == stateBlocked:
+		reason := a.reason
+		a.mu.Unlock()
+		return server.Conflict("%s", reason)
+	}
+	a.installOp = true
+	if a.stagedV == v {
+		a.state = stateInstalling
+	} else {
+		a.state = stateDownloading
+	}
+	a.mu.Unlock()
+
+	fail := func(state string, err error) error {
+		a.mu.Lock()
+		a.installOp, a.state, a.reason = false, state, err.Error()
+		a.mu.Unlock()
+		return err
+	}
+	dest, err := resolveDest()
+	if err != nil {
+		return fail(stateAvailable, err)
+	}
+	if reason := writeProblem(dest); reason != "" {
+		return fail(stateBlocked, errors.New(reason))
+	}
+	a.opMu.Lock()
+	defer a.opMu.Unlock()
+	if !a.stagedIntact(dest, v) {
+		if err := a.stage(ctx, dest, v); err != nil {
+			return fail(stateAvailable, err)
+		}
+	}
+	a.mu.Lock()
+	a.state = stateInstalling
+	a.mu.Unlock()
+	if err := swapBinary(filepath.Join(filepath.Dir(dest), nextPrefix+v), dest); err != nil {
+		return fail(stateAvailable, err)
+	}
+	a.mu.Lock()
+	a.installed = true
+	a.stagedV, a.stagedSum = "", ""
+	a.mu.Unlock()
+	clearNext(filepath.Dir(dest))
+	a.mu.Lock()
+	logf := a.logf
+	a.mu.Unlock()
+	if logf == nil {
+		logf = func(format string, args ...any) { logLine(a.home, format, args...) }
+	}
+	logf("upgrade: installing %s (requested from the web UI)", v)
+	return nil
 }
 
 // binaryChanged is daemon.Options.BinaryChanged: the installed file changed (merlin

@@ -7,29 +7,58 @@ import (
 	"time"
 )
 
-// avail is a settable Options.Available.
+// avail is a settable Options.Update.
 type avail struct {
 	mu sync.Mutex
-	v  string
+	u  UpdateEvent
 }
 
-func (a *avail) set(v string) { a.mu.Lock(); a.v = v; a.mu.Unlock() }
-func (a *avail) get() string  { a.mu.Lock(); defer a.mu.Unlock(); return a.v }
+func (a *avail) set(v string) {
+	a.setEvent(UpdateEvent{Version: v})
+}
+func (a *avail) setEvent(u UpdateEvent) { a.mu.Lock(); a.u = u; a.mu.Unlock() }
+func (a *avail) get() UpdateEvent       { a.mu.Lock(); defer a.mu.Unlock(); return a.u }
 
-func updateVersion(t *testing.T, f frame) string {
+func updateEvent(t *testing.T, f frame) UpdateEvent {
 	t.Helper()
 	var u UpdateEvent
 	if f.event != EventUpdate || json.Unmarshal([]byte(f.data), &u) != nil {
 		t.Fatalf("frame %q %s is not an update", f.event, f.data)
 	}
-	return u.Version
+	return u
+}
+
+func updateVersion(t *testing.T, f frame) string { return updateEvent(t, f).Version }
+
+func TestEventsUpdateCarriesStateAndReason(t *testing.T) {
+	a := &avail{u: UpdateEvent{Version: "1.3.0", State: "available"}}
+	r := newRig(t, func(o *Options) {
+		o.Update = a.get
+		o.StateInterval = 10 * time.Millisecond
+	})
+	c := r.events()
+	if u := updateEvent(t, c.nextEvent(t, EventUpdate)); u.State != "available" || u.Reason != "" {
+		t.Errorf("first = %+v", u)
+	}
+	c.nextEvent(t, EventScanProgress)
+	// Only the state changes: the same version is sent again.
+	for _, want := range []UpdateEvent{
+		{Version: "1.3.0", State: "downloading"},
+		{Version: "1.3.0", State: "blocked", Reason: "cannot write to /usr/local/bin"},
+		{Version: "1.3.0", State: "ready"},
+	} {
+		a.setEvent(want)
+		if got := updateEvent(t, c.nextEvent(t, EventUpdate)); got != want {
+			t.Errorf("got %+v, want %+v", got, want)
+		}
+	}
 }
 
 func TestEventsUpdateAfterHello(t *testing.T) {
-	a := &avail{v: "1.3.0"}
+	a := &avail{u: UpdateEvent{Version: "1.3.0"}}
 	r := newRig(t, func(o *Options) {
 		o.Version = "1.2.3"
-		o.Available = a.get
+		o.Update = a.get
 		o.StateInterval = 10 * time.Millisecond
 	})
 	c := r.events()
@@ -45,7 +74,7 @@ func TestEventsUpdateFollowsChanges(t *testing.T) {
 	a := &avail{}
 	r := newRig(t, func(o *Options) {
 		o.Version = "1.2.3"
-		o.Available = a.get
+		o.Update = a.get
 		o.StateInterval = 10 * time.Millisecond
 	})
 	c := r.events() // a stream opened before anything was found

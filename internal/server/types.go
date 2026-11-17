@@ -12,13 +12,16 @@ import (
 
 // Error codes of ErrorBody.
 const (
-	CodeInvalidParameter = "invalid_parameter"  // 400
-	CodeForbiddenHost    = "forbidden_host"     // 403
-	CodeNotFound         = "not_found"          // 404
-	CodeMethodNotAllowed = "method_not_allowed" // 405
-	CodeAmbiguousID      = "ambiguous_id"       // 409
-	CodeInternal         = "internal"           // 500
-	CodeUnavailable      = "unavailable"        // 503
+	CodeInvalidParameter = "invalid_parameter"      // 400
+	CodeForbiddenHost    = "forbidden_host"         // 403
+	CodeForbiddenOrigin  = "forbidden_origin"       // 403
+	CodeNotFound         = "not_found"              // 404
+	CodeMethodNotAllowed = "method_not_allowed"     // 405
+	CodeAmbiguousID      = "ambiguous_id"           // 409
+	CodeConflict         = "conflict"               // 409
+	CodeUnsupportedMedia = "unsupported_media_type" // 415
+	CodeInternal         = "internal"               // 500
+	CodeUnavailable      = "unavailable"            // 503
 )
 
 // ErrorBody is the body of every non-2xx response.
@@ -406,8 +409,25 @@ type Hello struct {
 
 // UpdateEvent is the data of an update event: a newer release than the daemon's own exists
 // and is not installed. An empty Version means there is nothing to report (any more).
+// State is one of "available", "downloading", "ready" (downloaded and checked, installing is
+// instant), "installing" and "blocked"; it is empty when Version is. Reason says why it is
+// blocked, and, for "available", why the last download failed.
 type UpdateEvent struct {
 	Version string `json:"version"`
+	State   string `json:"state,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// UpgradeRequest is the body of POST /api/upgrade.
+type UpgradeRequest struct {
+	Version string `json:"version"`
+}
+
+// UpgradeResponse is the body of a successful POST /api/upgrade: the new binary is in place
+// and the daemon is restarting into it.
+type UpgradeResponse struct {
+	Version    string `json:"version"`
+	Restarting bool   `json:"restarting"`
 }
 
 // ScanProgress is the data of a scan-progress event: how far indexing is. Pending is the

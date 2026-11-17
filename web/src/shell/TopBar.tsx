@@ -1,11 +1,12 @@
 import { Monitor, Moon, Radio, Sun } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { useConnection, useScanProgress, useVersion } from '../api/events'
+import { isApiError } from '../api/client'
+import { useConnection, useInstall, useScanProgress, useVersion } from '../api/events'
 import { cn } from '../lib/cn'
 import { formatCount } from '../lib/format'
-import { availableToShow, releaseUrl } from '../lib/version'
-import { IconButton } from '../ui'
+import { type Available, availableToShow, releaseUrl } from '../lib/version'
+import { Button, IconButton } from '../ui'
 import { lensLinks } from './lastOverview'
 import { PanelButton } from './Panel'
 import { SlotTarget } from './ShellSlot'
@@ -54,11 +55,61 @@ function ThemeControl() {
   )
 }
 
+/** The popover's update block: the release, Install and what it is doing, or the command when blocked. */
+function UpdateRow({ update }: { update: Available }) {
+  const install = useInstall()
+  const [phase, setPhase] = useState<'idle' | 'installing' | 'restarting'>('idle')
+  const [error, setError] = useState('')
+  const click = async () => {
+    setPhase('installing')
+    setError('')
+    try {
+      await install(update.version)
+      setPhase('restarting')
+    } catch (e) {
+      setError(isApiError(e) ? e.message : String(e))
+      setPhase('idle')
+    }
+  }
+  const busy = phase !== 'idle' || update.state === 'installing'
+  const label = phase === 'restarting' ? 'Restarting…' : busy ? 'Installing…' : `Install ${update.version}`
+  return (
+    <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium text-fg">Update available</span>
+        <a href={releaseUrl(update.version)} target="_blank" rel="noreferrer" title="Release notes">
+          {update.version}
+        </a>
+      </div>
+      {update.state === 'blocked' ? (
+        <p className="m-0 select-text break-words text-muted">
+          {update.reason ?? 'Merlin cannot install this update by itself.'}
+        </p>
+      ) : (
+        <>
+          <Button variant="primary" disabled={busy} onClick={click} className="w-full">
+            {label}
+          </Button>
+          {update.state === 'downloading' && !busy && <span className="text-faint">downloading…</span>}
+          {error && <p className="m-0 select-text break-words text-bad">{error}</p>}
+          {!error && update.state === 'available' && update.reason && (
+            <p className="m-0 select-text break-words text-faint">{update.reason}</p>
+          )}
+        </>
+      )}
+      <p className="m-0 text-faint">
+        Turn on auto-upgrade: <code className="select-text">merlin autoupgrade</code>
+      </p>
+    </div>
+  )
+}
+
 /** One button at the far right: its look is the connection; its panel holds the state, the version and the theme. */
 function StatusButton() {
   const connection = useConnection()
   const version = useVersion()
   const available = availableToShow(version)
+  const offered = available !== null && connection !== 'offline' ? available : null
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   useShortcut('Escape', () => setOpen(false), { enabled: open })
@@ -77,19 +128,31 @@ function StatusButton() {
         type="button"
         aria-label="Status"
         aria-expanded={open}
-        title={connection === 'offline' ? 'Status: offline, retrying' : `Status: ${text}`}
+        title={
+          offered
+            ? `Update available: ${offered.version}. Status: ${text}`
+            : connection === 'offline'
+              ? 'Status: offline, retrying'
+              : `Status: ${text}`
+        }
         onClick={() => setOpen(!open)}
         className={cn(
           'relative inline-flex size-7 items-center justify-center rounded-card hover:bg-surface-2',
-          connection === 'live' && 'text-muted hover:text-fg',
+          connection === 'live' && (offered ? 'text-accent' : 'text-muted hover:text-fg'),
           connection === 'connecting' && 'text-faint',
           connection === 'offline' && 'text-bad',
         )}
       >
         <Radio size={15} aria-hidden />
+        {offered && (
+          <span className="pointer-events-none absolute top-0.5 right-0.5 flex size-2" aria-hidden>
+            <span className="absolute inline-flex size-full rounded-full bg-accent opacity-75 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-2 rounded-full bg-accent" />
+          </span>
+        )}
       </button>
       {open && (
-        <div className="absolute top-full right-0 z-40 mt-1 w-64 rounded-card border border-line bg-surface p-3 text-sec shadow-lg">
+        <div className="absolute top-full right-0 z-40 mt-1 w-72 rounded-card border border-line bg-surface p-3 text-sec shadow-lg">
           <dl className="m-0 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
             <dt className="text-muted">Connection</dt>
             <dd className="m-0 flex items-center justify-end gap-1.5 text-fg">
@@ -104,22 +167,8 @@ function StatusButton() {
             </dd>
             <dt className="text-muted">Version</dt>
             <dd className="m-0 text-right text-fg">{version.loaded ?? 'unknown'}</dd>
-            {available && (
-              <>
-                <dt className="text-muted">Update</dt>
-                <dd className="m-0 text-right">
-                  <a
-                    href={releaseUrl(available)}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="merlin upgrade installs it; merlin autoupgrade keeps Merlin up to date"
-                  >
-                    {available} available
-                  </a>
-                </dd>
-              </>
-            )}
           </dl>
+          {available && <UpdateRow update={available} />}
         </div>
       )}
     </div>

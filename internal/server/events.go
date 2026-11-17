@@ -77,15 +77,15 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// told is the available release last sent on this stream; update events follow its changes.
-	told := ""
+	// told is the update status last sent on this stream; update events follow its changes.
+	var told UpdateEvent
 	sendUpdate := func() error {
-		if a.o.Available == nil {
+		if a.o.Update == nil {
 			return nil
 		}
-		if v := a.o.Available(); v != told {
-			told = v
-			return s.event(EventUpdate, UpdateEvent{Version: v})
+		if u := a.o.Update(); u != told {
+			told = u
+			return s.event(EventUpdate, u)
 		}
 		return nil
 	}

@@ -76,11 +76,6 @@ type Options struct {
 	BinaryChanged       func() bool
 	BinaryCheckInterval time.Duration
 
-	// Available, if set, returns a newer release that was found and not installed ("" for
-	// none). The daemon only keeps it for the API (Daemon.Available); whatever sets it is
-	// the Upgrade check.
-	Available func() string
-
 	IdlePoll time.Duration // how often to look for in-flight builds before a restart; default 2 s
 	IdleMax  time.Duration // how long to wait for them; then restart anyway; default 10 min
 
@@ -104,6 +99,8 @@ type Daemon struct {
 
 	logMu sync.Mutex
 	logW  io.Writer // file + stderr once the log is open
+
+	restartCh chan struct{} // Restart's request; Run shuts down at once when it is there
 
 	hookCh chan hookMsg // /hook bodies for the live loop; a full channel drops (hints only)
 
@@ -157,11 +154,12 @@ func New(opts Options) (*Daemon, error) {
 		opts.Stderr = os.Stderr
 	}
 	d := &Daemon{
-		opts:   opts,
-		mux:    http.NewServeMux(),
-		ready:  make(chan struct{}),
-		hookCh: make(chan hookMsg, 256),
-		logW:   opts.Stderr,
+		opts:      opts,
+		mux:       http.NewServeMux(),
+		ready:     make(chan struct{}),
+		hookCh:    make(chan hookMsg, 256),
+		restartCh: make(chan struct{}, 1),
+		logW:      opts.Stderr,
 	}
 	d.mux.HandleFunc("/hook", d.handleHook)
 	d.mux.HandleFunc("/healthz", d.handleHealth)
@@ -179,13 +177,15 @@ func (d *Daemon) Handle(pattern string, h http.Handler) { d.mux.Handle(pattern, 
 // been updated: a subscriber that reads the catalog on an event sees at least that state.
 func (d *Daemon) Events() *Bus { return &d.bus }
 
-// Available is Options.Available, or "" when it is not set: a newer release that has not
-// been installed.
-func (d *Daemon) Available() string {
-	if d.opts.Available == nil {
-		return ""
+// Restart asks Run to shut down and return ErrRestart at once, without waiting for builds
+// to go idle (their writes are atomic; Run's shutdown gives in-flight ones ShutdownTimeout).
+// It never blocks and may be called from an HTTP handler: the listener is shut down
+// gracefully, so a response being written is delivered first.
+func (d *Daemon) Restart() {
+	select {
+	case d.restartCh <- struct{}{}:
+	default:
 	}
-	return d.opts.Available()
 }
 
 // Catalog returns the in-memory catalog. It is nil until Run has loaded it, which is
@@ -338,6 +338,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 	case <-restart:
+		restarting = true
+	case <-d.restartCh:
+		d.logf("restart requested")
 		restarting = true
 	}
 	d.logf("shutting down")

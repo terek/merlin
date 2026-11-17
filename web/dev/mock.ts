@@ -1566,12 +1566,51 @@ const idleProgress: ScanProgress = {
   missing: 0,
 }
 
+// MOCK_UPDATE=<available|downloading|ready|installing|blocked> offers version 9.9.9 in that state.
+// POST /api/upgrade answers after 1.5 s, then the stream drops and the next hello reports 9.9.9.
+// MOCK_UPDATE_FAIL=1 makes the POST fail with a 500.
+const updateState = process.env.MOCK_UPDATE
+let runningVersion = '1.0.0'
+function updateEvent() {
+  const reasons: Record<string, string> = {
+    blocked: 'cannot write to /usr/local/bin; run: sudo /usr/local/bin/merlin upgrade',
+    available: 'last attempt failed: checksum mismatch',
+  }
+  return {
+    version: '9.9.9',
+    state: updateState,
+    ...(reasons[updateState ?? ''] && { reason: reasons[updateState ?? ''] }),
+  }
+}
+
+async function upgrade(req: Request): Promise<Response> {
+  const body = (await req.json()) as { version?: string }
+  await new Promise((r) => setTimeout(r, 1500))
+  if (process.env.MOCK_UPDATE_FAIL) return fail(500, 'internal', 'download failed: connection reset')
+  if (!updateState || body.version !== '9.9.9' || updateState === 'blocked')
+    return fail(409, 'conflict', 'nothing to install')
+  setTimeout(() => {
+    runningVersion = '9.9.9'
+    for (const c of clients) {
+      try {
+        c.close()
+      } catch {}
+    }
+    clients.clear()
+  }, 500)
+  return json(200, { version: '9.9.9', restarting: true })
+}
+
 function events(req: Request): Response {
   let ctl: ReadableStreamDefaultController<Uint8Array>
   const body = new ReadableStream<Uint8Array>({
     start(c) {
       ctl = c
       clients.add(c)
+      if (updateState && runningVersion !== '9.9.9') {
+        c.enqueue(textEnc.encode(`event: update\ndata: ${JSON.stringify(updateEvent())}\n\n`))
+      }
+      c.enqueue(textEnc.encode(`event: hello\ndata: ${JSON.stringify({ version: runningVersion })}\n\n`))
       c.enqueue(
         textEnc.encode(`retry: 3000\n: connected\n\nevent: scan-progress\ndata: ${JSON.stringify(idleProgress)}\n\n`),
       )
@@ -1709,7 +1748,12 @@ function route(req: Request): Response {
   return fail(404, 'not_found', `no such endpoint: ${u.pathname}`)
 }
 
-Bun.serve({ hostname: '127.0.0.1', port, idleTimeout: 0, fetch: route })
+Bun.serve({
+  hostname: '127.0.0.1',
+  port,
+  idleTimeout: 0,
+  fetch: (req) => (req.method === 'POST' && new URL(req.url).pathname === '/api/upgrade' ? upgrade(req) : route(req)),
+})
 console.log(
   `mock API on http://127.0.0.1:${port}: ${ds.sessions.length} sessions, ${ds.scripted.reduce((a, l) => a + l.count, 0)} scripted runs, big session ${ds.bigId}`,
 )

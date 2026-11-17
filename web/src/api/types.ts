@@ -1041,6 +1041,10 @@ export interface HelloEvent {
 /** A newer release exists and is not installed; an empty version means there is nothing to report (any more). */
 export interface UpdateEvent {
   version: string
+  /** Absent from older daemons: read as `available`. */
+  state?: 'available' | 'downloading' | 'ready' | 'installing' | 'blocked'
+  /** blocked: what to do, with the command; available: the last failure. */
+  reason?: string
 }
 
 export interface EventMap {

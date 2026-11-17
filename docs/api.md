@@ -1,13 +1,14 @@
 # Explorer HTTP API
 
-Read-only JSON over HTTP, plus one Server-Sent Events stream. It is served by `merlin serve`
+JSON over HTTP, read-only except for one route (`POST /api/upgrade`), plus one Server-Sent Events stream. It is served by `merlin serve`
 on the daemon's address (`127.0.0.1:7433` by default) next to `/hook` and `/healthz`, which are
 not part of this API. The response types are Go structs in `internal/server/types.go`; the
 examples below come from the synthetic fixtures (`testdata/`), trimmed.
 
 ## Conventions
 
-- **Methods.** `GET` (and `HEAD`) only. Anything else on `/api/...` is `405` with an `Allow` header.
+- **Methods.** `GET` (and `HEAD`) only, except `POST /api/upgrade`. Anything else on `/api/...` is
+  `405` with an `Allow` header.
 - **Host guard.** A request whose `Host` header is not `127.0.0.1[:port]` or `localhost[:port]`
   is refused with `403 forbidden_host` (DNS-rebinding guard: the digests contain your prompts).
   No CORS headers are sent, so a web page on another origin cannot read the responses. Reach the
@@ -75,9 +76,12 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 |---|---|---|
 | 400 | `invalid_parameter` | a parameter is malformed or unknown to the endpoint's vocabulary |
 | 403 | `forbidden_host` | the Host guard |
+| 403 | `forbidden_origin` | `POST /api/upgrade` without an `Origin` equal to `http://<Host>` |
 | 404 | `not_found` | unknown session or endpoint |
-| 405 | `method_not_allowed` | not GET/HEAD |
+| 405 | `method_not_allowed` | not GET/HEAD (`POST` for `/api/upgrade`) |
 | 409 | `ambiguous_id` | an id prefix matches several sessions; `error.candidates` lists them |
+| 409 | `conflict` | `POST /api/upgrade`: nothing to install, another version, already installing, blocked, or a development build |
+| 415 | `unsupported_media_type` | `POST /api/upgrade` without `Content-Type: application/json` |
 | 503 | `unavailable` | the daemon has not loaded its catalog yet |
 
 ## Route table
@@ -99,6 +103,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/overview` | `Overview` (experimental) |
 | `GET /api/moments` | `moments.Report` (experimental) |
 | `GET /api/events` | `text/event-stream` |
+| `POST /api/upgrade` | `UpgradeResponse` |
 
 ## GET /api/harnesses
 
@@ -1359,6 +1364,30 @@ included. `status` is `habit`, `explored` or `unseen`; `examples` are the latest
 first, at most 3. A note never quotes the session. `suggestions[].reason` is absent when the
 moment's symptom did not fire. Clients ignore moment ids they do not know.
 
+## POST /api/upgrade
+
+The API's one write route: install the release an `update` event announced, and restart the
+daemon into it. Body: `{"version": "0.9.0"}` (a leading `v` is ignored). The daemon uses the
+release it downloaded ahead of time if the file is still byte for byte what it downloaded, and
+downloads it again otherwise (the request then waits, up to 2 minutes). On success the new
+binary is in place and the daemon restarts at once, without waiting for indexing to go idle,
+on the same address.
+
+```json
+{"version": "0.9.0", "restarting": true}
+```
+
+The response is written before the daemon shuts down; clients reconnect and compare the version
+in the `hello` event. Guards, besides the Host guard: the request must be a `POST` (else `405`
+with `Allow: POST`), carry an `Origin` header equal to `http://<Host>` (else `403
+forbidden_origin`, so a page on another site cannot trigger it) and `Content-Type:
+application/json` (else `415 unsupported_media_type`). A body that is not JSON, or has no
+`version`, is `400 invalid_parameter`. `409 conflict` says why nothing was done: the version is
+not the available one, nothing is available, an install is already under way, the state is
+`blocked` (the message is its reason), or this is a development build. Any other failure
+(download, signature, replacing the file) is `500 internal` with the message; the state goes
+back to `available` and a second request retries.
+
 ## GET /api/events
 
 A Server-Sent Events stream (`Content-Type: text/event-stream`), for live updates without polling.
@@ -1369,7 +1398,7 @@ is waiting, then a `scan-progress` event with the current state.
 | Event | When | Data |
 |---|---|---|
 | `hello` | first event of every stream, so again after each reconnect | `{"version": "0.4.2"}`: the daemon's version, as on `/healthz` |
-| `update` | right after `hello` when a newer release was found and not installed; later whenever that changes (checked every 2 s) | `{"version": "0.4.3"}`: the release. `{"version": ""}`: nothing to report (any more) |
+| `update` | right after `hello` when a newer release was found and not installed; later whenever that changes (checked every 2 s) | `{"version": "0.4.3", "state": "ready"}`: the release and what can be done with it. `{"version": ""}`: nothing to report (any more) |
 | `session-updated` | a session's digest was written (new, or changed) | `{"key": {...}, "session": <session summary>}`: the same shape as a row of `/api/sessions` |
 | `session-missing` | a session's files are gone (the digest is kept, `sourceMissing` is set) | `{"key": {...}}` |
 | `session-state` | a listed session changed between `busy`, `idle`, `recent` and `ended` | `{"key": {...}, "state": "idle", "previous": "busy"}` |
@@ -1400,6 +1429,13 @@ data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"s
   web UI is embedded in the binary, and `merlin serve` can replace itself and restart on the same
   port. Compare the version with the one seen first; a mismatch means the page is stale. The event
   is absent when the daemon has no version to report.
+- `update` carries `state`: `available` (found, not downloaded), `downloading`, `ready` (downloaded
+  and verified, so installing is instant), `installing`, or `blocked`; `state` is absent when the
+  version is empty. `reason` is set for `blocked` (the directory of the binary cannot be written;
+  the text names the `sudo` command that installs it) and, for `available`, says why the last
+  download failed. A change of `state` or `reason` alone is sent again. `merlin serve` downloads a
+  release it does not install in the background, so that `ready` is usually what a page sees. A
+  development build never downloads.
 - `update` is how a page learns that a newer release exists. `merlin serve` checks at startup and
   every 4 hours, whatever the auto-upgrade setting, and reports what it did not install (all of
   it when auto-upgrade is off, the default; under `"patch"` also a release outside the line). It is

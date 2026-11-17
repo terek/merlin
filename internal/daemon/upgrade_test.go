@@ -139,3 +139,21 @@ func TestNoUpgradeCallbacksUnchanged(t *testing.T) {
 		t.Fatalf("Run = %v, want nil", err)
 	}
 }
+
+func TestRestartReturnsErrRestartAtOnce(t *testing.T) {
+	r := newRig(t, "", "", func(o *daemon.Options) {
+		o.IdleMax = time.Hour // Restart must not wait for builds to go idle
+		o.ShutdownTimeout = 50 * time.Millisecond
+	})
+	r.h.gate = make(chan struct{})
+	r.start()
+	eventually(t, "builds in flight", func() bool { return r.d.Engine().Pending() > 0 })
+	r.d.Restart()
+	r.d.Restart() // a second request does not block
+	err := waitRun(t, r, "Restart")
+	close(r.h.gate)
+	time.Sleep(300 * time.Millisecond) // let the abandoned builds finish before the temp dir goes
+	if !errors.Is(err, daemon.ErrRestart) {
+		t.Fatalf("Run = %v, want ErrRestart", err)
+	}
+}

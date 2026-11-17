@@ -49,6 +49,11 @@ export async function get<T>(path: string, params?: Params, signal?: AbortSignal
     throw new ApiError(0, 'network', 'Cannot reach the Merlin daemon.')
   }
   if (res.ok) return (await res.json()) as T
+  throw await errorOf(res)
+}
+
+/** The ApiError for a non-2xx response: the API's error body when it has one. */
+async function errorOf(res: Response): Promise<ApiError> {
   let body: Partial<ErrorBody> | undefined
   try {
     body = (await res.json()) as ErrorBody
@@ -56,10 +61,25 @@ export async function get<T>(path: string, params?: Params, signal?: AbortSignal
     // not JSON (a proxy's error page, say)
   }
   const err = body?.error
-  throw new ApiError(
+  return new ApiError(
     res.status,
     err?.code ?? `http_${res.status}`,
     err?.message ?? `HTTP ${res.status}`,
     err?.candidates,
   )
+}
+
+/** POST /api/upgrade: the daemon installs `version` and restarts. Can take minutes when it must download first. */
+export async function upgrade(version: string): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch('/api/upgrade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ version }),
+    })
+  } catch {
+    throw new ApiError(0, 'network', 'Cannot reach the Merlin daemon.')
+  }
+  if (!res.ok) throw await errorOf(res)
 }
