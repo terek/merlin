@@ -1,0 +1,94 @@
+// The head of a session open in the Overview (docs/ui.md section 10b): the session's own line (harness mark, title,
+// description, folder; at the right the paginator, the spend and the close button) and, under it, the slot the
+// graph's locator is drawn into (SpendGraph portals it in). It borrows nothing of the list's row: no columns, no
+// time axis of the list. The slot keeps its height while the session loads, so the head never jumps.
+
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { cn } from '../../lib/cn'
+import { HarnessIcon, IconButton, Money } from '../../ui'
+import type { Position } from './focus'
+import { oneLine } from './model'
+import { FolderCell } from './RowParts'
+
+/** The locator's height: the strip is this tall (spend/Overview.tsx `H`); the slot holds it before it arrives. */
+const LOCATOR_H = 54
+
+export function SessionHead({
+  harness,
+  title,
+  desc,
+  folder,
+  folderPath,
+  command,
+  usd,
+  at,
+  prev,
+  next,
+  onClose,
+  locatorRef,
+}: {
+  harness: string
+  title: string
+  desc: string
+  /** The session's directory as the list shows it, its full path (for the title), and the command a click copies. */
+  folder: string
+  folderPath: string
+  command: string
+  /** The session's spend in the scope; absent when it has no lane there. */
+  usd?: number
+  /** Where it is in the list; null when it is not in it. */
+  at: Position | null
+  prev: (() => void) | null
+  next: (() => void) | null
+  onClose: () => void
+  /** Told the element the locator goes into. */
+  locatorRef: (el: HTMLDivElement | null) => void
+}) {
+  const text = oneLine(desc)
+  const arrow = (to: (() => void) | null, label: string, icon: React.ReactNode) => (
+    <IconButton
+      label={label}
+      disabled={to === null}
+      onClick={() => to?.()}
+      className={cn('size-6', to === null && 'opacity-35 hover:bg-transparent hover:text-muted')}
+    >
+      {icon}
+    </IconButton>
+  )
+  return (
+    <div className="shrink-0 border-line border-b bg-surface">
+      <div className="flex items-center gap-3 px-4 pt-2 text-sec">
+        <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+          <span className="flex shrink-0 items-center self-center">
+            <HarnessIcon harness={harness} size={13} />
+          </span>
+          <div className="min-w-0 flex-1 truncate" title={text ? `${title}: ${text}` : title}>
+            <span className="font-semibold text-fg">{title}</span>
+            {text && <span className="ml-2 text-muted">{text}</span>}
+          </div>
+        </div>
+        <FolderCell text={folder} path={folderPath} command={command} />
+        <div className="flex shrink-0 items-center gap-1">
+          {at ? (
+            <>
+              {arrow(prev, 'Previous session ([)', <ChevronLeft size={15} />)}
+              <span className="whitespace-nowrap font-mono text-muted">
+                {at.n} of {at.total}
+              </span>
+              {arrow(next, 'Next session (])', <ChevronRight size={15} />)}
+            </>
+          ) : (
+            <span className="whitespace-nowrap text-muted">Not in this list</span>
+          )}
+          {usd !== undefined && <Money usd={usd} className="mx-1 shrink-0" />}
+          <IconButton label="Close (Esc)" onClick={onClose} className="size-6">
+            <X size={15} />
+          </IconButton>
+        </div>
+      </div>
+      <div className="px-4 pt-1 pb-2">
+        <div ref={locatorRef} data-testid="head-locator" style={{ minHeight: LOCATOR_H }} />
+      </div>
+    </div>
+  )
+}

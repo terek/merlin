@@ -1,26 +1,24 @@
 // The overview above the time view of a session that ran long or on more than one day: the whole tree
 // on one wall-clock scale (idle time squeezed out as in the plot) with a brush on it. The brush is the
 // window the plot shows. Drag across the strip for a new range, drag the window to move it, drag a
-// handle to resize it, click a day to snap to it; ← → move the window by its own width (a day at a
-// time when it is a day).
+// handle to resize it, click anywhere on it to snap to the day there; ← → move the window by its own width
+// (a day at a time when it is a day).
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { cn } from '../../lib/cn'
 import { formatDuration, formatMoney } from '../../lib/format'
-import { useTimeMapping } from './TimeMapping'
 import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
   axisSpans,
   boundsOf,
-  centerWindow,
+  clickDay,
   contextEnvelope,
   type Day,
-  dayAt,
   dayStart,
   dragWindow,
   midnightsBetween,
   resizeWindow,
   snapDay,
-  snapTarget,
   spendDensity,
   stepWindow,
   type TimeAxis,
@@ -67,6 +65,8 @@ export interface OverviewProps {
   latest: Win
   /** Where the "Showing … Latest All" line goes (a heading row); it stays above the strip when there is none. */
   controlsHost?: HTMLElement | null
+  /** The strip sits in a head of its own (a pinned slot): no space under it, and nothing above it but the strip. */
+  docked?: boolean
 }
 
 /** The strip's time axis at a width: the whole tree, idle time squeezed out. */
@@ -74,27 +74,21 @@ export const stripAxis = (timeline: Timeline, width: number): TimeAxis =>
   timeAxis(axisSpans(timeline), PAD, Math.max(PAD + 80, width - PAD), undefined, STRIP_BREAKS)
 
 type Drag =
-  | { mode: 'move'; x: number; xlo: number; xhi: number }
+  | { mode: 'move'; x: number; xlo: number; xhi: number; moved: boolean }
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
-export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, controlsHost }: OverviewProps) {
+export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, controlsHost, docked }: OverviewProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
   const [cursor, setCursor] = useState('crosshair')
-  // the date label the pointer is on: the day it snaps to gets a soft wash, saying what a click selects
-  const [hoverSnap, setHoverSnap] = useState<number | null>(null)
+  // the moment under the pointer (not dragging, not at an edge): the day a click there selects gets a soft wash
+  const [hoverT, setHoverT] = useState<number | null>(null)
   const x0 = PAD
   const x1 = Math.max(x0 + 80, width - PAD)
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
   const axis = useMemo(() => stripAxis(timeline, width), [timeline, width])
-  const svg = useRef<SVGSVGElement>(null)
-  const mappingAxis = useMemo(
-    () => ({ lo: timeline.t0, hi: timeline.wait ?? timeline.t1, x: axis.x }),
-    [timeline, axis],
-  )
-  useTimeMapping(svg, mappingAxis)
 
   const env = useMemo(() => contextEnvelope(timeline, axis, COL), [timeline, axis])
   const peak = Math.max(1, ...env)
@@ -151,9 +145,8 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
   const xeff0 = Math.min(xlo, axis.x(eff.lo))
   const xeff = Math.max(xhi, axis.x(eff.hi))
   const dayOfWin = windowDay(win, days)
-  const snap = (k: number) => onWin(snapDay(days[k]))
   const snapped = dayOfWin >= 0 ? { m: days[dayOfWin].date } : undefined
-  const wash = hoverSnap === null ? null : snapTarget(timeline, days, hoverSnap)
+  const wash = hoverT === null ? null : clickDay(timeline, days, hoverT)
 
   const at = (e: PointerEvent) => e.clientX - (e.currentTarget as Element).getBoundingClientRect().left
   const zoneAt = (x: number): 'lo' | 'hi' | 'move' | 'new' =>
@@ -161,17 +154,12 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
 
   const onDown = (e: PointerEvent<SVGSVGElement>) => {
     e.preventDefault()
-    const m = (e.target as Element).getAttribute('data-snap')
-    if (m !== null) {
-      const w = snapTarget(timeline, days, Number(m))
-      if (w) onWin(w)
-      return
-    }
+    setHoverT(null)
     const x = at(e)
     const z = zoneAt(x)
     drag.current =
       z === 'move'
-        ? { mode: 'move', x, xlo, xhi }
+        ? { mode: 'move', x, xlo, xhi, moved: false }
         : z === 'new'
           ? { mode: 'new', x, t: axis.t(x), moved: false }
           : { mode: z }
@@ -187,9 +175,13 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
     if (!d) {
       const z = zoneAt(x)
       setCursor(z === 'move' ? 'grab' : z === 'new' ? 'crosshair' : 'ew-resize')
+      // an edge is for resizing; anywhere else a click selects the day under the pointer
+      setHoverT(z === 'lo' || z === 'hi' ? null : axis.t(x))
       return
     }
     if (d.mode === 'move') {
+      if (Math.abs(x - d.x) > 3) d.moved = true
+      if (!d.moved) return
       // the brush moves as the pointer does, its width on the strip kept: what the user holds is the brush
       const w = d.xhi - d.xlo
       const a = Math.max(x0, Math.min(x1 - w, d.xlo + x - d.x))
@@ -202,8 +194,14 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
   const onUp = (e: PointerEvent<SVGSVGElement>) => {
     const d = drag.current
     drag.current = null
-    // a click outside the window brings it there
-    if (d?.mode === 'new' && !d.moved) onWin(centerWindow(win, axis.t(at(e)), bounds))
+    // a click without movement, inside the window or out, selects the day under the pointer
+    if ((d?.mode === 'new' || d?.mode === 'move') && !d.moved) {
+      const w = clickDay(timeline, days, axis.t(at(e)))
+      if (w) onWin(w)
+    }
+  }
+  const onCancel = () => {
+    drag.current = null
   }
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const w = win.hi - win.lo
@@ -252,14 +250,14 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
         All
       </button>
       {!controlsHost && (
-        <span className="truncate text-faint">drag to select a range, drag the window or its edges, click a date</span>
+        <span className="truncate text-faint">click a day, drag to select a range, drag the window or its edges</span>
       )}
     </div>
   )
 
   return (
-    <div className="mb-3">
-      {controlsHost ? createPortal(showing, controlsHost) : showing}
+    <div className={docked ? undefined : 'mb-3'}>
+      {controlsHost ? createPortal(showing, controlsHost) : docked ? null : showing}
       <div
         ref={wrap}
         role="slider"
@@ -270,13 +268,10 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
         aria-valuenow={win.lo}
         aria-valuetext={`${longDate(from)} ${clock(from)} to ${clock(to)}`}
         onKeyDown={onKey}
-        className="mt-1 rounded-badge"
+        className={cn(docked ? undefined : 'mt-1', 'rounded-badge')}
       >
         <svg
-          ref={svg}
           data-testid="session-locator-axis"
-          data-from-ms={mappingAxis.lo}
-          data-to-ms={mappingAxis.hi}
           width={width}
           height={H}
           role="img"
@@ -286,11 +281,8 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={onUp}
-          onPointerCancel={onUp}
-          onDoubleClick={(e) => {
-            const k = dayAt(days, axis.t(e.clientX - e.currentTarget.getBoundingClientRect().left))
-            if (k >= 0) snap(k)
-          }}
+          onPointerCancel={onCancel}
+          onPointerLeave={() => setHoverT(null)}
         >
           <rect x={0} y={LABEL_H} width={width} height={H - LABEL_H} fill="var(--surface-2)" opacity={0.5} rx={3} />
           {axis.breaks.map((b) => (
@@ -319,7 +311,7 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
             />
           )}
           {midnights.map((x) => (
-            <line key={x} x1={x} x2={x} y1={0} y2={H} stroke="var(--line)" strokeWidth={1} />
+            <line key={x} x1={x} x2={x} y1={0} y2={H} stroke="var(--faint)" strokeOpacity={0.7} strokeWidth={1} />
           ))}
           <path d={area} fill="var(--series-1)" fillOpacity={0.28} stroke="none" />
           <line x1={x0} x2={x1} y1={CTX_BASE + 0.5} y2={CTX_BASE + 0.5} stroke="var(--line)" strokeWidth={1} />
@@ -340,15 +332,12 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
           {labels.map((l) => (
             <text
               key={l.m}
-              data-snap={l.m}
-              onPointerEnter={() => setHoverSnap(l.m)}
-              onPointerLeave={() => setHoverSnap(null)}
               x={l.x}
               y={LABEL_H - 3}
               fontSize={10}
               fill={snapped?.m === l.m ? 'var(--text)' : 'var(--muted)'}
               fontWeight={snapped?.m === l.m ? 600 : 400}
-              style={{ cursor: 'pointer' }}
+              pointerEvents="none"
             >
               {l.text}
             </text>

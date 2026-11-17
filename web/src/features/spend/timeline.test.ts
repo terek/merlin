@@ -16,6 +16,7 @@ import {
   carrierWeight,
   centerWindow,
   clampWindow,
+  clickDay,
   collapseSwarms,
   contextEnvelope,
   dayAt,
@@ -774,6 +775,15 @@ describe('windows', () => {
     expect(snapTarget(tl, [], h(6, 0))?.lo).toBeLessThan(h(6, 8))
     expect(snapTarget(tl, [], h(6, 0))?.lo).toBeGreaterThanOrEqual(h(6, 8) - 30 * 60_000)
     expect(snapTarget(tl, [], h(7, 0))).toBeUndefined()
+  })
+
+  test('a click anywhere on a day selects it: the strip reads the moment under the pointer', () => {
+    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
+    const days = splitDays(tl)
+    expect(clickDay(tl, days, h(5, 3))).toEqual(snapDay(days[0]))
+    expect(clickDay(tl, days, h(5, 23))).toEqual(snapDay(days[0]))
+    expect(clickDay(tl, days, h(6, 10))).toEqual(snapDay(days[1]))
+    expect(clickDay(tl, [], h(7, 10))).toBeUndefined()
   })
 
   test('windows stay inside the bounds and are never narrower than the minimum', () => {

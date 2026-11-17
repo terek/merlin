@@ -384,13 +384,15 @@ From top to bottom, the graph and then the box:
     time squeezed out as in the plot (`timeAxis` over every span, at most 16 breaks, so long nights do
     not eat the strip). It draws the context of the main rows as a light area (the largest of the main
     lanes, `contextEnvelope`), the spend as thin columns along the bottom, one grey with the cache miss in its colour like the plot
-    (`spendDensity`), a faint tick at each midnight, the date of each day (from `splitDays`: the
+    (`spendDensity`), a tick at each midnight (the faint text colour at 70 % opacity, clearly stronger than the strip's other lines), the date of each day (from `splitDays`: the
     day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
     marker. The **brush** is the window: a light accent band, no outline, centred on the line between the context area
     and the spend bars, with an accent marker at each edge (as on the Overview's timeline); the rest
     dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
-    strip kept (so over a break its time width changes); dragging a handle resizes it; a click outside the
-    window centres it there; a click on a date (while the pointer is on one, the day it would snap to gets a soft accent wash), or a double-click inside a day, snaps to that day (its
+    strip kept (so over a break its time width changes); dragging a handle resizes it; a click (the pointer
+    moved 3 px or less) anywhere on the strip, inside the window or out,
+    over a date label or not, selects the day under the pointer. While the pointer is on the strip (not on an
+    edge, not dragging) the day a click would select gets a soft accent wash. The day is snapped to (its
     activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
     window by its own width, or to the previous or next day when it is a day; Home and End go to the
     start and end. A window is never narrower than 5 minutes. The parts of the effective window beyond the
@@ -1065,39 +1067,26 @@ a history entry, so Back is the undo.
   focus** (a sidebar place, the range, a Custom or limit window, the search, the Organise-by key): the writers of
   those parameters drop `open`, `sfrom`, `sto` (and the development `pin`, `unit`, `cursor`) and the hash
   (`withoutFocus`, `useScope`).
-- **The head**, sticky, is the session's own row of the list (`RowParts.tsx`, shared with the table: `SessionText`,
-  `FolderCell`, `RowGraph`): the text line (harness mark, bold title, muted description, the folder with its copy
-  button for the resume command) and under it the row graph on **the list's linear time axis**. The geometry is the
-  list's: the same cell padding, the structured block's width reserved on the right (the paginator takes the place of
-  the figures: `‹ 12 of 160 ›`, the session's spend in the scope, ✕), and the list's scrollbar width given up, so the
-  axis is the one the list draws for the same scope and width and the session sits at the same x (checked with the
-  panel open and closed). ‹ and › walk the table's rows in its current sort (`listRows` is the one place both take
-  the ordered list from); at either end the arrow is disabled. A session that is not in the list (the scope or the
-  search leaves it out, or an id prefix resolves outside it) says "Not in this list" and has no arrows; its graph is
-  drawn when the range holds it, else a muted line "Outside this range: Sep 7-9" stands in its place. Keys: `[` and
-  `]`, and `Esc` closes, after the graph's own Esc has taken back a pinned turn (one Esc, one thing); none of them
-  while a field has focus. The previous and next sessions' details are prefetched once the current one has loaded.
-  - **The zoom band.** The row graph is linear in time; the main graph and the locator are distorted to give active
-    time room. So the head draws the main graph's effective window (the whole session, or the stretch zoomed to) on
-    the row graph as a band in true time: a 1 px accent outline with a barely-there tint (never a fill: a lockout is a shaded block on the same row), clipped to the axis, a small ‹ or ›
-    at an edge that runs past it (`windowBand`). It follows the main graph live (drag, Latest, All, keys): the graph
-    reports its window through `onWindow`. A click on the head's row graph zooms the main graph to the same stretch
-    the list's row click opens at (`sessionStretch`, the day or hour under the pointer cut to the session's activity).
-  - **Time mapping.** Thin, muted connections join matching local day boundaries on the head's linear axis and
-    the full-session locator's compressed axis; an intraday overlap uses hours or finer clock boundaries. Only
-    timestamps within both ranges connect, with marks thinned on both axes (at most eight). The connections measure
-    the real graph elements and the locator's own `stripAxis`, so the reserved paginator, scrollbar, sidebar and
-    Legend panel do not skew them. A 32 px channel above the locator keeps lines clear of the controls; it is absent
-    without a summary graph. The overlay takes no pointer events and hides when the locator scrolls under the sticky
-    head. Loading and session changes clear the previous locator (`TimeMapping.tsx`, `mappingBoundaries.ts`).
+- **The head**, sticky (`SessionHead.tsx`; it shares nothing with the list's row geometry), is the session's own line
+  and, under it, the graph's locator. Line 1: the harness mark, the bold title, the muted description (it truncates
+  first), the folder with its copy button for the resume command (`FolderCell`), and at the right end the paginator
+  `‹ 12 of 160 ›` (mono count), the session's spend in the scope and ✕. ‹ and › walk the table's rows in its current
+  sort (`listRows` is the one place both take the ordered list from); at either end the arrow is disabled. A session
+  that is not in the list (the scope or the search leaves it out, or an id prefix resolves outside it) says "Not in
+  this list" and has no arrows. Keys: `[` and `]`, and `Esc` closes, after the graph's own Esc has taken back a
+  pinned turn (one Esc, one thing); none of them while a field has focus. The previous and next sessions' details are
+  prefetched once the current one has loaded. Line 2: the **locator** (the whole session on the distorted axis, with
+  its brush; `spend/Overview.tsx`), the full width of the head with the body's 16 px side padding, so that it lines up
+  with the main graph below. The graph owns the window; it draws the locator into the head's slot (a portal, the
+  `locatorHost` prop of `SessionView` and `SpendGraph`), so it stays pinned while the body scrolls. The slot keeps its
+  height while the session loads, so the head does not jump when it arrives.
 - **Frame.** The body uses the frame of the Overview and Cost, not cards: full-bleed sections, each ending in a
   hairline, each with a small uppercase heading row (`FrameSection` in `ui/layout.tsx`, which Cost's sections use
-  too) and its content padded under it. The full-session locator sits directly below the sticky summary and its
-  mapping channel. **Spend** carries the locator's "Showing ... Latest All" at the right of its heading row immediately
-  below the locator (a portal from the strip into the heading); its detail graph comes next, then the spend bars and
+  too) and its content padded under it. **Spend** carries the locator's "Showing ... Latest All" at the right of its heading
+  row (a portal from the strip into the heading; the strip itself is in the head); its detail graph comes next, then the spend bars and
   associated notes. The **turn or agent** section follows it with its own
   heading row (name, time, duration; ‹ › ✕ at the right).
-- **The zoom never writes the address.** Drag, Latest, All, the keys and the head's click change state only: no URL
+- **The zoom never writes the address.** Drag, click, Latest, All and the keys change state only: no URL
   change, no history entry. `sfrom`/`sto` come in from links (an old `/s/` link) and are
   read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash
   change; pinning in the page does not write it.

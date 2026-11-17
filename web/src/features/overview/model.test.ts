@@ -8,8 +8,6 @@ import {
   axisTicks,
   type Beads,
   bandAt,
-  bandLabel,
-  bandTimes,
   beadLabel,
   beadPath,
   beadPrefix,
@@ -18,7 +16,6 @@ import {
   buildPlaceTree,
   CTX_MAX,
   chooseSlot,
-  clipToActivity,
   comparePath,
   comparePlace,
   customDays,
@@ -72,7 +69,6 @@ import {
   type SortKey,
   searchLanes,
   selectLanes,
-  sessionStretch,
   slotX,
   sortLanes,
   spineLanes,
@@ -84,7 +80,6 @@ import {
   totalsOf,
   underPath,
   visibleRows,
-  windowBand,
   xOf,
 } from './model'
 
@@ -1033,73 +1028,6 @@ describe('the locator', () => {
     expect(stripTicks(stripOf('2026-12-20', new Date(2027, 0, 10), null), 500).map((x) => x.label)).toContain(
       'Jan 2027',
     )
-  })
-})
-
-describe('a click on a row graph', () => {
-  const t0 = new Date(2026, 10, 7).getTime()
-  const axis = makeAxis(t0, t0 + 7 * DAY, HOUR, 700)
-  const at = (day: number, hour = 12) => (day * DAY + hour * HOUR) * axis.pxPerMs
-  const l = lane({
-    id: 'abc 1',
-    harness: 'claude',
-    // active in the slots of day 2, 10:00 to 12:00 (slot0 counts from the axis start)
-    slot0: 2 * 24 + 10,
-    active: [1, 1, 0, 0],
-    context: [5, 6, 6, 0],
-  })
-
-  test('the stretch is the local day, or the hour in a range of two days or less', () => {
-    expect(bandTimes(axis, at(2))).toEqual({
-      fromMs: new Date(2026, 10, 9).getTime(),
-      toMs: new Date(2026, 10, 10).getTime(),
-    })
-    expect(bandTimes(axis, -1)).toBeNull()
-    const hourly = makeAxis(t0, t0 + DAY, MIN, 960)
-    expect(bandTimes(hourly, 13.5 * 40)).toEqual({ fromMs: t0 + 13 * HOUR, toMs: t0 + 14 * HOUR })
-    expect(bandLabel(axis, at(2))).toBe('Mon, Nov 9')
-    expect(bandLabel(hourly, 13.5 * 40)).toBe('Nov 7, 13:00')
-  })
-
-  test("the window is cut to the session's activity in the stretch", () => {
-    const [a, b] = clipToActivity(l, axis, new Date(2026, 10, 9).getTime(), new Date(2026, 10, 10).getTime())
-    expect(a).toBe(new Date(2026, 10, 9, 10).getTime())
-    expect(b).toBe(new Date(2026, 10, 9, 13).getTime())
-    // a day where it did nothing: the day itself
-    const day = [new Date(2026, 10, 11).getTime(), new Date(2026, 10, 12).getTime()] as const
-    expect(clipToActivity(l, axis, ...day)).toEqual([...day])
-  })
-
-  test('the stretch the head graph zooms to', () => {
-    expect(sessionStretch(l, axis, at(2))).toEqual([
-      new Date(2026, 10, 9, 10).getTime(),
-      new Date(2026, 10, 9, 13).getTime(),
-    ])
-    expect(sessionStretch(l, axis, -5)).toBeNull()
-  })
-})
-
-describe('a window drawn on the row graph', () => {
-  const ax = makeAxis(0, 100 * HOUR, HOUR, 1000)
-  test('inside the axis: its true place, no marks', () => {
-    expect(windowBand(ax, 10 * HOUR, 20 * HOUR)).toEqual({ x0: 100, x1: 200, before: false, after: false })
-  })
-  test('clipped to the axis, with the edge that ran past it marked', () => {
-    expect(windowBand(ax, -5 * HOUR, 20 * HOUR)).toEqual({ x0: 0, x1: 200, before: true, after: false })
-    expect(windowBand(ax, 90 * HOUR, 120 * HOUR)).toEqual({ x0: 900, x1: 1000, before: false, after: true })
-    expect(windowBand(ax, -HOUR, 101 * HOUR)).toEqual({ x0: 0, x1: 1000, before: true, after: true })
-  })
-  test('wholly outside, or not a window: nothing', () => {
-    expect(windowBand(ax, -9 * HOUR, -HOUR)).toBeNull()
-    expect(windowBand(ax, 101 * HOUR, 110 * HOUR)).toBeNull()
-    expect(windowBand(ax, 20 * HOUR, 10 * HOUR)).toBeNull()
-    expect(windowBand(ax, Number.NaN, 10 * HOUR)).toBeNull()
-  })
-  test('a very short window is still a visible line, and stays on the axis', () => {
-    const b = windowBand(ax, 50 * HOUR, 50 * HOUR + MIN)
-    expect(b?.x1 !== undefined && b.x0 !== undefined && b.x1 - b.x0).toBeGreaterThanOrEqual(2)
-    const edge = windowBand(ax, 100 * HOUR, 100 * HOUR)
-    expect(edge && edge.x1 <= 1000 && edge.x1 - edge.x0 >= 2).toBe(true)
   })
 })
 

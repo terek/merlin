@@ -1,16 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { withoutFocus } from '../../lib/scope'
-import {
-  closedSearch,
-  focusSearch,
-  headRow,
-  legacyTarget,
-  lifeRange,
-  openValue,
-  outsideNote,
-  parseOpen,
-  positionIn,
-} from './focus'
+import { closedSearch, focusSearch, legacyTarget, openValue, parseOpen, positionIn } from './focus'
 import { listRows } from './model'
 
 const rows = ['a', 'b', 'c'].map((id) => ({ harness: 'claude', id }))
@@ -122,44 +112,5 @@ describe('the list the focus walks', () => {
     const r = listRows(lanes, { term: '', sel: null, by, sort: { key: 'spend', desc: true }, home: undefined })
     expect(r.rows.map((l) => l.id)).toEqual(['b', 'c', 'a'])
     expect(positionIn(r.rows, { harness: 'claude', id: 'c' })?.n).toBe(2)
-  })
-})
-
-describe('outsideNote', () => {
-  const at = (m: number, d: number, y = 2026) => new Date(y, m, d, 12).getTime()
-  test('a day, days in a month, across months', () => {
-    expect(outsideNote(at(8, 7), at(8, 7))).toBe('Outside this range: Sep 7')
-    expect(outsideNote(at(8, 7), at(8, 9))).toBe('Outside this range: Sep 7–9')
-    expect(outsideNote(at(8, 30), at(9, 2))).toBe('Outside this range: Sep 30 – Oct 2')
-    expect(outsideNote(at(11, 30), at(0, 2, 2027))).toBe('Outside this range: Dec 30 – Jan 2 2027')
-  })
-  test('without dates', () => {
-    expect(outsideNote(Number.NaN, Number.NaN)).toBe('Outside this range')
-  })
-})
-
-describe('what the head draws under its text', () => {
-  const day = 86_400_000
-  const axis = { fromMs: Date.parse('2026-11-14T14:00:00Z'), toMs: Date.parse('2026-11-15T14:00:00Z') }
-  test('a session with a lane gets its graph, even when its recorded life ends before the axis', () => {
-    const life = lifeRange(['2026-11-11T20:41:00Z'], ['2026-11-14T10:18:00Z'])
-    expect(headRow(true, life, axis)).toBe('graph')
-  })
-  test('no lane and a life wholly outside: the note, with the real first and last day', () => {
-    const life = lifeRange(
-      ['2026-11-11T20:41:00Z', '2026-11-12T08:00:00Z'],
-      ['2026-11-12T09:00:00Z', '2026-11-13T10:18:00Z'],
-    )
-    expect(headRow(false, life, axis)).toBe('note')
-    const [a, b] = life
-    expect(new Date(a).toISOString()).toBe('2026-11-11T20:41:00.000Z')
-    expect(new Date(b).toISOString()).toBe('2026-11-13T10:18:00.000Z')
-    expect(outsideNote(a, b)).toMatch(/Nov 1[12]\u2013(13|14)$/)
-  })
-  test('no lane but a life that overlaps the axis: no note that would be wrong', () => {
-    expect(headRow(false, [axis.fromMs - day, axis.fromMs + day], axis)).toBe('none')
-  })
-  test('no dates at all: nothing to say', () => {
-    expect(headRow(false, lifeRange([undefined], [undefined]), axis)).toBe('none')
   })
 })

@@ -926,6 +926,13 @@ export function snapTarget(tl: Timeline, days: readonly Day[], m: number): Win |
 /** Local midnight of the day `t` is on. */
 export const dayStart = (t: number) => midnight(t)
 
+/**
+ * What a click without movement on the locator selects, and what hovering shows it will: the day under the
+ * pointer (`t` is the moment there), as `snapTarget` has it; undefined when nothing ran on that day.
+ */
+export const clickDay = (tl: Timeline, days: readonly Day[], t: number): Win | undefined =>
+  snapTarget(tl, days, dayStart(t))
+
 /** The local midnights from just after `t0` up to `t1`. */
 export function midnightsBetween(t0: number, t1: number): number[] {
   const out: number[] = []

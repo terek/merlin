@@ -37,15 +37,13 @@ function Loaded({
   details,
   missing,
   address,
-  onWindow,
-  zoomTo,
+  locatorHost,
 }: {
   home: SessionDetail
   details: SessionDetail[]
   missing: number
   address: Address
-  onWindow?: (lo: number, hi: number) => void
-  zoomTo?: { lo: number; hi: number; n: number }
+  locatorHost?: HTMLElement | null
 }) {
   const params = new URLSearchParams(address.search)
   const tree = useMemo(() => buildTree(details), [details])
@@ -169,8 +167,7 @@ function Loaded({
         keyInPanel
         lockouts={lockouts}
         refusals={refusals}
-        onWindow={onWindow}
-        zoomTo={zoomTo}
+        locatorHost={locatorHost}
       />
       <div ref={opened} className="scroll-mt-12">
         {branch && col && pinned && (
@@ -198,13 +195,11 @@ function Loaded({
 function Family({
   home,
   address,
-  onWindow,
-  zoomTo,
+  locatorHost,
 }: {
   home: SessionDetail
   address: Address
-  onWindow?: (lo: number, hi: number) => void
-  zoomTo?: { lo: number; hi: number; n: number }
+  locatorHost?: HTMLElement | null
 }) {
   const others = home.family.members.map((m) => m.key).filter((k) => !same(k, home.summary.key))
   const results = useQueries({
@@ -232,8 +227,7 @@ function Family({
       details={details.length ? details : [home]}
       missing={others.length - loaded.length}
       address={address}
-      onWindow={onWindow}
-      zoomTo={zoomTo}
+      locatorHost={locatorHost}
     />
   )
 }
@@ -276,14 +270,12 @@ export interface SessionViewProps {
   hash: string
   /** Where a candidate of an ambiguous id leads: the Overview with it open. */
   hrefFor: (key: SessionKey) => string
-  /** Told the window the graph shows (ms): the focus's head draws it on the row's own axis. */
-  onWindow?: (lo: number, hi: number) => void
-  /** Zoom the graph to this stretch (ms) when `n` changes. */
-  zoomTo?: { lo: number; hi: number; n: number }
+  /** Where the graph's locator strip goes: the head's pinned slot (null until it mounts). Undefined: in the page. */
+  locatorHost?: HTMLElement | null
 }
 
 /** The session the Overview has open: its graph, and the pinned turn under it. */
-export function SessionView({ harness, id, search, hash, hrefFor, onWindow, zoomTo }: SessionViewProps) {
+export function SessionView({ harness, id, search, hash, hrefFor, locatorHost }: SessionViewProps) {
   const query = useSession(harness, id, { messages: true })
   useDocumentTitle(query.data ? sessionTitle(query.data.summary) : undefined)
 
@@ -309,7 +301,7 @@ export function SessionView({ harness, id, search, hash, hrefFor, onWindow, zoom
   if (err) return <ErrorState error={err} onRetry={() => void query.refetch()} />
   return (
     <QueryBoundary query={query} skeleton={<PageSkeleton />}>
-      {(d) => <Family home={d} address={{ search, hash }} onWindow={onWindow} zoomTo={zoomTo} />}
+      {(d) => <Family home={d} address={{ search, hash }} locatorHost={locatorHost} />}
     </QueryBoundary>
   )
 }

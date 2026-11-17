@@ -1,7 +1,8 @@
 // The spend graph: the card around the time view (TimeView.tsx), with the bars and their names (Breakdown.tsx) and the plot's key below the plot (Key.tsx), the compactions,
 // the readout of what is under the cursor and the key handling. The pinned turn and the selected
 // piece of agent work are the page's; the panels under the card open them.
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { usePrices } from '../../api/queries'
 import type { SessionKey } from '../../api/types'
 import { approx, callLine, tallyLine, warmLine } from '../../lib/compaction'
@@ -27,7 +28,6 @@ import {
   unitUnrecorded,
 } from './model'
 import { Overview, stripAxis } from './Overview'
-import { useMappingSource } from './TimeMapping'
 import { TimePlot } from './TimeView'
 import {
   boundsOf,
@@ -40,7 +40,7 @@ import {
   type Win,
 } from './timeline'
 import type { Branch, Tree } from './tree'
-import { useWidth } from './useWidth'
+import { useElementWidth } from './useWidth'
 
 /** A turn of a branch. */
 export interface Pin {
@@ -75,10 +75,11 @@ export interface SpendGraphProps {
   lockouts?: readonly LockoutSpan[]
   /** The times (ms) at which a limit refused this session's calls. */
   refusals?: readonly number[]
-  /** Told the window the plot shows (ms, after the defaults) whenever it changes: the page draws it elsewhere. */
-  onWindow?: (lo: number, hi: number) => void
-  /** Zoom the plot to this stretch (ms) when `n` changes: a click somewhere else on the page. */
-  zoomTo?: { lo: number; hi: number; n: number }
+  /**
+   * Where the locator strip goes (the page's pinned head). Undefined: the strip stays in the page, above the Spend
+   * section. Null: it is to go to a host that has not mounted yet, so it waits (and takes no room) until it has.
+   */
+  locatorHost?: HTMLElement | null
 }
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
@@ -267,11 +268,9 @@ export function SpendGraph({
   keyInPanel,
   lockouts,
   refusals,
-  onWindow,
-  zoomTo,
+  locatorHost,
 }: SpendGraphProps) {
   const inset = usePanelInset()
-  const mapping = useMappingSource()
   const [cursor, setCursor] = useState<Pin | null>(
     initialCursor !== undefined && tree.branches[home]?.model.cols[initialCursor]
       ? { branch: home, col: initialCursor }
@@ -324,10 +323,13 @@ export function SpendGraph({
   // what the plot shows is measured on the strip the brush is dragged on, so the strip's width is known here
   // the locator's "Showing … Latest All" line sits in the section's heading row
   const [locator, setLocator] = useState<HTMLElement | null>(null)
-  const stripRef = useRef<HTMLDivElement>(null)
-  const stripWidth = useWidth(stripRef)
-  const strip = useMemo(() => stripAxis(timeline, stripWidth), [timeline, stripWidth])
-  const eff = useMemo(() => effectiveWindow(timeline, win, (a, b) => strip.x(b) - strip.x(a)), [timeline, win, strip])
+  const [stripEl, setStripEl] = useState<HTMLDivElement | null>(null)
+  const stripWidth = useElementWidth(stripEl)
+  const stripScale = useMemo(() => stripAxis(timeline, stripWidth), [timeline, stripWidth])
+  const eff = useMemo(
+    () => effectiveWindow(timeline, win, (a, b) => stripScale.x(b) - stripScale.x(a)),
+    [timeline, win, stripScale],
+  )
   // the window is the user's: only what they do to it moves it. A turn they pin (in a panel, in the list
   // of decisions) or reach with the keys brings itself into view when the plot does not show it; the
   // pointer passing over the plot never moves it.
@@ -336,16 +338,6 @@ export function SpendGraph({
     const next = revealWindow(win, t, days, bounds)
     if (next !== win) setWin(next)
   }
-  // a stretch asked for from outside (a click on the session's row graph): the plot goes there, once per request
-  const [seenZoom, setSeenZoom] = useState(zoomTo?.n)
-  if (zoomTo && seenZoom !== zoomTo.n) {
-    setSeenZoom(zoomTo.n)
-    setWin(clampWindow({ lo: zoomTo.lo, hi: zoomTo.hi }, bounds))
-  }
-  // what the plot shows, for the page to draw on its own axis
-  const told = useRef(onWindow)
-  told.current = onWindow
-  useEffect(() => told.current?.(eff.lo, eff.hi), [eff.lo, eff.hi])
   const [seen, setSeen] = useState(pinKey(pinned))
   if (seen !== pinKey(pinned)) {
     setSeen(pinKey(pinned))
@@ -392,22 +384,28 @@ export function SpendGraph({
     reveal(turnStart(to))
   }
 
+  const strip = (
+    <div ref={setStripEl}>
+      <Overview
+        timeline={timeline}
+        days={days}
+        win={win}
+        eff={eff}
+        onWin={setWin}
+        pinnedT={turnStart(pinned)}
+        latest={latest}
+        controlsHost={locator}
+        docked={locatorHost !== undefined}
+      />
+    </div>
+  )
   return (
     <>
-      <div className={mapping ? 'px-4 pt-8' : 'px-4 pt-2'}>
-        <div ref={stripRef}>
-          <Overview
-            timeline={timeline}
-            days={days}
-            win={win}
-            eff={eff}
-            onWin={setWin}
-            pinnedT={turnStart(pinned)}
-            latest={latest}
-            controlsHost={locator}
-          />
-        </div>
-      </div>
+      {locatorHost === undefined ? (
+        <div className="px-4 pt-2">{strip}</div>
+      ) : (
+        locatorHost && createPortal(strip, locatorHost)
+      )}
       <FrameSection title="Spend" actions={<div ref={setLocator} className="flex min-w-0 flex-1 justify-end" />}>
         <div className="min-w-0">
           <div className="relative">
