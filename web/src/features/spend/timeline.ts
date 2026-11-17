@@ -907,31 +907,41 @@ export function spendDensity(tl: Timeline, axis: TimeAxis, step: number): Record
   return out
 }
 
-/**
- * The window a click on the calendar day starting at local midnight `m` snaps to: the day `splitDays`
- * made of it when there is one that is about a day long, else that calendar day's own activity (cut
- * at its midnights); undefined when nothing ran on it.
- */
-export function snapTarget(tl: Timeline, days: readonly Day[], m: number): Win | undefined {
-  const day = days.find((d) => d.date === m && d.t1 - d.t0 <= 30 * HOUR)
-  if (day) return snapDay(day)
-  const next = midnight(m, 1)
-  const hit = tl.spans.filter(([a, b]) => a < next && b >= m)
-  if (hit.length === 0) return undefined
-  const first = Math.min(...hit.map(([a]) => Math.max(a, m)))
-  const last = Math.max(...hit.map(([, b]) => Math.min(b, next)))
-  return windowAround(first, last)
-}
-
 /** Local midnight of the day `t` is on. */
 export const dayStart = (t: number) => midnight(t)
 
+/** A session shorter than this has no day selection on the locator. */
+export const DAY_MS = 24 * HOUR
+
+/** Whether the locator offers days at all: not for a session shorter than a day. */
+export const hasDays = (b: { t0: number; t1: number }): boolean => b.t1 - b.t0 >= DAY_MS
+
 /**
- * What a click without movement on the locator selects, and what hovering shows it will: the day under the
- * pointer (`t` is the moment there), as `snapTarget` has it; undefined when nothing ran on that day.
+ * The calendar day `t` is on as the locator draws it: local midnight to the next local midnight, clipped to
+ * the session's `bounds`.
  */
-export const clickDay = (tl: Timeline, days: readonly Day[], t: number): Win | undefined =>
-  snapTarget(tl, days, dayStart(t))
+export function calendarDay(t: number, bounds: { t0: number; t1: number }): Win {
+  return { lo: Math.max(bounds.t0, midnight(t)), hi: Math.min(bounds.t1, midnight(t, 1)) }
+}
+
+/** The midnight of the calendar day `w` is (clipped to `bounds`, within a second), or -1. */
+export function windowCalendarDay(w: Win, bounds: { t0: number; t1: number }): number {
+  const m = midnight(w.lo + 1000)
+  const d = calendarDay(m, bounds)
+  return Math.abs(d.lo - w.lo) < 1000 && Math.abs(d.hi - w.hi) < 1000 ? m : -1
+}
+
+/** The calendar day before or after the one at midnight `m`, kept to the days the session touches. */
+export function stepCalendarDay(m: number, dir: -1 | 1, bounds: { t0: number; t1: number }): Win {
+  const first = midnight(bounds.t0)
+  const last = midnight(bounds.t1)
+  const to = dir < 0 ? midnight(m, -1) : midnight(m, 1)
+  return calendarDay(Math.max(first, Math.min(last, to)), bounds)
+}
+
+/** The first or last calendar day the session touches. */
+export const edgeCalendarDay = (which: 'first' | 'last', bounds: { t0: number; t1: number }): Win =>
+  calendarDay(which === 'first' ? bounds.t0 : bounds.t1, bounds)
 
 /** The local midnights from just after `t0` up to `t1`. */
 export function midnightsBetween(t0: number, t1: number): number[] {

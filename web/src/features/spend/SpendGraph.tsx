@@ -388,7 +388,6 @@ export function SpendGraph({
     <div ref={setStripEl}>
       <Overview
         timeline={timeline}
-        days={days}
         win={win}
         eff={eff}
         onWin={setWin}

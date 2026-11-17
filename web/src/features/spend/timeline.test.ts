@@ -13,20 +13,22 @@ import {
   branchWeight,
   breakWidth,
   buildTimeline,
+  calendarDay,
   carrierWeight,
   centerWindow,
   clampWindow,
-  clickDay,
   collapseSwarms,
   contextEnvelope,
   dayAt,
   defaultWindow,
   detailAt,
   dragWindow,
+  edgeCalendarDay,
   effectiveWindow,
   episodes,
   findSwarms,
   GAP_MS,
+  hasDays,
   heavierTier,
   inheritedContext,
   type Lane,
@@ -46,10 +48,10 @@ import {
   sliceWindow,
   slotLength,
   snapDay,
-  snapTarget,
   spendDensity,
   splitDays,
   splitHeld,
+  stepCalendarDay,
   stepWindow,
   TIER_WEIGHT,
   type Timeline,
@@ -58,6 +60,7 @@ import {
   timeAxis,
   turnPlace,
   turnTier,
+  windowCalendarDay,
   windowDay,
 } from './timeline'
 import { buildTree } from './tree'
@@ -768,22 +771,34 @@ describe('windows', () => {
     expect(windowDay({ lo: w.lo + 3_600_000, hi: w.hi }, days)).toBe(-1)
   })
 
-  test('a date label snaps to the day made of it, else to the activity of that calendar day', () => {
-    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
-    const days = splitDays(tl)
-    expect(snapTarget(tl, days, h(5, 0))).toEqual(snapDay(days[0]))
-    expect(snapTarget(tl, [], h(6, 0))?.lo).toBeLessThan(h(6, 8))
-    expect(snapTarget(tl, [], h(6, 0))?.lo).toBeGreaterThanOrEqual(h(6, 8) - 30 * 60_000)
-    expect(snapTarget(tl, [], h(7, 0))).toBeUndefined()
+  test('a calendar day is midnight to midnight, clipped to the session', () => {
+    const b = { t0: h(5, 9), t1: h(7, 15) }
+    expect(calendarDay(h(5, 20), b)).toEqual({ lo: h(5, 9), hi: h(6, 0) })
+    expect(calendarDay(h(6, 3), b)).toEqual({ lo: h(6, 0), hi: h(7, 0) })
+    expect(calendarDay(h(7, 14), b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
   })
 
-  test('a click anywhere on a day selects it: the strip reads the moment under the pointer', () => {
-    const tl = tlOf([h(5, 9)], [h(5, 17)], [h(6, 8)], [h(6, 12)])
-    const days = splitDays(tl)
-    expect(clickDay(tl, days, h(5, 3))).toEqual(snapDay(days[0]))
-    expect(clickDay(tl, days, h(5, 23))).toEqual(snapDay(days[0]))
-    expect(clickDay(tl, days, h(6, 10))).toEqual(snapDay(days[1]))
-    expect(clickDay(tl, [], h(7, 10))).toBeUndefined()
+  test('a window is a calendar day when it is one, clipped, within a second', () => {
+    const b = { t0: h(5, 9), t1: h(7, 15) }
+    expect(windowCalendarDay({ lo: h(6, 0), hi: h(7, 0) }, b)).toBe(h(6, 0))
+    expect(windowCalendarDay({ lo: h(5, 9) + 500, hi: h(6, 0) }, b)).toBe(h(5, 0))
+    expect(windowCalendarDay({ lo: h(7, 0), hi: h(7, 15) }, b)).toBe(h(7, 0))
+    expect(windowCalendarDay({ lo: h(6, 1), hi: h(7, 0) }, b)).toBe(-1)
+  })
+
+  test('stepping and the ends go by calendar day, never past the session', () => {
+    const b = { t0: h(5, 9), t1: h(7, 15) }
+    expect(stepCalendarDay(h(5, 0), 1, b)).toEqual({ lo: h(6, 0), hi: h(7, 0) })
+    expect(stepCalendarDay(h(6, 0), 1, b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
+    expect(stepCalendarDay(h(7, 0), 1, b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
+    expect(stepCalendarDay(h(5, 0), -1, b)).toEqual({ lo: h(5, 9), hi: h(6, 0) })
+    expect(edgeCalendarDay('first', b)).toEqual({ lo: h(5, 9), hi: h(6, 0) })
+    expect(edgeCalendarDay('last', b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
+  })
+
+  test('a session under a day has no day selection', () => {
+    expect(hasDays({ t0: h(5, 9), t1: h(6, 8) })).toBe(false)
+    expect(hasDays({ t0: h(5, 9), t1: h(6, 9) })).toBe(true)
   })
 
   test('windows stay inside the bounds and are never narrower than the minimum', () => {

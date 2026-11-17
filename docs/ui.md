@@ -391,11 +391,14 @@ From top to bottom, the graph and then the box:
     dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
     strip kept (so over a break its time width changes); dragging a handle resizes it; a click (the pointer
     moved 3 px or less) anywhere on the strip, inside the window or out,
-    over a date label or not, selects the day under the pointer. While the pointer is on the strip (not on an
-    edge, not dragging) the day a click would select gets a soft accent wash. The day is snapped to (its
-    activity with a pad of 2%, 1 to 30 minutes, never into the next day). ← → on the strip move the
-    window by its own width, or to the previous or next day when it is a day; Home and End go to the
-    start and end. A window is never narrower than 5 minutes. The parts of the effective window beyond the
+    over a date label or not, selects the day under the pointer. A day on the locator is the **calendar day as
+    drawn**: local midnight to the next local midnight (the midnight lines the strip draws), clipped to the session's
+    bounds, so the first and last day reach the strip's edge; the plot focuses on the active parts of it by itself.
+    While the pointer is on the strip (not on an edge, not dragging) the day a click would select gets a soft
+    accent wash, exactly between its midnight lines. **A session shorter than 24 hours has no day selection:** no
+    wash, and a click without movement does nothing (drags, edge resizing and the keys that step by window width
+    still work). ← → on the strip move the window by its own width, or to the previous or next calendar day the
+    session touches when it is one; Home and End go to the first and last day (or the start and end). A window is never narrower than 5 minutes. The parts of the effective window beyond the
     brush, on either side, are drawn as a fainter continuation of the highlight (no handles; the brush itself is still the
     user's window). A line above the strip says what is shown (the effective window: its span, duration
     and spend, as the plot shows them) and what it spent, with **Latest** (the window the page opened on) and **All**. The days are cut each

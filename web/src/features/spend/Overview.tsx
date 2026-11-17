@@ -1,8 +1,8 @@
 // The overview above the time view of a session that ran long or on more than one day: the whole tree
 // on one wall-clock scale (idle time squeezed out as in the plot) with a brush on it. The brush is the
 // window the plot shows. Drag across the strip for a new range, drag the window to move it, drag a
-// handle to resize it, click anywhere on it to snap to the day there; ← → move the window by its own width
-// (a day at a time when it is a day).
+// handle to resize it, click anywhere on it to select the calendar day there (sessions of a day or more); ← → move the window by its own width
+// (a calendar day at a time when it is one).
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn'
@@ -11,21 +11,22 @@ import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
   axisSpans,
   boundsOf,
-  clickDay,
+  calendarDay,
   contextEnvelope,
-  type Day,
   dayStart,
   dragWindow,
+  edgeCalendarDay,
+  hasDays,
   midnightsBetween,
   resizeWindow,
-  snapDay,
   spendDensity,
+  stepCalendarDay,
   stepWindow,
   type TimeAxis,
   type Timeline,
   timeAxis,
   type Win,
-  windowDay,
+  windowCalendarDay,
 } from './timeline'
 import { useWidth } from './useWidth'
 
@@ -54,7 +55,6 @@ const month = (t: number) => new Date(t).toLocaleDateString([], { month: 'short'
 export interface OverviewProps {
   /** The whole tree. */
   timeline: Timeline
-  days: readonly Day[]
   win: Win
   /** What the plot really shows: `win`, grown to the end of the turn it cuts (`effectiveWindow`). */
   eff: Win
@@ -78,7 +78,7 @@ type Drag =
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
-export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, controlsHost, docked }: OverviewProps) {
+export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsHost, docked }: OverviewProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
@@ -144,9 +144,10 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
   const xhi = Math.max(xlo + 2, axis.x(win.hi))
   const xeff0 = Math.min(xlo, axis.x(eff.lo))
   const xeff = Math.max(xhi, axis.x(eff.hi))
-  const dayOfWin = windowDay(win, days)
-  const snapped = dayOfWin >= 0 ? { m: days[dayOfWin].date } : undefined
-  const wash = hoverT === null ? null : clickDay(timeline, days, hoverT)
+  // a day on the locator is the calendar day as drawn; a session shorter than a day has none
+  const daily = hasDays(bounds)
+  const dayOfWin = daily ? windowCalendarDay(win, bounds) : -1
+  const wash = hoverT === null || !daily ? null : calendarDay(hoverT, bounds)
 
   const at = (e: PointerEvent) => e.clientX - (e.currentTarget as Element).getBoundingClientRect().left
   const zoneAt = (x: number): 'lo' | 'hi' | 'move' | 'new' =>
@@ -196,8 +197,7 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
     drag.current = null
     // a click without movement, inside the window or out, selects the day under the pointer
     if ((d?.mode === 'new' || d?.mode === 'move') && !d.moved) {
-      const w = clickDay(timeline, days, axis.t(at(e)))
-      if (w) onWin(w)
+      if (daily) onWin(calendarDay(axis.t(at(e)), bounds))
     }
   }
   const onCancel = () => {
@@ -206,11 +206,14 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const w = win.hi - win.lo
     let next: Win | undefined
-    if (e.key === 'ArrowLeft') next = stepWindow(win, -1, days, bounds)
-    else if (e.key === 'ArrowRight') next = stepWindow(win, 1, days, bounds)
-    else if (e.key === 'Home') next = dayOfWin >= 0 ? snapDay(days[0]) : dragWindow(bounds.t0, bounds.t0 + w, bounds)
+    if (e.key === 'ArrowLeft')
+      next = dayOfWin >= 0 ? stepCalendarDay(dayOfWin, -1, bounds) : stepWindow(win, -1, [], bounds)
+    else if (e.key === 'ArrowRight')
+      next = dayOfWin >= 0 ? stepCalendarDay(dayOfWin, 1, bounds) : stepWindow(win, 1, [], bounds)
+    else if (e.key === 'Home')
+      next = dayOfWin >= 0 ? edgeCalendarDay('first', bounds) : dragWindow(bounds.t0, bounds.t0 + w, bounds)
     else if (e.key === 'End')
-      next = dayOfWin >= 0 ? snapDay(days[days.length - 1]) : dragWindow(bounds.t1 - w, bounds.t1, bounds)
+      next = dayOfWin >= 0 ? edgeCalendarDay('last', bounds) : dragWindow(bounds.t1 - w, bounds.t1, bounds)
     if (!next) return
     e.preventDefault()
     onWin(next)
@@ -228,7 +231,7 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
         {whole
           ? 'the whole session'
           : dayOfWin >= 0
-            ? longDate(days[dayOfWin].date)
+            ? longDate(dayOfWin)
             : sameDay
               ? `${longDate(from)} ${clock(from)}–${clock(to)}`
               : `${longDate(from)} ${clock(from)} – ${longDate(to)} ${clock(to)}`}
@@ -250,7 +253,9 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
         All
       </button>
       {!controlsHost && (
-        <span className="truncate text-faint">click a day, drag to select a range, drag the window or its edges</span>
+        <span className="truncate text-faint">
+          click a day (sessions over a day), drag to select a range, drag the window or its edges
+        </span>
       )}
     </div>
   )
@@ -335,8 +340,8 @@ export function Overview({ timeline, days, win, eff, onWin, pinnedT, latest, con
               x={l.x}
               y={LABEL_H - 3}
               fontSize={10}
-              fill={snapped?.m === l.m ? 'var(--text)' : 'var(--muted)'}
-              fontWeight={snapped?.m === l.m ? 600 : 400}
+              fill={dayOfWin === l.m ? 'var(--text)' : 'var(--muted)'}
+              fontWeight={dayOfWin === l.m ? 600 : 400}
               pointerEvents="none"
             >
               {l.text}

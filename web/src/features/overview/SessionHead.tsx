@@ -12,6 +12,8 @@ import { FolderCell } from './RowParts'
 
 /** The locator's height: the strip is this tall (spend/Overview.tsx `H`); the slot holds it before it arrives. */
 const LOCATOR_H = 54
+/** The spend slot's width in characters: "$99,999" with room for a flag's prefix and suffix. */
+const SPEND_CH = 9
 
 export function SessionHead({
   harness,
@@ -72,7 +74,10 @@ export function SessionHead({
           {at ? (
             <>
               {arrow(prev, 'Previous session ([)', <ChevronLeft size={15} />)}
-              <span className="whitespace-nowrap font-mono text-muted">
+              <span
+                className="whitespace-nowrap text-center font-mono text-muted tabular-nums"
+                style={{ width: `${2 * String(at.total).length + 4}ch` }}
+              >
                 {at.n} of {at.total}
               </span>
               {arrow(next, 'Next session (])', <ChevronRight size={15} />)}
@@ -80,7 +85,10 @@ export function SessionHead({
           ) : (
             <span className="whitespace-nowrap text-muted">Not in this list</span>
           )}
-          {usd !== undefined && <Money usd={usd} className="mx-1 shrink-0" />}
+          {/* a slot as wide as the widest figure ("$99,999" and a flag's marker), so paging never moves the arrows */}
+          <span className="mx-1 shrink-0 text-right font-mono tabular-nums" style={{ width: `${SPEND_CH}ch` }}>
+            {usd !== undefined && <Money usd={usd} />}
+          </span>
           <IconButton label="Close (Esc)" onClick={onClose} className="size-6">
             <X size={15} />
           </IconButton>
