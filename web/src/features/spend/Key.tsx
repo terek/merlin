@@ -483,8 +483,9 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
           ),
         },
         {
-          label: 'locked out by a limit',
-          title: "From the limit's first refused call to its reset; calls made inside it (extra usage) draw over it",
+          label: 'no successful calls observed',
+          title:
+            'From refusal until a successful call on any account or harness, or the account lockout end; open stretches stop at now',
           has: f.lockedOut,
           sample: (
             <>

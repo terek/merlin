@@ -57,6 +57,8 @@ func (e *OverviewError) Error() string { return e.Msg }
 type OverviewQuery struct {
 	From, To time.Time
 	Slot     time.Duration
+	Account  string
+	Harness  string
 }
 
 // Overview is the answer: Slots slots, slot i covering [From + i·SlotMs, From + (i+1)·SlotMs),
@@ -223,6 +225,9 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 
 	out := Overview{From: from, To: to, Slot: OverviewSlotName(slot), SlotMs: slot.Milliseconds(), Slots: n, Lanes: []OverviewLane{}}
 	for _, s := range v.sessions {
+		if q.Harness != "" && s.key.Harness != q.Harness {
+			continue
+		}
 		o := &ovSess{s: s}
 		var main []*model.Message // the main agent's owned messages
 		seen := false
@@ -231,6 +236,9 @@ func (c *Catalog) Overview(q OverviewQuery) (Overview, error) {
 			kinds[s.d.Agents[k].ID] = s.d.Agents[k].Kind
 		}
 		for _, m := range s.own {
+			if !accountMatches(q.Account, messageAccount(s, m)) {
+				continue
+			}
 			if m.AgentID == "" {
 				main = append(main, m)
 			}

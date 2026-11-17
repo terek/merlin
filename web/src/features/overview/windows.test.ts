@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { LimitWindow } from '../../api/types'
+import type { LimitLockout, LimitWindow } from '../../api/types'
 import { makeAxis } from './model'
 import {
   limitName,
@@ -65,7 +65,13 @@ describe('windowRange', () => {
 })
 
 describe('lockout', () => {
-  const w = win({ refusals: 2, firstRefusalAt: '2026-11-10T14:20:00Z' })
+  const w: LimitLockout = {
+    harness: 'codex',
+    startedAt: '2026-11-10T14:20:00Z',
+    endedAt: '2026-11-10T15:00:00Z',
+    resetsAt: '2026-11-10T15:00:00Z',
+    end: 'reset',
+  }
   test('reset minus the first refusal, rounded as the session graph writes breaks', () => {
     expect(lockoutMs(w)).toBe(40 * 60_000)
     expect(lockoutText(40 * 60_000)).toBe('40m')
@@ -75,7 +81,7 @@ describe('lockout', () => {
     expect(lockoutText(2 * 60_000)).toBe('5m')
   })
   test('none without a refusal', () => {
-    expect(lockoutMs(win({}))).toBeUndefined()
+    expect(lockoutMs({ ...w, startedAt: 'invalid' })).toBeUndefined()
   })
   test('the band is clipped to the range', () => {
     const from = Date.parse('2026-11-10T14:30:00Z')

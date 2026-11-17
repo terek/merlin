@@ -30,6 +30,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `sourceMissing` | the source files have disappeared; the digest is kept as the ledger |
 | `harness` | harness name, `claude` or `codex` |
 | `id` | session id |
+| `account` | opaque key derived from the session's recorded account identity, omitted when unknown |
 | `projectKey` | the harness's own storage key for the project |
 | `project` | directory the session started in; the project's identity across harnesses |
 | `cwd` | working directory at the end of the session (`project` is where it started) |
@@ -65,6 +66,9 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 |---|---|
 | `at` | when the harness wrote it |
 | `limit` | the harness's own name for the limit: Codex `limit_id` (`codex`), Claude Code `rateLimitType` (`five_hour`); omitted when not said |
+| `kind` | normalized classification when the harness supplies it, currently `spend_cap` |
+| `account` | account whose limit was read, as an opaque key |
+| `accountKnown` | explicit account override when the session's account does not apply, including an explicitly unknown account |
 | `windowMinutes` | the window's length: Codex `window_minutes`; Claude Code five_hour 300, seven_day* 10080; omitted when not known |
 | `usedPercent` | share of the window used, 0-100; omitted when the harness did not record it (always for Claude Code) |
 | `resetsAt` | when the window resets, UTC; omitted when not known |
@@ -398,6 +402,8 @@ One billed API message. Token counts are flattened (`Tokens`: `input`, `output`,
 | `id` | the API message id; billed once globally |
 | `at` | time of the message |
 | `model` | model that produced it |
+| `account` | opaque account key for a call with its own recorded identity |
+| `accountKnown` | explicit account override when the session's account does not apply, including an explicitly unknown account |
 | `agentId` | agent that made it; omitted for the main agent |
 | `turn` | index of the turn it belongs to, when any; for an agent's message, the main turn its top-level ancestor was spawned in |
 | `agentTurn` | for an agent's message, the index of the agent's turn (`Agent.turns`) it belongs to |

@@ -50,7 +50,7 @@ export function useScope() {
   const [sp, setSp] = useSearchParams()
   const range = oneOf<Range>(sp.get('range'), ['1d', '7d', '30d'], '7d')
   // a custom range (both days, in order) wins over `range`
-  const custom = parseCustom(sp.get('from'), sp.get('to'), sp.get('harness'))
+  const custom = parseCustom(sp.get('from'), sp.get('to'), sp.get('harness'), sp.get('account'))
   const by = parseBy(sp.get('by'))
   const sel = parseIn(sp.get('in'))
   const q = sp.get('q') ?? ''

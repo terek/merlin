@@ -113,7 +113,7 @@ differs between lines of the same message in 15k cases.)
 An assistant record of a call the API refused because a usage limit was reached
 (`isApiErrorMessage: true`, `error: "rate_limit"`, `apiErrorStatus: 429`, model `<synthetic>`)
 carries `quotaLimits`: `status` (`rejected`), `resetsAt` (unix seconds), `rateLimitType`,
-`unifiedRateLimitFallbackAvailable`, `overageStatus`, `overageDisabledReason`, `upgradePaths` and
+`unifiedRateLimitFallbackAvailable`, `overageStatus`, `overageResetsAt`, `overageDisabledReason`, `upgradePaths` and
 `isUsingOverage`. `rateLimitType` is one of the values Claude Code 2.1.325 knows: `five_hour`, `seven_day`, `seven_day_opus`,
 `seven_day_sonnet`, `seven_day_overage_included`, `overage`, and may be absent. Some records repeat
 the object as `apiErrorParams.rate_limit_info`; only `quotaLimits` is read, and the message text
@@ -125,6 +125,21 @@ The parser makes a `LimitReading` with `rejected` for each record whose `status`
 (0 otherwise), `resetsAt` from `resetsAt`. A record copied in from another session (`session_id`
 differing from `sessionId`, or a `forkedFrom` marker) is left out, and a record repeated in an
 agent file under the same `uuid` is kept once. Other statuses are ignored.
+
+A reported Claude Code 2.1.314 admin spend cap has `rateLimitType: "overage"` and
+`overageDisabledReason: "org_spend_cap_reached"` in the top-level quota object. Merlin
+adds `kind: "spend_cap"` for that combination. The nested copy can give a different
+reason. Other `overage` refusals keep their own label without a spend cap classification.
+The example named a reset on the first of the following month. The transcript does not
+establish the start of the cap period, and a successful call can precede the scheduled reset.
+
+`session-owner` carries `accountUuid`, `organizationUuid` and `sessionId`. In a local check
+it repeated with the same identity in all 23 files that carried it. The earliest observed
+record was adjacent to 2.1.317, and the earliest confirmed in a single-version file was 2.1.319.
+Merlin uses the matching session's account and organization to derive an opaque account key.
+Conflicting or absent identity stays unknown. A `bridge-session` owner does not determine
+billing or call ownership. No reliable Claude transcript marker was observed for subscription plan
+changes or switching to an API key.
 
 ## 4. User records
 

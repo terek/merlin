@@ -33,10 +33,11 @@ type SessionDigest struct {
 	// Source so the session is retried only when its files change.
 	Error string `json:"error,omitempty"`
 
-	Harness    string `json:"harness"`    // "claude", "codex"
-	ID         string `json:"id"`         // session id, unique within the harness
-	ProjectKey string `json:"projectKey"` // the harness's storage key for the project
-	Project    string `json:"project"`    // directory the session started in
+	Harness    string `json:"harness"`           // "claude", "codex"
+	ID         string `json:"id"`                // session id, unique within the harness
+	ProjectKey string `json:"projectKey"`        // the harness's storage key for the project
+	Project    string `json:"project"`           // directory the session started in
+	Account    string `json:"account,omitempty"` // opaque harness account key
 
 	Cwd             string   `json:"cwd,omitempty"`
 	Cwds            []string `json:"cwds,omitempty"`
@@ -476,8 +477,11 @@ type Message struct {
 	ID      string    `json:"id"`
 	At      time.Time `json:"at"`
 	Model   string    `json:"model"`
-	AgentID string    `json:"agentId,omitempty"` // empty = main agent
-	Turn    *int      `json:"turn,omitempty"`
+	Account string    `json:"account,omitempty"`
+	// AccountKnown marks an explicit account override, including an unknown account.
+	AccountKnown bool   `json:"accountKnown,omitempty"`
+	AgentID      string `json:"agentId,omitempty"` // empty = main agent
+	Turn         *int   `json:"turn,omitempty"`
 	// AgentTurn is the index of the owning agent's turn (Agent.Turns) the message belongs to.
 	AgentTurn *int    `json:"agentTurn,omitempty"`
 	USD       float64 `json:"usd"`

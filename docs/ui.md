@@ -367,7 +367,7 @@ From top to bottom, the graph and then the box:
     are squeezed into a narrow **break** (a pause, so that the work around it reads first) labelled with its length. A break is not a band: the page stays white, and a veil (a rect of the page colour at `BREAK_VEIL`, 0.6, over the rows) fades whatever crosses it, the baselines, gridlines, held contexts, agent lines and spend, which stay visible. The veil lies over the plot's lines and under the cursor, and the texts written on rows (model names, frame labels) are drawn above it so that they stay readable; it takes no pointer. The veil stops above every overhead strip (it is cut into segments around each one, the strip of a session in the middle of a tree included): a strip is never faded. A break's width is not fixed: `breakWidth` = `BREAK_BASE_PX` (12) + `BREAK_LOG_PX` (8) x ln(length / 10 min), at most `BREAK_MAX_PX` (60), so a 15-minute pause is barely wider than the base (about 15 px) and a night of 8-12 h is 43-46 px; together the breaks take at most `BREAK_SHARE` (a tenth) of the axis, each made narrower to fit (never under `BREAK_MIN_PX`, 6). The overview's axis uses the same rule (it is the same `timeAxis`, so that the effective window measures the same lengths on both). A light dotted stretch of the time axis (`BREAK_DOTS`) with its length written above it, rounded (`15m`, `40m`, `8h`, `21h`, `3d`: to 5 minutes under an hour, to the hour under two days, else to the day), marks it on the axis (its tooltip says exactly how long nothing ran); with more than 12 such
     pauses, only longer ones (20 min, 30 min, 1 h, ... up to 16 h) become breaks. A turn ends at the
     last thing that ran in it (the harness may close a turn hours later, when the session is left);
-  - **lockouts** (`merlin-smi`, `merlin-mc7`): when a subscription limit stopped the session's harness, the time from the window's first refused call to its reset is a block behind every row and the axis strip (`lockoutSpans`: the harness's windows, overlapping ones merged, clipped to the axis). The mark is the one every lockout has (`ui/lockout.tsx`): a light `--bad-soft` fill with thin `--bad` stripes, 6 px apart, leaning the other way (−45°) from the grey 45° hatches of overhead and "not in messages", so the two are never mistaken. A lockout is usually idle time, so it lies in a break: the block runs across it, the break's veil there is the same striped mark (still 60 % opaque, so the stripes show) instead of the page colour, its length is written in `--bad` and its tooltip says "Locked out by the 5h and Weekly limits until Fri 14, 15:00" (so does the block's). **A session the limit stopped shows the wait**: when a lockout began within the session (its first refused call no more than five minutes after the session's last activity, or a call of this session refused in it) and runs past that last activity, the time axis goes on to the reset: a break, then a short piece at the reset (`waitUntil` in `overview/windows.ts`, `Timeline.wait`, `axisSpans`; a window that reaches the end of the work keeps it, the strip shows it too). Calls made inside a lockout (extra usage, an upgrade) are drawn over the block. The block's left edge is the first refused call; the graph draws no refusal ticks, since a red vertical there already means a compaction on a cold cache. The key lists it ("Locked out by a limit", faint when the graph has none).
+  - **Lockouts.** The session axis shades observed interruptions for the session's own account. A refusal starts the band. The first successful call anywhere can end the interruption even if the account's own limit remains in effect. A session that stopped at a refusal can extend its axis to the observed end. An open interruption is marked as open through the present, with the scheduled reset in its wording when known. Refusal ticks still mark the individual calls.
   - **a window at a time** (beads `merlin-t8s.50`, `merlin-zls.6`): the plot shows one **window** of
     time, with a time axis, breaks, slot length and dollar scale of its own (its rows and token scale are the whole session's, see the vertical frame below); the rest of a long tree is
     reached through an **overview** strip above the readout (`Overview.tsx`). Every tree has it, a short one
@@ -796,26 +796,19 @@ pages never disagree and switching tabs keeps it.
   nothing" (and the harness's own per-call figures where there are any), the backing sentence (exact, partial,
   estimated; unknown, lower bound) and the arithmetic of the sidebar. There is no reported / attributed split anywhere
   else on the page.
-- **Limits** (`LimitsSection.tsx`, helpers `worth.ts`), directly under the headline strip, in the same section style,
-  shown only when `useLimits()` (`GET /api/limits`) has qualifying windows overlapping the scope (`scopeWindows`: calls
-  were refused, or `maxPercent` of 90 or more; the scope's harness only under a window scope), newest first. Columns:
-  **Window** (harness icon, the limit in words, `5h` or `Weekly`, the plan muted, the times `Fri 14, 10:00–15:00`, a
-  week `Nov 7 → Nov 14`, a Claude Code start with a "≈" prefix when it is only known to within ten minutes), **Used**
-  (Codex `maxPercent`, bold red at 100; Claude Code "hit"), **Locked out** (`resetsAt` minus `firstRefusalAt`, rounded as
-  the session graph's breaks, or a muted dash), **Spent** (`seenUSD`, with a "≥" sign for Claude Code, whose
-  windows hold only what this machine recorded), **Biggest sessions** (`topSessions`, each a link to its Session page,
-  ellipsis-cut as one line; then a muted "+ scripted $41" for `scriptedUSD`). A click on the row narrows the scope to
-  the window (a history entry, the page kept); "sessions →" at its end opens the Overview on the same window with
-  `sort=spend`. Under the table, one sentence per harness and limit that has data: Codex "A Codex 5h window is worth
-  about $11 at API prices (1% ≈ $0.11, median of the 6 windows in this range)" (from `usdPerPercent`, the median of the qualifying windows in this range only, never all history; each Codex row has its own "1% ≈ $0.11 in this window" in its Spent title), Claude Code "ran out after at
-  least $47 (median of 4 hits; spend this machine recorded)". Figures are medians; `seenUSD` is never summed across
-  windows, which can overlap and count a message twice.
-- **A limit window as the scope.** `from` and `to` as RFC 3339 instants (`2026-11-13T10:00:00Z`, UTC, no
-  milliseconds) and `harness` (`codex`, `claude`) instead of local days; `range` is absent. `CustomRange` carries the
-  instants (`fromMs`, `toMs`) and the harness beside the local days it touches. Cost sends the instants as `since` and
-  `until` (the end capped at now) and `harness` on every request, the previous period is the window's own length just
-  before ("+180% on the 5h before"), the sidebar lists only that harness's sessions and the scripted lines go. The chart
-  stays in whole local days (by the hour for a day).
+- **Limits** under the headline shows qualifying usage windows and refused calls. The table names
+  limits, including **Spend cap**, and shows scheduled resets, account lockout episodes, spend and
+  the biggest sessions where their window is known. A cap with no known start shows its refusal
+  time and scheduled reset separately. Its row has no window link or spend. An account lockout
+  says when calls resumed or when the scheduled reset passed. Open lockouts show their status
+  and the scheduled reset if known. When several known accounts use the same harness, the table
+  labels them Account 1, Account 2 and so on, in first observed order. The unknown group remains
+  separate. Window worth compares the same account, limit and observed plan period. Claude
+  figures describe what the machine recorded at list prices.
+- **A limit window as the scope.** A window with a known start can narrow Cost and Overview to
+  its time range, harness and account. Links carry RFC 3339 `from` and `to` instants, a
+  `harness`, and an opaque `account` key (or `unknown`). A preset, brush or typed range
+  leaves this scope. Cost sends those bounds and selectors on its rollup requests.
 - The Overview tab is the way back to the sessions (it keeps the scope); the Overview's footer Spend figure links here with it.
 - **Empty**: "Nothing was spent between May 20 and May 29." (the Overview's phrase), with "Clear the selection" when a
   selection emptied it.
@@ -1123,26 +1116,18 @@ a history entry, so Back is the undo.
 
 ### Limit windows (added 2026-11-15, `merlin-6py`)
 
-A subscription limit window is a scope like a Custom range, but with exact instants and a harness: the Overview lists
-the sessions that ate it and Cost shows what the money went to. No page and no group rows of its own.
+A known limit window is a custom scope with exact instants, a harness and an account.
+An unknown window length has no scope link.
 
-- **Scope.** `from`/`to` as RFC 3339 instants plus `harness` (section 10 has the shape). `parseCustom` reads it (instants in
-  order, harness a plain name), `formatCustom` writes it, so any preset, a brush or a typed range leaves it (and drops the
-  harness). It is never remembered (`useRememberedCustom` skips it) and not offered under Custom. `scope.scopeTo(range)`
-  pushes it as a history entry. The pill reads the window as `Fri 14, 10:00 → 5h` with the harness's icon (13 px) before
-  it; its title says the timeline opens it up to leave. The lanes are filtered to the harness on the client (the daemon's
-  Overview has no harness filter) and the scripted line goes. Helpers (`windows.ts`): `qualifies`, `scopeWindows`,
-  `windowRange`, `lockoutText`, `limitName`, `windowTimes`.
-- **Refusal ticks.** A session row's graph gets a red (`--bad`) 1.25 px vertical tick, from the row's top to its baseline,
-  at each call that session had refused in the range (`refusals` of `/api/limits`, by session; `refusalTicks` merges those
-  closer than 3 px). Scripted runs' refusals have no row.
-- **Lockout blocks on the rows.** Behind the graph of each session row the lockouts of the row's own harness (`lockoutSpans`: first refused call to reset, 5h and weekly merged) are the lockout mark (the `--bad-soft` fill with thin `--bad` stripes, `ui/lockout.tsx`, section 9) from the row's top to its baseline. Only a session a lockout **touched** gets one (`lockoutAffects`: its life, start to last activity, overlaps the lockout, a last activity up to five minutes before the first refused call counts, or one of its calls was refused in it), and it gets the **whole** lockout, clipped to the axis, not only the part while it ran: a session that stopped at the refusal shows the wait after it, and one merely open in the same hours elsewhere does not turn red. The opened session's head row draws the same. They stay when calls went through (extra usage, an upgrade): those draw over them, and the refusal ticks stay on top. The summary's axis keeps its clickable bands below.
-- **Locked-out bands.** In the summary's date axis, under the labels, each qualifying window's locked-out stretch
-  (`firstRefusalAt` to `resetsAt`, clipped to the range) is a band in the lockout mark. It is a button with the title "Scope
-  to this limit window: Fri 14, 10:00–15:00"; everything else in the graph stays non-interactive.
-- **The legend's Overview tab.** While limit data has a refusal or a lockout and no session is open, the page fills the
-  legend panel's `overview` tab (first of the known ids) with "Locked out by a limit" (the striped swatch) and "A
-  refused call" (the red tick).
+- **Refusal ticks.** Each refused call gets a red tick on its session row, as space allows.
+  Scripted refusals have no individual session row.
+- **Interruption bands.** Overview and session graphs use the episodes in `/api/limits`.
+  A row shows the bands for its own account when an interruption touched that session.
+  A successful call anywhere ends the observed interruption, while Cost can still show
+  that the original account remained locked out. Open episodes are drawn through the
+  present with an open marker. The summary strip links to a usage window when the
+  corresponding start is known.
+- **Legend.** The Overview and Graph tabs explain the interruption band and refusal tick.
 
 ## 11. As built
 

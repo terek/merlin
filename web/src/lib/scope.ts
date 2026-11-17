@@ -1,6 +1,6 @@
 // The scope the Overview and Cost both read: the URL's `range`, `from`, `to`, `by`, `in`, `q` and, for a limit window, `harness`.
 
-export const SCOPE_KEYS = ['range', 'from', 'to', 'by', 'in', 'q', 'harness'] as const
+export const SCOPE_KEYS = ['range', 'from', 'to', 'by', 'in', 'q', 'harness', 'account'] as const
 
 /**
  * The scope's parameters of a query string, as `?…` (empty for none). `q: false` leaves the search out: Cost has none.

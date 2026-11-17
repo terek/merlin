@@ -21,7 +21,7 @@ import { parseTime } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
 import { sessionKey } from './model'
 import { TurnBox } from './TurnBox'
-import { lockoutSpans, refusalsBySession } from './windows'
+import { episodeText, limitName, refusalsBySession, sessionLockouts } from './windows'
 
 const num = (s: string | null) => (s !== null && s !== '' && Number.isFinite(Number(s)) ? Number(s) : null)
 const same = (a: SessionKey, b: SessionKey) => a.harness === b.harness && a.id === b.id
@@ -124,24 +124,33 @@ function Loaded({
   const multi = tree.branches.length > 1
   // the harness's limit lockouts (the plot clips them to its axis)
   const limits = useLimits()
-  const lockouts = useMemo(
-    () =>
-      lockoutSpans(
-        limits.data?.windows ?? [],
-        home.summary.key.harness,
-        Number.NEGATIVE_INFINITY,
-        Number.POSITIVE_INFINITY,
-      ),
-    [limits.data, home.summary.key.harness],
-  )
+  const lockouts = useMemo(() => sessionLockouts(limits.data, home.summary.key), [limits.data, home.summary.key])
 
   const refusals = useMemo(
     () => refusalsBySession(limits.data?.refusals ?? []).get(sessionKey(home.summary.key.harness, home.summary.key.id)),
     [limits.data, home.summary.key.harness, home.summary.key.id],
   )
 
+  const account = limits.data?.sessionAccounts?.find((x) => same(x.session, home.summary.key))?.account
+  const accountEpisodes = (limits.data?.lockouts ?? []).filter(
+    (l) =>
+      l.harness === home.summary.key.harness &&
+      l.account === account &&
+      ((Date.parse(l.startedAt) <= Date.parse(home.summary.lastActivityAt ?? '') + 300_000 &&
+        Date.parse(l.endedAt ?? new Date().toISOString()) >= Date.parse(home.summary.startedAt ?? '')) ||
+        (refusals ?? []).some((t) => t >= Date.parse(l.startedAt) && t <= (Date.parse(l.endedAt ?? '') || Date.now()))),
+  )
+
   return (
     <div>
+      {accountEpisodes.map((l) => (
+        <p
+          key={`${l.limit}/${l.kind}/${l.windowMinutes}/${l.startedAt}`}
+          className="border-line border-b px-4 py-2 text-meta text-muted"
+        >
+          {limitName(l)} · {episodeText(l)}
+        </p>
+      ))}
       {missing > 0 && (
         <p className="border-line border-b px-4 py-2 text-sec text-warn">
           {missing === 1 ? 'One session' : `${missing} sessions`} of this tree could not be loaded.

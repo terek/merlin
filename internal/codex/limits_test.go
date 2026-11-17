@@ -115,3 +115,38 @@ func TestRefusedEndState(t *testing.T) {
 		t.Errorf("end state = %q, want refused", d.EndState)
 	}
 }
+
+func TestThreadAccountAttribution(t *testing.T) {
+	home := t.TempDir()
+	newRollout(t).meta("R", "R", "vscode", map[string]any{"creator_account_id": "root-account"}).
+		start(1, "r1", "", "user").ctx(1, "r1", "m", nil).usage(2, "root-msg", "r1", 10, 0, 2).
+		rate(3, lim("codex", win(10, 300, reset5h), nil, "plus")).write(home, "rollout-R.jsonl")
+	for i, tc := range []struct{ id, account string }{{"A", "child-account"}, {"B", ""}} {
+		extra := map[string]any{"parent_thread_id": "R"}
+		if tc.account != "" {
+			extra["creator_account_id"] = tc.account
+		}
+		newRollout(t).meta(tc.id, "R", spawnSource("R", "/root/"+tc.id, tc.id, 1), extra).
+			start(10+i*10, "a1", "r1", "user").ctx(10+i*10, "a1", "m", nil).
+			usage(11+i*10, tc.id+"-msg", "a1", 10, 0, 2).
+			rate(12+i*10, lim("codex", win(10, 300, reset5h), nil, "plus")).write(home, "rollout-"+tc.id+".jsonl")
+	}
+	d := build(t, home, "R")
+	accounts := map[string]string{"": model.AccountKey("root-account"), "A": model.AccountKey("child-account"), "B": ""}
+	if d.Account != accounts[""] {
+		t.Fatalf("session account = %q", d.Account)
+	}
+	if len(d.Messages) != 3 || len(d.Limits) != 3 {
+		t.Fatalf("messages %d, limits %d", len(d.Messages), len(d.Limits))
+	}
+	for _, m := range d.Messages {
+		if m.Account != accounts[m.AgentID] || !m.AccountKnown {
+			t.Errorf("message = %+v", m)
+		}
+	}
+	for _, l := range d.Limits {
+		if l.Account != accounts[l.AgentID] || !l.AccountKnown || l.Plan != "plus" {
+			t.Errorf("limit = %+v", l)
+		}
+	}
+}

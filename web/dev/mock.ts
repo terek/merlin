@@ -1088,7 +1088,25 @@ function limits(): Limits {
   }
   wins.sort((a, b) => (a.resetsAt < b.resetsAt ? -1 : a.resetsAt > b.resetsAt ? 1 : a.harness < b.harness ? -1 : 1))
   refusals.sort((a, b) => (a.at < b.at ? -1 : 1))
-  return { windows: wins, refusals }
+  return {
+    windows: wins,
+    refusals,
+    lockouts: wins.flatMap((w) =>
+      w.firstRefusalAt
+        ? [
+            {
+              harness: w.harness,
+              limit: w.limit,
+              windowMinutes: w.windowMinutes,
+              startedAt: w.firstRefusalAt,
+              resetsAt: w.resetsAt,
+              endedAt: Date.parse(w.resetsAt) <= Date.now() ? w.resetsAt : undefined,
+              end: Date.parse(w.resetsAt) <= Date.now() ? ('reset' as const) : ('open' as const),
+            },
+          ]
+        : [],
+    ),
+  }
 }
 
 // ---- /api/overview (experimental) ------------------------------------------------------

@@ -16,7 +16,7 @@ import (
 
 // ParserVersion identifies the output of this package. Bump it whenever a change would
 // change a digest built from the same files.
-const ParserVersion = 12
+const ParserVersion = 13
 
 // Pricer prices one API call; *pricing.Table satisfies it. ok is false for a model with no
 // price.
@@ -164,6 +164,9 @@ func (b *builder) inherit(src source) error {
 }
 
 func (b *builder) build() {
+	if b.root != nil {
+		b.d.Account = threadAccount(b.root)
+	}
 	b.mainTurns()
 	b.buildAgents()
 	b.resolveRootTurns()
@@ -744,6 +747,7 @@ func (b *builder) messages() {
 	add := func(t *thread, off int, agent *model.Agent) {
 		for _, u := range t.Usage {
 			m := b.price(u)
+			m.Account, m.AccountKnown = u.Account, true
 			if agent == nil {
 				if u.Turn >= 0 {
 					v := off + u.Turn
@@ -834,11 +838,15 @@ func (b *builder) beads() {
 func (b *builder) limits() {
 	var all []model.LimitReading
 	if b.root != nil {
-		all = append(all, b.root.Limits...)
+		for _, r := range b.root.Limits {
+			r.Account, r.AccountKnown = threadAccount(b.root), true
+			all = append(all, r)
+		}
 	}
 	for _, a := range b.agents {
 		for _, r := range a.Limits {
 			r.AgentID = a.Meta.ID
+			r.Account, r.AccountKnown = threadAccount(a), true
 			all = append(all, r)
 		}
 	}
@@ -1068,4 +1076,12 @@ func earlier(a, b time.Time) bool {
 		return !a.IsZero() && b.IsZero()
 	}
 	return a.Before(b)
+}
+
+// threadAccount uses only this thread's own authentication metadata.
+func threadAccount(t *thread) string {
+	if t.Meta.CreatorAccountID == "" {
+		return ""
+	}
+	return model.AccountKey(t.Meta.CreatorAccountID)
 }

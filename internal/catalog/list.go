@@ -11,6 +11,16 @@ import (
 // lv supplies liveness: it fills SessionInfo.State and is needed for f.States.
 func (c *Catalog) List(f Filter, lv Liveness) Listing {
 	v, _, f := c.prepare(f, false)
+	var accountSpend map[*sess]Money
+	if f.Account != "" {
+		accountSpend = make(map[*sess]Money)
+		for _, x := range v.selected(f) {
+			m := accountSpend[x.s]
+			m.add(x.reported, x.attributed, x.recorded, x.billed)
+			m.Compactions.add(x.comp)
+			accountSpend[x.s] = m
+		}
+	}
 	var l Listing
 	for _, s := range v.sessions {
 		if s.d.Kind == model.KindSDK {
@@ -21,6 +31,16 @@ func (c *Catalog) List(f Filter, lv Liveness) Listing {
 			continue
 		}
 		in := s.info
+		if accountSpend != nil {
+			m, hasSpend := accountSpend[s]
+			if !hasSpend && !accountMatches(f.Account, s.d.Account) {
+				continue
+			}
+			in.Cost.BestUSD, in.Cost.ReportedUSD = m.TotalUSD, m.ReportedUSD
+			in.Cost.RecordedUSD, in.Cost.BilledUSD = m.RecordedUSD, m.BilledUSD
+			in.Cost.UncoveredUSD, in.Cost.EstimatedUncoveredUSD = m.AttributedUSD+m.RecordedUSD, 0
+			in.Cost.Compactions = m.Compactions
+		}
 		if lv.known() {
 			in.State = st
 		}

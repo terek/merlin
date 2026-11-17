@@ -21,6 +21,7 @@ const syntheticModel = "<synthetic>"
 // Result as feeding it whole.
 func (b *Builder) Result() *FileResult {
 	res := &FileResult{
+		Owners:          make(map[string][]string, len(b.owners)),
 		Compactions:     slices.Clone(b.compactions),
 		AgentSpawns:     slices.Clone(b.spawns),
 		SpawnResults:    slices.Clone(b.spawnRes),
@@ -49,6 +50,9 @@ func (b *Builder) Result() *FileResult {
 		FirstTimestamp:  b.first,
 		LastTimestamp:   b.last,
 		Counters:        b.counters,
+	}
+	for id, owners := range b.owners {
+		res.Owners[id] = slices.Clone(owners)
 	}
 	if b.forkedFrom != nil {
 		f := *b.forkedFrom

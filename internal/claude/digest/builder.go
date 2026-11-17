@@ -137,6 +137,7 @@ type Builder struct {
 	prs          []model.PRLink
 	bash         map[string]bashCall // Bash calls without a result yet, by tool_use id
 	beads        []beadCall
+	owners       map[string][]string // complete identities by explicit sessionId
 	limits       []LimitRecord
 	lastPrompt   string
 	lastLeaf     string
@@ -234,6 +235,17 @@ func (b *Builder) Apply(r *transcript.Record) {
 
 	away := false
 	switch r.Type {
+	case transcript.TypeSessionOwner:
+		var owner struct {
+			AccountUUID      string `json:"accountUuid"`
+			OrganizationUUID string `json:"organizationUuid"`
+		}
+		if json.Unmarshal(r.Raw, &owner) == nil && r.SessionID != "" && owner.AccountUUID != "" && owner.OrganizationUUID != "" {
+			if b.owners == nil {
+				b.owners = map[string][]string{}
+			}
+			b.owners[r.SessionID] = append(b.owners[r.SessionID], model.AccountKey(owner.AccountUUID, owner.OrganizationUUID))
+		}
 	case transcript.TypeAssistant:
 		b.assistant(r, ts, pos)
 		if refused {
@@ -331,10 +343,13 @@ func (b *Builder) quota(r *transcript.Record, ts time.Time) bool {
 		return false
 	}
 	lr := model.LimitReading{At: ts, Limit: q.RateLimitType, WindowMinutes: quotaWindow(q.RateLimitType), Rejected: true}
+	if q.RateLimitType == "overage" && q.OverageDisabledReason == "org_spend_cap_reached" {
+		lr.Kind = "spend_cap"
+	}
 	if q.ResetsAt > 0 {
 		lr.ResetsAt = time.Unix(int64(q.ResetsAt), 0).UTC()
 	}
-	b.limits = append(b.limits, LimitRecord{UUID: r.UUID, LimitReading: lr})
+	b.limits = append(b.limits, LimitRecord{UUID: r.UUID, SessionID: r.SessionID, LimitReading: lr})
 	return true
 }
 

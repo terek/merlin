@@ -97,3 +97,36 @@ func TestLimitsMatchCost(t *testing.T) {
 		t.Errorf("window = %+v", w)
 	}
 }
+
+func TestAccountScopeMatchesLimitsCostAndOverview(t *testing.T) {
+	r := newRig(t)
+	at := time.Date(2026, 11, 14, 10, 0, 0, 0, time.UTC)
+	account := model.AccountKey("invented-account")
+	a := spender("claude", "a", map[time.Time]float64{at: 2},
+		model.LimitReading{At: at.Add(time.Minute), Limit: "five_hour", WindowMinutes: 300, ResetsAt: at.Add(time.Hour), Rejected: true})
+	a.Account = account
+	r.cat.Upsert(a)
+	r.cat.Upsert(spender("claude", "b", map[time.Time]float64{at: 4}))
+	var limits catalog.Limits
+	r.get("/api/limits", &limits)
+	if len(limits.Windows) != 1 || limits.Windows[0].Account != account ||
+		limits.Windows[0].SeenUSD == nil || *limits.Windows[0].SeenUSD != 2 {
+		t.Fatalf("windows = %+v", limits.Windows)
+	}
+	var cost CostTable
+	r.get("/api/cost?harness=claude&account="+account, &cost)
+	if cost.Total.TotalUSD != 2 {
+		t.Errorf("scoped cost = %+v", cost.Total)
+	}
+	var overview Overview
+	q := "/api/overview?harness=claude&from=" + url.QueryEscape(at.Format(time.RFC3339)) +
+		"&to=" + url.QueryEscape(at.Add(time.Hour).Format(time.RFC3339))
+	r.get(q+"&account="+account, &overview)
+	if len(overview.Lanes) != 1 || overview.Lanes[0].ID != "a" {
+		t.Errorf("known-account lanes = %+v", overview.Lanes)
+	}
+	r.get(q+"&account=unknown", &overview)
+	if len(overview.Lanes) != 1 || overview.Lanes[0].ID != "b" {
+		t.Errorf("unknown-account lanes = %+v", overview.Lanes)
+	}
+}

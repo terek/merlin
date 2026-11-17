@@ -126,7 +126,7 @@ export function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; 
       (data.lockouts ?? []).flatMap((s) => {
         const x0 = Math.max(0, xOf(axis, s.fromMs))
         const x1 = Math.min(axis.width, xOf(axis, s.toMs))
-        return x1 > x0 ? [[x0, x1] as const] : []
+        return x1 > x0 ? [[x0, x1, s.open] as const] : []
       }),
     [data.lockouts, axis],
   )
@@ -140,8 +140,17 @@ export function RowGraph({ data, axis, pxPerTok }: { data: RowData; axis: Axis; 
           <LockoutPattern id={lockId} />
         </defs>
       )}
-      {locked.map(([x0, x1]) => (
-        <rect key={x0} x={x0} y={0} width={x1 - x0} height={base} fill={`url(#${lockId})`} />
+      {locked.map(([x0, x1, open]) => (
+        <rect
+          key={x0}
+          x={x0}
+          y={0}
+          width={x1 - x0}
+          height={base}
+          fill={`url(#${lockId})`}
+          stroke={open ? 'var(--bad)' : undefined}
+          strokeDasharray={open ? '3 3' : undefined}
+        />
       ))}
       {midnights.map((x) => (
         <line key={x} x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={1} opacity={0.6} />

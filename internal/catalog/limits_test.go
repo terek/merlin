@@ -90,8 +90,123 @@ func TestLimitsClaudeRefusalsMakeOneWindow(t *testing.T) {
 		t.Errorf("refusals = %+v", l.Refusals)
 	}
 	b, _ := json.Marshal(New().Limits())
-	if string(b) != `{"windows":[],"refusals":[]}` {
+	if string(b) != `{"windows":[],"refusals":[],"lockouts":[]}` {
 		t.Errorf("empty = %s", b)
+	}
+}
+
+func TestLockoutRecoveryAcrossSessions(t *testing.T) {
+	c := New()
+	account := model.AccountKey("invented-account")
+	other := model.AccountKey("another-account")
+	reset := at(30 * 24 * 60)
+	refusal := func(min int) model.LimitReading {
+		return model.LimitReading{At: at(min), Limit: "overage", Kind: "spend_cap", Rejected: true, ResetsAt: reset}
+	}
+	rejected := limitSession("claude", "refused", 0, []model.LimitReading{refusal(5), refusal(6), refusal(150)})
+	rejected.Account = account
+	c.Upsert(rejected)
+	call := func(id, acct, modelName string, min int, usage bool) {
+		d := limitSession("claude", id, min, nil, msgSpec{id, min, 1, 0})
+		d.Account, d.Messages[0].Model = acct, modelName
+		d.Messages[0].Tokens = model.Tokens{}
+		if usage {
+			d.Messages[0].Input = 1
+		}
+		d.Kind = model.KindSDK
+		c.Upsert(d)
+	}
+	call("synthetic", account, "<synthetic>", 10, true)
+	call("no-usage", account, "claude-opus-4-6", 15, false)
+	call("other", other, "claude-opus-4-6", 20, true)
+	call("unknown", "", "claude-opus-4-6", 25, true)
+	call("resumed", account, "claude-opus-4-6", 125, true)
+	l := c.LimitsAt(at(180))
+	if len(l.Windows) != 1 || l.Windows[0].Kind != "spend_cap" || !l.Windows[0].StartsAt.IsZero() || l.Windows[0].SeenUSD != nil {
+		t.Fatalf("windows = %+v", l.Windows)
+	}
+	if len(l.Lockouts) != 2 {
+		t.Fatalf("lockouts = %+v", l.Lockouts)
+	}
+	first, next := l.Lockouts[0], l.Lockouts[1]
+	if first.Account != account || first.AccountLabel != "Account 1" || first.End != "resumed" ||
+		!first.EndedAt.Equal(at(125)) || !first.WorkResumedAt.Equal(at(20)) || !first.ResetsAt.Equal(reset) {
+		t.Errorf("first lockout = %+v", first)
+	}
+	if next.End != "open" || !next.StartedAt.Equal(at(150)) || !next.EndedAt.IsZero() {
+		t.Errorf("next lockout = %+v", next)
+	}
+	next = c.LimitsAt(reset).Lockouts[1]
+	if next.End != "reset" || !next.EndedAt.Equal(reset) {
+		t.Errorf("past reset = %+v", next)
+	}
+}
+
+func TestLockoutRecoveryMatchesModelAndAccount(t *testing.T) {
+	c := New()
+	known := model.AccountKey("known")
+	d := limitSession("claude", "refused", 0, []model.LimitReading{
+		{At: at(5), Limit: "seven_day_opus", WindowMinutes: 10080, ResetsAt: at(300), Rejected: true},
+	})
+	c.Upsert(d)
+	for _, tc := range []struct {
+		id, account, model string
+		at                 int
+	}{
+		{"known-opus", known, "claude-opus-4-6", 8},
+		{"unknown-sonnet", "", "claude-sonnet-4-6", 10},
+		{"unknown-opus", "", "claude-opus-4-6[1m]", 15},
+	} {
+		s := limitSession("claude", tc.id, tc.at, nil, msgSpec{tc.id, tc.at, 0, 0})
+		s.Account, s.Messages[0].Model, s.Messages[0].CacheRead = tc.account, tc.model, 1
+		c.Upsert(s)
+	}
+	l := c.LimitsAt(at(30))
+	if len(l.Lockouts) != 1 || !l.Lockouts[0].EndedAt.Equal(at(15)) || !l.Lockouts[0].WorkResumedAt.Equal(at(8)) ||
+		l.Lockouts[0].AccountLabel != "" {
+		t.Errorf("lockouts = %+v", l.Lockouts)
+	}
+}
+
+func TestLimitWindowSpendMatchesAccountAndPlan(t *testing.T) {
+	setZone(t, "UTC")
+	c := New()
+	account := model.AccountKey("first")
+	reset := at(300)
+	old, newPlan := codexRead(20, 95, reset), codexRead(40, 90, reset)
+	newPlan.Plan = "pro"
+	newPlan2 := codexRead(350, 98, at(620))
+	newPlan2.Plan = "pro"
+	a := limitSession("codex", "A", 0, []model.LimitReading{old, newPlan, newPlan2},
+		msgSpec{"a1", 50, 3, 0}, msgSpec{"a2", 400, 5, 0}, msgSpec{"a3", 430, 33, 0})
+	a.Account = account
+	a.Messages[2].AccountKnown = true // a child with an unknown account
+	c.Upsert(a)
+	b := limitSession("codex", "B", 50, []model.LimitReading{codexRead(60, 95, reset)},
+		msgSpec{"b1", 110, 16, 0})
+	b.Account = model.AccountKey("second")
+	c.Upsert(b)
+	l := c.LimitsAt(at(700))
+	if len(l.Windows) != 4 {
+		t.Fatalf("windows = %+v", l.Windows)
+	}
+	for _, w := range l.Windows {
+		switch {
+		case w.Account == a.Account && w.ResetsAt.Equal(reset):
+			if w.PlanPeriod == "" || w.SeenUSD != nil {
+				t.Errorf("crosses plan observation boundary: %+v", w)
+			}
+		case w.Account == a.Account:
+			if w.Plan != "pro" || w.SeenUSD == nil || *w.SeenUSD != 5 || w.SeenSessions != 1 || w.TopSessions[0].ID != "A" {
+				t.Errorf("first account: %+v", w)
+			}
+		case w.Account == b.Account:
+			if w.SeenUSD == nil || *w.SeenUSD != 16 || w.AccountLabel != "Account 2" {
+				t.Errorf("second account: %+v", w)
+			}
+		default:
+			t.Errorf("unexpected account: %+v", w)
+		}
 	}
 }
 

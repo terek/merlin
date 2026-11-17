@@ -14,6 +14,8 @@ import (
 // Everything is ordered by file position. Nothing in it depends on the wall clock or on
 // map iteration order. Texts are whole.
 type FileResult struct {
+	// Owners contains complete identities by the session-owner record's sessionId.
+	Owners map[string][]string
 	// Turns are the file's turns in file order. Turn.Index is the slice index. When the
 	// file has assistant activity before its first prompt, Turns[0] is a continuation turn
 	// (origin "continuation", empty UserText, no UUID) and the first prompt is Turns[1].
@@ -112,7 +114,8 @@ type FileResult struct {
 // LimitRecord is a limit reading with the uuid of the record it came from, so that Assemble
 // can keep one reading when a fork agent's file repeats its parent's records.
 type LimitRecord struct {
-	UUID string
+	SessionID string // explicit source session, used to constrain account inheritance
+	UUID      string
 	model.LimitReading
 }
 

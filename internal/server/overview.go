@@ -35,6 +35,16 @@ func (a *API) handleOverview(w http.ResponseWriter, r *http.Request) {
 		qq  catalog.OverviewQuery
 		err error
 	)
+	qq.Account = q.Get("account")
+	if err := validateAccount(qq.Account); err != nil {
+		a.paramError(w, err)
+		return
+	}
+	qq.Harness = q.Get("harness")
+	if qq.Harness != "" && !a.knownHarness(cat, qq.Harness) {
+		a.badParam(w, "harness=%q: not a known harness (see /api/harnesses)", qq.Harness)
+		return
+	}
 	if s := q.Get("slot"); s != "" {
 		for _, d := range catalog.OverviewSlots {
 			if catalog.OverviewSlotName(d) == s {

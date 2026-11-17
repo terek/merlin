@@ -37,7 +37,8 @@ const count = (n: number, one: string, many: string): string => (n === 1 ? `1 ${
 export function worthSentences(windows: readonly LimitWindow[]): string[] {
   const groups = new Map<string, LimitWindow[]>()
   for (const w of windows) {
-    const k = `${w.harness}/${w.windowMinutes}`
+    if (!w.startsAt || !w.windowMinutes || w.kind === 'spend_cap' || w.limit === 'overage') continue
+    const k = JSON.stringify([w.harness, w.account, w.limit, w.windowMinutes, w.plan, w.planPeriod])
     const g = groups.get(k)
     if (g) g.push(w)
     else groups.set(k, [w])
@@ -45,7 +46,7 @@ export function worthSentences(windows: readonly LimitWindow[]): string[] {
   const out: { key: string; text: string }[] = []
   for (const [key, ws] of groups) {
     const first = ws[0]
-    const name = harnessName(first.harness)
+    const name = `${harnessName(first.harness)}${first.accountLabel ? ` ${first.accountLabel}` : ''}${first.plan ? ` (${first.plan})` : ''}${first.planPeriod ? `, period from ${new Date(first.planPeriod).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}`
     const limit = limitName(first)
     const per = ws.flatMap((w) => (w.usdPerPercent && w.usdPerPercent > 0 ? [w.usdPerPercent] : []))
     if (first.harness === 'claude') {
@@ -64,16 +65,5 @@ export function worthSentences(windows: readonly LimitWindow[]): string[] {
       })
     }
   }
-  // by harness name, then the shorter limit first
-  const order = (k: string): [string, number] => {
-    const [h, m] = k.split('/')
-    return [h, Number(m)]
-  }
-  return out
-    .sort((a, b) => {
-      const [ha, ma] = order(a.key)
-      const [hb, mb] = order(b.key)
-      return ha < hb ? -1 : ha > hb ? 1 : ma - mb
-    })
-    .map((s) => s.text)
+  return out.sort((a, b) => a.key.localeCompare(b.key)).map((s) => s.text)
 }

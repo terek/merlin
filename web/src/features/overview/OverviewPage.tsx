@@ -11,7 +11,7 @@ import { memo, type ReactNode, useLayoutEffect, useMemo, useRef, useState } from
 import { Link, useNavigate } from 'react-router-dom'
 import { useHarness } from '../../api/harnesses'
 import { useLimits, useOverview, useSearch } from '../../api/queries'
-import type { LimitWindow, Overview, OverviewLane } from '../../api/types'
+import type { LimitLockout, LimitWindow, Overview, OverviewLane } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatDuration, formatMoney, plural } from '../../lib/format'
 import { useDocumentTitle, useNow } from '../../lib/hooks'
@@ -88,12 +88,12 @@ import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
 import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
 import {
   type LockoutSpan,
+  limitName,
   lockoutBand,
-  lockoutSpans,
+  lockoutsBySession,
   refusalsBySession,
   scopeWindows,
   windowRange,
-  windowTimes,
 } from './windows'
 
 /** The structured block's columns (px) and the cell padding the graph sits in. */
@@ -517,6 +517,7 @@ function Summary({
   axis,
   band,
   windows,
+  episodes,
   onWindow,
   padRight,
 }: {
@@ -534,6 +535,7 @@ function Summary({
   band: Band | null
   /** The limit windows that qualify in the range: their locked-out stretch is a clickable band under the labels. */
   windows: readonly LimitWindow[]
+  episodes: readonly LimitLockout[]
   onWindow: (w: LimitWindow) => void
   padRight: number
 }) {
@@ -555,27 +557,37 @@ function Summary({
             <LockoutPattern id={lockId} />
           </defs>
           {band && <rect x={band.x0} y={0} width={band.x1 - band.x0} height={22} fill="var(--surface-2)" />}
-          {windows.map((w) => {
-            const b = lockoutBand(w, axis.fromMs, axis.toMs)
+          {episodes.map((l) => {
+            const b = lockoutBand(l, axis.fromMs, axis.toMs)
             if (!b) return null
+            const w = windows.find(
+              (w) =>
+                w.startsAt &&
+                w.harness === l.harness &&
+                w.account === l.account &&
+                w.limit === l.limit &&
+                w.windowMinutes === l.windowMinutes &&
+                Math.abs(Date.parse(w.resetsAt) - Date.parse(l.resetsAt ?? '')) <= 600_000,
+            )
             const x = xOf(axis, b.fromMs)
-            const label = `Scope to this limit window: ${windowTimes(w)}`
+            const label = `${limitName(l)} refusal; ${l.end === 'open' && !l.workResumedAt ? 'open, through now' : `no successful calls observed until ${new Date(b.toMs).toLocaleString()}`}${w ? '; scope to this limit window' : ''}`
             return (
-              // biome-ignore lint/a11y/useSemanticElements: an SVG rect cannot be a button element
               <rect
-                key={`${w.harness}/${w.limit}/${w.resetsAt}`}
-                role="button"
-                tabIndex={0}
+                key={`${l.harness}/${l.account}/${l.kind}/${l.windowMinutes}/${l.limit}/${l.startedAt}`}
+                role={w ? 'button' : undefined}
+                tabIndex={w ? 0 : undefined}
                 aria-label={label}
                 x={x}
                 y={0}
                 width={Math.max(3, xOf(axis, b.toMs) - x)}
                 height={22}
                 fill={`url(#${lockId})`}
-                className="cursor-pointer"
-                onClick={() => onWindow(w)}
+                stroke={l.end === 'open' && !l.workResumedAt ? 'var(--bad)' : undefined}
+                strokeDasharray={l.end === 'open' && !l.workResumedAt ? '3 3' : undefined}
+                className={w ? 'cursor-pointer' : undefined}
+                onClick={() => w && onWindow(w)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') onWindow(w)
+                  if (w && (e.key === 'Enter' || e.key === ' ')) onWindow(w)
                 }}
               >
                 <title>{label}</title>
@@ -644,8 +656,8 @@ function LimitKey() {
       <ul className="grid grid-cols-[28px_1fr] items-center gap-x-2 gap-y-1.5">
         <li className="contents">
           <LockoutSwatch />
-          <span title="From the first refused call to the reset, whole, on every session it touched">
-            Locked out by a limit
+          <span title="From refusal until the first successful call observed anywhere or the account lockout end; open stretches stop at now">
+            No successful calls observed
           </span>
         </li>
         <li className="contents">
@@ -701,6 +713,8 @@ export function OverviewPage() {
       from: new Date(win.fromMs).toISOString(),
       to: new Date(win.toMs).toISOString(),
       slot,
+      harness: custom?.harness,
+      account: custom?.account,
     },
     measured !== null,
   )
@@ -804,12 +818,7 @@ function Table({
   )
   const limits = useLimits()
   const refusals = useMemo(() => refusalsBySession(limits.data?.refusals ?? []), [limits.data])
-  const lockouts = useMemo(() => {
-    const out = new Map<string, LockoutSpan[]>()
-    for (const h of new Set((limits.data?.windows ?? []).map((w) => w.harness)))
-      out.set(h, lockoutSpans(limits.data?.windows ?? [], h, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY))
-    return out
-  }, [limits.data])
+  const lockouts = useMemo(() => lockoutsBySession(limits.data, o.lanes), [limits.data, o.lanes])
   const hasLimits = (limits.data?.refusals.length ?? 0) > 0 || lockouts.size > 0
   // The rows scroll; header and summary do not. The scrollbar takes width from the rows only, so the
   // header and the summary give up as much (padRight) and the columns and the date axis stay aligned.
@@ -848,8 +857,16 @@ function Table({
   )
 
   const windows = useMemo(
-    () => scopeWindows(limits.data?.windows ?? [], axis.fromMs, axis.toMs, harness),
-    [limits.data, axis.fromMs, axis.toMs, harness],
+    () =>
+      scopeWindows(
+        limits.data?.windows ?? [],
+        axis.fromMs,
+        axis.toMs,
+        harness,
+        sp.get('account') ?? undefined,
+        limits.data?.lockouts,
+      ),
+    [limits.data, axis.fromMs, axis.toMs, harness, sp],
   )
 
   // ---- hover: one state, the pointer's x and the place under it ----
@@ -919,7 +936,7 @@ function Table({
                   axis={axis}
                   pxPerTok={pxPerTok}
                   refusals={refusals.get(sessionKey(l.harness, l.id))}
-                  lockouts={lockouts.get(l.harness)}
+                  lockouts={lockouts.get(sessionKey(l.harness, l.id))}
                   search={search}
                 />
               ))}
@@ -947,6 +964,11 @@ function Table({
             axis={axis}
             band={band}
             windows={windows}
+            episodes={(limits.data?.lockouts ?? []).filter(
+              (l) =>
+                (!harness || l.harness === harness) &&
+                (!sp.get('account') || sp.get('account') === (l.account ?? 'unknown')),
+            )}
             onWindow={onWindow}
             padRight={padRight}
           />

@@ -32,17 +32,18 @@ type envelope struct {
 
 // sessionMeta is the payload of a session_meta record: the first line of every rollout.
 type sessionMeta struct {
-	ID             string          `json:"id"`
-	SessionID      string          `json:"session_id"`
-	ParentThreadID string          `json:"parent_thread_id"`
-	Timestamp      string          `json:"timestamp"`
-	Cwd            string          `json:"cwd"`
-	Originator     string          `json:"originator"`
-	CLIVersion     string          `json:"cli_version"`
-	Source         json.RawMessage `json:"source"`
-	AgentNickname  string          `json:"agent_nickname"`
-	AgentPath      string          `json:"agent_path"`
-	Git            *struct {
+	ID               string          `json:"id"`
+	CreatorAccountID string          `json:"creator_account_id"`
+	SessionID        string          `json:"session_id"`
+	ParentThreadID   string          `json:"parent_thread_id"`
+	Timestamp        string          `json:"timestamp"`
+	Cwd              string          `json:"cwd"`
+	Originator       string          `json:"originator"`
+	CLIVersion       string          `json:"cli_version"`
+	Source           json.RawMessage `json:"source"`
+	AgentNickname    string          `json:"agent_nickname"`
+	AgentPath        string          `json:"agent_path"`
+	Git              *struct {
 		Branch string `json:"branch"`
 	} `json:"git"`
 	ForkedFromID string `json:"forked_from_id"`
@@ -130,6 +131,7 @@ type usage struct {
 
 // usageRec is one token_usage_record: one billed API call.
 type usageRec struct {
+	Account    string // the source thread, preserved through inherited history
 	ResponseID string
 	At         time.Time
 	Turn       int // index into thread.turns; -1 when before every turn
@@ -333,6 +335,10 @@ func readThread(path string, lim limit) (*thread, error) {
 		t.Truncated = true
 	}
 	p.finish()
+	account := threadAccount(t)
+	for i := range t.Usage {
+		t.Usage[i].Account = account
+	}
 	return t, nil
 }
 

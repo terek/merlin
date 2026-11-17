@@ -17,6 +17,10 @@ const scopeSearchLimit = defaultLimit
 // bead; dir by default) with `in`, a path in it, and `q`, the Overview's search. With either of
 // `in` and `q` the scripted runs are out, as they are on the Overview.
 func (a *API) scope(cat *catalog.Catalog, q url.Values, f *catalog.Filter) error {
+	f.Account = q.Get("account")
+	if err := validateAccount(f.Account); err != nil {
+		return err
+	}
 	place, in, term := q.Get("place"), q.Get("in"), strings.TrimSpace(q.Get("q"))
 	if place != "" && !catalog.ValidPlace(place) {
 		return fmt.Errorf("place=%q: use dir, checkout, repo, remote or bead", place)

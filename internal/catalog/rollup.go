@@ -76,7 +76,7 @@ func (v *view) selected(f Filter) []fact {
 		if x.s != last {
 			last, ok = x.s, f.selects(x.s, "")
 		}
-		if ok && f.dayIn(x.day) && f.minuteIn(x) {
+		if ok && accountMatches(f.Account, x.account) && f.dayIn(x.day) && f.minuteIn(x) {
 			out = append(out, x)
 		}
 	}
@@ -338,7 +338,7 @@ func (v *view) scripted(f Filter) []ScriptedLine {
 		return l
 	}
 	for _, s := range v.sessions {
-		if s.d.Kind == model.KindSDK && f.selects(s, "") && f.dayIn(v.day(s.d.StartedAt)) {
+		if s.d.Kind == model.KindSDK && accountMatches(f.Account, s.d.Account) && f.selects(s, "") && f.dayIn(v.day(s.d.StartedAt)) {
 			l := line(key{s.project, v.day(s.d.StartedAt)})
 			l.Count++
 			if s.d.EndState == model.EndRefused && len(s.d.Messages) == 0 {

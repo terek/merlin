@@ -3,13 +3,13 @@
 // the Overview on the same window.
 
 import { Link } from 'react-router-dom'
-import type { LimitWindow } from '../../api/types'
+import type { LimitLockout, LimitWindow } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { formatMoney } from '../../lib/format'
 import { HarnessIcon, Money } from '../../ui'
 import { openValue } from '../overview/focus'
 import { type CustomRange, formatCustom } from '../overview/model'
-import { limitName, lockoutMs, lockoutText, windowRange, windowTimes } from '../overview/windows'
+import { episodeText, limitName, windowLockouts, windowRange, windowTimes } from '../overview/windows'
 import { sessionLabel, worthSentences } from './worth'
 
 const HEAD = 'text-faint text-meta uppercase tracking-wide'
@@ -37,15 +37,33 @@ export function windowSessionsHref(
 
 export function Limits({
   windows,
+  lockouts,
   sp,
   onWindow,
+  fromMs,
+  toMs,
 }: {
   /** The qualifying windows overlapping the scope, newest first (`scopeWindows`). */
   windows: readonly LimitWindow[]
+  lockouts: readonly LimitLockout[]
   sp: URLSearchParams
   onWindow: (r: CustomRange) => void
+  fromMs: number
+  toMs: number
 }) {
-  if (windows.length === 0) return null
+  const from = fromMs
+  const to = toMs
+  const unmatched = lockouts.filter(
+    (l) =>
+      !windows.some((w) => windowLockouts(w, [l]).length > 0) &&
+      (!sp.get('harness') || sp.get('harness') === l.harness) &&
+      (!sp.get('account') || sp.get('account') === (l.account ?? 'unknown')) &&
+      (!Number.isFinite(from) ||
+        Date.parse(l.endedAt ?? '') >= from ||
+        (l.end === 'open' && Date.parse(l.startedAt) <= Date.now())) &&
+      (!Number.isFinite(to) || Date.parse(l.startedAt) < to),
+  )
+  if (windows.length === 0 && unmatched.length === 0) return null
   const sentences = worthSentences(windows)
   return (
     <section className="border-line border-b">
@@ -56,9 +74,9 @@ export function Limits({
         <table className="w-full table-fixed text-sec">
           <thead>
             <tr className={cn(HEAD, 'h-9')}>
-              <th className="w-[26%] text-left font-normal">Window</th>
+              <th className="w-[32%] text-left font-normal">Window</th>
               <th className="w-14 text-right font-normal">Used</th>
-              <th className="w-24 px-2 text-right font-normal">Locked out</th>
+              <th className="w-[24%] px-2 text-right font-normal">Account lockout</th>
               <th className="w-24 text-right font-normal">Spent</th>
               <th className="px-4 text-left font-normal">Biggest sessions</th>
               <th className="w-24" />
@@ -66,10 +84,25 @@ export function Limits({
           </thead>
           <tbody>
             {windows.map((w) => (
-              <Row key={`${w.harness}/${w.limit}/${w.resetsAt}`} w={w} sp={sp} onWindow={onWindow} />
+              <Row
+                key={`${w.harness}/${w.account}/${w.plan}/${w.planPeriod}/${w.kind}/${w.windowMinutes}/${w.limit}/${w.resetsAt}`}
+                w={w}
+                lockouts={windowLockouts(w, lockouts)}
+                sp={sp}
+                onWindow={onWindow}
+              />
             ))}
           </tbody>
         </table>
+        {unmatched.map((l) => (
+          <p
+            key={`${l.harness}/${l.account}/${l.kind}/${l.windowMinutes}/${l.limit}/${l.startedAt}`}
+            className="pt-2 text-meta text-muted"
+          >
+            <span className="text-fg">{limitName(l)}</span> · {episodeText(l)}
+            {l.resetsAt && <span> · reset {new Date(l.resetsAt).toLocaleString()}</span>}
+          </p>
+        ))}
         {sentences.map((s) => (
           <p key={s} className="pt-1 text-meta text-muted">
             {s}
@@ -80,28 +113,41 @@ export function Limits({
   )
 }
 
-function Row({ w, sp, onWindow }: { w: LimitWindow; sp: URLSearchParams; onWindow: (r: CustomRange) => void }) {
+function Row({
+  w,
+  lockouts,
+  sp,
+  onWindow,
+}: {
+  w: LimitWindow
+  lockouts: LimitLockout[]
+  sp: URLSearchParams
+  onWindow: (r: CustomRange) => void
+}) {
   const claude = w.harness === 'claude'
-  const range = windowRange(w)
-  const lock = lockoutMs(w)
+  const range = w.startsAt ? windowRange(w) : undefined
   const scripted = w.scriptedUSD ?? 0
   const approx = claude
   return (
     <tr
-      className="h-[34px] cursor-pointer border-line border-t hover:bg-surface-2"
-      title="Scope to this limit window"
-      onClick={() => onWindow(range)}
+      className={cn('h-[34px] border-line border-t', range && 'cursor-pointer hover:bg-surface-2')}
+      title={range ? 'Scope to this limit window' : 'Window bounds unknown'}
+      onClick={() => range && onWindow(range)}
     >
       <td className="min-w-0 py-1">
         <div className="flex items-center gap-1.5 truncate">
           <HarnessIcon harness={w.harness} size={14} />
           <span className="text-fg">{limitName(w)}</span>
+          {w.accountLabel && <span className="text-muted">{w.accountLabel}</span>}
           {w.plan && <span className="text-muted">{w.plan}</span>}
-          <span className="truncate text-muted">
-            {approx ? '≈ ' : ''}
-            {windowTimes(w)}
-          </span>
+          {range && (
+            <span className="truncate text-muted" title={windowTimes(w)}>
+              {approx ? '≈ ' : ''}
+              {windowTimes(w)}
+            </span>
+          )}
         </div>
+        {!range && <div className="text-meta text-muted">{windowTimes(w)}</div>}
       </td>
       <td className="text-right">
         {claude ? (
@@ -113,7 +159,15 @@ function Row({ w, sp, onWindow }: { w: LimitWindow; sp: URLSearchParams; onWindo
         )}
       </td>
       <td className="px-2 text-right">
-        {lock === undefined ? <span className="text-faint">–</span> : lockoutText(lock)}
+        {lockouts.length === 0 ? (
+          <span className="text-faint">–</span>
+        ) : (
+          lockouts.map((l) => (
+            <div key={l.startedAt} title={episodeText(l)}>
+              {episodeText({ ...l, accountLabel: undefined })}
+            </div>
+          ))
+        )}
       </td>
       <td
         className="text-right"
@@ -134,7 +188,7 @@ function Row({ w, sp, onWindow }: { w: LimitWindow; sp: URLSearchParams; onWindo
             <span key={`${s.harness}/${s.id}`}>
               {i > 0 && ', '}
               <Link
-                to={windowSessionsHref(sp, range, s)}
+                to={range ? windowSessionsHref(sp, range, s) : `/?open=${openValue(s)}`}
                 onClick={(e) => e.stopPropagation()}
                 className="text-fg hover:text-accent hover:underline"
                 title={`${sessionLabel(s)}: ${s.usd.toFixed(2)} USD`}
@@ -151,13 +205,15 @@ function Row({ w, sp, onWindow }: { w: LimitWindow; sp: URLSearchParams; onWindo
         </div>
       </td>
       <td className="text-right">
-        <Link
-          to={windowSessionsHref(sp, range)}
-          onClick={(e) => e.stopPropagation()}
-          className="text-muted hover:text-accent"
-        >
-          sessions →
-        </Link>
+        {range && (
+          <Link
+            to={windowSessionsHref(sp, range)}
+            onClick={(e) => e.stopPropagation()}
+            className="text-muted hover:text-accent"
+          >
+            sessions →
+          </Link>
+        )}
       </td>
     </tr>
   )

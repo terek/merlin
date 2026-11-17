@@ -1026,6 +1026,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
  * day-based code keep working) and the `harness` whose limit it is.
  */
 export interface CustomRange {
+  account?: string
   from: string
   to: string
   fromMs?: number
@@ -1062,13 +1063,14 @@ export function parseInstant(v: string | null): number | null {
 }
 
 /** A limit window as a range: the instants, the local days they touch, and the harness. */
-export function instantRange(fromMs: number, toMs: number, harness?: string): CustomRange {
+export function instantRange(fromMs: number, toMs: number, harness?: string, account?: string): CustomRange {
   return {
     from: localDay(new Date(fromMs)),
     to: localDay(new Date(Math.max(fromMs, toMs - 1))),
     fromMs,
     toMs,
     ...(harness ? { harness } : {}),
+    ...(account ? { account } : {}),
   }
 }
 
@@ -1076,11 +1078,18 @@ export function instantRange(fromMs: number, toMs: number, harness?: string): Cu
  * `from` and `to` of the URL: a custom range when both are real days and `from` is not after `to`; or a limit
  * window when both are RFC 3339 instants in order (then `harness`, a plain name, goes with it).
  */
-export function parseCustom(from: string | null, to: string | null, harness?: string | null): CustomRange | null {
+export function parseCustom(
+  from: string | null,
+  to: string | null,
+  harness?: string | null,
+  account?: string | null,
+): CustomRange | null {
   const fa = parseInstant(from)
   const ta = parseInstant(to)
   if (fa !== null && ta !== null) {
-    return fa < ta ? instantRange(fa, ta, harness && /^[A-Za-z][\w-]*$/.test(harness) ? harness : undefined) : null
+    return fa < ta
+      ? instantRange(fa, ta, harness && /^[A-Za-z][\w-]*$/.test(harness) ? harness : undefined, account || undefined)
+      : null
   }
   const a = parseDay(from)
   const b = parseDay(to)
@@ -1090,12 +1099,14 @@ export function parseCustom(from: string | null, to: string | null, harness?: st
 const instantText = (ms: number): string => new Date(ms).toISOString().replace('.000Z', 'Z')
 
 /** The URL params of a custom range or window, and of none (the presets drop them, and the harness with them). */
-export const formatCustom = (r: CustomRange | null): { from?: string; to?: string; harness?: string } =>
+export const formatCustom = (
+  r: CustomRange | null,
+): { from?: string; to?: string; harness?: string; account?: string } =>
   isWindowRange(r)
-    ? { from: instantText(r.fromMs), to: instantText(r.toMs), harness: r.harness }
+    ? { from: instantText(r.fromMs), to: instantText(r.toMs), harness: r.harness, account: r.account }
     : r
-      ? { from: r.from, to: r.to, harness: undefined }
-      : { from: undefined, to: undefined, harness: undefined }
+      ? { from: r.from, to: r.to, harness: undefined, account: undefined }
+      : { from: undefined, to: undefined, harness: undefined, account: undefined }
 
 /** The days a range covers. */
 export const customDays = (r: CustomRange): number =>

@@ -1476,7 +1476,16 @@ export function TimePlot({
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
           {/* limit lockouts: a light red block behind everything, across breaks too */}
           {lockBlocks.map((l) => (
-            <rect key={`l${l.fromMs}`} x={l.x0} y={0} width={l.x1 - l.x0} height={height} fill={`url(#${lockId})`}>
+            <rect
+              key={`l${l.fromMs}`}
+              x={l.x0}
+              y={0}
+              width={l.x1 - l.x0}
+              height={height}
+              fill={`url(#${lockId})`}
+              stroke={l.open ? 'var(--bad)' : undefined}
+              strokeDasharray={l.open ? '3 3' : undefined}
+            >
               <title>{lockoutTitle(l)}</title>
             </rect>
           ))}

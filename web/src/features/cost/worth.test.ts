@@ -7,6 +7,7 @@ const win = (o: Partial<LimitWindow>): LimitWindow => ({
   limit: 'codex',
   windowMinutes: 300,
   resetsAt: '2026-11-10T15:00:00Z',
+  startsAt: '2026-11-10T10:00:00Z',
   firstSeenAt: '2026-11-10T10:00:00Z',
   lastSeenAt: '2026-11-10T14:00:00Z',
   refusals: 0,
@@ -60,5 +61,38 @@ describe('worthSentences', () => {
     expect(worthSentences(ws)).toEqual([
       'Claude Code ran out of its weekly limit after at least $300 (median of 1 hit; spend this machine recorded).',
     ])
+  })
+  test('unknown bounds and overage readings never contribute window worth', () => {
+    expect(
+      worthSentences([
+        win({ startsAt: undefined, usdPerPercent: 0.3 }),
+        win({ windowMinutes: undefined, usdPerPercent: 0.3 }),
+        win({ kind: 'spend_cap', usdPerPercent: 0.3 }),
+        win({ limit: 'overage', usdPerPercent: 0.3 }),
+      ]),
+    ).toEqual([])
+  })
+  test('worth separates account, model-specific limit and plan period', () => {
+    const base = win({
+      harness: 'claude',
+      limit: 'seven_day_opus',
+      windowMinutes: 10080,
+      refusals: 1,
+      seenUSD: 30,
+      account: 'a',
+      accountLabel: 'Account 1',
+    })
+    const sentences = worthSentences([
+      base,
+      { ...base, account: 'b', accountLabel: 'Account 2', seenUSD: 300 },
+      { ...base, limit: 'seven_day_sonnet', seenUSD: 400 },
+      { ...base, planPeriod: '2026-11-11T12:00:00Z', plan: 'max', seenUSD: 500 },
+    ])
+    expect(sentences).toHaveLength(4)
+    expect(sentences.join(' ')).toContain('Account 1')
+    expect(sentences.join(' ')).toContain('Account 2')
+    expect(sentences.join(' ')).toContain('weekly (opus)')
+    expect(sentences.join(' ')).toContain('weekly (sonnet)')
+    expect(sentences.join(' ')).not.toContain('2026-11-11T12:00:00Z')
   })
 })

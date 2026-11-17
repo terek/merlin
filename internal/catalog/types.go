@@ -390,6 +390,8 @@ type Tree struct {
 // Filter selects sessions. The zero value selects everything.
 type Filter struct {
 	Harness string
+	// Account selects an opaque account key, or "unknown" for unassigned spend.
+	Account string
 	// Project is a project directory (or a harness storage key).
 	Project string
 	Kinds   []model.SessionKind

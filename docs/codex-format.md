@@ -155,6 +155,12 @@ plan, `resets_at` within 120 s) is dropped. A refused call is a `task_complete` 
 reading with `rejected` and no limit, window or percentage. A subagent thread's readings carry its
 `agentId`.
 
+`session_meta.creator_account_id` identifies a recorded account for that thread. Merlin
+derives an opaque key and keeps the thread's identity on its limit readings and calls,
+including when the thread is a subagent or its history is inherited by a fork. Missing
+account metadata stays unknown. `plan_type` describes the plan at a limit reading and
+does not give the time of a plan change.
+
 ## Hooks
 
 What `internal/codex/hooks` writes and reads, checked against Codex 0.164's own `hooks/list`

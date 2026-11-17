@@ -1,19 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import type { LimitWindow } from '../../api/types'
+import type { LimitLockout } from '../../api/types'
 import { affectedLockouts, lockoutAffects, lockoutSpans, lockoutTitle, waitUntil } from './windows'
 
 const at = (h: number, m = 0) =>
   Date.parse(`2026-11-10T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`)
 const iso = (h: number) => new Date(at(h)).toISOString()
-const win = (o: Partial<LimitWindow>): LimitWindow => ({
+const win = (o: Partial<LimitLockout>): LimitLockout => ({
   harness: 'claude',
   limit: 'five_hour',
   windowMinutes: 300,
   resetsAt: iso(15),
-  firstSeenAt: iso(10),
-  lastSeenAt: iso(14),
-  refusals: 2,
-  firstRefusalAt: iso(12),
+  startedAt: iso(12),
+  endedAt: iso(15),
+  end: 'reset',
   ...o,
 })
 
@@ -32,24 +31,30 @@ describe('lockoutSpans', () => {
   })
 
   test('overlapping and touching lockouts merge, naming both windows', () => {
-    const weekly = win({ windowMinutes: 10080, limit: 'seven_day', firstRefusalAt: iso(14), resetsAt: iso(20) })
+    const weekly = win({
+      windowMinutes: 10080,
+      limit: 'seven_day',
+      startedAt: iso(14),
+      resetsAt: iso(20),
+      endedAt: iso(20),
+    })
     const s = lockoutSpans([weekly, win({})], 'claude', 0, at(23))
     expect(s).toHaveLength(1)
     expect(s[0]).toMatchObject({ fromMs: at(12), toMs: at(20), untilMs: at(20) })
-    expect(s[0].windows.map((w) => w.windowMinutes)).toEqual([300, 10080])
-    const touching = win({ firstRefusalAt: iso(15), resetsAt: iso(18) })
+    expect(s[0].episodes.map((w) => w.windowMinutes)).toEqual([300, 10080])
+    const touching = win({ startedAt: iso(15), resetsAt: iso(18), endedAt: iso(18) })
     expect(lockoutSpans([win({}), touching], 'claude', 0, at(23))).toHaveLength(1)
   })
 
   test('separate lockouts stay apart, sorted', () => {
-    const later = win({ firstRefusalAt: iso(18), resetsAt: iso(20) })
+    const later = win({ startedAt: iso(18), resetsAt: iso(20), endedAt: iso(20) })
     const s = lockoutSpans([later, win({})], 'claude', 0, at(23))
     expect(s.map((x) => x.fromMs)).toEqual([at(12), at(18)])
   })
 
   test('other harnesses and windows without a lockout are ignored', () => {
     const codex = win({ harness: 'codex' })
-    const none = win({ firstRefusalAt: undefined, refusals: 0 })
+    const none = win({ startedAt: iso(20), endedAt: iso(21), harness: 'pi' })
     expect(lockoutSpans([codex, none], 'claude', 0, at(23))).toEqual([])
     expect(lockoutSpans([codex, none], 'codex', 0, at(23))).toHaveLength(1)
   })
@@ -57,10 +62,10 @@ describe('lockoutSpans', () => {
 
 describe('lockoutTitle', () => {
   test('names the limits and the end', () => {
-    const one = lockoutTitle({ untilMs: at(15), windows: [win({})] })
-    expect(one).toMatch(/^Locked out by the 5h limit until \w{3} \d+, \d\d:\d\d$/)
-    const two = lockoutTitle({ untilMs: at(15), windows: [win({}), win({ windowMinutes: 10080 })] })
-    expect(two).toMatch(/^Locked out by the 5h and Weekly limits until /)
+    const one = lockoutTitle({ untilMs: at(15), open: false, episodes: [win({})] })
+    expect(one).toMatch(/^No successful calls observed after 5h refusal until \w{3} \d+, \d\d:\d\d$/)
+    const two = lockoutTitle({ untilMs: at(15), open: false, episodes: [win({}), win({ windowMinutes: 10080 })] })
+    expect(two).toMatch(/^No successful calls observed after 5h and Weekly refusal until /)
   })
 })
 

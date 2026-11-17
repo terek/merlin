@@ -1139,6 +1139,7 @@ export interface SessionFilters {
 }
 
 export interface CostParams {
+  account?: string
   by?: CostBy
   split?: CostSplit
   /** A local day (`2026-11-14`) or an RFC 3339 instant, which cuts per message. */
@@ -1188,6 +1189,8 @@ export interface PriceList {
 export type OverviewSlot = '1m' | '2m' | '5m' | '10m' | '15m' | '30m' | '1h' | '2h' | '3h' | '6h' | '12h' | '1d'
 
 export interface OverviewParams {
+  harness?: string
+  account?: string
   from?: string
   to?: string
   slot?: OverviewSlot
@@ -1291,10 +1294,14 @@ export interface LimitSession {
 
 /** A usage window of the subscription: the 5-hour or the 7-day limit, per harness (internal/limits). */
 export interface LimitWindow {
+  account?: string
+  accountLabel?: string
+  kind?: string
+  planPeriod?: string
   harness: string
   /** Codex `limit_id`, Claude Code `rateLimitType` (`five_hour`, `seven_day`). */
   limit: string
-  windowMinutes: number
+  windowMinutes?: number
   plan?: string
   resetsAt: string
   /** `resetsAt` minus `windowMinutes`; for Claude Code only to within about 10 minutes. */
@@ -1321,6 +1328,9 @@ export interface LimitWindow {
 
 /** A call a harness refused because a limit was reached. */
 export interface LimitRefusal {
+  account?: string
+  accountLabel?: string
+  kind?: string
   at: string
   harness: string
   session?: { harness: string; id: string }
@@ -1330,7 +1340,23 @@ export interface LimitRefusal {
   resetsAt?: string
 }
 
+export interface LimitLockout {
+  harness: string
+  account?: string
+  accountLabel?: string
+  limit?: string
+  kind?: string
+  windowMinutes?: number
+  startedAt: string
+  resetsAt?: string
+  endedAt?: string
+  end: 'open' | 'reset' | 'resumed'
+  workResumedAt?: string
+}
+
 export interface Limits {
+  lockouts: LimitLockout[]
+  sessionAccounts?: { session: { harness: string; id: string }; account: string }[]
   windows: LimitWindow[]
   refusals: LimitRefusal[]
 }

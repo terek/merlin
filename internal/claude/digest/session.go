@@ -18,7 +18,7 @@ import (
 // the Builder, in Assemble or in the transcript package would change a digest built from
 // the same files: the engine rebuilds every digest whose parserVersion differs. A change of
 // the embedded price table counts too, as the stored costs are not repriced otherwise.
-const ParserVersion = 21
+const ParserVersion = 22
 
 // BuildSession reads the files of one discovered session and returns its complete digest.
 //
@@ -75,6 +75,50 @@ func BuildSessionFrom(src discover.Source, pricer Pricer, reduce FileReducer) (*
 		files = append(files, af)
 	}
 
+	// Resolve only identities explicitly recorded for this session. Conflicting complete
+	// identities are ambiguous, rather than evidence of an account switch.
+	account := ""
+	conflict := false
+	allFiles := []*FileResult{main}
+	for _, f := range files {
+		allFiles = append(allFiles, f.Result)
+	}
+	for _, f := range allFiles {
+		if f == nil {
+			continue
+		}
+		for _, a := range f.Owners[src.ID] {
+			if account != "" && account != a {
+				conflict = true
+			}
+			account = a
+		}
+	}
+	if !conflict {
+		d.Account = account
+	}
+	// A reducer may retain its FileResult for incremental reads: attach accounts to
+	// private copies, and never inherit across a nonmatching explicit session id.
+	accountLimits := func(f *FileResult) *FileResult {
+		if f == nil {
+			return nil
+		}
+		copy := *f
+		copy.Limits = slices.Clone(f.Limits)
+		for i := range copy.Limits {
+			l := &copy.Limits[i]
+			if l.SessionID == src.ID {
+				l.Account = d.Account
+			} else {
+				l.AccountKnown = true
+			}
+		}
+		return &copy
+	}
+	main = accountLimits(main)
+	for i := range files {
+		files[i].Result = accountLimits(files[i].Result)
+	}
 	asm := Assemble(main, files)
 	d.Turns, d.Agents, d.Messages, d.Workflows, d.Beads = asm.Turns, asm.Agents, asm.Messages, asm.Workflows, asm.Beads
 	d.Limits = asm.Limits

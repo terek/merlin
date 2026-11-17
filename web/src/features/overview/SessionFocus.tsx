@@ -220,7 +220,7 @@ export function SessionFocus({
                 data={laneData(
                   rowGraph,
                   ctx.refusals.get(sessionKey(rowGraph.harness, rowGraph.id)),
-                  ctx.lockouts.get(rowGraph.harness),
+                  ctx.lockouts.get(sessionKey(rowGraph.harness, rowGraph.id)),
                 )}
                 axis={axis}
                 pxPerTok={ctx.pxPerTok}

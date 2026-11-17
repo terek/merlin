@@ -120,6 +120,7 @@ export function CostPage() {
   const scoped = {
     ...costRange(days, nowMs),
     harness,
+    account: custom?.account,
     place: sel === null ? undefined : by,
     in: sel ?? undefined,
   }
@@ -139,7 +140,7 @@ export function CostPage() {
   // the period before: as many days just before the window, the same scope
   const before = previousWindow(days)
   const prev = useCost(
-    { by: 'model', ...costRange(before), harness, place: scoped.place, in: scoped.in },
+    { by: 'model', ...costRange(before), harness, account: custom?.account, place: scoped.place, in: scoped.in },
     { enabled: ready },
   )
 
@@ -147,7 +148,13 @@ export function CostPage() {
   const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
   const w = customWindow(days, to)
   const overview = useOverview(
-    { from: new Date(w.fromMs).toISOString(), to: new Date(w.toMs).toISOString(), slot: '1d' },
+    {
+      from: new Date(w.fromMs).toISOString(),
+      to: new Date(w.toMs).toISOString(),
+      slot: '1d',
+      harness,
+      account: custom?.account,
+    },
     ready,
   )
   // under a limit window's harness only that harness's sessions are the places; scripted runs are not placed
@@ -162,8 +169,8 @@ export function CostPage() {
 
   const limits = useLimits(ready).data
   const windows = useMemo(
-    () => scopeWindows(limits?.windows ?? [], w.fromMs, w.toMs, harness),
-    [limits, w.fromMs, w.toMs, harness],
+    () => scopeWindows(limits?.windows ?? [], w.fromMs, w.toMs, harness, custom?.account, limits?.lockouts),
+    [limits, w.fromMs, w.toMs, harness, custom?.account],
   )
 
   const prevByModel = useMemo(() => new Map((prev.data?.rows ?? []).map((r) => [r.key, r.totalUSD])), [prev.data])
@@ -215,6 +222,16 @@ export function CostPage() {
         extra={extras}
       />
       <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        {empty && (
+          <Limits
+            fromMs={w.fromMs}
+            toMs={w.toMs}
+            windows={windows}
+            lockouts={limits?.lockouts ?? []}
+            sp={sp}
+            onWindow={scope.scopeTo}
+          />
+        )}
         {empty ? (
           <div className="p-6 text-muted">
             Nothing was spent {customPhrase(days, now)}
@@ -243,7 +260,14 @@ export function CostPage() {
               }
             />
 
-            <Limits windows={windows} sp={sp} onWindow={scope.scopeTo} />
+            <Limits
+              fromMs={w.fromMs}
+              toMs={w.toMs}
+              windows={windows}
+              lockouts={limits?.lockouts ?? []}
+              sp={sp}
+              onWindow={scope.scopeTo}
+            />
 
             <Section
               title={sectionTitle(grain)}

@@ -31,6 +31,7 @@ type sess struct {
 type fact struct {
 	s          *sess
 	day, model string
+	account    string
 	depth      int8  // context band of the call (depth0k...), depthNone for overhead
 	hour       int8  // local clock hour 0-23 of the message; -1 when the fact has no day
 	minute     int64 // the message's UTC minute (Unix seconds / 60, rounded down); meaningful only when day != ""
@@ -567,6 +568,7 @@ func (v *view) costs() {
 
 		type key struct {
 			day, model string
+			account    string
 			hour       int8
 			minute     int64
 			cov        bool
@@ -583,7 +585,7 @@ func (v *view) costs() {
 		var priced, recorded, billed int // owned messages with a price, and of those the harness's own figure
 		for _, m := range s.own {
 			wi := covered(s.windows, m.At)
-			k := key{v.day(m.At), m.Model, v.hour(m.At), minuteOf(m.At), wi >= 0, callDepth(m.Tokens)}
+			k := key{v.day(m.At), m.Model, messageAccount(s, m), v.hour(m.At), minuteOf(m.At), wi >= 0, callDepth(m.Tokens)}
 			if _, ok := sums[k]; !ok {
 				order = append(order, k)
 			}
@@ -659,7 +661,7 @@ func (v *view) costs() {
 			}
 			t := tally(cp.Call, covered(s.windows, cp.At) >= 0)
 			c.Compactions.add(t)
-			v.facts = append(v.facts, fact{s: s, day: v.day(cp.At), hour: v.hour(cp.At), minute: minuteOf(cp.At), model: cp.Call.Model, comp: t, depth: compactionDepth(cp.Call)})
+			v.facts = append(v.facts, fact{s: s, account: s.d.Account, day: v.day(cp.At), hour: v.hour(cp.At), minute: minuteOf(cp.At), model: cp.Call.Model, comp: t, depth: compactionDepth(cp.Call)})
 		}
 		for k := range s.d.Compactions {
 			cp := &s.d.Compactions[k]
@@ -676,7 +678,7 @@ func (v *view) costs() {
 			}
 		}
 		for _, k := range order {
-			f := fact{s: s, day: k.day, hour: k.hour, minute: k.minute, model: k.model, depth: k.depth, cls: *clsSums[k], ag: *agSums[k]}
+			f := fact{s: s, account: k.account, day: k.day, hour: k.hour, minute: k.minute, model: k.model, depth: k.depth, cls: *clsSums[k], ag: *agSums[k]}
 			if k.cov {
 				f.reported = sums[k]
 			} else {
@@ -709,7 +711,7 @@ func (v *view) costs() {
 				shares, shareSum := windowShares(w)
 				for _, d := range perWin[wi] {
 					amount := over * d.usd / coveredBy[wi]
-					f := fact{s: s, day: d.day, hour: d.hour, minute: d.minute, model: OverheadModel, reported: amount}
+					f := fact{s: s, account: s.d.Account, day: d.day, hour: d.hour, minute: d.minute, model: OverheadModel, reported: amount}
 					f.cls.addScaled(amount, shares, shareSum)
 					f.ag[AgentUnsplit] = amount
 					v.facts = append(v.facts, f)
@@ -720,7 +722,7 @@ func (v *view) costs() {
 					at = w.From
 				}
 				shares, shareSum := windowShares(w)
-				f := fact{s: s, day: v.day(at), hour: v.hour(at), minute: minuteOf(at), model: OverheadModel, reported: over}
+				f := fact{s: s, account: s.d.Account, day: v.day(at), hour: v.hour(at), minute: minuteOf(at), model: OverheadModel, reported: over}
 				f.cls.addScaled(over, shares, shareSum)
 				f.ag[AgentUnsplit] = over
 				v.facts = append(v.facts, f)

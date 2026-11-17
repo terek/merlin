@@ -387,7 +387,7 @@ func TestBuildIsDeterministic(t *testing.T) {
 
 func TestForkInheritsParentPrefix(t *testing.T) {
 	home := t.TempDir()
-	parent := newRollout(t).meta("P", "P", "vscode", nil).
+	parent := newRollout(t).meta("P", "P", "vscode", map[string]any{"creator_account_id": "parent-account"}).
 		start(1, "p1", "", "user").ctx(1, "p1", "m", nil).user(1, "First.", 0).usage(2, "resp-p1", "p1", 100, 0, 10).done(3, "p1").
 		start(4, "p2", "", "user").ctx(4, "p2", "m", nil).user(4, "Second.", 0).usage(5, "resp-p2", "p2", 200, 100, 10).done(6, "p2")
 	// The fork point is after p1: the fork inherits p1 only.
@@ -407,7 +407,7 @@ func TestForkInheritsParentPrefix(t *testing.T) {
 		}
 		offset += int64(len(line))
 	}
-	fork := newRollout(t).meta("F", "F", "vscode", map[string]any{"forked_from_id": "P",
+	fork := newRollout(t).meta("F", "F", "vscode", map[string]any{"forked_from_id": "P", "creator_account_id": "fork-account",
 		"history_base": map[string]any{"thread_id": "P", "end_byte_offset": offset, "end_ordinal_exclusive": cut}})
 	fork.recs[0]["ordinal"] = cut
 	fork.start(10, "f1", "", "user").ctx(10, "f1", "m", nil).user(10, "Fork prompt.", 0).usage(11, "resp-f1", "f1", 300, 0, 10).done(12, "f1")
@@ -425,6 +425,11 @@ func TestForkInheritsParentPrefix(t *testing.T) {
 	}
 	if len(d.Messages) != 2 || d.Messages[0].ID != "resp-p1" || d.Messages[1].ID != "resp-f1" {
 		t.Errorf("messages = %+v", d.Messages)
+	}
+	if len(d.Messages) == 2 && (d.Account != model.AccountKey("fork-account") ||
+		d.Messages[0].Account != model.AccountKey("parent-account") || d.Messages[1].Account != d.Account ||
+		!d.Messages[0].AccountKnown || !d.Messages[1].AccountKnown) {
+		t.Errorf("fork account = %q, messages = %+v", d.Account, d.Messages)
 	}
 	found := false
 	for _, s := range d.Source {

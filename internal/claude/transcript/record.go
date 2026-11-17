@@ -23,6 +23,7 @@ const (
 	TypeRelocated      = "relocated"
 	TypeForkContextRef = "fork-context-ref"
 	TypePRLink         = "pr-link"
+	TypeSessionOwner   = "session-owner"
 )
 
 // System record subtypes.
@@ -51,7 +52,7 @@ func IsKnownType(t string) bool {
 	switch t {
 	case TypeUser, TypeAssistant, TypeSystem, TypeAttachment, TypeProgress, TypeAITitle,
 		TypeCustomTitle, TypeAgentName, TypeLastPrompt, TypeCostState, TypeRelocated,
-		TypeForkContextRef, TypePRLink:
+		TypeForkContextRef, TypePRLink, TypeSessionOwner:
 		return true
 	}
 	return knownIgnored[t] || knownOpaque[t] || strings.HasPrefix(t, "file-history-") || strings.HasPrefix(t, "artifact-")
@@ -67,9 +68,10 @@ type ForkedFrom struct {
 // RateLimitType is five_hour, seven_day, seven_day_opus, seven_day_sonnet,
 // seven_day_overage_included or overage, and may be absent. ResetsAt is unix seconds.
 type QuotaLimits struct {
-	Status        string  `json:"status,omitempty"`
-	ResetsAt      float64 `json:"resetsAt,omitempty"`
-	RateLimitType string  `json:"rateLimitType,omitempty"`
+	OverageDisabledReason string  `json:"overageDisabledReason,omitempty"`
+	Status                string  `json:"status,omitempty"`
+	ResetsAt              float64 `json:"resetsAt,omitempty"`
+	RateLimitType         string  `json:"rateLimitType,omitempty"`
 }
 
 // Origin is the envelope's origin object. Older versions omit it; some versions may write
