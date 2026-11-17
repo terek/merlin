@@ -393,6 +393,7 @@ export function SpendGraph({
         onWin={setWin}
         pinnedT={turnStart(pinned)}
         latest={latest}
+        lockouts={lockouts}
         controlsHost={locator}
         docked={locatorHost !== undefined}
       />

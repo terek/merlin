@@ -1124,6 +1124,9 @@ An unknown window length has no scope link.
   that the original account remained locked out. Open episodes are drawn through the
   present with an open marker. The summary strip links to a usage window when the
   corresponding start is known.
+  An open session lists no episodes in text: the session graph draws them as blocks, and the
+  locator in the head draws the same blocks at half strength (the lockout pattern at opacity 0.5,
+  across its breaks, under its content), so the whole session's lockouts are in view; hover names one.
 - **Legend.** The Overview and Graph tabs explain the interruption band and refusal tick.
 
 ## 11. As built

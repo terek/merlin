@@ -8,6 +8,8 @@ import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn'
 import { formatDuration, formatMoney } from '../../lib/format'
+import { LockoutPattern, useLockoutId } from '../../ui'
+import { type LockoutSpan, lockoutTitle } from '../overview/windows'
 import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
   axisSpans,
@@ -61,6 +63,8 @@ export interface OverviewProps {
   pinnedT?: number
   /** The last work episode: what "Latest" goes back to. */
   latest: Win
+  /** The lockouts the session graph draws: the strip shows them too, softly, so the whole session's are in view. */
+  lockouts?: readonly LockoutSpan[]
   /** Where the "Showing … Latest All" line goes (a heading row); it stays above the strip when there is none. */
   controlsHost?: HTMLElement | null
   /** The strip sits in a head of its own (a pinned slot): no space under it, and nothing above it but the strip. */
@@ -76,7 +80,18 @@ type Drag =
   | { mode: 'lo' | 'hi' }
   | { mode: 'new'; x: number; t: number; moved: boolean }
 
-export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsHost, docked }: OverviewProps) {
+export function Overview({
+  timeline,
+  win,
+  eff,
+  onWin,
+  pinnedT,
+  latest,
+  lockouts,
+  controlsHost,
+  docked,
+}: OverviewProps) {
+  const lockId = useLockoutId()
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
@@ -88,6 +103,15 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
   const axis = useMemo(() => stripAxis(timeline, width), [timeline, width])
 
+  // the lockouts on the strip's axis, as the session graph has them (the axis clamps what lies outside)
+  const lockBlocks = useMemo(() => {
+    const a = axis.pieces[0].t0
+    const b = axis.pieces[axis.pieces.length - 1].t1
+    return (lockouts ?? [])
+      .filter((l) => l.toMs > a && l.fromMs < b)
+      .map((l) => ({ ...l, x0: axis.x(l.fromMs), x1: axis.x(l.toMs) }))
+      .filter((l) => l.x1 - l.x0 >= 0.5)
+  }, [lockouts, axis])
   const env = useMemo(() => contextEnvelope(timeline, axis, COL), [timeline, axis])
   const peak = Math.max(1, ...env)
   const dens = useMemo(() => spendDensity(timeline, axis, COL), [timeline, axis])
@@ -292,6 +316,25 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
               opacity={0.9}
             >
               <title>{`${formatDuration(b.t1 - b.t0)} in which nothing ran, left out`}</title>
+            </rect>
+          ))}
+          {lockBlocks.length > 0 && (
+            <defs>
+              <LockoutPattern id={lockId} />
+            </defs>
+          )}
+          {/* limit lockouts, the session graph's mark at half strength: in view, but the strip's content reads first */}
+          {lockBlocks.map((l) => (
+            <rect
+              key={`l${l.fromMs}`}
+              x={l.x0}
+              y={LABEL_H}
+              width={l.x1 - l.x0}
+              height={H - LABEL_H}
+              fill={`url(#${lockId})`}
+              opacity={0.5}
+            >
+              <title>{lockoutTitle(l)}</title>
             </rect>
           ))}
           {wash && (
