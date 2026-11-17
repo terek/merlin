@@ -916,32 +916,57 @@ export const DAY_MS = 24 * HOUR
 /** Whether the locator offers days at all: not for a session shorter than a day. */
 export const hasDays = (b: { t0: number; t1: number }): boolean => b.t1 - b.t0 >= DAY_MS
 
+/** A partition of the locator: what a click on it selects. The parts tile the strip. */
+export interface Part {
+  /** Local midnight of the day it is named after. */
+  m: number
+  x0: number
+  x1: number
+  /** The window a pick selects, clipped to the bounds. */
+  win: Win
+}
+
 /**
- * The calendar day `t` is on as the locator draws it: local midnight to the next local midnight, clipped to
- * the session's `bounds`.
+ * The partitions of the locator as drawn. The boundaries are the local midnights, except that midnights
+ * with no activity between them (a whole idle day) are one boundary, at the last of them, so the part after
+ * it is named after the day that has the activity. The first part starts at `left` and the last ends at
+ * `right` (the strip's edges, by default the axis'), so they tile with no gap.
  */
-export function calendarDay(t: number, bounds: { t0: number; t1: number }): Win {
-  return { lo: Math.max(bounds.t0, midnight(t)), hi: Math.min(bounds.t1, midnight(t, 1)) }
+export function dayParts(
+  tl: Pick<Timeline, 'spans' | 't0' | 't1'>,
+  axis: Pick<TimeAxis, 'x' | 'x0' | 'x1'>,
+  bounds: { t0: number; t1: number },
+  left = axis.x0,
+  right = axis.x1,
+): Part[] {
+  const all = midnightsBetween(bounds.t0, bounds.t1)
+  const busy = (a: number, b: number) => tl.spans.some(([s0, s1]) => s0 < b && s1 >= a)
+  // a midnight whose day (up to the next midnight) has no activity gives way to the next one
+  const cuts = all.filter((m, i) => i === all.length - 1 || busy(m, all[i + 1]))
+  const ms = [midnight(bounds.t0), ...cuts]
+  return ms.map((m, i) => ({
+    m,
+    x0: i === 0 ? left : axis.x(m),
+    x1: i === ms.length - 1 ? right : axis.x(ms[i + 1]),
+    win: {
+      lo: i === 0 ? bounds.t0 : Math.max(bounds.t0, m),
+      hi: i === ms.length - 1 ? bounds.t1 : Math.min(bounds.t1, ms[i + 1]),
+    },
+  }))
 }
 
-/** The midnight of the calendar day `w` is (clipped to `bounds`, within a second), or -1. */
-export function windowCalendarDay(w: Win, bounds: { t0: number; t1: number }): number {
-  const m = midnight(w.lo + 1000)
-  const d = calendarDay(m, bounds)
-  return Math.abs(d.lo - w.lo) < 1000 && Math.abs(d.hi - w.hi) < 1000 ? m : -1
+/** The strip's ends for the brush: where the first activity piece starts and the last one ends (not the wait for a limit's reset). */
+export function stripEnds(
+  tl: Pick<Timeline, 'wait'>,
+  axis: TimeAxis,
+  bounds: { t0: number; t1: number },
+): { x0: number; x1: number } {
+  const x0 = axis.pieces[0].x0
+  if (tl.wait === undefined) return { x0, x1: axis.x1 }
+  const pad = Math.max(0, bounds.t0 - axis.pieces[0].t0)
+  const p = axis.pieces.find((q) => q.t1 >= bounds.t1) ?? axis.pieces[axis.pieces.length - 1]
+  return { x0, x1: axis.x(Math.min(p.t1, bounds.t1 + pad)) }
 }
-
-/** The calendar day before or after the one at midnight `m`, kept to the days the session touches. */
-export function stepCalendarDay(m: number, dir: -1 | 1, bounds: { t0: number; t1: number }): Win {
-  const first = midnight(bounds.t0)
-  const last = midnight(bounds.t1)
-  const to = dir < 0 ? midnight(m, -1) : midnight(m, 1)
-  return calendarDay(Math.max(first, Math.min(last, to)), bounds)
-}
-
-/** The first or last calendar day the session touches. */
-export const edgeCalendarDay = (which: 'first' | 'last', bounds: { t0: number; t1: number }): Win =>
-  calendarDay(which === 'first' ? bounds.t0 : bounds.t1, bounds)
 
 /** The local midnights from just after `t0` up to `t1`. */
 export function midnightsBetween(t0: number, t1: number): number[] {

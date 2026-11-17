@@ -13,17 +13,16 @@ import {
   branchWeight,
   breakWidth,
   buildTimeline,
-  calendarDay,
   carrierWeight,
   centerWindow,
   clampWindow,
   collapseSwarms,
   contextEnvelope,
   dayAt,
+  dayParts,
   defaultWindow,
   detailAt,
   dragWindow,
-  edgeCalendarDay,
   effectiveWindow,
   episodes,
   findSwarms,
@@ -51,8 +50,8 @@ import {
   spendDensity,
   splitDays,
   splitHeld,
-  stepCalendarDay,
   stepWindow,
+  stripEnds,
   TIER_WEIGHT,
   type Timeline,
   tierSegments,
@@ -60,7 +59,6 @@ import {
   timeAxis,
   turnPlace,
   turnTier,
-  windowCalendarDay,
   windowDay,
 } from './timeline'
 import { buildTree } from './tree'
@@ -771,29 +769,55 @@ describe('windows', () => {
     expect(windowDay({ lo: w.lo + 3_600_000, hi: w.hi }, days)).toBe(-1)
   })
 
-  test('a calendar day is midnight to midnight, clipped to the session', () => {
-    const b = { t0: h(5, 9), t1: h(7, 15) }
-    expect(calendarDay(h(5, 20), b)).toEqual({ lo: h(5, 9), hi: h(6, 0) })
-    expect(calendarDay(h(6, 3), b)).toEqual({ lo: h(6, 0), hi: h(7, 0) })
-    expect(calendarDay(h(7, 14), b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
+  test('the day partitions tile the strip, clipped to the bounds', () => {
+    const spans: [number, number][] = [
+      [h(5, 9), h(5, 17)],
+      [h(6, 8), h(6, 12)],
+      [h(7, 1), h(7, 15)],
+    ]
+    const b = { t0: h(5, 9) - 1, t1: h(7, 15) + 1 }
+    const axis = timeAxis(spans, 8, 800)
+    const parts = dayParts({ spans, t0: b.t0 + 1, t1: b.t1 - 1 }, axis, b, 0, 808)
+    expect(parts.map((p) => p.m)).toEqual([h(5, 0), h(6, 0), h(7, 0)])
+    expect(parts[0].x0).toBe(0)
+    expect(parts[parts.length - 1].x1).toBe(808)
+    expect(parts.slice(1).map((p) => p.x0)).toEqual(parts.slice(0, -1).map((p) => p.x1))
+    expect(parts[0].win).toEqual({ lo: b.t0, hi: h(6, 0) })
+    expect(parts[1].win).toEqual({ lo: h(6, 0), hi: h(7, 0) })
+    expect(parts[2].win).toEqual({ lo: h(7, 0), hi: b.t1 })
   })
 
-  test('a window is a calendar day when it is one, clipped, within a second', () => {
-    const b = { t0: h(5, 9), t1: h(7, 15) }
-    expect(windowCalendarDay({ lo: h(6, 0), hi: h(7, 0) }, b)).toBe(h(6, 0))
-    expect(windowCalendarDay({ lo: h(5, 9) + 500, hi: h(6, 0) }, b)).toBe(h(5, 0))
-    expect(windowCalendarDay({ lo: h(7, 0), hi: h(7, 15) }, b)).toBe(h(7, 0))
-    expect(windowCalendarDay({ lo: h(6, 1), hi: h(7, 0) }, b)).toBe(-1)
+  test('midnights around a whole idle day are one boundary, at the later one', () => {
+    const spans: [number, number][] = [
+      [h(8, 18), h(8, 22)],
+      [h(10, 9), h(10, 12)],
+      [h(11, 9), h(11, 12)],
+    ]
+    const b = { t0: h(8, 18) - 1, t1: h(11, 12) + 1 }
+    const axis = timeAxis(spans, 8, 800)
+    const parts = dayParts({ spans, t0: b.t0 + 1, t1: b.t1 - 1 }, axis, b)
+    // the midnights of the 9th and 10th: the 9th is idle all day, so only the 10th cuts
+    expect(parts.map((p) => p.m)).toEqual([h(8, 0), h(10, 0), h(11, 0)])
+    expect(parts[0].win.hi).toBe(h(10, 0))
+    expect(parts[0].x0).toBe(axis.x0)
+    expect(parts[2].x1).toBe(axis.x1)
+    expect(parts.slice(1).map((p) => p.x0)).toEqual(parts.slice(0, -1).map((p) => p.x1))
+    expect(parts[1].x1 - parts[1].x0).toBeGreaterThan(20)
   })
 
-  test('stepping and the ends go by calendar day, never past the session', () => {
-    const b = { t0: h(5, 9), t1: h(7, 15) }
-    expect(stepCalendarDay(h(5, 0), 1, b)).toEqual({ lo: h(6, 0), hi: h(7, 0) })
-    expect(stepCalendarDay(h(6, 0), 1, b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
-    expect(stepCalendarDay(h(7, 0), 1, b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
-    expect(stepCalendarDay(h(5, 0), -1, b)).toEqual({ lo: h(5, 9), hi: h(6, 0) })
-    expect(edgeCalendarDay('first', b)).toEqual({ lo: h(5, 9), hi: h(6, 0) })
-    expect(edgeCalendarDay('last', b)).toEqual({ lo: h(7, 0), hi: h(7, 15) })
+  test('the strip ends the brush stops at leave out the wait for a reset', () => {
+    const spans: [number, number][] = [
+      [h(5, 9), h(5, 12)],
+      [h(7, 9), h(7, 12)],
+    ]
+    const b = { t0: h(5, 9) - 1, t1: h(7, 12) + 1 }
+    const plain = timeAxis(spans, 8, 800)
+    expect(stripEnds({}, plain, b)).toEqual({ x0: 8, x1: 800 })
+    const waiting = timeAxis([...spans, [h(9, 0), h(9, 0)]], 8, 800)
+    const e = stripEnds({ wait: h(9, 0) }, waiting, b)
+    expect(e.x0).toBe(8)
+    expect(e.x1).toBeLessThan(waiting.x1 - 10)
+    expect(e.x1).toBeGreaterThan(waiting.x(b.t1))
   })
 
   test('a session under a day has no day selection', () => {

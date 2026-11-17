@@ -384,21 +384,26 @@ From top to bottom, the graph and then the box:
     time squeezed out as in the plot (`timeAxis` over every span, at most 16 breaks, so long nights do
     not eat the strip). It draws the context of the main rows as a light area (the largest of the main
     lanes, `contextEnvelope`), the spend as thin columns along the bottom, one grey with the cache miss in its colour like the plot
-    (`spendDensity`), a tick at each midnight (the faint text colour at 70 % opacity, clearly stronger than the strip's other lines), the date of each day (from `splitDays`: the
+    (`spendDensity`), a line at each day boundary (the faint text colour at 70 % opacity, clearly stronger than the strip's other lines), the date of each day (from `splitDays`: the
     day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
     marker. The **brush** is the window: a light accent band, no outline, centred on the line between the context area
     and the spend bars, with an accent marker at each edge (as on the Overview's timeline); the rest
     dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
     strip kept (so over a break its time width changes); dragging a handle resizes it; a click (the pointer
     moved 3 px or less) anywhere on the strip, inside the window or out,
-    over a date label or not, selects the day under the pointer. A day on the locator is the **calendar day as
-    drawn**: local midnight to the next local midnight (the midnight lines the strip draws), clipped to the session's
-    bounds, so the first and last day reach the strip's edge; the plot focuses on the active parts of it by itself.
-    While the pointer is on the strip (not on an edge, not dragging) the day a click would select gets a soft
-    accent wash, exactly between its midnight lines. **A session shorter than 24 hours has no day selection:** no
+    over a date label or not, selects the day under the pointer. The strip is cut into **day partitions** that tile it
+    (`dayParts`): the boundaries are the local midnights, except that midnights with no activity between them (a
+    whole idle day, squeezed into a break) are one boundary, at the last of them, so the partition after it is named
+    after the day that has the activity. The first partition starts at the strip's left edge and the last ends at its
+    right edge (the background's extent); a partition's window is its extent in time clipped to the session's bounds;
+    the plot focuses on the active parts of it by itself. One line is drawn per boundary, and a label at the start of
+    each partition, only where its text fits inside it. While the pointer is on the strip (not on an edge, not
+    dragging) the partition under it gets a soft accent wash, edge to edge. A brush whose window reaches the session's
+    start or end is drawn at the strip's start or end (the first piece's start; the end of the last activity, not
+    the wait for a limit's reset, which stays outside the brush and dimmed), so All, the first and the last partition fill the strip. **A session shorter than 24 hours has no day selection:** no
     wash, and a click without movement does nothing (drags, edge resizing and the keys that step by window width
-    still work). ← → on the strip move the window by its own width, or to the previous or next calendar day the
-    session touches when it is one; Home and End go to the first and last day (or the start and end). A window is never narrower than 5 minutes. The parts of the effective window beyond the
+    still work). ← → on the strip move the window by its own width, or to the previous or next partition
+    when it is one; Home and End go to the first and last partition (or the start and end). A window is never narrower than 5 minutes. The parts of the effective window beyond the
     brush, on either side, are drawn as a fainter continuation of the highlight (no handles; the brush itself is still the
     user's window). A line above the strip says what is shown (the effective window: its span, duration
     and spend, as the plot shows them) and what it spent, with **Latest** (the window the page opened on) and **All**. The days are cut each

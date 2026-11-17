@@ -1,8 +1,9 @@
 // The overview above the time view of a session that ran long or on more than one day: the whole tree
 // on one wall-clock scale (idle time squeezed out as in the plot) with a brush on it. The brush is the
 // window the plot shows. Drag across the strip for a new range, drag the window to move it, drag a
-// handle to resize it, click anywhere on it to select the calendar day there (sessions of a day or more); ← → move the window by its own width
-// (a calendar day at a time when it is one).
+// handle to resize it, click anywhere on it to select the day partition there (sessions of a day or more; the
+// partitions tile the strip, cut at local midnights, a whole idle day cut once); ← → move the window by its own
+// width (a partition at a time when it is one).
 import { type KeyboardEvent, type PointerEvent, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn'
@@ -11,22 +12,19 @@ import { MISS_COLOR, SPEND_COLOR } from './TimeView'
 import {
   axisSpans,
   boundsOf,
-  calendarDay,
   contextEnvelope,
-  dayStart,
+  dayParts,
   dragWindow,
-  edgeCalendarDay,
   hasDays,
-  midnightsBetween,
+  type Part,
   resizeWindow,
   spendDensity,
-  stepCalendarDay,
   stepWindow,
+  stripEnds,
   type TimeAxis,
   type Timeline,
   timeAxis,
   type Win,
-  windowCalendarDay,
 } from './timeline'
 import { useWidth } from './useWidth'
 
@@ -83,8 +81,8 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
   const width = useWidth(wrap)
   const drag = useRef<Drag | null>(null)
   const [cursor, setCursor] = useState('crosshair')
-  // the moment under the pointer (not dragging, not at an edge): the day a click there selects gets a soft wash
-  const [hoverT, setHoverT] = useState<number | null>(null)
+  // the x under the pointer (not dragging, not at an edge): the partition a click there selects gets a soft wash
+  const [hoverX, setHoverX] = useState<number | null>(null)
   const x0 = PAD
   const x1 = Math.max(x0 + 80, width - PAD)
   const bounds = useMemo(() => boundsOf(timeline), [timeline])
@@ -110,44 +108,39 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
     return usd
   }, [timeline, eff])
 
-  // a label for the strip's first day and for every midnight in it, where they do not collide; each snaps
-  // to its day
-  const mids = useMemo(() => midnightsBetween(timeline.t0, timeline.t1), [timeline])
+  // the partitions of the strip: cut at local midnights (a whole idle day cut once), tiling the strip's background
+  const parts = useMemo(() => dayParts(timeline, axis, bounds, 0, width), [timeline, axis, bounds, width])
+  // a label at the start of each partition it fits in
   const labels = useMemo(() => {
-    let end = Number.NEGATIVE_INFINITY
     let prev = -1
-    return [dayStart(timeline.t0), ...mids].flatMap((m, i) => {
-      const x = (i === 0 ? x0 : axis.x(m)) + 2
-      const d = new Date(m)
+    return parts.flatMap((p, i) => {
+      const d = new Date(p.m)
       const text =
         d.getMonth() !== prev
-          ? `${month(m)} ${d.getDate()}`
+          ? `${month(p.m)} ${d.getDate()}`
           : `${d.toLocaleDateString([], { weekday: 'short' })} ${d.getDate()}`
-      if (x < end + 4 || x + text.length * 5.5 > x1 + PAD) return []
-      end = x + text.length * 5.5
+      if (text.length * 5.5 + 4 > p.x1 - p.x0) return []
       prev = d.getMonth()
-      return [{ m, x, text }]
+      return [{ i, x: p.x0 + 2, text }]
     })
-  }, [timeline, mids, axis, x1])
-  const midnights = useMemo(() => {
-    let last = Number.NEGATIVE_INFINITY
-    return mids
-      .map((m) => axis.x(m))
-      .filter((x) => {
-        const keep = x - last >= 3
-        if (keep) last = x
-        return keep
-      })
-  }, [mids, axis])
+  }, [parts])
+  const lines = useMemo(() => parts.slice(1).map((p) => p.x0), [parts])
 
-  const xlo = axis.x(win.lo)
-  const xhi = Math.max(xlo + 2, axis.x(win.hi))
-  const xeff0 = Math.min(xlo, axis.x(eff.lo))
-  const xeff = Math.max(xhi, axis.x(eff.hi))
-  // a day on the locator is the calendar day as drawn; a session shorter than a day has none
+  // the brush at an end of the session is drawn at the strip's end: the first piece's start, and the last
+  // activity's end (not the wait for a limit's reset)
+  const ends = useMemo(() => stripEnds(timeline, axis, bounds), [timeline, axis, bounds])
+  const sx = (t: number) => (t <= bounds.t0 ? ends.x0 : t >= bounds.t1 ? ends.x1 : axis.x(t))
+  const xlo = sx(win.lo)
+  const xhi = Math.max(xlo + 2, sx(win.hi))
+  const xeff0 = Math.min(xlo, sx(eff.lo))
+  const xeff = Math.max(xhi, sx(eff.hi))
+  // a day on the locator is a partition as drawn; a session shorter than a day has none
   const daily = hasDays(bounds)
-  const dayOfWin = daily ? windowCalendarDay(win, bounds) : -1
-  const wash = hoverT === null || !daily ? null : calendarDay(hoverT, bounds)
+  const partAt = (x: number): Part => parts.find((p) => x < p.x1) ?? parts[parts.length - 1]
+  const dayIdx = daily
+    ? parts.findIndex((p) => Math.abs(p.win.lo - win.lo) < 1000 && Math.abs(p.win.hi - win.hi) < 1000)
+    : -1
+  const wash = hoverX === null || !daily ? null : partAt(hoverX)
 
   const at = (e: PointerEvent) => e.clientX - (e.currentTarget as Element).getBoundingClientRect().left
   const zoneAt = (x: number): 'lo' | 'hi' | 'move' | 'new' =>
@@ -155,7 +148,7 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
 
   const onDown = (e: PointerEvent<SVGSVGElement>) => {
     e.preventDefault()
-    setHoverT(null)
+    setHoverX(null)
     const x = at(e)
     const z = zoneAt(x)
     drag.current =
@@ -177,7 +170,7 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
       const z = zoneAt(x)
       setCursor(z === 'move' ? 'grab' : z === 'new' ? 'crosshair' : 'ew-resize')
       // an edge is for resizing; anywhere else a click selects the day under the pointer
-      setHoverT(z === 'lo' || z === 'hi' ? null : axis.t(x))
+      setHoverX(z === 'lo' || z === 'hi' ? null : x)
       return
     }
     if (d.mode === 'move') {
@@ -197,7 +190,7 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
     drag.current = null
     // a click without movement, inside the window or out, selects the day under the pointer
     if ((d?.mode === 'new' || d?.mode === 'move') && !d.moved) {
-      if (daily) onWin(calendarDay(axis.t(at(e)), bounds))
+      if (daily) onWin(partAt(at(e)).win)
     }
   }
   const onCancel = () => {
@@ -206,14 +199,12 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const w = win.hi - win.lo
     let next: Win | undefined
-    if (e.key === 'ArrowLeft')
-      next = dayOfWin >= 0 ? stepCalendarDay(dayOfWin, -1, bounds) : stepWindow(win, -1, [], bounds)
-    else if (e.key === 'ArrowRight')
-      next = dayOfWin >= 0 ? stepCalendarDay(dayOfWin, 1, bounds) : stepWindow(win, 1, [], bounds)
-    else if (e.key === 'Home')
-      next = dayOfWin >= 0 ? edgeCalendarDay('first', bounds) : dragWindow(bounds.t0, bounds.t0 + w, bounds)
+    const step = (dir: -1 | 1) => parts[Math.max(0, Math.min(parts.length - 1, dayIdx + dir))].win
+    if (e.key === 'ArrowLeft') next = dayIdx >= 0 ? step(-1) : stepWindow(win, -1, [], bounds)
+    else if (e.key === 'ArrowRight') next = dayIdx >= 0 ? step(1) : stepWindow(win, 1, [], bounds)
+    else if (e.key === 'Home') next = dayIdx >= 0 ? parts[0].win : dragWindow(bounds.t0, bounds.t0 + w, bounds)
     else if (e.key === 'End')
-      next = dayOfWin >= 0 ? edgeCalendarDay('last', bounds) : dragWindow(bounds.t1 - w, bounds.t1, bounds)
+      next = dayIdx >= 0 ? parts[parts.length - 1].win : dragWindow(bounds.t1 - w, bounds.t1, bounds)
     if (!next) return
     e.preventDefault()
     onWin(next)
@@ -230,8 +221,8 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
       <span className="font-medium">
         {whole
           ? 'the whole session'
-          : dayOfWin >= 0
-            ? longDate(dayOfWin)
+          : dayIdx >= 0
+            ? longDate(parts[dayIdx].m)
             : sameDay
               ? `${longDate(from)} ${clock(from)}–${clock(to)}`
               : `${longDate(from)} ${clock(from)} – ${longDate(to)} ${clock(to)}`}
@@ -287,7 +278,7 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onCancel}
-          onPointerLeave={() => setHoverT(null)}
+          onPointerLeave={() => setHoverX(null)}
         >
           <rect x={0} y={LABEL_H} width={width} height={H - LABEL_H} fill="var(--surface-2)" opacity={0.5} rx={3} />
           {axis.breaks.map((b) => (
@@ -305,17 +296,16 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
           ))}
           {wash && (
             <rect
-              x={axis.x(wash.lo)}
+              x={wash.x0}
               y={0}
-              width={Math.max(2, axis.x(wash.hi) - axis.x(wash.lo))}
+              width={wash.x1 - wash.x0}
               height={H}
-              rx={3}
               fill="var(--accent)"
               fillOpacity={0.08}
               pointerEvents="none"
             />
           )}
-          {midnights.map((x) => (
+          {lines.map((x) => (
             <line key={x} x1={x} x2={x} y1={0} y2={H} stroke="var(--faint)" strokeOpacity={0.7} strokeWidth={1} />
           ))}
           <path d={area} fill="var(--series-1)" fillOpacity={0.28} stroke="none" />
@@ -336,12 +326,12 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
           })}
           {labels.map((l) => (
             <text
-              key={l.m}
+              key={l.i}
               x={l.x}
               y={LABEL_H - 3}
               fontSize={10}
-              fill={dayOfWin === l.m ? 'var(--text)' : 'var(--muted)'}
-              fontWeight={dayOfWin === l.m ? 600 : 400}
+              fill={dayIdx === l.i ? 'var(--text)' : 'var(--muted)'}
+              fontWeight={dayIdx === l.i ? 600 : 400}
               pointerEvents="none"
             >
               {l.text}
@@ -366,7 +356,7 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
             <rect
               x={0}
               y={LABEL_H}
-              width={Math.max(0, xeff0)}
+              width={xeff0 <= ends.x0 ? 0 : xeff0}
               height={H - LABEL_H}
               fill="var(--surface)"
               opacity={0.55}
@@ -374,7 +364,7 @@ export function Overview({ timeline, win, eff, onWin, pinnedT, latest, controlsH
             <rect
               x={xeff}
               y={LABEL_H}
-              width={Math.max(0, width - xeff)}
+              width={xeff >= ends.x1 && timeline.wait === undefined ? 0 : Math.max(0, width - xeff)}
               height={H - LABEL_H}
               fill="var(--surface)"
               opacity={0.55}

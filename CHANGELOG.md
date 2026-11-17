@@ -4,7 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
-- An open session's head carries the session's locator, pinned while you scroll, in place of the small row graph; a click anywhere on the locator selects that calendar day (midnight to midnight, for sessions longer than a day), the hover shows exactly that day, and day boundaries are easier to see.
+- An open session's head carries the session's locator, pinned while you scroll, in place of the small row graph; a click anywhere on the locator selects that day (midnight to midnight, for sessions longer than a day; a whole idle day belongs to the next), the hover shows exactly that day, and day boundaries are easier to see.
 - A click anywhere on an Overview row opens the session whole; a click on its small graph no longer opens it on that one day.
 - Limits names Claude Code spend caps, separates accounts, and shows when calls resumed before a scheduled reset.
 - `merlin serve` listens on `$PORT` when it is set, so `portless merlin merlin` works; hooks and `merlin upgrade` find the daemon on whatever port it serves.
