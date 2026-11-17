@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- A click anywhere on an Overview row opens the session whole; a click on its small graph no longer opens it on that one day.
 - `merlin serve` listens on `$PORT` when it is set, so `portless merlin merlin` works; hooks and `merlin upgrade` find the daemon on whatever port it serves.
 
 ## 0.8.0 — 2026-11-16

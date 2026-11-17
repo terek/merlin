@@ -936,11 +936,10 @@ The table only ever lists sessions.
   above $0, the `deepUSD` (spend in calls at 200k or more) under it in small muted type; the figure is body colour at
   200k or more, muted below. Title: "Peak 262k, held by sub-agent \"Explore\" at 10:05 · $31.40 spent in calls at 200k
   or more" ("main thread" when no agent holds it).
-- **Click on the graph.** The graph is a link: a click opens the Session page at the stretch under the pointer
-  (`/s/:harness/:id?from=<ISO>&to=<ISO>`): the local day, or in a range of two days or less the hour (`bandAt`),
-  cut to the session's own activity in it (`clipToActivity`; a stretch where it did nothing opens as it is).
-  The pointer is a pointer and the title reads "Open this session at Mon, May 18". Cmd, ctrl or shift and the
-  middle button open a new tab. The head and the rest of the text line open the session whole.
+- **Click on the row.** A click anywhere on the row (head, description, graph, figures) opens the session whole,
+  never a stretch of it: what opens does not depend on where the pointer was. The row's pointer is a pointer; the head
+  is the link the keyboard reaches. The folder keeps its own click (it copies), and a click that ends a text selection
+  opens nothing. Cmd, ctrl or shift and the middle button open a new tab.
 - **Harness mark**: the shared `HarnessIcon` (`ui/harness.tsx`, 13 px in a row), the product's real logo with its path
   data inline: Claude and OpenAI from Simple Icons (CC0), Pi from pi.dev; the marks are the products'
   trademarks, used to name them. Claude's is filled with `--harness-claude`, Codex's with the body colour, Pi's
@@ -1063,7 +1062,7 @@ The table only ever lists sessions.
 A session opens inside the Overview, in the list it was clicked in. The address is the Overview's plus
 `open=<harness>:<id>` (the scope parameters stay as they are); the session's own zoom is `sfrom`/`sto` (the
 Overview's `from`/`to` are its scope), and its hash targets (`#t<n>`, `#a<agentId>`, `#c<n>`) work as they did.
-A click on a row's head or text opens it whole; a click on its graph opens it on that stretch (`sfrom`, `sto`, read once on open).
+A click anywhere on a row opens it whole; `sfrom`, `sto` come only from links that carry a stretch (an old `/s/` link), read once on open.
 Cost's Limits "biggest sessions" open in the window's scope, sorted by spend. Every open, previous/next and close is
 a history entry, so Back is the undo.
 
@@ -1106,7 +1105,7 @@ a history entry, so Back is the undo.
   associated notes. The **turn or agent** section follows it with its own
   heading row (name, time, duration; ‹ › ✕ at the right).
 - **The zoom never writes the address.** Drag, Latest, All, the keys and the head's click change state only: no URL
-  change, no history entry. `sfrom`/`sto` come in from links (a list row's graph click, an old `/s/` link) and are
+  change, no history entry. `sfrom`/`sto` come in from links (an old `/s/` link) and are
   read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash
   change; pinning in the page does not write it.
 - **Body**: the session's graph with its key in the Legend panel's Graph tab (the Overview's list fills no tab), and

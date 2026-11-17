@@ -31,7 +31,6 @@ import {
   type Beads,
   type By,
   bandAt,
-  bandLabel,
   blockWidth,
   buildPlaceTree,
   chooseSlot,
@@ -64,7 +63,6 @@ import {
   type Sort,
   type SortKey,
   sessionKey,
-  sessionStretchUrl,
   slotX,
   stepAreaPath,
   sumLanes,
@@ -200,8 +198,8 @@ function BlockFigures({
  * A session row, two blocks side by side: the session column (the text line with the folder at its right end,
  * and under it the graph) and, behind a thin rule, the structured block (the figures on one line, centred in
  * the row). The row's hover is CSS, so that moving the pointer does not render it; `data-place` lets the table
- * find the place a hovered row is in. A click on the graph opens the session at the day (the hour) under the
- * pointer; the head and the rest of the text line open it whole.
+ * find the place a hovered row is in. A click anywhere on the row opens the session whole (the head is the link a
+ * keyboard reaches); the folder keeps its own click, and a click that ends a text selection opens nothing.
  */
 const SessionRow = memo(function SessionRow({
   l,
@@ -233,10 +231,24 @@ const SessionRow = memo(function SessionRow({
   const navigate = useNavigate()
   const command = resumeCommand(l.project, l.id, useHarness(l.harness).resume)
   const openHref = `/${focusSearch(search, l)}`
-  const urlAt = (e: React.MouseEvent<HTMLAnchorElement>) =>
-    sessionStretchUrl(l, axis, e.clientX - e.currentTarget.getBoundingClientRect().left, search)
+  // the row's own click: not one a link or button inside it already took, nor the end of a text selection
+  const rowClick = (e: React.MouseEvent) =>
+    !(e.target as Element).closest('a, button, input') && !window.getSelection()?.toString()
   return (
-    <div data-place={place} className={cn('flex border-line border-t first:border-t-0', HOVER)}>
+    <div
+      data-place={place}
+      className={cn('flex cursor-pointer border-line border-t first:border-t-0', HOVER)}
+      onClick={(e) => {
+        if (e.button !== 0 || !rowClick(e)) return
+        if (e.metaKey || e.ctrlKey || e.shiftKey) window.open(openHref, '_blank', 'noopener')
+        else navigate(openHref)
+      }}
+      onAuxClick={(e) => {
+        if (e.button !== 1 || !rowClick(e)) return
+        e.preventDefault()
+        window.open(openHref, '_blank', 'noopener')
+      }}
+    >
       <div className="min-w-0 flex-1 pb-1" style={{ paddingInline: CELL_PAD }}>
         <SessionText
           mark={<HarnessIcon harness={l.harness} size={13} />}
@@ -250,29 +262,9 @@ const SessionRow = memo(function SessionRow({
           note={note}
           folder={<FolderCell text={folder} path={l.dir || 'No folder'} command={command} />}
         />
-        <a
-          href={openHref}
-          tabIndex={-1}
-          aria-label={`Open ${head} at a day`}
-          className="block cursor-pointer"
-          style={{ width: axis.width }}
-          onMouseMove={(e) => {
-            e.currentTarget.title = `Open this session at ${bandLabel(axis, e.clientX - e.currentTarget.getBoundingClientRect().left)}`
-          }}
-          onClick={(e) => {
-            if (e.button !== 0) return
-            e.preventDefault()
-            if (e.metaKey || e.ctrlKey || e.shiftKey) window.open(urlAt(e), '_blank', 'noopener')
-            else navigate(urlAt(e))
-          }}
-          onAuxClick={(e) => {
-            if (e.button !== 1) return
-            e.preventDefault()
-            window.open(urlAt(e), '_blank', 'noopener')
-          }}
-        >
+        <div style={{ width: axis.width }}>
           <RowGraph data={laneData(l, refusals, lockouts)} axis={axis} pxPerTok={pxPerTok} />
-        </a>
+        </div>
       </div>
       <div
         className="flex shrink-0 flex-col justify-center border-line border-l"

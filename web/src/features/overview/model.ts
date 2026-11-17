@@ -7,7 +7,6 @@ import { formatMoney } from '../../lib/format'
 import { homeOf } from '../../lib/places'
 import { dayStart, daysBefore, localDay } from '../../lib/time'
 import { HOLD_MS } from '../spend/timeline'
-import { focusSearch } from './focus'
 
 const MIN = 60_000
 const HOUR = 3_600_000
@@ -1274,24 +1273,7 @@ export function clipToActivity(l: OverviewLane, axis: Axis, a: number, b: number
   return lo <= hi ? [lo, hi] : [a, b]
 }
 
-/**
- * Where a click at x on a session's graph goes: the Overview as it is (`search`) with the session open on the
- * stretch under the pointer as its window (`sfrom`, `sto`), cut to the session's activity in it; the session whole
- * outside the plot.
- */
-export function sessionStretchUrl(
-  l: OverviewLane,
-  axis: Axis,
-  x: number,
-  search: string | URLSearchParams = '',
-): string {
-  const key = { harness: l.harness, id: l.id }
-  const w = sessionStretch(l, axis, x)
-  if (!w) return `/${focusSearch(search, key)}`
-  return `/${focusSearch(search, key, { from: new Date(w[0]).toISOString(), to: new Date(w[1]).toISOString() })}`
-}
-
-/** The stretch a click at x on a session's graph opens: the day (hour) under it cut to the session's activity; null outside the plot. */
+/** The stretch a click at x on an open session's head graph zooms to: the day (hour) under it cut to the session's activity; null outside the plot. */
 export function sessionStretch(l: OverviewLane, axis: Axis, x: number): [number, number] | null {
   const t = bandTimes(axis, x)
   return t ? clipToActivity(l, axis, t.fromMs, t.toMs) : null
