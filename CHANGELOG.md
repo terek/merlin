@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- `merlin serve` listens on `$PORT` when it is set, so `portless merlin merlin` works; hooks and `merlin upgrade` find the daemon on whatever port it serves.
+
 ## 0.8.0 — 2026-11-16
 
 - An open session groups its summary, full-session locator and detailed graph together, with matching time boundaries connected between the summary and locator; spend breakdown bars follow the graph.

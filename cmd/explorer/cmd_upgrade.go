@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/terek/merlin/internal/claude/hooks"
 	"github.com/terek/merlin/internal/config"
 	"github.com/terek/merlin/internal/paths"
 	"github.com/terek/merlin/internal/release"
@@ -41,7 +40,7 @@ var (
 		if err != nil {
 			return ""
 		}
-		return fmt.Sprintf("http://127.0.0.1:%d/healthz", hooks.Port(home))
+		return fmt.Sprintf("http://127.0.0.1:%d/healthz", daemonPort(home))
 	}
 )
 

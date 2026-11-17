@@ -389,7 +389,19 @@ func TestHooksForCodex(t *testing.T) {
 func isolatedEnv(t *testing.T, kv ...string) []string {
 	t.Helper()
 	empty := t.TempDir()
-	env := append(os.Environ(), "HOME="+empty, "CODEX_HOME="+filepath.Join(empty, "codex"),
+	env := withoutEnv(os.Environ(), "PORT")
+	env = append(env, "HOME="+empty, "CODEX_HOME="+filepath.Join(empty, "codex"),
 		"PI_CODING_AGENT_DIR="+filepath.Join(empty, "pi"), "PI_CODING_AGENT_SESSION_DIR=")
 	return append(env, kv...)
+}
+
+// withoutEnv drops the named variable, so a developer's PORT never reaches a child.
+func withoutEnv(env []string, name string) []string {
+	var out []string
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, name+"=") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }

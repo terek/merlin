@@ -26,7 +26,7 @@ not touch `~/.claude`. macOS and Linux, arm64 and x64; Windows is not supported.
 merlin
 ```
 
-Bare `merlin` is `merlin serve`; flags alone go to it too (`merlin --port 8080`). Open http://127.0.0.1:7433/. The first start:
+Bare `merlin` is `merlin serve`; flags alone go to it too (`merlin --port 8080`); serve also listens on `$PORT` when it is set, e.g. `portless merlin merlin`. Open http://127.0.0.1:7433/. The first start:
 
 - indexes your sessions from `~/.claude` into `~/.merlin` (read-only on `~/.claude`);
 - leaves `~/.claude/settings.json` alone; the page follows sessions as their files change.

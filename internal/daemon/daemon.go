@@ -304,6 +304,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	addr := ln.Addr().String()
 	d.addr.Store(&addr)
+	if ta, ok := ln.Addr().(*net.TCPAddr); ok {
+		if err := writeLockPort(lock, ta.Port); err != nil {
+			d.logf("recording port in merlin.lock: %v", err)
+		}
+	}
 	srv := &http.Server{Handler: d.mux, ReadHeaderTimeout: 5 * time.Second}
 	srvDone := make(chan struct{})
 	go func() {

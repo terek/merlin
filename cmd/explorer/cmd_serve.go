@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -36,7 +37,7 @@ func init() {
 func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	port := fs.Int("port", 0, "TCP port on 127.0.0.1 (default: \"port\" in config.json, else 7433)")
+	port := fs.Int("port", 0, "TCP port on 127.0.0.1 (default: $PORT, else \"port\" in config.json, else 7433)")
 	noHooks := fs.Bool("no-hooks", false, "do not refresh installed Claude Code and Codex hooks")
 	rescan := fs.Duration("rescan", daemon.DefaultRescanInterval, "full rescan interval")
 	debounce := fs.Duration("debounce", daemon.DefaultDebounce, "at most one build per live session per this")
@@ -72,11 +73,10 @@ func runServe(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if *port == 0 { // flag, then config.json, then the default
-		*port = hooks.DefaultPort
-		if cfg.Port > 0 {
-			*port = cfg.Port
-		}
+	var warn string
+	*port, warn = servePort(*port, os.Getenv("PORT"), cfg.Port)
+	if warn != "" {
+		fmt.Fprintln(os.Stderr, warn)
 	}
 	opts := daemon.Options{
 		Home:           home,
@@ -280,4 +280,32 @@ func apiOptions(d *daemon.Daemon, pricer *pricing.Table) server.Options {
 				Unchanged: s.Unchanged, Failed: s.Failed, Missing: s.Missing}
 		},
 	}
+}
+
+// servePort picks the port to serve on: the --port flag (nonzero), then $PORT (portless and
+// other launchers pass it that way), then config.json's port, then the default. An unusable
+// $PORT is skipped with a warning.
+func servePort(flag int, env string, cfgPort int) (port int, warning string) {
+	if flag != 0 {
+		return flag, ""
+	}
+	if env != "" {
+		if p, err := strconv.Atoi(env); err == nil && p >= 1 && p <= 65535 {
+			return p, ""
+		}
+		warning = fmt.Sprintf("merlin serve: ignoring PORT=%q: not a port number", env)
+	}
+	if cfgPort > 0 {
+		return cfgPort, warning
+	}
+	return hooks.DefaultPort, warning
+}
+
+// daemonPort is where the daemon listens: the port it recorded in merlin.lock, else the
+// configured one (config.json, then the default).
+func daemonPort(home string) int {
+	if p, ok := daemon.RecordedPort(home); ok {
+		return p
+	}
+	return hooks.Port(home)
 }
