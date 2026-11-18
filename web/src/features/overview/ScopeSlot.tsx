@@ -1,6 +1,6 @@
-// The two capsules both lenses of the scope (the Overview and Cost) put in the top bar: the range with its
-// axis, and the search with the `in` chip. The scope is the URL's `range`, `from`, `to`, `by`, `in` and `q`
-// (docs/ui.md section 10b).
+// The scope controls of the two lenses (the Overview and Cost): the search box in the top bar's slot (Overview
+// only), and the scope bar, the header row of the content area, with the range capsule and its axis and the `in`
+// chip. The scope is the URL's `range`, `from`, `to`, `by`, `in` and `q` (docs/ui.md section 10b).
 
 import { ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -337,255 +337,210 @@ function useRememberedCustom(applied: CustomRange | null): CustomRange | null {
   return applied ?? last
 }
 
-/** The capsules in the top bar's slot. `home` and `beads` name the selection in its chip. */
-export function ScopeSlot({
-  scope,
-  home,
-  beads,
-  search = true,
-}: {
-  scope: Scope
-  home: string | undefined
-  beads?: Beads
-  /** False on Cost: the range capsule alone, the axis opening into the room the search had. */
-  search?: boolean
-}) {
-  const { set, select, range, custom, by, sel, q } = scope
-  const now = useNow(300_000)
-  const days = custom ?? presetRange(range, now)
-  // ---- the slot's two capsules: exactly one is expanded (page state, not URL); the search starts expanded ----
-  // The axis is open only while the user works the time axis; any other choice puts the search back.
-  const [axisOpen, setAxisOpen] = useState(false)
-  const [live, setLive] = useState<CustomRange | null>(null)
-  const wantFocus = useRef(false)
-  const rangeRef = useRef<HTMLFieldSetElement>(null)
-  const openSearch = () => {
-    setLive(null)
-    setAxisOpen(false)
-    wantFocus.current = true
-  }
-  useShortcut('Escape', openSearch, { enabled: axisOpen })
-  useEffect(() => {
-    if (!axisOpen) return
-    const onDown = (e: PointerEvent) => {
-      if (!rangeRef.current?.contains(e.target as Node)) {
-        setLive(null)
-        setAxisOpen(false)
-      }
-    }
-    window.addEventListener('pointerdown', onDown)
-    return () => window.removeEventListener('pointerdown', onDown)
-  }, [axisOpen])
-
-  // ---- search box: typing is local, the URL follows after 200 ms ----
+/** The search box in the top bar's slot: typing is local, the URL follows after 200 ms. */
+export function ScopeSearch({ scope }: { scope: Scope }) {
+  const { set, q } = scope
   const [draft, setDraft] = useState(q)
   const debounced = useDebounced(draft, 200)
   const written = useRef(q)
   // biome-ignore lint/correctness/useExhaustiveDependencies: write only when the debounced text changes
   useEffect(() => {
-    if (search && debounced !== written.current) {
+    if (debounced !== written.current) {
       written.current = debounced
       set({ q: debounced })
     }
-  }, [debounced, search])
+  }, [debounced])
   useEffect(() => {
     // back / forward changed `q`: the box follows
-    if (search && q !== written.current) {
+    if (q !== written.current) {
       written.current = q
       setDraft(q)
     }
-  }, [q, search])
+  }, [q])
   const inputRef = useRef<HTMLInputElement>(null)
-  useShortcut(
-    '/',
-    () => {
-      if (axisOpen) return openSearch()
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    },
-    { enabled: search },
+  useShortcut('/', () => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  })
+  return (
+    <ShellSlot>
+      <div className="relative flex h-8 w-full min-w-[160px] max-w-[560px] items-center overflow-hidden rounded-full border border-line bg-surface-2">
+        <button
+          type="button"
+          aria-label="Focus the search"
+          title="Search sessions (/)"
+          onClick={() => inputRef.current?.focus()}
+          className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
+        >
+          <Search size={14} aria-hidden />
+        </button>
+        <input
+          ref={inputRef}
+          type="search"
+          aria-label="Search sessions"
+          value={draft}
+          placeholder="Search sessions…"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return
+            if (draft) setDraft('')
+            else e.currentTarget.blur()
+          }}
+          className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
+        />
+        {draft ? (
+          <IconButton label="Clear" onClick={() => setDraft('')} className="mr-1 size-5 shrink-0">
+            <X size={13} />
+          </IconButton>
+        ) : (
+          <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
+        )}
+      </div>
+    </ShellSlot>
   )
-  // the search capsule is back: focus its input if a `/` or the magnifier asked for it
+}
+
+/**
+ * The header row of the content area (right of the sidebar): the range capsule, Custom's axis opening into
+ * the room, and the `in` chip. The row of both lenses; an open session replaces it with its own head.
+ * `home` and `beads` name the selection in its chip.
+ */
+export function ScopeBar({ scope, home, beads }: { scope: Scope; home: string | undefined; beads?: Beads }) {
+  const { set, select, range, custom, by, sel } = scope
+  const now = useNow(300_000)
+  const days = custom ?? presetRange(range, now)
+  // the axis is open only while the user works the time axis (page state, not URL)
+  const [axisOpen, setAxisOpen] = useState(false)
+  const [live, setLive] = useState<CustomRange | null>(null)
+  const rangeRef = useRef<HTMLFieldSetElement>(null)
+  const closeAxis = () => {
+    setLive(null)
+    setAxisOpen(false)
+  }
+  useShortcut('Escape', closeAxis, { enabled: axisOpen })
+  // biome-ignore lint/correctness/useExhaustiveDependencies: closeAxis only sets state
   useEffect(() => {
-    if (search && !axisOpen && wantFocus.current) {
-      wantFocus.current = false
-      inputRef.current?.focus()
+    if (!axisOpen) return
+    const onDown = (e: PointerEvent) => {
+      if (!rangeRef.current?.contains(e.target as Node)) closeAxis()
     }
-  }, [axisOpen, search])
-  const searchNote =
-    q || sel !== null
-      ? `Search: ${[q, sel !== null ? `in ${displayPath(sel, home, by)}` : ''].filter(Boolean).join(' · ')}`
-      : ''
+    window.addEventListener('pointerdown', onDown)
+    return () => window.removeEventListener('pointerdown', onDown)
+  }, [axisOpen])
   // the last custom range outlives the presets: the Custom segment keeps showing it, unpressed
   const remembered = useRememberedCustom(custom)
   const shown = live ?? custom
   const label = shown ?? remembered
   const grow = 'transition-[flex-grow,min-width] duration-150 motion-reduce:transition-none'
   return (
-    <ShellSlot>
-      <div className="flex w-full min-w-0 items-center gap-2">
-        {/* the two capsules: exactly one is expanded and takes the room; the other is a small one */}
-        {/* the range capsule: the four modes always; Custom's editor, the axis, opens only while it is worked */}
-        <fieldset
-          ref={rangeRef}
-          aria-label="Range"
-          className={cn(
-            'm-0 inline-flex h-8 min-w-0 shrink-0 items-center rounded-full border border-line bg-surface-2 p-0.5',
-            grow,
-          )}
-          style={{ flexGrow: axisOpen ? 1 : 0, flexBasis: axisOpen ? 0 : 'auto' }}
-        >
-          {(['1d', '7d', '30d'] as const).map((v) => {
-            const on = !shown && range === v
-            return (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={on}
-                title={RANGE_TITLE[v]}
-                onClick={() => {
-                  setAxisOpen(false)
-                  setLive(null)
-                  set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
-                }}
-                className={cn(
-                  'h-full shrink-0 whitespace-nowrap rounded-full px-2.5 text-sec',
-                  on ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted hover:text-fg',
-                )}
-              >
-                {v}
-              </button>
-            )
-          })}
-          {/* Custom: one unit, a pill (white when pressed, on the grey when not) holding the label and, open, the axis */}
-          <span
-            className={cn(
-              'inline-flex h-full min-w-0 items-center rounded-full',
-              axisOpen && 'flex-1',
-              shown ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted',
-            )}
-          >
-            <button
-              type="button"
-              aria-pressed={!!shown}
-              aria-expanded={axisOpen}
-              title={
-                axisOpen
-                  ? 'Close the timeline'
-                  : !shown && remembered
-                    ? `Use ${customLabel(remembered, now)}`
-                    : isWindowRange(shown)
-                      ? 'A limit window: open the timeline to leave it'
-                      : 'Open the timeline'
-              }
-              onClick={() => {
-                if (axisOpen) return openSearch()
-                // the first click selects the remembered range; the next one opens the timeline
-                if (!shown && remembered) return set({ range: undefined, ...formatCustom(remembered) })
-                setAxisOpen(true)
-              }}
-              className="inline-flex h-full shrink-0 items-center gap-1 whitespace-nowrap pr-1.5 pl-2.5 text-left text-sec hover:text-fg"
-            >
-              {/* one width for a range label, so that nothing shifts under a drag */}
-              {label ? (
-                <span className="inline-flex min-w-[13ch] items-center gap-1.5">
-                  {label.harness && <HarnessIcon harness={label.harness} size={13} />}
-                  {customLabel(label, now)}
-                </span>
-              ) : (
-                'Custom'
-              )}
-              {axisOpen ? (
-                <ChevronsLeft size={12} aria-hidden className="text-muted" />
-              ) : (
-                <ChevronsRight size={12} aria-hidden className="text-muted" />
-              )}
-            </button>
-            {axisOpen && (
-              <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-                <Locator
-                  value={days}
-                  now={now}
-                  onLive={setLive}
-                  onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
-                />
-              </div>
-            )}
-          </span>
-        </fieldset>
-        {search && (
-          <div
-            className={cn(
-              'relative flex h-8 items-center overflow-hidden rounded-full border border-line bg-surface-2',
-              grow,
-              axisOpen ? 'shrink-0' : 'min-w-0',
-            )}
-            style={{ flexGrow: axisOpen ? 0 : 1, flexBasis: axisOpen ? 32 : 0, minWidth: axisOpen ? 32 : 160 }}
-          >
-            <button
-              type="button"
-              aria-label={axisOpen ? 'Search sessions' : 'Focus the search'}
-              title={axisOpen ? ['Search sessions (/)', searchNote].filter(Boolean).join('\n') : 'Search sessions (/)'}
-              onClick={() => (axisOpen ? openSearch() : inputRef.current?.focus())}
-              className="relative inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
-            >
-              <Search size={14} aria-hidden />
-              {axisOpen && (q || sel !== null) && (
-                <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-accent" aria-hidden />
-              )}
-            </button>
-            {!axisOpen && (
-              <>
-                <input
-                  ref={inputRef}
-                  type="search"
-                  aria-label="Search sessions"
-                  value={draft}
-                  placeholder="Search sessions…"
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== 'Escape') return
-                    if (draft) setDraft('')
-                    else e.currentTarget.blur()
-                  }}
-                  className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
-                />
-                {draft ? (
-                  <IconButton label="Clear" onClick={() => setDraft('')} className="mr-1 size-5 shrink-0">
-                    <X size={13} />
-                  </IconButton>
-                ) : (
-                  <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
-                )}
-                {sel !== null && (
-                  <span className="mr-1 inline-flex h-6 max-w-[260px] shrink-0 items-center gap-1 rounded-full border border-line bg-surface pr-1 pl-2.5 text-sec">
-                    <span className="text-muted">in</span>
-                    <span
-                      className="truncate font-medium text-fg"
-                      title={
-                        by === 'bead'
-                          ? [beads?.[displayPath(sel, home, by)]?.title, sel].filter(Boolean).join('\n')
-                          : sel
-                      }
-                    >
-                      {displayPath(sel, home, by)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => select(null)}
-                      aria-label="Clear the selection"
-                      title="Clear the selection"
-                      className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted hover:bg-line hover:text-fg"
-                    >
-                      <X size={11} aria-hidden />
-                    </button>
-                  </span>
-                )}
-              </>
-            )}
-          </div>
+    <div className="flex h-12 shrink-0 items-center gap-2 border-line border-b px-4">
+      {/* the range capsule: the four modes always; Custom's editor, the axis, opens only while it is worked */}
+      <fieldset
+        ref={rangeRef}
+        aria-label="Range"
+        className={cn(
+          'm-0 inline-flex h-8 min-w-0 shrink-0 items-center rounded-full border border-line bg-surface-2 p-0.5',
+          grow,
         )}
-      </div>
-    </ShellSlot>
+        style={{ flexGrow: axisOpen ? 1 : 0, flexBasis: axisOpen ? 0 : 'auto' }}
+      >
+        {(['1d', '7d', '30d'] as const).map((v) => {
+          const on = !shown && range === v
+          return (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={on}
+              title={RANGE_TITLE[v]}
+              onClick={() => {
+                closeAxis()
+                set({ range: v === '7d' ? undefined : v, ...formatCustom(null) })
+              }}
+              className={cn(
+                'h-full shrink-0 whitespace-nowrap rounded-full px-2.5 text-sec',
+                on ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted hover:text-fg',
+              )}
+            >
+              {v}
+            </button>
+          )
+        })}
+        {/* Custom: one unit, a pill (white when pressed, on the grey when not) holding the label and, open, the axis */}
+        <span
+          className={cn(
+            'inline-flex h-full min-w-0 items-center rounded-full',
+            axisOpen && 'flex-1',
+            shown ? 'bg-surface text-fg outline outline-1 outline-line' : 'text-muted',
+          )}
+        >
+          <button
+            type="button"
+            aria-pressed={!!shown}
+            aria-expanded={axisOpen}
+            title={
+              axisOpen
+                ? 'Close the timeline'
+                : !shown && remembered
+                  ? `Use ${customLabel(remembered, now)}`
+                  : isWindowRange(shown)
+                    ? 'A limit window: open the timeline to leave it'
+                    : 'Open the timeline'
+            }
+            onClick={() => {
+              if (axisOpen) return closeAxis()
+              // the first click selects the remembered range; the next one opens the timeline
+              if (!shown && remembered) return set({ range: undefined, ...formatCustom(remembered) })
+              setAxisOpen(true)
+            }}
+            className="inline-flex h-full shrink-0 items-center gap-1 whitespace-nowrap pr-1.5 pl-2.5 text-left text-sec hover:text-fg"
+          >
+            {/* one width for a range label, so that nothing shifts under a drag */}
+            {label ? (
+              <span className="inline-flex min-w-[13ch] items-center gap-1.5">
+                {label.harness && <HarnessIcon harness={label.harness} size={13} />}
+                {customLabel(label, now)}
+              </span>
+            ) : (
+              'Custom'
+            )}
+            {axisOpen ? (
+              <ChevronsLeft size={12} aria-hidden className="text-muted" />
+            ) : (
+              <ChevronsRight size={12} aria-hidden className="text-muted" />
+            )}
+          </button>
+          {axisOpen && (
+            <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+              <Locator
+                value={days}
+                now={now}
+                onLive={setLive}
+                onCommit={(r) => set({ range: undefined, ...formatCustom(r) })}
+              />
+            </div>
+          )}
+        </span>
+      </fieldset>
+      {sel !== null && (
+        <span className="inline-flex h-6 max-w-[320px] shrink-0 items-center gap-1 rounded-full border border-line bg-surface-2 pr-1 pl-2.5 text-sec">
+          <span className="text-muted">in</span>
+          <span
+            className="truncate font-medium text-fg"
+            title={by === 'bead' ? [beads?.[displayPath(sel, home, by)]?.title, sel].filter(Boolean).join('\n') : sel}
+          >
+            {displayPath(sel, home, by)}
+          </span>
+          <button
+            type="button"
+            onClick={() => select(null)}
+            aria-label="Clear the selection"
+            title="Clear the selection"
+            className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted hover:bg-line hover:text-fg"
+          >
+            <X size={11} aria-hidden />
+          </button>
+        </span>
+      )}
+    </div>
   )
 }

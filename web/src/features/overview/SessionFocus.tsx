@@ -24,6 +24,8 @@ export interface HeadContext {
   home: string | undefined
   /** The list's time range, in instants: a session opens on its part in it. */
   scope: { fromMs: number; toMs: number }
+  /** The list the session came from, as the head's back link names it (`7d · in ~/tools · "q"`). */
+  context: string
 }
 
 export function SessionFocus({
@@ -90,7 +92,8 @@ export function SessionFocus({
         folder={folderText(dir, ctx.home)}
         folderPath={dir || 'No folder'}
         command={command}
-        usd={lane?.usd}
+        context={ctx.context}
+        usd={detail ? detail.summary.cost.bestUSD : lane?.usd}
         at={at}
         prev={prev ? () => goTo(prev) : null}
         next={next ? () => goTo(next) : null}

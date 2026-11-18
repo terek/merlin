@@ -1142,6 +1142,25 @@ export const customLabel = (r: CustomRange, now: Date): string =>
     ? `${stampText(r.fromMs)} → ${windowLength(r.toMs - r.fromMs)}`
     : `${dayText(r.from, now)} → ${customDays(r)}d`
 
+/**
+ * Where an open session came from, as the session head's back link names it: the range as the capsule shows
+ * it (`7d`, `Nov 16 → 1d`), `· in ~/tools` with a folder, `· "term"` with a search.
+ */
+export function listContext(
+  s: { range: Range; custom: CustomRange | null; sel: string | null; by: By; q: string },
+  home: string | undefined,
+  now: Date,
+): string {
+  const term = s.q.trim()
+  return [
+    s.custom ? customLabel(s.custom, now) : s.range,
+    s.sel !== null ? `in ${displayPath(s.sel, home, s.by)}` : '',
+    term ? `"${term}"` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 /** "between May 20 and May 29", "on May 20": for the empty state. */
 export const customPhrase = (r: CustomRange, now: Date): string =>
   isWindowRange(r)

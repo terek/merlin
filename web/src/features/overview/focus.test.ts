@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { withoutFocus } from '../../lib/scope'
 import { closedSearch, focusSearch, legacyTarget, openValue, parseOpen, positionIn } from './focus'
-import { listRows } from './model'
+import { listContext, listRows } from './model'
 
 const rows = ['a', 'b', 'c'].map((id) => ({ harness: 'claude', id }))
 
@@ -112,5 +112,16 @@ describe('the list the focus walks', () => {
     const r = listRows(lanes, { term: '', sel: null, by, sort: { key: 'spend', desc: true }, home: undefined })
     expect(r.rows.map((l) => l.id)).toEqual(['b', 'c', 'a'])
     expect(positionIn(r.rows, { harness: 'claude', id: 'c' })?.n).toBe(2)
+  })
+})
+
+describe('listContext', () => {
+  const now = new Date(2026, 10, 18, 12)
+  const base = { range: '7d' as const, custom: null, sel: null, by: 'dir' as const, q: '' }
+  test('range, folder, search', () => {
+    expect(listContext(base, '/h', now)).toBe('7d')
+    expect(listContext({ ...base, range: '1d', sel: '/h/tools' }, '/h', now)).toBe('1d · in ~/tools')
+    expect(listContext({ ...base, sel: '/h/tools', q: ' foo ' }, '/h', now)).toBe('7d · in ~/tools · "foo"')
+    expect(listContext({ ...base, custom: { from: '2026-11-16', to: '2026-11-16' } }, '/h', now)).toContain('→ 1d')
   })
 })

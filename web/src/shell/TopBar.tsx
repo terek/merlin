@@ -181,7 +181,7 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'bg-surface-2 font-medium text-fg' : 'text-muted hover:text-fg',
   )
 
-/** 44 px: the name, the page's slot in the middle, the tabs and the status button at the right. */
+/** 44 px: the name and the tabs, the page's slot (the search), then the update notice and the buttons. It never changes with a session open. */
 export function TopBar() {
   const { pathname, search } = useLocation()
   const links = lensLinks(pathname, search)
@@ -191,8 +191,6 @@ export function TopBar() {
         <img src="/logo-48.png" width={22} height={22} alt="" className="size-[22px]" />
         Merlin
       </Link>
-      <SlotTarget />
-      <UpdateNotice />
       <nav className="flex gap-1" aria-label="Main">
         <NavLink to={links.overview} end className={navClass} title="Overview: where the agents' work went (g o)">
           Overview
@@ -204,6 +202,8 @@ export function TopBar() {
           Moments
         </NavLink>
       </nav>
+      <SlotTarget />
+      <UpdateNotice />
       <div className="flex items-center gap-1">
         <PanelButton />
         <ThemeControl />

@@ -32,7 +32,7 @@ import {
   totalsOf,
   windowLength,
 } from '../overview/model'
-import { ScopeSlot, useScope } from '../overview/ScopeSlot'
+import { ScopeBar, useScope } from '../overview/ScopeSlot'
 import { Sidebar, useSidebarOpen } from '../overview/Sidebar'
 import { scopeWindows } from '../overview/windows'
 import { DayChart, Swatch, segmentLabel } from './DayChart'
@@ -207,7 +207,6 @@ export function CostPage() {
 
   return (
     <div className="flex h-full w-full bg-surface">
-      <ScopeSlot scope={scope} home={home} beads={beads} search={false} />
       <Sidebar
         open={sbOpen}
         onOpen={setSbOpen}
@@ -221,45 +220,10 @@ export function CostPage() {
         onSelect={select}
         extra={extras}
       />
-      <div className="min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        {empty && (
-          <Limits
-            fromMs={w.fromMs}
-            toMs={w.toMs}
-            windows={windows}
-            lockouts={limits?.lockouts ?? []}
-            sp={sp}
-            onWindow={scope.scopeTo}
-          />
-        )}
-        {empty ? (
-          <div className="p-6 text-muted">
-            Nothing was spent {customPhrase(days, now)}
-            {sel !== null && ` in ${displayPath(sel, home, by)}`}.{' '}
-            {sel !== null && (
-              <button type="button" onClick={() => select(null)} className="text-accent hover:underline">
-                Clear the selection
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <Headline
-              query={head}
-              change={change}
-              concentration={
-                conc && (
-                  <Link
-                    className="text-muted hover:text-accent"
-                    to={`/${scopeSearch(sp, { q: false })}${scopeSearch(sp, { q: false }) ? '&' : '?'}sort=spend`}
-                  >
-                    {conc.n === 1 ? '1 session' : `${conc.n} sessions`} of {conc.of} {conc.n === 1 ? 'is' : 'are'} half
-                    of it
-                  </Link>
-                )
-              }
-            />
-
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ScopeBar scope={scope} home={home} beads={beads} />
+        <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+          {empty && (
             <Limits
               fromMs={w.fromMs}
               toMs={w.toMs}
@@ -268,121 +232,159 @@ export function CostPage() {
               sp={sp}
               onWindow={scope.scopeTo}
             />
-
-            <Section
-              title={sectionTitle(grain)}
-              actions={
-                <SegmentedControl
-                  label="Stack by"
-                  value={stack}
-                  onChange={(v) => set({ stack: v === 'model' ? undefined : v })}
-                  options={[
-                    { value: 'model', label: 'By model' },
-                    { value: 'who', label: 'Who', title: 'Stack by the main thread and the sub-agents' },
-                    {
-                      value: 'class',
-                      label: 'Price class',
-                      title: 'Stack by what the tokens were: cache reads, cache writes, output, uncached input',
-                    },
-                    {
-                      value: 'tier',
-                      label: 'Tier',
-                      title: 'Stack by what the model costs: heavy, mid and light models, heavy at the bottom',
-                    },
-                    {
-                      value: 'depth',
-                      label: 'Depth',
-                      title: 'Stack by the context the call carried: under 100k at the bottom, 500k or more on top',
-                    },
-                    {
-                      value: 'compaction',
-                      label: 'Compactions',
-                      title:
-                        'The days’ spend as above, empty, with what the compaction calls cost coloured at the bottom of each bar',
-                    },
-                  ]}
-                />
-              }
-            >
-              <QueryBoundary query={dayRows} skeleton={<Skeleton className="h-56" />}>
-                {(d) => (
-                  <ChartBody
-                    rows={d.rows}
-                    win={win}
-                    stack={stack}
-                    prices={prices}
-                    onPick={(b) => set({ range: undefined, ...formatCustom({ from: bucketDay(b), to: b.to }) })}
-                  />
-                )}
-              </QueryBoundary>
-            </Section>
-
-            <Section title="Context depth">
-              <WhoDepth query={byAgentDepth} />
-            </Section>
-
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(380px,1fr))] overflow-hidden border-line border-b">
-              <div className="-mr-px -mb-px border-line border-r border-b">
-                <LensTable
-                  query={byModel}
-                  name="Model"
-                  before={prevByModel}
-                  tone={(r) => tableColor(modelColor(r.key))}
-                  label={(r) =>
-                    r.key === OVERHEAD ? (
-                      <span title="Spend the harness reported that no transcript message explains.">
-                        (overhead)<sup className="ml-0.5 text-faint">1</sup>
-                      </span>
-                    ) : (
-                      <span title={r.key}>{modelLabel(r.key)}</span>
-                    )
-                  }
-                  footer={(d) =>
-                    d.rows.some((r) => r.key === OVERHEAD) && (
-                      <>
-                        <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It
-                        has no model of its own.
-                      </>
-                    )
-                  }
-                />
-              </div>
-              <div className="-mr-px -mb-px border-line border-r border-b">
-                <LensTable
-                  query={byClass}
-                  name="Price class"
-                  tone={(r) => classColor(r.key)}
-                  label={(r) => segmentLabel(r.key)}
-                  footer={(d) => (
-                    <>
-                      {classSentence(d.rows)}
-                      {d.rows.some((r) => r.key === '(unsplit)') && ' Not split: spend no token count explains.'} A
-                      message’s spend is spread over its tokens at the price of each kind; cache writes are the 5-minute
-                      and 1-hour ones together.
-                    </>
-                  )}
-                />
-              </div>
-              <div className="-mr-px -mb-px border-line border-r border-b">
-                <LensTable
-                  query={head}
-                  name="Kind"
-                  label={(r) => (
-                    <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
-                  )}
-                />
-                <WhoTier query={byAgentModel} prices={prices} />
-              </div>
+          )}
+          {empty ? (
+            <div className="p-6 text-muted">
+              Nothing was spent {customPhrase(days, now)}
+              {sel !== null && ` in ${displayPath(sel, home, by)}`}.{' '}
+              {sel !== null && (
+                <button type="button" onClick={() => select(null)} className="text-accent hover:underline">
+                  Clear the selection
+                </button>
+              )}
             </div>
-            <HowMade
-              query={head}
-              placesUsd={
-                sel === null ? all.usd : selectLanes(lanes ?? [], sel, by, beads).reduce((n, l) => n + l.usd, 0)
-              }
-              extras={extras}
-            />
-          </>
-        )}
+          ) : (
+            <>
+              <Headline
+                query={head}
+                change={change}
+                concentration={
+                  conc && (
+                    <Link
+                      className="text-muted hover:text-accent"
+                      to={`/${scopeSearch(sp, { q: false })}${scopeSearch(sp, { q: false }) ? '&' : '?'}sort=spend`}
+                    >
+                      {conc.n === 1 ? '1 session' : `${conc.n} sessions`} of {conc.of} {conc.n === 1 ? 'is' : 'are'}{' '}
+                      half of it
+                    </Link>
+                  )
+                }
+              />
+
+              <Limits
+                fromMs={w.fromMs}
+                toMs={w.toMs}
+                windows={windows}
+                lockouts={limits?.lockouts ?? []}
+                sp={sp}
+                onWindow={scope.scopeTo}
+              />
+
+              <Section
+                title={sectionTitle(grain)}
+                actions={
+                  <SegmentedControl
+                    label="Stack by"
+                    value={stack}
+                    onChange={(v) => set({ stack: v === 'model' ? undefined : v })}
+                    options={[
+                      { value: 'model', label: 'By model' },
+                      { value: 'who', label: 'Who', title: 'Stack by the main thread and the sub-agents' },
+                      {
+                        value: 'class',
+                        label: 'Price class',
+                        title: 'Stack by what the tokens were: cache reads, cache writes, output, uncached input',
+                      },
+                      {
+                        value: 'tier',
+                        label: 'Tier',
+                        title: 'Stack by what the model costs: heavy, mid and light models, heavy at the bottom',
+                      },
+                      {
+                        value: 'depth',
+                        label: 'Depth',
+                        title: 'Stack by the context the call carried: under 100k at the bottom, 500k or more on top',
+                      },
+                      {
+                        value: 'compaction',
+                        label: 'Compactions',
+                        title:
+                          'The days’ spend as above, empty, with what the compaction calls cost coloured at the bottom of each bar',
+                      },
+                    ]}
+                  />
+                }
+              >
+                <QueryBoundary query={dayRows} skeleton={<Skeleton className="h-56" />}>
+                  {(d) => (
+                    <ChartBody
+                      rows={d.rows}
+                      win={win}
+                      stack={stack}
+                      prices={prices}
+                      onPick={(b) => set({ range: undefined, ...formatCustom({ from: bucketDay(b), to: b.to }) })}
+                    />
+                  )}
+                </QueryBoundary>
+              </Section>
+
+              <Section title="Context depth">
+                <WhoDepth query={byAgentDepth} />
+              </Section>
+
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(380px,1fr))] overflow-hidden border-line border-b">
+                <div className="-mr-px -mb-px border-line border-r border-b">
+                  <LensTable
+                    query={byModel}
+                    name="Model"
+                    before={prevByModel}
+                    tone={(r) => tableColor(modelColor(r.key))}
+                    label={(r) =>
+                      r.key === OVERHEAD ? (
+                        <span title="Spend the harness reported that no transcript message explains.">
+                          (overhead)<sup className="ml-0.5 text-faint">1</sup>
+                        </span>
+                      ) : (
+                        <span title={r.key}>{modelLabel(r.key)}</span>
+                      )
+                    }
+                    footer={(d) =>
+                      d.rows.some((r) => r.key === OVERHEAD) && (
+                        <>
+                          <sup>1</sup> (overhead) is spend the harness reported that no transcript message explains. It
+                          has no model of its own.
+                        </>
+                      )
+                    }
+                  />
+                </div>
+                <div className="-mr-px -mb-px border-line border-r border-b">
+                  <LensTable
+                    query={byClass}
+                    name="Price class"
+                    tone={(r) => classColor(r.key)}
+                    label={(r) => segmentLabel(r.key)}
+                    footer={(d) => (
+                      <>
+                        {classSentence(d.rows)}
+                        {d.rows.some((r) => r.key === '(unsplit)') && ' Not split: spend no token count explains.'} A
+                        message’s spend is spread over its tokens at the price of each kind; cache writes are the
+                        5-minute and 1-hour ones together.
+                      </>
+                    )}
+                  />
+                </div>
+                <div className="-mr-px -mb-px border-line border-r border-b">
+                  <LensTable
+                    query={head}
+                    name="Kind"
+                    label={(r) => (
+                      <span title={r.label}>{r.key === 'sdk' ? 'sdk (scripted runs with spend)' : r.key}</span>
+                    )}
+                  />
+                  <WhoTier query={byAgentModel} prices={prices} />
+                </div>
+              </div>
+              <HowMade
+                query={head}
+                placesUsd={
+                  sel === null ? all.usd : selectLanes(lanes ?? [], sel, by, beads).reduce((n, l) => n + l.usd, 0)
+                }
+                extras={extras}
+              />
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

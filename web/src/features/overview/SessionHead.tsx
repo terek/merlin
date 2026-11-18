@@ -1,9 +1,9 @@
-// The head of a session open in the Overview (docs/ui.md section 10b): the session's own line (harness mark, title,
-// description, folder; at the right the paginator, the spend and the close button) and, under it, the slot the
+// The head of a session open in the Overview (docs/ui.md section 10b): the session's own line (`← the list it came from`,
+// harness mark, title, description, folder; at the right the session's total spend, the paginator and the close button) and, under it, the slot the
 // graph's locator is drawn into (SpendGraph portals it in). It borrows nothing of the list's row: no columns, no
 // time axis of the list. The slot keeps its height while the session loads, so the head never jumps.
 
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { cn } from '../../lib/cn'
 import { HarnessIcon, IconButton, Money } from '../../ui'
 import type { Position } from './focus'
@@ -22,6 +22,7 @@ export function SessionHead({
   folder,
   folderPath,
   command,
+  context,
   usd,
   at,
   prev,
@@ -36,7 +37,9 @@ export function SessionHead({
   folder: string
   folderPath: string
   command: string
-  /** The session's spend in the scope; absent when it has no lane there. */
+  /** The list it came from (`7d · in ~/tools`): the back link's text. */
+  context: string
+  /** The session's total spend; absent while nothing is known of it. */
   usd?: number
   /** Where it is in the list; null when it is not in it. */
   at: Position | null
@@ -60,6 +63,15 @@ export function SessionHead({
   return (
     <div className="shrink-0 border-line border-b bg-surface">
       <div className="flex items-center gap-3 px-4 pt-2 text-sec">
+        <button
+          type="button"
+          onClick={onClose}
+          title="Back to the list"
+          className="flex min-w-0 max-w-[40%] shrink items-center gap-1 self-center text-muted hover:text-fg"
+        >
+          <ArrowLeft size={13} className="shrink-0" aria-hidden />
+          <span className="truncate">{context}</span>
+        </button>
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
           <span className="flex shrink-0 items-center self-center">
             <HarnessIcon harness={harness} size={13} />
@@ -71,6 +83,10 @@ export function SessionHead({
         </div>
         <FolderCell text={folder} path={folderPath} command={command} />
         <div className="flex shrink-0 items-center gap-1">
+          {/* a slot as wide as the widest figure ("$99,999" and a flag's marker), so paging never moves the arrows */}
+          <span className="mx-1 shrink-0 text-right font-mono tabular-nums" style={{ width: `${SPEND_CH}ch` }}>
+            {usd !== undefined && <Money usd={usd} />}
+          </span>
           {at ? (
             <>
               {arrow(prev, 'Previous session ([)', <ChevronLeft size={15} />)}
@@ -85,10 +101,6 @@ export function SessionHead({
           ) : (
             <span className="whitespace-nowrap text-muted">Not in this list</span>
           )}
-          {/* a slot as wide as the widest figure ("$99,999" and a flag's marker), so paging never moves the arrows */}
-          <span className="mx-1 shrink-0 text-right font-mono tabular-nums" style={{ width: `${SPEND_CH}ch` }}>
-            {usd !== undefined && <Money usd={usd} />}
-          </span>
           <IconButton label="Close (Esc)" onClick={onClose} className="size-6">
             <X size={15} />
           </IconButton>

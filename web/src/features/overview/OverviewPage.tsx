@@ -50,6 +50,7 @@ import {
   laneDescription,
   laneHead,
   laneScale,
+  listContext,
   listRows,
   makeAxis,
   nextSort,
@@ -82,7 +83,7 @@ import {
   SessionText,
   spanColor,
 } from './RowParts'
-import { ScopeSlot, useScope } from './ScopeSlot'
+import { type Scope, ScopeBar, ScopeSearch, useScope } from './ScopeSlot'
 import { SessionFocus } from './SessionFocus'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
 import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
@@ -724,7 +725,7 @@ export function OverviewPage() {
   const home = useMemo(() => inferHome(query.data?.lanes.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [query.data])
   return (
     <div ref={rootRef} className="flex h-full w-full flex-col bg-surface">
-      <ScopeSlot scope={scope} home={home} beads={query.data?.beads} />
+      <ScopeSearch scope={scope} />
       <div className="flex min-h-0 flex-1 flex-col">
         <QueryBoundary
           query={query}
@@ -752,6 +753,7 @@ export function OverviewPage() {
               harness={custom?.harness}
               open={open}
               sp={sp}
+              scopeCtl={scope}
               onWindow={(w) => scope.scopeTo(windowRange(w))}
               costHref={`/cost${scopeSearch(sp)}`}
             />
@@ -787,6 +789,7 @@ function Table({
   costHref,
   open,
   sp,
+  scopeCtl,
 }: {
   o: Overview
   by: By
@@ -809,6 +812,7 @@ function Table({
   /** The session open in place of the list. */
   open: Key | null
   sp: URLSearchParams
+  scopeCtl: Scope
 }) {
   const o = useMemo(
     () =>
@@ -882,6 +886,7 @@ function Table({
     setHover((h) => (h && h.x === x && h.place === place ? h : { x, place }))
   }
 
+  const now = useNow(300_000)
   const where = sel === null ? '' : ` in ${displayPath(sel, home, by)}`
   return (
     <div className="flex min-h-0 flex-1">
@@ -903,12 +908,18 @@ function Table({
         onSelect={onSelect}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
+        {!open && <ScopeBar scope={scopeCtl} home={home} beads={o.beads} />}
         {open && (
           <SessionFocus
             open={open}
             rows={rows}
             sp={sp}
-            ctx={{ lanes: o.lanes, home, scope: { fromMs: axis.fromMs, toMs: axis.toMs } }}
+            ctx={{
+              lanes: o.lanes,
+              home,
+              scope: { fromMs: axis.fromMs, toMs: axis.toMs },
+              context: listContext(scopeCtl, home, now),
+            }}
           />
         )}
         {/* the list stays laid out and mounted under the session (hidden, not removed): its width, its scroll position
