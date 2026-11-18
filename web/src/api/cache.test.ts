@@ -226,6 +226,7 @@ describe('applyEvent', () => {
       '["groups"]',
       '["beads"]',
       '["cost"]',
+      '["overview"]',
     ])
     expect(changed).toEqual(['b'])
   })
@@ -243,7 +244,7 @@ describe('applyEvent', () => {
   test('session-missing invalidates lists and the detail', () => {
     const { qc, b, calls, sink } = setup()
     applyEvent(qc, 'session-missing', { key: b.key }, sink)
-    expect(calls).toEqual(['["sessions"]', '["trees"]', '["session","claude","b"]'])
+    expect(calls).toEqual(['["sessions"]', '["trees"]', '["session","claude","b"]', '["overview"]'])
   })
 
   test('scan-progress does nothing to the cache', () => {

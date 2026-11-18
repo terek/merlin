@@ -689,8 +689,9 @@ export function OverviewPage() {
     [search.data],
   )
 
-  // "Ending now", rounded up so that the query key holds still between refreshes.
-  const now = useNow(300_000)
+  // "Ending now", rounded up so that the query key holds still between refreshes; read every minute, so that a
+  // live session's new events are never past the end for longer than that
+  const now = useNow(60_000)
   const to = Math.ceil(now.getTime() / TEN_MIN) * TEN_MIN
   // a preset is its whole local days (today included), as the timeline draws it, ending now
   const days = custom ?? presetRange(range, now)

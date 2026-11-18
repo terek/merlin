@@ -211,13 +211,14 @@ unknown names unchanged), `buildAgentTree(agents)`, and the search-snippet highl
 - `api/events.tsx`: `EventsProvider` opens one `EventSource('/api/events')` for the app.
   - `session-updated`: replace the matching row in every cached `['sessions', ...]` page (insert
     at the top of unfiltered first pages when it is new), invalidate `['session', harness, id]`,
-    and mark `['projects']` and `['cost']` stale without refetching hidden queries. In cached
+    and mark `['projects']` and `['cost']` (and `['overview', params]`, which the whole Overview
+    page reads: its table, sidebar and the open session's head) stale without refetching hidden queries. In cached
     `['trees', ...]` pages the member is replaced and its tree re-tallied (last activity, cost,
     the member to open); a new session with no parent becomes a new tree. A new member of a tree,
     or a matching session whose tree is not cached, changes which sessions a tree holds, which
     only the daemon knows: the tree lists are invalidated instead.
   - `session-state`: patch the row's `state` in the cached lists and in a cached detail.
-  - `session-missing`: invalidate lists (sessions and trees) and that detail.
+  - `session-missing`: invalidate lists (sessions and trees), that detail and the Overview.
   - `scan-progress`: kept in a small store read by `useScanProgress()`.
   - `hello` and `update`: the daemon's version and the newer release it did not install, kept in
     the same store (`useVersion()`; `availableToShow` decides whether the top bar offers it).

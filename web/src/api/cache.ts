@@ -284,8 +284,9 @@ export interface EventSink {
 
 /**
  * Applies one SSE event to the cache, as docs/ui.md section 6 describes:
- * session-updated patches the rows and the detail's summary and invalidates the detail, projects
- * and cost; session-state patches the `state`; session-missing invalidates lists and the detail.
+ * session-updated patches the rows and the detail's summary and invalidates the detail, projects,
+ * cost and the Overview; session-state patches the `state`; session-missing invalidates lists, the detail and
+ * the Overview.
  * `scan-progress` is not a cache matter.
  */
 export function applyEvent<K extends keyof EventMap>(
@@ -307,6 +308,7 @@ export function applyEvent<K extends keyof EventMap>(
       invalidate(['groups'])
       invalidate(['beads'])
       invalidate(['cost'])
+      invalidate(['overview'])
       sink.changed?.(key)
       break
     }
@@ -323,6 +325,7 @@ export function applyEvent<K extends keyof EventMap>(
       invalidate(SESSIONS)
       invalidate(TREES)
       invalidate(['session', key.harness, key.id])
+      invalidate(['overview'])
       break
     }
     default:
