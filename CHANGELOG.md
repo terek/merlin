@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- An open live session's graph keeps its newest turns in view as they arrive, unless you have zoomed away from the end.
+
 ## 0.8.1 — 2026-11-18
 
 - When a new release is out, the status light at the top right pulses; its menu installs the update with one click (Merlin downloads it ahead of time) and the page reloads on the new version.

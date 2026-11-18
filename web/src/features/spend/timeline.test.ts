@@ -26,6 +26,7 @@ import {
   effectiveWindow,
   episodes,
   findSwarms,
+  followEnd,
   GAP_MS,
   hasDays,
   heavierTier,
@@ -1136,5 +1137,27 @@ describe('branchWeight', () => {
     expect(carrierWeight(runs, 30)).toBe(TIER_WEIGHT.heavy)
     expect(carrierWeight(runs, 45)).toBe(TIER_WEIGHT.mid)
     expect(carrierWeight([], 5)).toBe(TIER_WEIGHT.mid)
+  })
+})
+
+describe('followEnd', () => {
+  test('a window at the end extends to the new end', () => {
+    expect(followEnd({ lo: 100, hi: 500 }, 500, 700)).toEqual({ lo: 100, hi: 700 })
+  })
+  test('the whole session stays the whole session, the left edge kept', () => {
+    expect(followEnd({ lo: 0, hi: 500 }, 500, 650)).toEqual({ lo: 0, hi: 650 })
+  })
+  test('a window ending before the old end stays the same object', () => {
+    const w = { lo: 100, hi: 400 }
+    expect(followEnd(w, 500, 700)).toBe(w)
+  })
+  test('an end that does not move later leaves the window the same object', () => {
+    const w = { lo: 100, hi: 500 }
+    expect(followEnd(w, 500, 500)).toBe(w)
+    expect(followEnd(w, 500, 450)).toBe(w)
+  })
+  test('a window already past the new end keeps its right edge', () => {
+    const w = { lo: 100, hi: 800 }
+    expect(followEnd(w, 500, 700)).toBe(w)
   })
 })

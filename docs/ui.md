@@ -1095,6 +1095,8 @@ a history entry, so Back is the undo.
   change, no history entry. `sfrom`/`sto` come in from links (an old `/s/` link) and are
   read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash
   change; pinning in the page does not write it.
+  A window whose right edge is at the session's end follows the end as a live session grows; one pulled back
+  from the end stays where it is.
 - **Body**: the session's graph with its key in the Legend panel's Graph tab (the Overview's list fills no tab), and
   the box for the pinned turn or piece of agent work under it (section 9). The zoom window is the user's: toggling the panel resizes the plot and keeps the window
   in time. The graph's vertical frame (`spend/layout.ts`) is built for the width the plot has with the panel open,

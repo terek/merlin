@@ -35,6 +35,7 @@ import {
   clampWindow,
   defaultWindow,
   effectiveWindow,
+  followEnd,
   revealWindow,
   splitDays,
   type Win,
@@ -336,6 +337,14 @@ export function SpendGraph({
   const reveal = (t: number) => {
     if (!Number.isFinite(t) || (t >= eff.lo && t < eff.hi)) return
     const next = revealWindow(win, t, days, bounds)
+    if (next !== win) setWin(next)
+  }
+  // a live session grows at its end: a window whose right edge sat at the old end follows the new one;
+  // one the user pulled back from the end stays where it is
+  const [prevT1, setPrevT1] = useState(bounds.t1)
+  if (prevT1 !== bounds.t1) {
+    setPrevT1(bounds.t1)
+    const next = followEnd(win, prevT1, bounds.t1)
     if (next !== win) setWin(next)
   }
   const [seen, setSeen] = useState(pinKey(pinned))

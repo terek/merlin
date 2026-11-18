@@ -794,6 +794,13 @@ export function resizeWindow(w: Win, edge: 'lo' | 'hi', t: number, bounds: { t0:
   return { lo: w.lo, hi: Math.min(bounds.t1, Math.max(t, w.lo + MIN_WINDOW_MS)) }
 }
 
+/** A live session's end moving later (`prevT1` to `t1`) carries a window whose right edge was at that end; any other window stays. */
+export function followEnd(w: Win, prevT1: number, t1: number): Win {
+  if (t1 <= prevT1 || w.hi < prevT1) return w
+  const hi = Math.max(w.hi, t1)
+  return hi === w.hi ? w : { lo: w.lo, hi }
+}
+
 /** The window moved to be centred on `t`, same width. */
 export function centerWindow(w: Win, t: number, bounds: { t0: number; t1: number }): Win {
   const half = (w.hi - w.lo) / 2
