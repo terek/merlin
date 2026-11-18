@@ -881,7 +881,8 @@ The table only ever lists sessions.
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
 - **Scope controls.** The **search box** is in the top bar's slot (Overview only): a rounded 32 px capsule on the
   grey track holding the magnifier, the input (placeholder "Search sessions…") and the `/` hint (the clear button
-  once there is text). The **range capsule** and the **`in` chip** are the **scope header row** (`ScopeBar`, one
+  once there is text). With a session open the box searches that session (see "Find" in "A session in place"): a chip
+  "in this session ✕" at its left, the placeholder "Search this session…", a counter and ⌃ ⌄ at its right. The **range capsule** and the **`in` chip** are the **scope header row** (`ScopeBar`, one
   component for the Overview and Cost, 48 px, a bottom hairline) at the top of the content area, right of the
   sidebar and above the list (or Cost's content). An open session replaces this row with its own head. The capsule
   is 32 px high on the grey track; the axis is open only while the user works the time axis (a preset, Escape or a
@@ -1103,6 +1104,22 @@ a history entry, so Back is the undo.
   row (a portal from the strip into the heading; the strip itself is in the head); its detail graph comes next, then the spend bars and
   associated notes. The **turn or agent** section follows it with its own
   heading row (name, time, duration; ‹ › ✕ at the right).
+- **Find** (`find.ts`, the box in `ScopeSlot.tsx`). With a session open the top bar's search box searches it, as Slack's
+  "Search #channel" does: the chip "in this session ✕" sits at the box's left, the placeholder is "Search this
+  session…", and the text is the session's `find` (URL, written with `replace` after 200 ms, so no history entry per
+  keystroke; one of `FOCUS_KEYS`, so closing and any scope change drop it), not the list's `q`. Removing the chip (its ✕,
+  or Backspace in an empty box), or the row "Search all sessions for “term”" under the box while it has focus and text,
+  closes the session and makes the term the list's `q`. A session opened from a list with a search and no `find` of its
+  own opens with `find` = `q` (`focusSearch`, so row clicks, ‹ › and `[` `]` alike). The match is client side, over the
+  loaded tree and case-insensitive: the typed prompts, the prompts typed while a turn ran, the final answers, the agents'
+  prompts and final answers, and the compaction summaries (never the harness's fixed wording). A hit resolves to a turn
+  (an agent's text to the piece of work, opened with the turn that launched it); several texts of one turn are one hit.
+  The box shows "3 of 12" (or "No matches"; "12 matches" until a hit is pinned) with ⌃ ⌄; Enter steps to the next hit,
+  Shift+Enter to the previous, both wrapping, and each step pins the hit (the window reveals it, the box opens and
+  scrolls into view). The graph rings the turns that hold the term and fades the other turns' prompt dots; the locator
+  has an accent tick per hit turn; the turn box marks the term in its texts (the CSS highlight `::highlight(find)`, an
+  accent tint). `/` focuses the box; Esc in it clears the term first, then (empty) leaves the box, and then Esc takes
+  back a pin and closes as before. Cmd+F stays the browser's.
 - **The zoom never writes the address.** Drag, click, Latest, All and the keys change state only: no URL
   change, no history entry. `sfrom`/`sto` come in from links (an old `/s/` link) and are
   read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash

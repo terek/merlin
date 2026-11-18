@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- With a session open, the search box finds within that session (prompts, answers, agents, compaction summaries): hits are marked on the graph and the locator, Enter steps through them and opens each turn; a session opened from a searched list starts with that term.
+
 ## 0.8.2 — 2026-11-18
 
 - The range and folder controls sit at the top of the Overview and Cost, and the tabs at the left of the top bar; an open session's head names the list it came from (← 1d · in ~/tools) and shows the session's total spend.

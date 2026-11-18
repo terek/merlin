@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom'
 import { get, isApiError } from '../../api/client'
 import { queryKeys, useLimits, useSession } from '../../api/queries'
 import type { Candidate, SessionDetail, SessionKey } from '../../api/types'
+import { useFindHighlight } from '../../lib/findHighlight'
 import { useDocumentTitle } from '../../lib/hooks'
 import { sessionTitle } from '../../lib/session'
 import { isTyping } from '../../shell/useShortcut'
@@ -19,7 +20,9 @@ import { type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
 import { parseHash, resolveTarget } from '../spend/session'
 import { parseTime, type TimeRange } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
+import { findHits, hitIndex, stepIndex } from './find'
 import { sessionKey } from './model'
+import type { FindControl } from './ScopeSlot'
 import { TurnBox } from './TurnBox'
 import { refusalsBySession, sessionLockouts } from './windows'
 
@@ -39,6 +42,8 @@ function Loaded({
   address,
   locatorHost,
   scope,
+  find,
+  onFind,
 }: {
   home: SessionDetail
   details: SessionDetail[]
@@ -46,6 +51,8 @@ function Loaded({
   address: Address
   locatorHost?: HTMLElement | null
   scope?: TimeRange
+  find: string
+  onFind?: (c: FindControl | null) => void
 }) {
   const params = new URLSearchParams(address.search)
   const tree = useMemo(() => buildTree(details), [details])
@@ -107,6 +114,26 @@ function Loaded({
     requestAnimationFrame(() => opened.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }, [address.hash])
 
+  // The find of the page's search box: the turns that hold the term; a step pins the next one (the window
+  // reveals it, the box opens) and, for agent work, opens that piece of work with it
+  const term = find.trim()
+  const hits = useMemo(() => findHits(tree.branches, term), [tree, term])
+  const found = useMemo(() => (term ? hits.map((h) => ({ branch: h.branch, col: h.col })) : undefined), [hits, term])
+  const at = hitIndex(hits, pinned, unit && pinned && unit.branch === pinned.branch ? unit.id : null)
+  const stepRef = useRef((_dir: 1 | -1) => {})
+  stepRef.current = (dir) => {
+    const h = hits[stepIndex(at, hits.length, dir)]
+    if (!h) return
+    setPinned({ branch: h.branch, col: h.col })
+    setUnit(h.unit ? { branch: h.branch, id: h.unit } : null)
+    requestAnimationFrame(() => opened.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
+  }
+  useEffect(() => {
+    onFind?.({ count: hits.length, index: at, step: (d) => stepRef.current(d) })
+  }, [hits.length, at, onFind])
+  useEffect(() => () => onFind?.(null), [onFind])
+  useFindHighlight(opened, term)
+
   // Esc takes the pin back before it closes the session: one Esc does one thing (the focus closes on an Esc
   // nobody has handled). Listened to in the capture phase, so that it is settled before anything else sees it.
   useEffect(() => {
@@ -153,6 +180,7 @@ function Loaded({
         refusals={refusals}
         locatorHost={locatorHost}
         scope={scope}
+        found={found}
       />
       <div ref={opened} className="scroll-mt-12">
         {branch && col && pinned && (
@@ -182,11 +210,15 @@ function Family({
   address,
   locatorHost,
   scope,
+  find,
+  onFind,
 }: {
   home: SessionDetail
   address: Address
   locatorHost?: HTMLElement | null
   scope?: TimeRange
+  find: string
+  onFind?: (c: FindControl | null) => void
 }) {
   const others = home.family.members.map((m) => m.key).filter((k) => !same(k, home.summary.key))
   const results = useQueries({
@@ -216,6 +248,8 @@ function Family({
       address={address}
       locatorHost={locatorHost}
       scope={scope}
+      find={find}
+      onFind={onFind}
     />
   )
 }
@@ -262,10 +296,24 @@ export interface SessionViewProps {
   locatorHost?: HTMLElement | null
   /** The Overview list's time range: the session opens on its part in it (`sfrom`/`sto` win). */
   scope?: TimeRange
+  /** What the page's search box is looking for in the session: its hits are marked, and stepped through (`onFind`). */
+  find?: string
+  /** Told what the search has to offer (null when the session goes). */
+  onFind?: (c: FindControl | null) => void
 }
 
 /** The session the Overview has open: its graph, and the pinned turn under it. */
-export function SessionView({ harness, id, search, hash, hrefFor, locatorHost, scope }: SessionViewProps) {
+export function SessionView({
+  harness,
+  id,
+  search,
+  hash,
+  hrefFor,
+  locatorHost,
+  scope,
+  find = '',
+  onFind,
+}: SessionViewProps) {
   const query = useSession(harness, id, { messages: true })
   useDocumentTitle(query.data ? sessionTitle(query.data.summary) : undefined)
 
@@ -291,7 +339,16 @@ export function SessionView({ harness, id, search, hash, hrefFor, locatorHost, s
   if (err) return <ErrorState error={err} onRetry={() => void query.refetch()} />
   return (
     <QueryBoundary query={query} skeleton={<PageSkeleton />}>
-      {(d) => <Family home={d} address={{ search, hash }} locatorHost={locatorHost} scope={scope} />}
+      {(d) => (
+        <Family
+          home={d}
+          address={{ search, hash }}
+          locatorHost={locatorHost}
+          scope={scope}
+          find={find}
+          onFind={onFind}
+        />
+      )}
     </QueryBoundary>
   )
 }

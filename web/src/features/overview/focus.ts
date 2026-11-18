@@ -20,15 +20,20 @@ export const openValue = (k: Key): string => `${k.harness}:${k.id}`
 
 /**
  * The query of the Overview with `key` open: the scope and the rest as they are, the previous session's zoom and
- * development parameters gone, and the session's own zoom (`sfrom`, `sto`) when it opens on a stretch.
+ * development parameters gone, and the session's own zoom (`sfrom`, `sto`) when it opens on a stretch. The
+ * session's `find` is the list's search (`q`) unless it already has a term.
  */
 export function focusSearch(
   search: string | URLSearchParams,
   key: Key,
   stretch?: { from: string; to: string },
 ): string {
+  // a session opened from a searched list starts with that term (Gmail); one already searched keeps its own
+  const from = new URLSearchParams(search)
+  const find = from.get('find') || from.get('q')
   const out = withoutFocus(search)
   out.set('open', openValue(key))
+  if (find) out.set('find', find)
   if (stretch) {
     out.set('sfrom', stretch.from)
     out.set('sto', stretch.to)
@@ -39,6 +44,14 @@ export function focusSearch(
 /** The query with the session closed: the scope as it was. */
 export function closedSearch(search: string | URLSearchParams): string {
   const s = withoutFocus(search).toString()
+  return s ? `?${s}` : ''
+}
+
+/** The list with the session closed and `term` its search (the scope's `q`); an empty term leaves `q` as it was. */
+export function searchAllSearch(search: string | URLSearchParams, term: string): string {
+  const out = withoutFocus(search)
+  if (term.trim()) out.set('q', term.trim())
+  const s = out.toString()
   return s ? `?${s}` : ''
 }
 

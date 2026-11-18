@@ -61,6 +61,8 @@ export interface OverviewProps {
   onWin: (w: Win) => void
   /** The start of the pinned turn, if there is one. */
   pinnedT?: number
+  /** The starts of the turns a find of the session hit: a small accent tick each, so that those outside the window show. */
+  foundT?: readonly number[]
   /** The last work episode: what "Latest" goes back to. */
   latest: Win
   /** The lockouts the session graph draws: the strip shows them too, softly, so the whole session's are in view. */
@@ -86,6 +88,7 @@ export function Overview({
   eff,
   onWin,
   pinnedT,
+  foundT,
   latest,
   lockouts,
   controlsHost,
@@ -380,6 +383,24 @@ export function Overview({
               {l.text}
             </text>
           ))}
+          {foundT && foundT.length > 0 && (
+            <g pointerEvents="none" data-testid="find-ticks">
+              {foundT.map((t) =>
+                Number.isFinite(t) ? (
+                  <rect
+                    key={t}
+                    x={axis.x(t) - 1}
+                    y={LABEL_H}
+                    width={2}
+                    height={H - LABEL_H}
+                    rx={1}
+                    fill="var(--accent)"
+                    opacity={0.55}
+                  />
+                ) : null,
+              )}
+            </g>
+          )}
           {pinnedT !== undefined && Number.isFinite(pinnedT) && (
             <g pointerEvents="none">
               <line

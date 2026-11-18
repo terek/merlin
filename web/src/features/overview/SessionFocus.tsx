@@ -14,6 +14,7 @@ import { sessionTitle } from '../../lib/session'
 import { isTyping, useShortcut } from '../../shell/useShortcut'
 import { closedSearch, focusSearch, type Key, positionIn } from './focus'
 import { folderText, laneDescription, laneHead } from './model'
+import type { FindControl } from './ScopeSlot'
 import { SessionHead } from './SessionHead'
 import { SessionView } from './SessionView'
 
@@ -33,12 +34,17 @@ export function SessionFocus({
   rows,
   sp,
   ctx,
+  find,
+  onFind,
 }: {
   open: Key
   /** The list's rows, in the order the table draws them. */
   rows: readonly OverviewLane[]
   sp: URLSearchParams
   ctx: HeadContext
+  /** What the top bar's search box looks for in the session. */
+  find: string
+  onFind: (c: FindControl | null) => void
 }) {
   const navigate = useNavigate()
   const { hash } = useLocation()
@@ -111,6 +117,8 @@ export function SessionFocus({
           hrefFor={hrefFor}
           locatorHost={locatorHost}
           scope={ctx.scope}
+          find={find}
+          onFind={onFind}
         />
       </div>
     </>

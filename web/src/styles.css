@@ -379,3 +379,9 @@
     text-underline-offset: 2px;
   }
 }
+
+/* the term of a session's find, in the texts of the turn box (lib/findHighlight.ts) */
+::highlight(find) {
+  background-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: inherit;
+}

@@ -2,7 +2,7 @@
 // only), and the scope bar, the header row of the content area, with the range capsule and its axis and the `in`
 // chip. The scope is the URL's `range`, `from`, `to`, `by`, `in` and `q` (docs/ui.md section 10b).
 
-import { ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useCost } from '../../api/queries'
@@ -84,7 +84,15 @@ export function useScope() {
     }
     setSp(next)
   }
-  return { sp, set, select, scopeTo, range, custom, by, sel, q }
+  // the term a session in place is searched for: written in place, a keystroke is no history entry
+  const find = sp.get('find') ?? ''
+  const setFind = (term: string) => {
+    const next = new URLSearchParams(sp)
+    if (term) next.set('find', term)
+    else next.delete('find')
+    setSp(next, { replace: true })
+  }
+  return { sp, set, select, scopeTo, range, custom, by, sel, q, find, setFind }
 }
 
 export type Scope = ReturnType<typeof useScope>
@@ -337,8 +345,62 @@ function useRememberedCustom(applied: CustomRange | null): CustomRange | null {
   return applied ?? last
 }
 
-/** The search box in the top bar's slot: typing is local, the URL follows after 200 ms. */
-export function ScopeSearch({ scope }: { scope: Scope }) {
+/** What the open session offers the search box: how many hits it has, which is shown, and a step to the next. */
+export interface FindControl {
+  count: number
+  /** The hit the pinned turn is; -1 when the pinned turn (or none) is not one. */
+  index: number
+  step: (dir: 1 | -1) => void
+}
+
+/**
+ * The term a session in place is searched for. Typing is local (the hits follow at once), the URL's `find` follows
+ * after 200 ms and `find` in the URL (a link, back and forward) is followed by the box.
+ */
+export function useFindDraft(scope: Scope, enabled: boolean): [string, (v: string) => void] {
+  const { find, setFind } = scope
+  const [draft, setDraft] = useState(find)
+  const debounced = useDebounced(draft, 200)
+  const written = useRef(find)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: write only when the debounced text changes
+  useEffect(() => {
+    if (enabled && debounced !== written.current) {
+      written.current = debounced
+      setFind(debounced)
+    }
+  }, [debounced])
+  useEffect(() => {
+    if (find !== written.current) {
+      written.current = find
+      setDraft(find)
+    }
+  }, [find])
+  return [draft, setDraft]
+}
+
+/**
+ * The search box in the top bar's slot. Without a session open it is the list's search: typing is local, the URL's
+ * `q` follows after 200 ms. With one open it searches that session (Slack's "Search #channel"): a chip says so, the
+ * text is the session's `find`, the counter and the arrows step through the hits, and removing the chip, or the row
+ * under the box, takes the term back to the list.
+ */
+export function ScopeSearch({
+  scope,
+  session,
+  find,
+  setFind,
+  control,
+  onAll,
+}: {
+  scope: Scope
+  /** A session is open: the box searches it. */
+  session: boolean
+  find: string
+  setFind: (v: string) => void
+  control: FindControl | null
+  /** Back to the list with the term as its search. */
+  onAll: (term: string) => void
+}) {
   const { set, q } = scope
   const [draft, setDraft] = useState(q)
   const debounced = useDebounced(draft, 200)
@@ -358,42 +420,113 @@ export function ScopeSearch({ scope }: { scope: Scope }) {
     }
   }, [q])
   const inputRef = useRef<HTMLInputElement>(null)
+  const [focused, setFocused] = useState(false)
   useShortcut('/', () => {
     inputRef.current?.focus()
     inputRef.current?.select()
   })
+  const value = session ? find : draft
+  const setValue = session ? setFind : setDraft
+  const term = find.trim()
+  const toList = () => {
+    onAll(find)
+    inputRef.current?.focus()
+  }
+  const showAll = session && focused && term !== ''
   return (
     <ShellSlot>
-      <div className="relative flex h-8 w-full min-w-[160px] max-w-[560px] items-center overflow-hidden rounded-full border border-line bg-surface-2">
-        <button
-          type="button"
-          aria-label="Focus the search"
-          title="Search sessions (/)"
-          onClick={() => inputRef.current?.focus()}
-          className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
-        >
-          <Search size={14} aria-hidden />
-        </button>
-        <input
-          ref={inputRef}
-          type="search"
-          aria-label="Search sessions"
-          value={draft}
-          placeholder="Search sessions…"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Escape') return
-            if (draft) setDraft('')
-            else e.currentTarget.blur()
-          }}
-          className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
-        />
-        {draft ? (
-          <IconButton label="Clear" onClick={() => setDraft('')} className="mr-1 size-5 shrink-0">
-            <X size={13} />
-          </IconButton>
-        ) : (
-          <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
+      <div className="relative w-full min-w-[160px] max-w-[560px]">
+        <div className="flex h-8 w-full items-center overflow-hidden rounded-full border border-line bg-surface-2">
+          <button
+            type="button"
+            aria-label="Focus the search"
+            title={session ? 'Search this session (/)' : 'Search sessions (/)'}
+            onClick={() => inputRef.current?.focus()}
+            className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
+          >
+            <Search size={14} aria-hidden />
+          </button>
+          {session && (
+            <span className="mr-1.5 inline-flex h-5 shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-accent-soft pr-0.5 pl-2 text-accent text-sec">
+              in this session
+              <IconButton label="Search all sessions instead" onClick={toList} className="size-4 text-accent">
+                <X size={11} />
+              </IconButton>
+            </span>
+          )}
+          <input
+            ref={inputRef}
+            type="search"
+            aria-label={session ? 'Search this session' : 'Search sessions'}
+            value={value}
+            placeholder={session ? 'Search this session…' : 'Search sessions…'}
+            onChange={(e) => setValue(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={(e) => {
+              if (session && e.key === 'Backspace' && value === '') {
+                e.preventDefault()
+                toList()
+              } else if (session && e.key === 'Enter') {
+                e.preventDefault()
+                control?.step(e.shiftKey ? -1 : 1)
+              } else if (e.key === 'Escape') {
+                if (value) setValue('')
+                else e.currentTarget.blur()
+              }
+            }}
+            className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
+          />
+          {session && term !== '' && control && (
+            <span className="mr-0.5 flex shrink-0 items-center gap-0.5">
+              <span className="whitespace-nowrap px-1 text-meta text-muted tabular-nums" aria-live="polite">
+                {control.count === 0
+                  ? 'No matches'
+                  : control.index >= 0
+                    ? `${control.index + 1} of ${control.count}`
+                    : `${control.count} ${control.count === 1 ? 'match' : 'matches'}`}
+              </span>
+              <IconButton
+                label="Previous match"
+                disabled={control.count === 0}
+                onClick={() => control.step(-1)}
+                className="size-5"
+              >
+                <ChevronUp size={13} />
+              </IconButton>
+              <IconButton
+                label="Next match"
+                disabled={control.count === 0}
+                onClick={() => control.step(1)}
+                className="size-5"
+              >
+                <ChevronDown size={13} />
+              </IconButton>
+            </span>
+          )}
+          {value ? (
+            <IconButton label="Clear" onClick={() => setValue('')} className="mr-1 size-5 shrink-0">
+              <X size={13} />
+            </IconButton>
+          ) : (
+            <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
+          )}
+        </div>
+        {showAll && (
+          <div className="absolute inset-x-0 top-full z-30 mt-1 overflow-hidden rounded-card border border-line bg-surface shadow-lg">
+            <button
+              type="button"
+              // before the input loses its focus: the row is clicked, not the box left
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={toList}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-body hover:bg-surface-2"
+            >
+              <Search size={13} aria-hidden className="shrink-0 text-faint" />
+              <span className="min-w-0 truncate">
+                Search all sessions for <span className="font-medium">“{term}”</span>
+              </span>
+            </button>
+          </div>
         )}
       </div>
     </ShellSlot>

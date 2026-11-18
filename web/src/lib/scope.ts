@@ -22,7 +22,7 @@ export function scopeSearch(search: string | URLSearchParams, opts: { q?: boolea
  * (`sfrom`, `sto`), and the development ones (`pin`, `unit`, `cursor`) a session link may carry. None of them is
  * part of the scope: any change of scope drops them.
  */
-export const FOCUS_KEYS = ['open', 'sfrom', 'sto', 'pin', 'unit', 'cursor'] as const
+export const FOCUS_KEYS = ['open', 'sfrom', 'sto', 'find', 'pin', 'unit', 'cursor'] as const
 
 /** A copy of the query with the session focus's parameters removed. */
 export function withoutFocus(search: string | URLSearchParams): URLSearchParams {

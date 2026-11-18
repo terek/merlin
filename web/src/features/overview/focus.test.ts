@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { withoutFocus } from '../../lib/scope'
-import { closedSearch, focusSearch, legacyTarget, openValue, parseOpen, positionIn } from './focus'
+import { closedSearch, focusSearch, legacyTarget, openValue, parseOpen, positionIn, searchAllSearch } from './focus'
 import { listContext, listRows } from './model'
 
 const rows = ['a', 'b', 'c'].map((id) => ({ harness: 'claude', id }))
@@ -25,6 +25,19 @@ describe('open=', () => {
     const z = new URLSearchParams(focusSearch('?range=7d', rows[0], { from: 'F', to: 'T' }))
     expect(z.get('sfrom')).toBe('F')
     expect(z.get('sto')).toBe('T')
+  })
+})
+
+describe('find', () => {
+  test('a session opened from a searched list starts with its term; one with a term keeps it', () => {
+    expect(new URLSearchParams(focusSearch('?q=lexer', rows[0])).get('find')).toBe('lexer')
+    expect(new URLSearchParams(focusSearch('?q=lexer&open=claude:a&find=parser', rows[1])).get('find')).toBe('parser')
+    expect(new URLSearchParams(focusSearch('?range=7d', rows[0])).has('find')).toBe(false)
+  })
+  test('closing and scope changes drop it; searching all sessions makes it the list search', () => {
+    expect(closedSearch('?q=a&open=claude:a&find=b')).toBe('?q=a')
+    expect(searchAllSearch('?q=a&open=claude:a&find=b', 'b c')).toBe('?q=b+c')
+    expect(searchAllSearch('?range=30d&q=a&open=claude:a', ' ')).toBe('?range=30d&q=a')
   })
 })
 
