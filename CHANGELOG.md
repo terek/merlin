@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+## 0.8.2 — 2026-11-18
+
 - The range and folder controls sit at the top of the Overview and Cost, and the tabs at the left of the top bar; an open session's head names the list it came from (← 1d · in ~/tools) and shows the session's total spend.
 - A session opened from the Overview opens on its part in the selected range (with 1d, today's part); All shows the whole session.
 - The Overview's table, sidebar and an open session's spend follow a live session as it grows, instead of keeping the figure they loaded with.
