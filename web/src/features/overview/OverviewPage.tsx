@@ -902,7 +902,14 @@ function Table({
         onSelect={onSelect}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {open && <SessionFocus open={open} rows={rows} sp={sp} ctx={{ lanes: o.lanes, home }} />}
+        {open && (
+          <SessionFocus
+            open={open}
+            rows={rows}
+            sp={sp}
+            ctx={{ lanes: o.lanes, home, scope: { fromMs: axis.fromMs, toMs: axis.toMs } }}
+          />
+        )}
         {/* the list stays laid out and mounted under the session (hidden, not removed): its width, its scroll position
             and its rows are where they were when it comes back */}
         <div

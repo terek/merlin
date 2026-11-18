@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- A session opened from the Overview opens on its part in the selected range (with 1d, today's part); All shows the whole session.
 - An open live session's graph keeps its newest turns in view as they arrive, unless you have zoomed away from the end.
 
 ## 0.8.1 — 2026-11-18

@@ -22,6 +22,8 @@ export interface HeadContext {
   /** Every session of the range (the list's rows are the ones the scope and the search leave). */
   lanes: readonly OverviewLane[]
   home: string | undefined
+  /** The list's time range, in instants: a session opens on its part in it. */
+  scope: { fromMs: number; toMs: number }
 }
 
 export function SessionFocus({
@@ -105,6 +107,7 @@ export function SessionFocus({
           hash={hash}
           hrefFor={hrefFor}
           locatorHost={locatorHost}
+          scope={ctx.scope}
         />
       </div>
     </>

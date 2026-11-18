@@ -17,7 +17,7 @@ import { isTyping } from '../../shell/useShortcut'
 import { EmptyState, ErrorState, Id, ProjectName, QueryBoundary, RelTime, Skeleton, SkeletonRows } from '../../ui'
 import { type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
 import { parseHash, resolveTarget } from '../spend/session'
-import { parseTime } from '../spend/timeline'
+import { parseTime, type TimeRange } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
 import { sessionKey } from './model'
 import { TurnBox } from './TurnBox'
@@ -38,12 +38,14 @@ function Loaded({
   missing,
   address,
   locatorHost,
+  scope,
 }: {
   home: SessionDetail
   details: SessionDetail[]
   missing: number
   address: Address
   locatorHost?: HTMLElement | null
+  scope?: TimeRange
 }) {
   const params = new URLSearchParams(address.search)
   const tree = useMemo(() => buildTree(details), [details])
@@ -150,6 +152,7 @@ function Loaded({
         lockouts={lockouts}
         refusals={refusals}
         locatorHost={locatorHost}
+        scope={scope}
       />
       <div ref={opened} className="scroll-mt-12">
         {branch && col && pinned && (
@@ -178,10 +181,12 @@ function Family({
   home,
   address,
   locatorHost,
+  scope,
 }: {
   home: SessionDetail
   address: Address
   locatorHost?: HTMLElement | null
+  scope?: TimeRange
 }) {
   const others = home.family.members.map((m) => m.key).filter((k) => !same(k, home.summary.key))
   const results = useQueries({
@@ -210,6 +215,7 @@ function Family({
       missing={others.length - loaded.length}
       address={address}
       locatorHost={locatorHost}
+      scope={scope}
     />
   )
 }
@@ -254,10 +260,12 @@ export interface SessionViewProps {
   hrefFor: (key: SessionKey) => string
   /** Where the graph's locator strip goes: the head's pinned slot (null until it mounts). Undefined: in the page. */
   locatorHost?: HTMLElement | null
+  /** The Overview list's time range: the session opens on its part in it (`sfrom`/`sto` win). */
+  scope?: TimeRange
 }
 
 /** The session the Overview has open: its graph, and the pinned turn under it. */
-export function SessionView({ harness, id, search, hash, hrefFor, locatorHost }: SessionViewProps) {
+export function SessionView({ harness, id, search, hash, hrefFor, locatorHost, scope }: SessionViewProps) {
   const query = useSession(harness, id, { messages: true })
   useDocumentTitle(query.data ? sessionTitle(query.data.summary) : undefined)
 
@@ -283,7 +291,7 @@ export function SessionView({ harness, id, search, hash, hrefFor, locatorHost }:
   if (err) return <ErrorState error={err} onRetry={() => void query.refetch()} />
   return (
     <QueryBoundary query={query} skeleton={<PageSkeleton />}>
-      {(d) => <Family home={d} address={{ search, hash }} locatorHost={locatorHost} />}
+      {(d) => <Family home={d} address={{ search, hash }} locatorHost={locatorHost} scope={scope} />}
     </QueryBoundary>
   )
 }

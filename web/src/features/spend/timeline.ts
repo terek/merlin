@@ -783,6 +783,24 @@ export function clampWindow(w: Win, b: { t0: number; t1: number }, min = MIN_WIN
   return { lo, hi: lo + width }
 }
 
+/** A stretch of time, in epoch milliseconds. */
+export interface TimeRange {
+  fromMs: number
+  toMs: number
+}
+
+/**
+ * The window a session opens on when the Overview's list has a time range: the part of the session inside it
+ * (cut, not shifted). Null (the session opens whole) when the session is wholly inside the range, or has
+ * nothing inside it. A part narrower than the minimum window is widened by `clampWindow`.
+ */
+export function scopeWindow(scope: TimeRange, b: { t0: number; t1: number }): Win | null {
+  const lo = Math.max(scope.fromMs, b.t0)
+  const hi = Math.min(scope.toMs, b.t1)
+  if (!(hi > lo) || (lo === b.t0 && hi === b.t1)) return null
+  return clampWindow({ lo, hi }, b)
+}
+
 /** The window from dragging out a new range between two moments. */
 export function dragWindow(a: number, b: number, bounds: { t0: number; t1: number }): Win {
   return clampWindow({ lo: Math.min(a, b), hi: Math.max(a, b) }, bounds)

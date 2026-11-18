@@ -43,6 +43,7 @@ import {
   pxPerTurn,
   resizeWindow,
   revealWindow,
+  scopeWindow,
   sliceDay,
   sliceTimeline,
   sliceWindow,
@@ -1159,5 +1160,25 @@ describe('followEnd', () => {
   test('a window already past the new end keeps its right edge', () => {
     const w = { lo: 100, hi: 800 }
     expect(followEnd(w, 500, 700)).toBe(w)
+  })
+})
+
+describe('scopeWindow', () => {
+  const H = 3_600_000
+  const b = { t0: 10 * H, t1: 70 * H }
+  test('the part of the session inside the range, cut at the range', () => {
+    expect(scopeWindow({ fromMs: 48 * H, toMs: 100 * H }, b)).toEqual({ lo: 48 * H, hi: 70 * H })
+    expect(scopeWindow({ fromMs: 0, toMs: 30 * H }, b)).toEqual({ lo: 10 * H, hi: 30 * H })
+    expect(scopeWindow({ fromMs: 20 * H, toMs: 30 * H }, b)).toEqual({ lo: 20 * H, hi: 30 * H })
+  })
+  test('a session inside the range, or with nothing in it, opens whole', () => {
+    expect(scopeWindow({ fromMs: 0, toMs: 100 * H }, b)).toBeNull()
+    expect(scopeWindow({ fromMs: 10 * H, toMs: 70 * H }, b)).toBeNull()
+    expect(scopeWindow({ fromMs: 80 * H, toMs: 90 * H }, b)).toBeNull()
+    expect(scopeWindow({ fromMs: 0, toMs: 10 * H }, b)).toBeNull()
+  })
+  test('a window at the end of the session stays at its end, so that it follows', () => {
+    const w = scopeWindow({ fromMs: 48 * H, toMs: 500 * H }, b)
+    expect(w?.hi).toBe(b.t1)
   })
 })

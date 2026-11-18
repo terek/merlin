@@ -410,7 +410,11 @@ From top to bottom, the graph and then the box:
     calendar day its first-to-last activity overlaps most; when two land on one day the first goes back
     to the day it started on (an evening run deep into the night), or, if it started that same day,
     they are one;
-  - a session **opens on all of it**; **Latest** goes to the day of the last work episode: an episode runs back from the end of
+  - a session opened from the Overview **opens on its part in the list's time range** (with `1d`, today's part; the part is cut at
+    the range, `scopeWindow`; the range is the one the list asks the API for, whole local days for a preset, the exact instants
+    of a limit window). A session wholly inside the range, or with nothing in it, opens on all of it, and `sfrom`/`sto`, when the
+    link has them, win. The window is set once, on open, and a later change of range does not move it; a window that ends at
+    the session's end follows a live session. **All** is the whole session. **Latest** goes to the day of the last work episode: an episode runs back from the end of
     activity to the first idle stretch longer than 2 hours or the first night cut, whichever comes
     first (`defaultWindow`, `episodes`); an episode that spent under 1% of the tree (a resume that only
     compacted) is passed over for the one before. The window is that episode's day (a day of three
@@ -1062,7 +1066,7 @@ The table only ever lists sessions.
 A session opens inside the Overview, in the list it was clicked in. The address is the Overview's plus
 `open=<harness>:<id>` (the scope parameters stay as they are); the session's own zoom is `sfrom`/`sto` (the
 Overview's `from`/`to` are its scope), and its hash targets (`#t<n>`, `#a<agentId>`, `#c<n>`) work as they did.
-A click anywhere on a row opens it whole; `sfrom`, `sto` come only from links that carry a stretch (an old `/s/` link), read once on open.
+A click anywhere on a row opens it on its part in the list's time range (whole when it is inside the range or misses it; see the locator in §9); `sfrom`, `sto` come only from links that carry a stretch (an old `/s/` link), win over that, and are read once on open.
 Cost's Limits "biggest sessions" open in the window's scope, sorted by spend. Every open, previous/next and close is
 a history entry, so Back is the undo.
 

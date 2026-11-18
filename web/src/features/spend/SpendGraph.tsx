@@ -37,7 +37,9 @@ import {
   effectiveWindow,
   followEnd,
   revealWindow,
+  scopeWindow,
   splitDays,
+  type TimeRange,
   type Win,
 } from './timeline'
 import type { Branch, Tree } from './tree'
@@ -68,6 +70,8 @@ export interface SpendGraphProps {
   initialCursor?: number
   /** Dev and screenshots: the window of time to show first (`?from=&to=`). */
   initialWindow?: Partial<Win>
+  /** A time range the session opens on its part of, unless `initialWindow` says otherwise (`scopeWindow`). */
+  scope?: TimeRange
   /** The session the page is about: its main row is marked in the plot. */
   current?: SessionKey
   /** The key goes to the Graph tab of the legend panel instead of under the plot. */
@@ -265,6 +269,7 @@ export function SpendGraph({
   onSelectUnit,
   initialCursor,
   initialWindow,
+  scope,
   current,
   keyInPanel,
   lockouts,
@@ -318,7 +323,9 @@ export function SpendGraph({
   const [win, setWin] = useState<Win>(() => {
     if (initialWindow && (initialWindow.lo !== undefined || initialWindow.hi !== undefined))
       return clampWindow({ lo: initialWindow.lo ?? bounds.t0, hi: initialWindow.hi ?? bounds.t1 }, bounds)
-    // a session opens on all of it; "Latest" is a click away
+    // a session opens on its part in the scope (all of it when inside it or missing it); "Latest" is a click away
+    const part = scope && scopeWindow(scope, bounds)
+    if (part) return part
     return { lo: bounds.t0, hi: bounds.t1 }
   })
   // what the plot shows is measured on the strip the brush is dragged on, so the strip's width is known here
