@@ -9,7 +9,6 @@ import { type Available, availableToShow, releaseUrl } from '../lib/version'
 import { Button, IconButton } from '../ui'
 import { lensLinks } from './lastOverview'
 import { PanelButton } from './Panel'
-import { SlotTarget } from './ShellSlot'
 import { nextTheme, useTheme } from './theme'
 import { useShortcut } from './useShortcut'
 
@@ -202,7 +201,7 @@ export function TopBar() {
           Moments
         </NavLink>
       </nav>
-      <SlotTarget />
+      <div className="flex-1" />
       <UpdateNotice />
       <div className="flex items-center gap-1">
         <PanelButton />

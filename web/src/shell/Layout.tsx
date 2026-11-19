@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ErrorBoundary } from './ErrorBoundary'
 import { lensLinks, rememberOverview, rememberScope } from './lastOverview'
 import { PanelColumn, PanelProvider, usePanel } from './Panel'
-import { SlotProvider } from './ShellSlot'
 import { TopBar } from './TopBar'
 import { useShortcut } from './useShortcut'
 
@@ -41,18 +40,16 @@ function Shell() {
     if (!a || a === document.body) el.focus({ preventScroll: true })
   }, [pathname])
   return (
-    <SlotProvider>
-      <div className="flex h-dvh flex-col overflow-hidden">
-        <TopBar />
-        <div className="relative flex min-h-0 flex-1">
-          <main ref={main} tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-auto outline-none">
-            <ErrorBoundary resetKey={pathname}>
-              <Outlet />
-            </ErrorBoundary>
-          </main>
-          <PanelColumn />
-        </div>
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <TopBar />
+      <div className="relative flex min-h-0 flex-1">
+        <main ref={main} tabIndex={-1} className="min-h-0 min-w-0 flex-1 overflow-auto outline-none">
+          <ErrorBoundary resetKey={pathname}>
+            <Outlet />
+          </ErrorBoundary>
+        </main>
+        <PanelColumn />
       </div>
-    </SlotProvider>
+    </div>
   )
 }

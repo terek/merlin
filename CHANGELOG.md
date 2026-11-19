@@ -5,7 +5,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 ## Unreleased
 
 - The Overview keeps its range and folder controls when nothing ran in the range, so you can switch back.
-- With a session open, the search box is disabled; close the session to search the list.
+- The search box moved from the top bar into the list's header row, beside the range; it is hidden while a session is open and shrinks to an icon when the row is narrow.
 
 ## 0.8.2 — 2026-11-18
 

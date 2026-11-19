@@ -725,12 +725,11 @@ export function OverviewPage() {
   const home = useMemo(() => inferHome(query.data?.lanes.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [query.data])
   return (
     <div ref={rootRef} className="flex h-full w-full flex-col bg-surface">
-      <ScopeSearch scope={scope} disabled={open !== null} />
       <div className="flex min-h-0 flex-1 flex-col">
         {/* the table carries the scope bar beside its sidebar; without a table (nothing in the range, an error, the
             first load) it stands here, so that the range can always be changed back */}
         {open === null && !(query.data && !listEmpty(query.data)) && (
-          <ScopeBar scope={scope} home={home} beads={query.data?.beads} />
+          <ScopeBar scope={scope} home={home} beads={query.data?.beads} search={<ScopeSearch scope={scope} />} />
         )}
         <QueryBoundary
           query={query}
@@ -916,7 +915,7 @@ function Table({
         onSelect={onSelect}
       />
       <div className="relative flex min-w-0 flex-1 flex-col">
-        {!open && <ScopeBar scope={scopeCtl} home={home} beads={o.beads} />}
+        {!open && <ScopeBar scope={scopeCtl} home={home} beads={o.beads} search={<ScopeSearch scope={scopeCtl} />} />}
         {open && (
           <SessionFocus
             open={open}

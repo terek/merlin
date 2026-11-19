@@ -233,18 +233,14 @@ below it a page scrolls inside the shell's main area (its scrollbar starts under
 Overview's sidebar and table do). A new page starts at the top of main; a filter change does not move it.
 Sticky headers inside main stick at its top (`top: 0`).
 
-One bar, 44px: **brand, the tabs, the page's slot, the theme and status buttons**. The bar is global: it looks the
-same whether or not a session is open in the Overview.
+One bar, 44px: **brand, the tabs, the theme and status buttons**: navigation only. The bar is global: it looks the
+same whether or not a session is open in the Overview, and no page puts tools in it.
 
 - **Left**: the wizard logo (`public/logo-48.png`, shown at 22 px) and "Merlin", linking to `/`. The favicons and the
   apple-touch icon are in `public/`.
 - **Left, after the logo**: the tabs **Overview** (`/`), **Cost**, **Moments**, described below.
-- **Middle, the slot**: a flexible area the current page fills with its own tools (`ShellSlot`, a portal into the
-  bar; a page never imports the bar). Empty means empty space. The Overview puts its search box there
-  (section 10b; disabled, in place, while a session is open; the range and folder controls are in the content area's header row, not here); the Session page's slot is filled by the shell (`SessionSlot`): `← Overview`, linking to the last
-  Overview address visited in this tab (`pathname + search` in `sessionStorage`, `/` when there is none), then the
-  session's harness mark and title, muted, truncating, the whole title in the tooltip. Cost, Moments, Sessions and
-  Bead leave it empty and keep their toolbars in the page.
+- **Middle**: a flexible spacer that keeps the right-hand buttons at the right. Pages put nothing in the bar: the
+  Overview's search and range and folder controls are in the content area's header row (section 10b).
 - **The tabs**: Overview and Cost link with the scope (`range`
   `from` `to` `by` `in`) of the page being read when it is one of the two, else the last one seen (`sessionStorage`),
   and `g o` and `g c` do the same; the search (`q`) is the Overview's alone: Cost's link has none, and the Overview's
@@ -256,8 +252,7 @@ same whether or not a session is open in the Overview.
   "offline, retrying"). While an update is offered (and the connection is not offline) the button's icon turns accent and an accent dot sits on its top-right corner with a ring pulsing behind it (`animate-ping`, `motion-safe` only: reduced motion gets a steady dot), and the tooltip reads "Update available: X". Its popover (closes on an outside click and Escape, 288 px) holds the connection and the running version; when an update is offered, a block under them is the most prominent thing in it: "Update available" with X (a link to that release's page) and a full-width primary button **Install X** (not while the "updated" notice is up, nor when X is the version running). The daemon's `update` event gives the state: `ready` and `available` show the button (the latter downloads first, and may carry the last failure as a quiet line); `downloading` shows it with a quiet "downloading…" hint; `blocked` has no button, only the reason (the `sudo` command, selectable). A click POSTs `/api/upgrade` and the button reads "Installing…", then "Restarting…" after the 200; a failed call shows its message under the button and enables it again. The block ends with the quiet hint "Turn on auto-upgrade: `merlin autoupgrade`". The tab that clicked Install reloads itself as soon as the daemon's hello reports the version it installed (the flag lives in the event store, not in storage); other tabs keep the "Merlin updated to X · Reload" notice.
 - **The legend panel** (added 2026-11-15, `merlin-bj5.1`): a column at the right of main, 300 px, full height under
   the bar, `bg-surface`, a left border, its own scroll. It pushes main (main narrows; the Cost chart follows its
-  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal, as
-  `ShellSlot`); the known ids, in order, are `overview` ("Overview"), `graph` ("Graph") and `cost` ("Cost"). Only filled tabs show; the one
+  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal); the known ids, in order, are `overview` ("Overview"), `graph` ("Graph") and `cost` ("Cost"). Only filled tabs show; the one
   picked by hand wins while it stays filled, else the one filled last; a single tab shows its title in place of
   a strip. The **Legend button** (`PanelRight`, before the theme button, pressed while open) shows only while the
   page filled a tab (the Overview fills one only when limits touched it); `l` toggles it (not while typing), Escape does not close it. Open or
@@ -729,7 +724,7 @@ pages never disagree and switching tabs keeps it.
 - **Scope**: the URL's `range` (`1d`, `7d`, `30d`), `from` and `to` (a custom range), `by` and `in`, read and written by
   the code the Overview uses (`features/overview/ScopeSlot.tsx`), plus Cost's own `stack` (the chart's toggle). **Cost
   has no search**: its header row (the same `ScopeBar` as the Overview's, section 10b) holds the range capsule and the
-  `in` chip, and the top bar's slot is empty; `q` is not sent and is dropped from Cost's URL (the Overview keeps its own, and its tab
+  `in` chip, and nothing is in the top bar; `q` is not sent and is dropped from Cost's URL (the Overview keeps its own, and its tab
   restores the last one). The data is `GET /api/cost` with `since`, `until` (the scope's local days), `place` (`by`
   when `in` is set) and `in` ([api.md](api.md)). An old address is rewritten with `replace`: `project=X` is
   `by=dir&in=X`, `range=90d` and `range=all` are `from` and `to` (all: from the first day with spend to today), the
@@ -864,8 +859,7 @@ the aggregate of a place is the summary once it is selected: one level up in the
 The table only ever lists sessions.
 
 ```
- (  search sessions...  )                                  <- the top bar's slot (tabs are left of it)
- [ 7d ] [ in ~/work x ]                                    <- the scope header row
+ [ 7d ] [ in ~/work x ]            (  search sessions...  )  <- the scope header row
  ORGANISE BY [Folder v] [<]|   START [..-=#=-..] END         FOLDER |   TURNS   AGENTS   SPEND  (sticky)
    ~             95  $342  |-------------------------------------------|----------------------------------
    acme          21  $73   | * bold head  muted description...  ~/acme/web|    22     14   $96.20 (scrolls)
@@ -879,14 +873,24 @@ The table only ever lists sessions.
   `YYYY-MM-DD`, both inclusive; when both are valid and in order they win over `range`, and the presets drop
   them), `by` (the sidebar's key: `dir` default, `checkout`, `repo`, `remote`, `bead`), `in` (the selection), `q` (the
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
-- **Scope controls.** The **search box** is in the top bar's slot (Overview only): a rounded 32 px capsule on the
-  grey track holding the magnifier, the input (placeholder "Search sessions…") and the `/` hint (the clear button
-  once there is text). **With a session open it is disabled**: the same box in the same place, dimmed (60% opacity,
-  muted text), not focusable, without the clear button or the `/` hint, showing the list's `q` read-only (else the
-  placeholder), tooltip "Close the session to search"; the session's own controls are its locator and Latest / All.
-  Closing the session (✕, Esc, ←, Back) enables it again. The **range capsule** and the **`in` chip** are the **scope header row** (`ScopeBar`, one
-  component for the Overview and Cost, 48 px, a bottom hairline) at the top of the content area, right of the
-  sidebar and above the list (or Cost's content). An open session replaces this row with its own head. The capsule
+- **Scope controls.** The **scope header row** (`ScopeBar`, one component for the Overview and Cost, 48 px, a
+  bottom hairline) is at the top of the content area, right of the sidebar and above the list (or Cost's content):
+  `[range capsule] [in chip] ······ [search]`. The **search box** is its right end (Overview only: `ScopeBar`'s
+  `search` prop; Cost passes none): a rounded 32 px capsule on the grey track holding the magnifier, the input
+  (placeholder "Search sessions…") and the `/` hint (the clear button once there is text), taking the free width
+  up to 560 px; while the timeline is open it asks for 200 px (the axis grows, the capsule keeping at least 320 px).
+  **When the room left for it is under 180 px** (the timeline open in a narrow window, a long `in` chip; measured
+  with a `ResizeObserver` on the box's slot, whatever the cause), and it is empty and unfocused, it collapses to a
+  round 32 px icon button (title "Search sessions (/)"); with a term (`q`) it never hides: a compact chip holds the
+  magnifier, the term (truncated) and a clear ✕. A click on the icon or on the chip's term, or `/`, brings the box
+  back, focused (the box then overlays the row's right end, 240 px, as there is no room beside the rest); focusing
+  it closes the timeline, as any pointer-down outside the capsule does, so a click or `/` usually leaves room for
+  the inline box. Leaving the box (blur) collapses it again if the row is still narrow. Typing is local, the URL
+  follows after 200 ms (back / forward update the box), Escape clears, then blurs. Typing never remounts the box:
+  `q` filters the rows of the table client-side and does not change what the overview asks for, so the list does
+  not empty into the other `ScopeBar` placement (see Overview page). With a session open the row, and with it the
+  search, is gone (the head's back button shows the list's term); `/` is registered only while the box is
+  mounted, so it does nothing then. The **range capsule** and the **`in` chip** sit in that row. An open session replaces the row with its own head. The capsule
   is 32 px high on the grey track; the axis is open only while the user works the time axis (a preset, Escape or a
   pointer-down outside the capsule closes it); which is which is page state, not URL; widths change in 150 ms.
 - **Range capsule**: always `1d | 7d | 30d | Custom`, the active one the white pill. Custom shows its range once
@@ -1078,10 +1082,9 @@ Cost's Limits "biggest sessions" open in the window's scope, sorted by spend. Ev
 a history entry, so Back is the undo.
 
 - **The main area** (right of the sidebar) shows the focus instead of the table, and the session head replaces the
-  scope header row (range capsule, `in` chip); the sidebar and the whole top bar (tabs, search) stay where they are, the search box disabled (it searches the list,
-  which is behind the session; close the session to search). The table stays mounted under it (`visibility: hidden`, laid out, so its width and scroll position
+  scope header row (range capsule, `in` chip); the sidebar and the whole top bar (tabs) stay where they are; the search goes with the row (the head's back button names the list's term). The table stays mounted under it (`visibility: hidden`, laid out, so its width and scroll position
   are where they were): closing gives the list back without a refetch or a jump. **Any scope change closes the
-  focus**; with the header row gone and the search box disabled, only the sidebar (a place, the Organise-by key) reaches one: the writers of
+  focus**; with the header row gone, only the sidebar (a place, the Organise-by key) reaches one: the writers of
   those parameters drop `open`, `sfrom`, `sto` (and the development `pin`, `unit`, `cursor`) and the hash
   (`withoutFocus`, `useScope`).
 - **The head**, sticky (`SessionHead.tsx`; it shares nothing with the list's row geometry), is the session's own line

@@ -1,15 +1,14 @@
-// The scope controls of the two lenses (the Overview and Cost): the search box in the top bar's slot (Overview
-// only), and the scope bar, the header row of the content area, with the range capsule and its axis and the `in`
-// chip. The scope is the URL's `range`, `from`, `to`, `by`, `in` and `q` (docs/ui.md section 10b).
+// The scope controls of the two lenses (the Overview and Cost): the scope bar, the header row of the content area,
+// with the range capsule and its axis, the `in` chip and (Overview only) the search box. The scope is the URL's
+// `range`, `from`, `to`, `by`, `in` and `q` (docs/ui.md section 10b).
 
 import { ChevronsLeft, ChevronsRight, Search, X } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useCost } from '../../api/queries'
 import { cn } from '../../lib/cn'
 import { useNow } from '../../lib/hooks'
 import { FOCUS_KEYS, withoutFocus } from '../../lib/scope'
-import { ShellSlot } from '../../shell/ShellSlot'
 import { useShortcut } from '../../shell/useShortcut'
 import { HarnessIcon, IconButton, KeyHint } from '../../ui'
 import {
@@ -38,7 +37,7 @@ import {
   stripOf,
   stripTicks,
 } from './model'
-import { useDebounced, useWidth } from './useWidth'
+import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
 
 const oneOf = <T extends string>(v: string | null, allowed: readonly T[], def: T): T =>
   allowed.includes(v as T) ? (v as T) : def
@@ -337,12 +336,17 @@ function useRememberedCustom(applied: CustomRange | null): CustomRange | null {
   return applied ?? last
 }
 
+/** Below this width (px) the room left for the search is too small for the box: it collapses. */
+const SEARCH_MIN = 180
+
 /**
- * The search box in the top bar's slot: typing is local, the URL follows after 200 ms. With a session open it is
- * `disabled`: the same box in the same place, dimmed, showing the list's `q` read-only (the session has its own
- * controls, the locator and Latest / All).
+ * The search box of the Overview's header row: typing is local, the URL follows after 200 ms. When the room
+ * left in the row is under SEARCH_MIN and the box is unfocused, an empty box collapses to a round icon button
+ * and a term to a compact chip (icon, the term, a clear button); the icon, the chip's term and `/` bring the
+ * box back, focused (over the row's left part, as the room is short). Mounted only while the list shows, so `/`
+ * does nothing with a session open.
  */
-export function ScopeSearch({ scope, disabled = false }: { scope: Scope; disabled?: boolean }) {
+export function ScopeSearch({ scope }: { scope: Scope }) {
   const { set, q } = scope
   const [draft, setDraft] = useState(q)
   const debounced = useDebounced(draft, 200)
@@ -361,67 +365,119 @@ export function ScopeSearch({ scope, disabled = false }: { scope: Scope; disable
       setDraft(q)
     }
   }, [q])
+  const rootRef = useRef<HTMLDivElement>(null)
+  const width = useMeasuredWidth(rootRef)
+  const narrow = width !== null && width < SEARCH_MIN
+  // the box was asked for (a click, `/`) and has not been left since
+  const [asked, setAsked] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  useShortcut(
-    '/',
-    () => {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    },
-    { enabled: !disabled },
-  )
+  useEffect(() => {
+    if (!asked) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [asked])
+  useShortcut('/', () => {
+    setAsked(true)
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  })
+  const box = !narrow || asked
+  const keepFocus = (e: React.MouseEvent) => e.preventDefault()
   return (
-    <ShellSlot>
-      <div
-        title={disabled ? 'Close the session to search' : undefined}
-        className={cn(
-          'relative flex h-8 w-full min-w-[160px] max-w-[560px] items-center overflow-hidden rounded-full border border-line bg-surface-2',
-          disabled && 'opacity-60',
-        )}
-      >
+    <div ref={rootRef} className="relative flex h-8 w-full justify-end">
+      {box ? (
+        <div
+          className={cn(
+            'flex h-8 items-center overflow-hidden rounded-full border border-line bg-surface-2',
+            narrow ? 'absolute right-0 z-10 w-[240px] shadow-md' : 'w-full max-w-[560px]',
+          )}
+        >
+          <button
+            type="button"
+            aria-label="Focus the search"
+            title="Search sessions (/)"
+            onMouseDown={keepFocus}
+            onClick={() => inputRef.current?.focus()}
+            className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint hover:text-fg"
+          >
+            <Search size={14} aria-hidden />
+          </button>
+          <input
+            ref={inputRef}
+            type="search"
+            aria-label="Search sessions"
+            value={draft}
+            placeholder="Search sessions…"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => setAsked(false)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return
+              if (draft) setDraft('')
+              else e.currentTarget.blur()
+            }}
+            className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
+          />
+          {draft ? (
+            <IconButton
+              label="Clear"
+              onMouseDown={keepFocus}
+              onClick={() => setDraft('')}
+              className="mr-1 size-5 shrink-0"
+            >
+              <X size={13} />
+            </IconButton>
+          ) : (
+            <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
+          )}
+        </div>
+      ) : draft ? (
+        <div className="flex h-8 min-w-0 max-w-full items-center rounded-full border border-line bg-surface-2 pr-1 pl-2.5 text-sec">
+          <button
+            type="button"
+            title={`Search sessions (/): ${draft}`}
+            onClick={() => setAsked(true)}
+            className="flex min-w-0 items-center gap-1.5 text-fg"
+          >
+            <Search size={14} aria-hidden className="shrink-0 text-faint" />
+            <span className="truncate">{draft}</span>
+          </button>
+          <IconButton label="Clear" onClick={() => setDraft('')} className="ml-1 size-5 shrink-0">
+            <X size={13} />
+          </IconButton>
+        </div>
+      ) : (
         <button
           type="button"
-          disabled={disabled}
-          aria-label="Focus the search"
-          title={disabled ? undefined : 'Search sessions (/)'}
-          onClick={() => inputRef.current?.focus()}
-          className="inline-flex size-[30px] shrink-0 items-center justify-center rounded-full text-faint enabled:hover:text-fg"
+          aria-label="Search sessions"
+          title="Search sessions (/)"
+          onClick={() => setAsked(true)}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-line bg-surface-2 text-faint hover:text-fg"
         >
           <Search size={14} aria-hidden />
         </button>
-        <input
-          ref={inputRef}
-          type="search"
-          aria-label="Search sessions"
-          value={draft}
-          disabled={disabled}
-          placeholder="Search sessions…"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Escape') return
-            if (draft) setDraft('')
-            else e.currentTarget.blur()
-          }}
-          className="h-full min-w-0 flex-1 border-0 bg-transparent pr-2 text-body text-fg outline-none placeholder:text-faint disabled:text-muted [&::-webkit-search-cancel-button]:hidden"
-        />
-        {disabled ? null : draft ? (
-          <IconButton label="Clear" onClick={() => setDraft('')} className="mr-1 size-5 shrink-0">
-            <X size={13} />
-          </IconButton>
-        ) : (
-          <KeyHint className="mr-1.5 shrink-0">/</KeyHint>
-        )}
-      </div>
-    </ShellSlot>
+      )}
+    </div>
   )
 }
 
 /**
  * The header row of the content area (right of the sidebar): the range capsule, Custom's axis opening into
- * the room, and the `in` chip. The row of both lenses; an open session replaces it with its own head.
+ * the room, the `in` chip and, on the Overview, the search box at the right end. The row of both lenses; an open
+ * session replaces it with its own head.
  * `home` and `beads` name the selection in its chip.
  */
-export function ScopeBar({ scope, home, beads }: { scope: Scope; home: string | undefined; beads?: Beads }) {
+export function ScopeBar({
+  scope,
+  home,
+  beads,
+  search,
+}: {
+  scope: Scope
+  home: string | undefined
+  beads?: Beads
+  /** The search box (the Overview's), at the right end of the row. */
+  search?: ReactNode
+}) {
   const { set, select, range, custom, by, sel } = scope
   const now = useNow(300_000)
   const days = custom ?? presetRange(range, now)
@@ -458,7 +514,7 @@ export function ScopeBar({ scope, home, beads }: { scope: Scope; home: string | 
           'm-0 inline-flex h-8 min-w-0 shrink-0 items-center rounded-full border border-line bg-surface-2 p-0.5',
           grow,
         )}
-        style={{ flexGrow: axisOpen ? 1 : 0, flexBasis: axisOpen ? 0 : 'auto' }}
+        style={{ flexGrow: axisOpen ? 1 : 0, flexBasis: axisOpen ? 0 : 'auto', minWidth: axisOpen ? 320 : 0 }}
       >
         {(['1d', '7d', '30d'] as const).map((v) => {
           const on = !shown && range === v
@@ -556,6 +612,16 @@ export function ScopeBar({ scope, home, beads }: { scope: Scope; home: string | 
             <X size={11} aria-hidden />
           </button>
         </span>
+      )}
+      {search && (
+        // the search takes the room the rest leaves, up to 560 px (with the axis open, 200 px: the axis grows)
+        <div
+          onFocus={closeAxis}
+          className="ml-auto flex h-8 min-w-0 justify-end"
+          style={{ flex: `0 1 ${axisOpen ? 200 : 560}px` }}
+        >
+          {search}
+        </div>
       )}
     </div>
   )
