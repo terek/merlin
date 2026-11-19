@@ -5,7 +5,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 ## Unreleased
 
 - The Overview keeps its range and folder controls when nothing ran in the range, so you can switch back.
-- With a session open, the search box finds within that session (prompts, answers, agents, compaction summaries): hits are marked on the graph and the locator, Enter steps through them and opens each turn; a session opened from a searched list starts with that term.
+- With a session open, the search box is disabled; close the session to search the list.
 
 ## 0.8.2 — 2026-11-18
 

@@ -241,7 +241,7 @@ same whether or not a session is open in the Overview.
 - **Left, after the logo**: the tabs **Overview** (`/`), **Cost**, **Moments**, described below.
 - **Middle, the slot**: a flexible area the current page fills with its own tools (`ShellSlot`, a portal into the
   bar; a page never imports the bar). Empty means empty space. The Overview puts its search box there
-  (section 10b; the range and folder controls are in the content area's header row, not here); the Session page's slot is filled by the shell (`SessionSlot`): `← Overview`, linking to the last
+  (section 10b; disabled, in place, while a session is open; the range and folder controls are in the content area's header row, not here); the Session page's slot is filled by the shell (`SessionSlot`): `← Overview`, linking to the last
   Overview address visited in this tab (`pathname + search` in `sessionStorage`, `/` when there is none), then the
   session's harness mark and title, muted, truncating, the whole title in the tooltip. Cost, Moments, Sessions and
   Bead leave it empty and keep their toolbars in the page.
@@ -881,8 +881,10 @@ The table only ever lists sessions.
   search), `sort` and `dir`. Nothing else; an old link's `show` is ignored.
 - **Scope controls.** The **search box** is in the top bar's slot (Overview only): a rounded 32 px capsule on the
   grey track holding the magnifier, the input (placeholder "Search sessions…") and the `/` hint (the clear button
-  once there is text). With a session open the box searches that session (see "Find" in "A session in place"): a chip
-  "in this session ✕" at its left, the placeholder "Search this session…", a counter and ⌃ ⌄ at its right. The **range capsule** and the **`in` chip** are the **scope header row** (`ScopeBar`, one
+  once there is text). **With a session open it is disabled**: the same box in the same place, dimmed (60% opacity,
+  muted text), not focusable, without the clear button or the `/` hint, showing the list's `q` read-only (else the
+  placeholder), tooltip "Close the session to search"; the session's own controls are its locator and Latest / All.
+  Closing the session (✕, Esc, ←, Back) enables it again. The **range capsule** and the **`in` chip** are the **scope header row** (`ScopeBar`, one
   component for the Overview and Cost, 48 px, a bottom hairline) at the top of the content area, right of the
   sidebar and above the list (or Cost's content). An open session replaces this row with its own head. The capsule
   is 32 px high on the grey track; the axis is open only while the user works the time axis (a preset, Escape or a
@@ -913,7 +915,7 @@ The table only ever lists sessions.
   range is set). The Custom label follows the drag live; the page applies the range (`from`, `to`) only when
   the drag ends, so a drag does not refetch.
 - **Search.** Typing is local and `q` follows after 200 ms (back and forward move the box); `/` focuses it and
-  Esc clears, then blurs. A session matches when the term (trimmed, case-insensitive substring) is in its head
+  Esc clears, then blurs (neither while a session is open: the box is disabled then). A session matches when the term (trimmed, case-insensitive substring) is in its head
   (name, title, id) or its description texts (recap, first and last prompt), or, for a term of two characters
   or more, when it is among the hits of `/api/search` (full text); until that answers, the local matches show.
   Nothing matching: "No sessions match "term"."
@@ -1076,9 +1078,10 @@ Cost's Limits "biggest sessions" open in the window's scope, sorted by spend. Ev
 a history entry, so Back is the undo.
 
 - **The main area** (right of the sidebar) shows the focus instead of the table, and the session head replaces the
-  scope header row (range capsule, `in` chip); the sidebar and the whole top bar (tabs, search) stay as they are. The table stays mounted under it (`visibility: hidden`, laid out, so its width and scroll position
+  scope header row (range capsule, `in` chip); the sidebar and the whole top bar (tabs, search) stay where they are, the search box disabled (it searches the list,
+  which is behind the session; close the session to search). The table stays mounted under it (`visibility: hidden`, laid out, so its width and scroll position
   are where they were): closing gives the list back without a refetch or a jump. **Any scope change closes the
-  focus**; with the header row gone, only the sidebar (a place, the Organise-by key) and the search reach one: the writers of
+  focus**; with the header row gone and the search box disabled, only the sidebar (a place, the Organise-by key) reaches one: the writers of
   those parameters drop `open`, `sfrom`, `sto` (and the development `pin`, `unit`, `cursor`) and the hash
   (`withoutFocus`, `useScope`).
 - **The head**, sticky (`SessionHead.tsx`; it shares nothing with the list's row geometry), is the session's own line
@@ -1104,22 +1107,6 @@ a history entry, so Back is the undo.
   row (a portal from the strip into the heading; the strip itself is in the head); its detail graph comes next, then the spend bars and
   associated notes. The **turn or agent** section follows it with its own
   heading row (name, time, duration; ‹ › ✕ at the right).
-- **Find** (`find.ts`, the box in `ScopeSlot.tsx`). With a session open the top bar's search box searches it, as Slack's
-  "Search #channel" does: the chip "in this session ✕" sits at the box's left, the placeholder is "Search this
-  session…", and the text is the session's `find` (URL, written with `replace` after 200 ms, so no history entry per
-  keystroke; one of `FOCUS_KEYS`, so closing and any scope change drop it), not the list's `q`. Removing the chip (its ✕,
-  or Backspace in an empty box), or the row "Search all sessions for “term”" under the box while it has focus and text,
-  closes the session and makes the term the list's `q`. A session opened from a list with a search and no `find` of its
-  own opens with `find` = `q` (`focusSearch`, so row clicks, ‹ › and `[` `]` alike). The match is client side, over the
-  loaded tree and case-insensitive: the typed prompts, the prompts typed while a turn ran, the final answers, the agents'
-  prompts and final answers, and the compaction summaries (never the harness's fixed wording). A hit resolves to a turn
-  (an agent's text to the piece of work, opened with the turn that launched it); several texts of one turn are one hit.
-  The box shows "3 of 12" (or "No matches"; "12 matches" until a hit is pinned) with ⌃ ⌄; Enter steps to the next hit,
-  Shift+Enter to the previous, both wrapping, and each step pins the hit (the window reveals it, the box opens and
-  scrolls into view). The graph rings the turns that hold the term and fades the other turns' prompt dots; the locator
-  has an accent tick per hit turn; the turn box marks the term in its texts (the CSS highlight `::highlight(find)`, an
-  accent tint). `/` focuses the box; Esc in it clears the term first, then (empty) leaves the box, and then Esc takes
-  back a pin and closes as before. Cmd+F stays the browser's.
 - **The zoom never writes the address.** Drag, click, Latest, All and the keys change state only: no URL
   change, no history entry. `sfrom`/`sto` come in from links (an old `/s/` link) and are
   read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash

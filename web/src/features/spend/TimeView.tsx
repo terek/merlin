@@ -246,8 +246,6 @@ export interface TimePlotProps {
   shortHint?: boolean
   /** The lockouts of the session's harness (merged; anything outside the axis is left out). */
   lockouts?: readonly LockoutSpan[]
-  /** The turns (`branch/col`) a find of the session hit: ringed on the line, and the others' prompt dots fade. */
-  found?: ReadonlySet<string>
 }
 
 /** Where a branch leaves its parent's row: a dot (a fork, with the context it copied), a ring (a continuation). */
@@ -298,7 +296,6 @@ export function TimePlot({
   frameInset = 0,
   shortHint,
   lockouts,
-  found,
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
@@ -1001,10 +998,8 @@ export function TimePlot({
           )
         })}
         {/* a person's messages: a dot on the baseline, hollow for one typed while a turn ran */}
-        {main?.turns.flatMap((s) => {
-          // a find is on: the turns that hold the term keep their dot, the others' fade
-          const dim = found !== undefined && !found.has(`${main.branch}/${s.col.index}`)
-          return [
+        {main?.turns.flatMap((s) =>
+          [
             ...(s.col.human ? [{ t: s.t0, queued: false }] : []),
             // typed while the turn ran: it starts no turn, but it steered this one
             ...(s.col.turn.queued ?? [])
@@ -1015,7 +1010,7 @@ export function TimePlot({
             .map((m) => {
               const x = axis.x(m.t)
               return (
-                <g key={`m${m.t}`} pointerEvents="none" opacity={dim ? 0.35 : undefined}>
+                <g key={`m${m.t}`} pointerEvents="none">
                   <circle
                     cx={x}
                     cy={g.base}
@@ -1026,26 +1021,8 @@ export function TimePlot({
                   />
                 </g>
               )
-            })
-        })}
-        {/* the turns a find of the session hit: an accent ring on the baseline, with or without a dot of a person's */}
-        {found &&
-          main?.turns.map((s) =>
-            found.has(`${main.branch}/${s.col.index}`) &&
-            (detail !== 'band' || isFocusTurn(s.col.index)) &&
-            Number.isFinite(s.t0) ? (
-              <circle
-                key={`f${s.col.index}`}
-                cx={axis.x(s.t0)}
-                cy={g.base}
-                r={DOT_R + 3}
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth={1.75}
-                pointerEvents="none"
-              />
-            ) : null,
-          )}
+            }),
+        )}
       </g>
     )
   }

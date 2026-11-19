@@ -85,8 +85,6 @@ export interface SpendGraphProps {
    * section. Null: it is to go to a host that has not mounted yet, so it waits (and takes no room) until it has.
    */
   locatorHost?: HTMLElement | null
-  /** The turns a find of the session hit: marked on the plot and on the locator. */
-  found?: readonly Pin[]
 }
 
 const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
@@ -277,7 +275,6 @@ export function SpendGraph({
   lockouts,
   refusals,
   locatorHost,
-  found,
 }: SpendGraphProps) {
   const inset = usePanelInset()
   const [cursor, setCursor] = useState<Pin | null>(
@@ -357,9 +354,6 @@ export function SpendGraph({
     const next = followEnd(win, prevT1, bounds.t1)
     if (next !== win) setWin(next)
   }
-  const foundKeys = useMemo(() => (found ? new Set(found.map(pinKey)) : undefined), [found])
-  // biome-ignore lint/correctness/useExhaustiveDependencies: turnStart reads the timeline
-  const foundT = useMemo(() => found?.map(turnStart).filter(Number.isFinite), [found, timeline])
   const [seen, setSeen] = useState(pinKey(pinned))
   if (seen !== pinKey(pinned)) {
     setSeen(pinKey(pinned))
@@ -414,7 +408,6 @@ export function SpendGraph({
         eff={eff}
         onWin={setWin}
         pinnedT={turnStart(pinned)}
-        foundT={foundT}
         latest={latest}
         lockouts={lockouts}
         controlsHost={locator}
@@ -447,7 +440,6 @@ export function SpendGraph({
               onKey={onKey}
               current={current}
               lockouts={lockouts}
-              found={foundKeys}
               frameInset={keyInPanel ? inset : 0}
               shortHint={keyInPanel}
               turnLines={shown || shownUnit ? <TurnReadout tree={tree} at={shown} unit={shownUnit} /> : null}

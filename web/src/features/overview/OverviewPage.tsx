@@ -20,7 +20,7 @@ import { scopeSearch } from '../../lib/scope'
 import { PanelTab } from '../../shell/Panel'
 import { HarnessIcon, LockoutPattern, LockoutSwatch, Money, QueryBoundary, Skeleton, useLockoutId } from '../../ui'
 import { COLOR, CTX_FILL } from '../spend/TimeView'
-import { focusSearch, type Key, parseOpen, searchAllSearch } from './focus'
+import { focusSearch, type Key, parseOpen } from './focus'
 import {
   ACTIVE_W,
   type Axis,
@@ -83,7 +83,7 @@ import {
   SessionText,
   spanColor,
 } from './RowParts'
-import { type FindControl, type Scope, ScopeBar, ScopeSearch, useFindDraft, useScope } from './ScopeSlot'
+import { type Scope, ScopeBar, ScopeSearch, useScope } from './ScopeSlot'
 import { SessionFocus } from './SessionFocus'
 import { SIDEBAR_W, Sidebar, STRIP_W, useSidebarOpen } from './Sidebar'
 import { useDebounced, useMeasuredWidth, useWidth } from './useWidth'
@@ -682,10 +682,6 @@ export function OverviewPage() {
   const openParam = sp.get('open')
   const open = useMemo(() => parseOpen(openParam), [openParam])
   const [sbOpen, setSbOpen] = useSidebarOpen()
-  // the top bar's search box searches the open session; the session says what it found
-  const [find, setFind] = useFindDraft(scope, open !== null)
-  const [findControl, setFindControl] = useState<FindControl | null>(null)
-  const navigate = useNavigate()
 
   const term = q.trim()
   const search = useSearch(term)
@@ -729,14 +725,7 @@ export function OverviewPage() {
   const home = useMemo(() => inferHome(query.data?.lanes.flatMap((l) => (l.dir ? [l.dir] : [])) ?? []), [query.data])
   return (
     <div ref={rootRef} className="flex h-full w-full flex-col bg-surface">
-      <ScopeSearch
-        scope={scope}
-        session={open !== null}
-        find={find}
-        setFind={setFind}
-        control={findControl}
-        onAll={(t) => navigate(`/${searchAllSearch(sp, t)}`)}
-      />
+      <ScopeSearch scope={scope} disabled={open !== null} />
       <div className="flex min-h-0 flex-1 flex-col">
         {/* the table carries the scope bar beside its sidebar; without a table (nothing in the range, an error, the
             first load) it stands here, so that the range can always be changed back */}
@@ -769,8 +758,6 @@ export function OverviewPage() {
               harness={custom?.harness}
               open={open}
               sp={sp}
-              find={find}
-              onFind={setFindControl}
               scopeCtl={scope}
               onWindow={(w) => scope.scopeTo(windowRange(w))}
               costHref={`/cost${scopeSearch(sp)}`}
@@ -811,8 +798,6 @@ function Table({
   open,
   sp,
   scopeCtl,
-  find,
-  onFind,
 }: {
   o: Overview
   by: By
@@ -836,9 +821,6 @@ function Table({
   open: Key | null
   sp: URLSearchParams
   scopeCtl: Scope
-  /** What the top bar's search box looks for in the open session, and where the session reports its hits. */
-  find: string
-  onFind: (c: FindControl | null) => void
 }) {
   const o = useMemo(
     () =>
@@ -940,8 +922,6 @@ function Table({
             open={open}
             rows={rows}
             sp={sp}
-            find={find}
-            onFind={onFind}
             ctx={{
               lanes: o.lanes,
               home,
