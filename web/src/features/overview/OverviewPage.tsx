@@ -738,10 +738,15 @@ export function OverviewPage() {
         onAll={(t) => navigate(`/${searchAllSearch(sp, t)}`)}
       />
       <div className="flex min-h-0 flex-1 flex-col">
+        {/* the table carries the scope bar beside its sidebar; without a table (nothing in the range, an error, the
+            first load) it stands here, so that the range can always be changed back */}
+        {open === null && !(query.data && !listEmpty(query.data)) && (
+          <ScopeBar scope={scope} home={home} beads={query.data?.beads} />
+        )}
         <QueryBoundary
           query={query}
           // with a session open the list is behind it: an empty one is still where "not in this list" is said
-          isEmpty={(o) => open === null && o.lanes.length === 0 && o.scripted.sessions === 0}
+          isEmpty={(o) => open === null && listEmpty(o)}
           empty={<div className="p-6 text-muted">{`Nothing ran ${customPhrase(days, now)}.`}</div>}
           skeleton={<Skeleton className="m-3 h-64" />}
         >
@@ -776,6 +781,9 @@ export function OverviewPage() {
     </div>
   )
 }
+
+/** Nothing in the range: no session and no scripted run. */
+const listEmpty = (o: Overview) => o.lanes.length === 0 && o.scripted.sessions === 0
 
 /** The pointer over the rows: x from the left of the rows (whole px), and the place of the row under it. */
 interface Hover {
