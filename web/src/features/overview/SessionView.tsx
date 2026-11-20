@@ -15,8 +15,8 @@ import { useDocumentTitle } from '../../lib/hooks'
 import { sessionTitle } from '../../lib/session'
 import { isTyping } from '../../shell/useShortcut'
 import { EmptyState, ErrorState, Id, ProjectName, QueryBoundary, RelTime, Skeleton, SkeletonRows } from '../../ui'
-import { type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
-import { parseHash, resolveTarget } from '../spend/session'
+import { type JobRef, type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
+import { jobLaunchTurn, parseHash, resolveTarget } from '../spend/session'
 import { parseTime, type TimeRange } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
 import { sessionKey } from './model'
@@ -74,8 +74,24 @@ function Loaded({
   const unitOf = (r: UnitRef | null) =>
     r ? tree.branches[r.branch]?.model.units.find((u) => u.id === r.id) : undefined
 
+  // a background job: the digest's, and the turns it belongs to (the one that launched it, the ones its output reached)
+  const [job, setJob] = useState<JobRef | null>(null)
+  const jobOf = (r: JobRef | null) => tree.branches[r?.branch ?? -1]?.detail.digest.jobs?.find((j) => j.id === r?.id)
+  const jobTurns = (r: JobRef | null) => {
+    const j = jobOf(r)
+    const b = r ? tree.branches[r.branch] : undefined
+    if (!j || !b) return []
+    const launch = jobLaunchTurn(b.model.cols, j)
+    return [
+      ...(launch === undefined ? [] : [launch]),
+      ...(j.returns ?? []).flatMap((x) => (x.turn === undefined ? [] : [x.turn])),
+    ]
+  }
+
   const pin = (p: Pin | null) => {
     setPinned(p)
+    // a job stays open on the turn that launched it and the ones its output reached
+    if (!p || !job || p.branch !== job.branch || !jobTurns(job).includes(p.col)) setJob(null)
     // a piece of agent work stays open on the turn that launched it and the ones its reports came in
     const u = unitOf(unit)
     if (!p || !unit || !u || p.branch !== unit.branch || (u.launch !== p.col && !u.reports.includes(p.col)))
@@ -83,17 +99,27 @@ function Loaded({
   }
   const selectUnit = (r: UnitRef | null) => {
     setUnit(r)
+    if (r) setJob(null)
     const u = unitOf(r)
     if (r && u && !(pinned?.branch === r.branch && (pinned.col === u.launch || u.reports.includes(pinned.col))))
       setPinned({ branch: r.branch, col: u.launch })
   }
 
+  const selectJob = (r: JobRef) => {
+    setJob(r)
+    setUnit(null)
+    const j = jobOf(r)
+    const launch = j ? jobLaunchTurn(tree.branches[r.branch].model.cols, j) : undefined
+    if (launch !== undefined && !(pinned?.branch === r.branch && jobTurns(r).includes(pinned.col)))
+      setPinned({ branch: r.branch, col: launch })
+  }
   // a sender of a message, or a sub-agent: its work, wherever in the tree it is
   const openAgent = (id: string) => {
     const t = resolveTarget(tree, homeIndex, { kind: 'agent', id })
     if (!t) return
     setPinned(t.pin)
     setUnit(t.unit)
+    setJob(null)
   }
 
   // a link to a turn, a compaction or an agent (from search) opens it, here or on a later hash change
@@ -104,22 +130,24 @@ function Loaded({
     if (!t) return
     setPinned(t.pin)
     setUnit(t.unit)
+    setJob(null)
     requestAnimationFrame(() => opened.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }, [address.hash])
 
   // Esc takes the pin back before it closes the session: one Esc does one thing (the focus closes on an Esc
   // nobody has handled). Listened to in the capture phase, so that it is settled before anything else sees it.
   useEffect(() => {
-    if (!pinned && !unit) return
+    if (!pinned && !unit && !job) return
     const on = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target)) return
       e.preventDefault()
       setPinned(null)
       setUnit(null)
+      setJob(null)
     }
     window.addEventListener('keydown', on, true)
     return () => window.removeEventListener('keydown', on, true)
-  }, [pinned, unit])
+  }, [pinned, unit, job])
 
   const multi = tree.branches.length > 1
   // the harness's limit lockouts (the plot clips them to its axis)
@@ -146,6 +174,8 @@ function Loaded({
         onPin={pin}
         selectedUnit={unit}
         onSelectUnit={selectUnit}
+        selectedJob={job}
+        onSelectJob={selectJob}
         initialCursor={num(params.get('cursor')) ?? undefined}
         initialWindow={{ lo: parseTime(params.get('sfrom')), hi: parseTime(params.get('sto')) }}
         keyInPanel
@@ -162,11 +192,14 @@ function Loaded({
             col={col}
             branchTitle={multi ? branch.title : undefined}
             unit={unit?.branch === pinned.branch ? branch.model.units.find((u) => u.id === unit.id) : undefined}
+            job={job?.branch === pinned.branch ? jobOf(job) : undefined}
+            onSelectJob={(id) => id === null && setJob(null)}
             onPin={(i) => pin(i === null ? null : { branch: pinned.branch, col: i })}
             onSelectUnit={(id) => (id === null ? setUnit(null) : selectUnit({ branch: pinned.branch, id }))}
             onOpenAgent={openAgent}
             onOpenTurn={(i) => {
               setUnit(null)
+              setJob(null)
               setPinned({ branch: pinned.branch, col: i })
             }}
           />

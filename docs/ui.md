@@ -553,15 +553,17 @@ From top to bottom, the graph and then the box:
     remain; the state is the plot's own and is not kept in the address;
   - **background jobs** (`digest.jobs`: a background command or a monitor) are lanes of kind `job`, packed
     by life into thin rows (14 px, no scale, no context or spend) after the agent rows of their branch, in one
-    neutral colour (`--muted`). A frame runs from the start to the end, the description (cut to fit, whole in the
+    neutral colour (`--muted`). A frame runs from the start to the end, the description without a leading "Wait for the" or "Watch the" (cut to fit, whole in the
     tooltip) and the duration at its top left; a monitor's frame is dotted. A job with no end runs to the end of
     the session (or the window) and fades out, with no end stem. A failed or killed job ends in a short `--bad`
     stem. Its spine starts on the launcher's baseline (the main row, or the row of the agent that started it) at
     `startedAt`, as an agent's does. Each return is a dashed line to the receiver's row at its time, like an agent's
     report (`woke` and `delivered`); `fetched` is dotted, lighter and points back at the job. The lines show for the
     job in focus (hovered, or started or answered in the turn under the cursor or pinned). Hovering a job
-    puts a line above the plot (kind, description, duration, how it ended, what woke what); it cannot be
-    selected. The turn card says "Started in the background" and "Came back". Jobs add nothing to any total and do not
+    puts a line above the plot (kind, description, duration, how it ended, what woke what), without the command;
+    a click selects the job: it stays in focus, the turn that started it is
+    pinned, and the box under the graph shows the job (kind, description, status, the command in code font, and
+    its returns with links to the turns). The turn card says "Started in the background" and "Came back". Jobs add nothing to any total and do not
     change how turns are grouped into decisions. The key lists "background job" only when the graph has one;
   - **spines** show who launched whom. Every agent lane, and every forked or continued session's main
     row, has a spine: a path that starts on its sender's baseline at the moment of launch (the main row of

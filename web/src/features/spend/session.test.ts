@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, FamilyMember, Message, SessionDetail, Turn } from '../../api/types'
-import { parseHash, resolveTarget } from './session'
+import type { Col } from './model'
+import { jobLaunchTurn, parseHash, resolveTarget } from './session'
 import { buildTree } from './tree'
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 1, 10, min)).toISOString()
@@ -151,5 +152,25 @@ describe('resolveTarget', () => {
     expect(resolveTarget(tree, home, { kind: 'compaction', index: 1 })).toBeNull()
     expect(resolveTarget(tree, home, { kind: 'agent', id: 'nobody' })).toBeNull()
     expect(resolveTarget(tree, home, null)).toBeNull()
+  })
+})
+
+describe('jobLaunchTurn', () => {
+  const col = (index: number, inherited = false) =>
+    ({ index, inherited, turn: { startedAt: at(index * 2) } }) as unknown as Col
+  const cols = [col(0, true), col(1, true), col(2), col(3), col(4)]
+  test('the digest names the launch turn', () => {
+    expect(jobLaunchTurn(cols, { turn: 3, startedAt: at(4) })).toBe(3)
+  })
+  test('without a turn, the own turn that started last before the job', () => {
+    expect(jobLaunchTurn(cols, { startedAt: at(7) })).toBe(3)
+    expect(jobLaunchTurn(cols, { turn: 9, startedAt: at(9) })).toBe(4)
+  })
+  test('a copied turn is skipped', () => {
+    expect(jobLaunchTurn(cols, { turn: 1, startedAt: at(3) })).toBeUndefined()
+    expect(jobLaunchTurn(cols, { turn: 1, startedAt: at(5) })).toBe(2)
+  })
+  test('none when the job started before every own turn', () => {
+    expect(jobLaunchTurn(cols, { startedAt: at(1) })).toBeUndefined()
   })
 })

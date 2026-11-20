@@ -58,6 +58,12 @@ export interface UnitRef {
   id: string
 }
 
+/** A background job of a branch (`Job.id`). */
+export interface JobRef {
+  branch: number
+  id: string
+}
+
 export interface SpendGraphProps {
   tree: Tree
   /** The branch the page was opened on: the keys move along it until something else is pinned. */
@@ -67,6 +73,8 @@ export interface SpendGraphProps {
   onPin: (pin: Pin | null) => void
   selectedUnit: UnitRef | null
   onSelectUnit: (unit: UnitRef) => void
+  selectedJob: JobRef | null
+  onSelectJob: (job: JobRef) => void
   /** Dev and screenshots: start with the cursor on this turn of the home branch. */
   initialCursor?: number
   /** Dev and screenshots: the window of time to show first (`?from=&to=`). */
@@ -283,6 +291,8 @@ export function SpendGraph({
   onPin,
   selectedUnit,
   onSelectUnit,
+  selectedJob,
+  onSelectJob,
   initialCursor,
   initialWindow,
   scope,
@@ -448,11 +458,13 @@ export function SpendGraph({
               pinned={valid(pinned) ? pinned : null}
               cursor={cur}
               selectedUnit={selectedUnit}
+              selectedJob={selectedJob}
               hoverUnit={hoverUnit}
               onCursor={setCursor}
               onHoverUnit={setHoverUnit}
               onPin={onPin}
               onSelectUnit={onSelectUnit}
+              onSelectJob={onSelectJob}
               onKey={onKey}
               current={current}
               lockouts={lockouts}

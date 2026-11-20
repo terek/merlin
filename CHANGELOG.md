@@ -4,6 +4,9 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Click a background job on the session graph to see it below the graph: its command, how it ended and the turns its output reached.
+- A background job's label on the session graph leaves out "Wait for the …", and its tooltip no longer shows the whole command.
+
 ## 0.8.3 — 2026-11-20
 
 - The graph legend calls the brackets "turns close in time" instead of "decision".

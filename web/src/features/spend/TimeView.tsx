@@ -60,7 +60,7 @@ import {
 } from './layout'
 import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
 import { KIND_SERIES, type KindKey, missText, type Unit } from './model'
-import type { Pin, UnitRef } from './SpendGraph'
+import type { JobRef, Pin, UnitRef } from './SpendGraph'
 import {
   addCall,
   axisSpans,
@@ -248,11 +248,13 @@ export interface TimePlotProps {
   pinned: Pin | null
   cursor: Pin | undefined
   selectedUnit: UnitRef | null
+  selectedJob: JobRef | null
   hoverUnit: UnitRef | null
   onCursor: (p: Pin | null) => void
   onHoverUnit: (u: UnitRef | null) => void
   onPin: (p: Pin | null) => void
   onSelectUnit: (u: UnitRef) => void
+  onSelectJob: (j: JobRef) => void
   onKey: (e: KeyboardEvent<HTMLDivElement>) => void
   /** The turn or piece of work under the cursor, pinned or selected (lines under the pointer's own); null if none. */
   turnLines: ReactNode
@@ -303,11 +305,13 @@ export function TimePlot({
   pinned,
   cursor,
   selectedUnit,
+  selectedJob,
   hoverUnit,
   onCursor,
   onHoverUnit,
   onPin,
   onSelectUnit,
+  onSelectJob,
   onKey,
   turnLines,
   current,
@@ -928,7 +932,8 @@ export function TimePlot({
     )
   }
 
-  const jobOn = (l: Lane) => hoverJob?.key === l.key
+  const jobOn = (l: Lane) =>
+    hoverJob?.key === l.key || (!!selectedJob && l.branch === selectedJob.branch && l.job?.id === selectedJob.id)
   /** A background job: a thin frame from its start to its end, the description at its top left; an open one fades out. */
   const drawJob = (g: Layout, l: Lane) => {
     const m = l.job
@@ -987,9 +992,9 @@ export function TimePlot({
         {jobOn(l) && (
           <line x1={a} x2={b} y1={top} y2={top} stroke={JOB_COLOR} strokeWidth={2.5} strokeDasharray={dash} />
         )}
-        {/* the whole of the label, the command and how it ended are the frame's tooltip */}
+        {/* the whole of the label and how it ended are the frame's tooltip */}
         <rect x={f1(a)} y={top} width={Math.max(4, b - a)} height={g.base - top} fill="transparent">
-          <title>{[jobLine(m), m.command].filter(Boolean).join('\n')}</title>
+          <title>{jobLine(m)}</title>
         </rect>
       </g>
     )
@@ -1701,6 +1706,11 @@ export function TimePlot({
             toggle(chip ?? sw?.swarm?.id ?? '')
             return
           }
+          if (layout[h.row]?.row.job) {
+            const jl = jobAt(h.row, h.x)
+            if (jl?.job) onSelectJob({ branch: jl.branch, id: jl.job.id })
+            return
+          }
           const r = read(h)
           if (r.unit) onSelectUnit(r.unit)
           else if (r.pin) onPin(r.pin)
@@ -1720,7 +1730,7 @@ export function TimePlot({
           setPx(null)
           onKey(e)
         }}
-        className={`relative mt-1 rounded-badge ${hot ? 'cursor-pointer' : 'cursor-crosshair'}`}
+        className={`relative mt-1 rounded-badge ${hot || hoverJob ? 'cursor-pointer' : 'cursor-crosshair'}`}
       >
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
           {/* limit lockouts: a light red block behind everything, across breaks too */}

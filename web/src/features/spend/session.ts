@@ -1,5 +1,7 @@
 // The session in the Overview's focus, as pure functions: what a URL hash points at in the spend tree.
 
+import type { Job } from '../../api/types'
+import type { Col } from './model'
 import type { Pin, UnitRef } from './SpendGraph'
 import type { Tree } from './tree'
 
@@ -49,4 +51,26 @@ export function resolveTarget(
     if (c && !c.inherited) return { pin: { branch: x.index, col: index }, unit: null }
   }
   return null
+}
+
+/**
+ * The turn that launched a background job: the digest's own `turn`, or when that is missing, not in the
+ * session or copied from its parent, the session's own turn that started last at or before the job's start.
+ * Undefined when there is none.
+ */
+export function jobLaunchTurn(
+  cols: readonly Pick<Col, 'index' | 'inherited' | 'turn'>[],
+  job: Pick<Job, 'turn' | 'startedAt'>,
+): number | undefined {
+  const named = job.turn === undefined ? undefined : cols[job.turn]
+  if (named && !named.inherited) return named.index
+  const at = Date.parse(job.startedAt)
+  if (!Number.isFinite(at)) return undefined
+  let best: { index: number; t: number } | undefined
+  for (const c of cols) {
+    const t = Date.parse(c.turn.startedAt ?? '')
+    if (c.inherited || !Number.isFinite(t) || t > at) continue
+    if (!best || t >= best.t) best = { index: c.index, t }
+  }
+  return best?.index
 }

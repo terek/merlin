@@ -39,17 +39,26 @@ export function jobLine(j: JobMark): string {
   return parts.filter(Boolean).join(' · ')
 }
 
+const WAITING = /^(?:(?:wait|watch)(?:\s+again)?\s+(?:for|until)\s+(?:the(?:\s+|$))?|watch\s+(?:the(?:\s+|$))?)/i
+
+/** What a job waits on: its description without a leading "Wait for the", "Wait again until", "Watch the". Case kept. */
+export function jobWhat(description: string): string {
+  const rest = description.replace(WAITING, '')
+  return rest.trim() ? rest : description
+}
+
 /** The label on a job's frame: what it was and how long it ran, cut to `room` px (the description loses its end first). */
 export function jobLabel(j: JobMark, room: number, charPx = 5.1): string {
   const max = Math.floor(room / charPx)
   if (max < 4) return ''
   const cut = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, Math.max(1, n - 1)).trimEnd()}…`)
   const dur = j.open ? '' : formatDuration(j.endMs - j.startMs)
-  const full = [j.description, dur].filter(Boolean).join(' · ')
+  const what = jobWhat(j.description)
+  const full = [what, dur].filter(Boolean).join(' · ')
   if (full.length <= max) return full
   // the duration is kept while the description can still be read with it
-  if (dur && max - dur.length - 3 >= 8) return `${cut(j.description, max - dur.length - 3)} · ${dur}`
-  return cut(j.description, max)
+  if (dur && max - dur.length - 3 >= 8) return `${cut(what, max - dur.length - 3)} · ${dur}`
+  return cut(what, max)
 }
 
 /** The jobs a turn started, and those whose output came in or woke it, as the turn card's lines. */

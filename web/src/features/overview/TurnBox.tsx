@@ -5,7 +5,7 @@
 
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { createContext, Fragment, type ReactNode, useContext, useState } from 'react'
-import type { Agent, InboxMessage, QueuedPrompt, Turn } from '../../api/types'
+import type { Agent, InboxMessage, Job, QueuedPrompt, Turn } from '../../api/types'
 import { agentRole, ROLE_LABEL } from '../../lib/agent'
 import { cn } from '../../lib/cn'
 import { formatDuration, plural } from '../../lib/format'
@@ -15,8 +15,10 @@ import { unwrapMachineText } from '../../lib/wrapper'
 import { Badge, Clamp, FrameSection, IconButton, ModelName, PlainText, Prose } from '../../ui'
 import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
+import { jobKind } from '../spend/jobs'
 import { kindColor } from '../spend/marks'
 import type { Col, SpendModel, Unit } from '../spend/model'
+import { jobLaunchTurn } from '../spend/session'
 import {
   agentThread,
   type Exchange,
@@ -231,6 +233,10 @@ export interface TurnBoxProps {
   branchTitle?: string
   /** The piece of agent work pinned with the turn, if any. */
   unit?: Unit
+  /** The background job selected with the turn, if any (it takes the box's place like a piece of agent work). */
+  job?: Job
+  /** Close the job (null) and go back to the turn. */
+  onSelectJob: (id: string | null) => void
   /** Pin another turn of the session (null unpins). */
   onPin: (index: number | null) => void
   /** Open a piece of agent work of this turn, or (null) go back to the turn. */
@@ -249,7 +255,7 @@ function MainTurn({
   onPin,
   onSelectUnit,
   onOpenAgent,
-}: Omit<TurnBoxProps, 'unit' | 'onOpenTurn'>) {
+}: Omit<TurnBoxProps, 'unit' | 'job' | 'onSelectJob' | 'onOpenTurn'>) {
   const t = col.turn
   const started = parseTime(t.startedAt)
   // previous and next among the session's own turns
@@ -357,7 +363,7 @@ function AgentWork({
   onSelectUnit,
   onOpenAgent,
   onOpenTurn,
-}: Omit<TurnBoxProps, 'col' | 'unit' | 'onPin' | 'model'> & { unit: Unit }) {
+}: Omit<TurnBoxProps, 'col' | 'unit' | 'job' | 'onSelectJob' | 'onPin' | 'model'> & { unit: Unit }) {
   const a = u.agent
   const label = agentLabel(a)
   const open = openTurn(a, u.startMs, u.ordinal)
@@ -476,7 +482,116 @@ function AgentWork({
   )
 }
 
-/** The box under the graph: a pinned turn, or a piece of agent work. */
+/** A background job: what it was, the command as stored, and where its output went. */
+function JobWork({
+  job: j,
+  branchTitle,
+  onSelectJob,
+  onOpenAgent,
+  onOpenTurn,
+  launch,
+}: Pick<TurnBoxProps, 'branchTitle' | 'onSelectJob' | 'onOpenAgent' | 'onOpenTurn'> & { job: Job; launch?: number }) {
+  const agents = useContext(AgentNames)
+  const [all, setAll] = useState(false)
+  const nameOf = (id: string) => {
+    const a = agents.get(id)
+    return a ? agentLabel(a) : id
+  }
+  const started = parseTime(j.startedAt)
+  const ended = parseTime(j.endedAt)
+  const open = j.status === 'open'
+  const command = (j.command ?? '').replace(/\r?\n$/, '')
+  const returns = j.returns ?? []
+  const shown = all ? returns : returns.slice(0, FOLD)
+  const description = j.description || j.command || j.id
+  const turn = launch
+  return (
+    <FrameSection
+      title={
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sec normal-case tracking-normal">
+          {branchTitle && <span className="max-w-72 truncate font-normal text-muted">{branchTitle}</span>}
+          <span className="font-medium text-fg">{jobKind({ kind: j.kind })}</span>
+          <span className="max-w-[48ch] truncate font-normal text-muted" title={description}>
+            {description}
+          </span>
+          {started && (
+            <time className="font-normal text-muted" title={fullTime(started)}>
+              {timeOfDay(started)}
+            </time>
+          )}
+          <Badge>{open ? 'running' : j.status}</Badge>
+          {started && ended && !open && (
+            <span className="font-normal text-muted">{formatDuration(ended.getTime() - started.getTime())}</span>
+          )}
+        </span>
+      }
+      actions={
+        <IconButton label="Close the background job" onClick={() => onSelectJob(null)} className="shrink-0">
+          <X size={14} />
+        </IconButton>
+      }
+    >
+      <div className="space-y-3">
+        <p className="text-sec text-muted">
+          Started
+          {turn !== undefined && (
+            <>
+              {' in '}
+              <Go onClick={() => onOpenTurn(turn)}>turn {turn}</Go>
+            </>
+          )}
+          {j.agentId && (
+            <>
+              {' by '}
+              <Go onClick={() => onOpenAgent(j.agentId ?? '')}>{nameOf(j.agentId)}</Go>
+            </>
+          )}
+          {!open && ` · ended ${j.status}${j.exitCode !== undefined ? `, exit ${j.exitCode}` : ''}`}
+        </p>
+        {command && (
+          <pre className="max-w-col overflow-x-auto whitespace-pre-wrap break-words rounded-card bg-surface-2 px-3 py-2 font-mono text-sec">
+            {command}
+          </pre>
+        )}
+        {returns.length === 0 ? (
+          <p className="text-sec text-muted">Nothing came back.</p>
+        ) : (
+          <ul className="max-w-col space-y-1.5 text-sec">
+            {shown.map((r) => (
+              <li key={`${r.at}${r.how}${r.turn ?? ''}${r.agentId ?? ''}`}>
+                <When at={r.at} className="mr-2" />
+                {r.agentId ? (
+                  <>
+                    {r.how === 'woke' ? 'woke' : r.how === 'delivered' ? 'delivered to' : 'fetched by'}{' '}
+                    <Go onClick={() => onOpenAgent(r.agentId ?? '')}>{nameOf(r.agentId)}</Go>
+                  </>
+                ) : (
+                  <>
+                    {r.how === 'woke' ? 'woke' : r.how === 'delivered' ? 'delivered in' : 'fetched in'}{' '}
+                    {r.turn !== undefined ? (
+                      <Go onClick={() => onOpenTurn(r.turn ?? 0)}>turn {r.turn}</Go>
+                    ) : (
+                      'the main agent'
+                    )}
+                  </>
+                )}
+                {r.final && <span className="text-muted"> (final)</span>}
+                {r.summary && <p className="whitespace-pre-wrap break-words text-muted">{r.summary}</p>}
+              </li>
+            ))}
+            {!all && returns.length > FOLD && (
+              <li>
+                <Go onClick={() => setAll(true)}>and {returns.length - FOLD} more</Go>
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+    </FrameSection>
+  )
+}
+
+/** The box under the graph: a pinned turn, a piece of agent work, or a background job. */
 export function TurnBox({ unit, ...rest }: TurnBoxProps) {
   return (
     <AgentNames.Provider value={rest.model.agentsById}>
@@ -485,7 +600,20 @@ export function TurnBox({ unit, ...rest }: TurnBoxProps) {
   )
 }
 
-function Inner({ unit, ...rest }: TurnBoxProps) {
+function Inner({ unit, job, ...rest }: TurnBoxProps) {
+  if (job) {
+    return (
+      <JobWork
+        key={job.id}
+        job={job}
+        launch={jobLaunchTurn(rest.model.cols, job)}
+        branchTitle={rest.branchTitle}
+        onSelectJob={rest.onSelectJob}
+        onOpenAgent={rest.onOpenAgent}
+        onOpenTurn={rest.onOpenTurn}
+      />
+    )
+  }
   if (unit) {
     return (
       <AgentWork
