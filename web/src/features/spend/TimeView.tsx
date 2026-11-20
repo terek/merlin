@@ -251,6 +251,10 @@ export interface TimePlotProps {
   onCursor: (p: Pin | null) => void
   onHoverUnit: (u: UnitRef | null) => void
   onSelect: (s: Selection | null) => void
+  /** A click on the top of a decision's bracket: the time it spans, and a key for it (`branch/decision`). */
+  onZoomBracket: (span: { t0: number; t1: number }, key: string) => void
+  /** The bracket whose zoom a click on it would undo, if any. */
+  zoomedKey: string | null
   onKey: (e: KeyboardEvent<HTMLDivElement>) => void
   /** The turn or piece of work under the cursor or selected (lines under the pointer's own); null if none. */
   turnLines: ReactNode
@@ -304,6 +308,8 @@ export function TimePlot({
   onCursor,
   onHoverUnit,
   onSelect,
+  onZoomBracket,
+  zoomedKey,
   onKey,
   turnLines,
   current,
@@ -313,7 +319,7 @@ export function TimePlot({
 }: TimePlotProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
-  const [px, setPx] = useState<{ x: number; row: number } | null>(null)
+  const [px, setPx] = useState<{ x: number; y: number; row: number } | null>(null)
   const [band, setBand] = useState<{ branch: number; k: number } | null>(null)
   const lockId = useLockoutId()
   const hatch = `hatch${useId().replace(/[^a-zA-Z0-9-]/g, '')}`
@@ -568,6 +574,40 @@ export function TimePlot({
     return l && x >= chipX(l) && x <= chipX(l) + CHIP && yy >= g.top && yy <= g.top + CHIP + 2 ? l.swarm?.id : undefined
   }
 
+  /** The brackets drawn over a main row: each decision with a bracket, its turns' span and where it stands. */
+  const bracketsOf = (g: Layout) => {
+    const main = g.row.main ? g.row.lanes[0] : undefined
+    const b = tree.branches[g.row.branch]
+    if (!main) return { shown: new Set<number>(), list: [] }
+    const focusDec = (p: Pin | null | undefined) =>
+      p && p.branch === g.row.branch ? b.model.cols[p.col]?.decision : undefined
+    const shown = bracketed(
+      b.model.decisions.filter(
+        (d) => d.usd > 0 && main.turns.some((s) => s.col.index >= d.start && s.col.index <= d.end),
+      ),
+      detail,
+      [focusDec(pinned), focusDec(cursor)],
+    )
+    const list = b.model.decisions.flatMap((dec) => {
+      const s0 = main.turns.find((s) => s.col.index === dec.start) ?? main.turns.find((s) => s.col.index >= dec.start)
+      const s1 = [...main.turns].reverse().find((s) => s.col.index <= dec.end)
+      if (!s0 || !s1 || dec.usd <= 0 || s1.col.index < s0.col.index || !shown.has(dec.index)) return []
+      const xa = axis.x(s0.t0) + 1
+      const xb = Math.max(xa + 3, axis.x(s1.t1) - 1)
+      return [{ dec, key: `${g.row.branch}/${dec.index}`, span: { t0: s0.t0, t1: s1.t1 }, xa, xb }]
+    })
+    return { shown, list }
+  }
+  /** The bracket whose top is under (x, y) of row `k`: the band above a main row's turns, within the bracket's width. */
+  const bracketAt = (k: number, x: number, y: number) => {
+    const g = layout[k]
+    if (!g?.row.main || y < g.top || y >= g.top + BRACKET_H) return undefined
+    return bracketsOf(g)
+      .list.filter((m) => x >= m.xa && x <= m.xb)
+      .sort((a, b) => a.xb - a.xa - (b.xb - b.xa))[0]
+  }
+  const hoverBracket = px ? bracketAt(px.row, px.x, px.y) : undefined
+
   // ---- the pointer
   const hit = (clientX: number, clientY: number, el: HTMLElement) => {
     const r = el.getBoundingClientRect()
@@ -577,7 +617,7 @@ export function TimePlot({
     if (strips.some((s) => yy >= s.top - OVER_GAP / 2 && yy <= s.bottom + 2)) return null
     const k = layout.findIndex((g, i) => yy < g.bottom + (layout[i + 1] ? (layout[i + 1].top - g.bottom) / 2 : 99))
     if (k < 0) return null
-    return { x, row: k, t: axis.t(x) }
+    return { x, y: yy, row: k, t: axis.t(x) }
   }
   const read = (h: { x: number; row: number; t: number }) => {
     const g = layout[h.row]
@@ -616,7 +656,7 @@ export function TimePlot({
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     setBand(bandAt(e.clientX, e.clientY, e.currentTarget))
     const h = hit(e.clientX, e.clientY, e.currentTarget)
-    setPx(h ? { x: h.x, row: h.row } : null)
+    setPx(h ? { x: h.x, y: h.y, row: h.row } : null)
     const r = h ? read(h) : { pin: null, unit: null }
     onCursor(r.pin)
     onHoverUnit(r.unit)
@@ -1002,17 +1042,7 @@ export function TimePlot({
     const whole = main && fullLane.get(main.key)
     const b = tree.branches[g.row.branch]
     // the decisions that get a bracket, and the turns drawn one by one
-    const focusDec = (p: Pin | null | undefined) =>
-      p && p.branch === g.row.branch ? b.model.cols[p.col]?.decision : undefined
-    const shown = main
-      ? bracketed(
-          b.model.decisions.filter(
-            (d) => d.usd > 0 && main?.turns.some((s) => s.col.index >= d.start && s.col.index <= d.end),
-          ),
-          detail,
-          [focusDec(pinned), focusDec(cursor)],
-        )
-      : new Set<number>()
+    const { list } = bracketsOf(g)
     const isFocusTurn = (c: number) => [pinned, cursor].some((p) => p && p.branch === g.row.branch && p.col === c)
     const turnsY = g.bottom - 3
     let lastTurnX = Number.NEGATIVE_INFINITY
@@ -1020,16 +1050,12 @@ export function TimePlot({
       <g key={g.full.lanes[0].key}>
         {/* the decisions over a main row */}
         {main &&
-          b.model.decisions.map((dec) => {
-            const s0 =
-              main.turns.find((s) => s.col.index === dec.start) ?? main.turns.find((s) => s.col.index >= dec.start)
-            const s1 = [...main.turns].reverse().find((s) => s.col.index <= dec.end)
-            if (!s0 || !s1 || dec.usd <= 0 || s1.col.index < s0.col.index || !shown.has(dec.index)) return null
-            const xa = axis.x(s0.t0) + 1
-            const xb = Math.max(xa + 3, axis.x(s1.t1) - 1)
+          list.map(({ dec, xa, xb, key, span }) => {
             const yy = g.top + 12
             const held = pinned?.branch === g.row.branch && b.model.cols[pinned.col]?.decision === dec.index
-            const on = held || (cursor?.branch === g.row.branch && b.model.cols[cursor.col]?.decision === dec.index)
+            const under = hoverBracket?.key === key
+            const on =
+              held || under || (cursor?.branch === g.row.branch && b.model.cols[cursor.col]?.decision === dec.index)
             const text = formatMoney(dec.usd)
             if (xb - xa >= text.length * 6 + 4 || on)
               labels.push(
@@ -1052,10 +1078,10 @@ export function TimePlot({
             return (
               <g key={dec.index} pointerEvents="none">
                 <path
-                  d={`M${f1(axis.x(s0.t0))} ${g.base}V${yy}H${f1(xb)}V${yy + 3}`}
+                  d={`M${f1(axis.x(span.t0))} ${g.base}V${yy}H${f1(xb)}V${yy + 3}`}
                   fill="none"
                   stroke={held ? 'var(--accent)' : on ? 'var(--text)' : 'var(--faint)'}
-                  strokeWidth={held ? 3 : 1}
+                  strokeWidth={held ? 3 : under ? 2 : 1}
                 />
               </g>
             )
@@ -1562,6 +1588,7 @@ export function TimePlot({
   // takes that, whose own mark is the preview), or the keyboard's; not the one already selected
   const previewOf =
     cursor &&
+    !hoverBracket &&
     !(px && !layout[px.row]?.row.main) &&
     !(pinned && pinned.branch === cursor.branch && pinned.col === cursor.col)
       ? cursor
@@ -1654,8 +1681,8 @@ export function TimePlot({
           ) : (
             <div className="text-faint">
               Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click
-              selects it and opens it below. Context per call above each baseline, spend per {slotText(slot)} below it,
-              each on one scale (the tallest bar is {formatMoney(maxSlot)}).
+              selects it and opens it below; click a bracket's top to zoom to it. Context per call above each baseline,
+              spend per {slotText(slot)} below it, each on one scale (the tallest bar is {formatMoney(maxSlot)}).
             </div>
           )
         ) : (
@@ -1715,6 +1742,11 @@ export function TimePlot({
           const box = e.currentTarget.getBoundingClientRect()
           const chip = chipAt(h.row, h.x, e.clientY - box.top)
           const sw = swarmAt(h.row, h.x)
+          const br = chip || sw ? undefined : bracketAt(h.row, h.x, h.y)
+          if (br) {
+            onZoomBracket(br.span, br.key)
+            return
+          }
           if (chip || sw) {
             toggle(chip ?? sw?.swarm?.id ?? '')
             return
@@ -1743,7 +1775,7 @@ export function TimePlot({
           setPx(null)
           onKey(e)
         }}
-        className={`relative mt-1 rounded-badge ${hot || hoverJob ? 'cursor-pointer' : 'cursor-crosshair'}`}
+        className={`relative mt-1 rounded-badge ${hoverBracket ? (zoomedKey === hoverBracket.key ? 'cursor-zoom-out' : 'cursor-zoom-in') : hot || hoverJob ? 'cursor-pointer' : 'cursor-crosshair'}`}
       >
         <svg width={width} height={height} role="img" aria-label="Spend over time" className="block">
           {/* limit lockouts: a light red block behind everything, across breaks too */}

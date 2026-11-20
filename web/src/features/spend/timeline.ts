@@ -911,6 +911,37 @@ export function clampWindow(w: Win, b: { t0: number; t1: number }, min = MIN_WIN
   return { lo, hi: lo + width }
 }
 
+/** The window that frames a decision's `span`: it and a margin of 8% of its width (at least a minute) on each side. */
+export function bracketWindow(span: { t0: number; t1: number }, bounds: { t0: number; t1: number }): Win {
+  const margin = Math.max(MIN, (span.t1 - span.t0) * 0.08)
+  return clampWindow({ lo: span.t0 - margin, hi: span.t1 + margin }, bounds)
+}
+
+/** A click on a decision's bracket zoomed the graph to it: the bracket, the window before, and the window it set. */
+export interface BracketZoom {
+  key: string
+  before: Win
+  to: Win
+}
+
+/** The key of the bracket a click would zoom back out of: the one zoomed to, while the window is still the one it set. */
+export function zoomedKey(zoom: BracketZoom | null, win: Win): string | null {
+  return zoom && zoom.to.lo === win.lo && zoom.to.hi === win.hi ? zoom.key : null
+}
+
+/** What a click on bracket `key` (spanning `span`) does to the window `win`: zoom to it, or, a second time, back. */
+export function zoomBracket(
+  zoom: BracketZoom | null,
+  win: Win,
+  key: string,
+  span: { t0: number; t1: number },
+  bounds: { t0: number; t1: number },
+): { zoom: BracketZoom | null; win: Win } {
+  if (zoomedKey(zoom, win) === key && zoom) return { zoom: null, win: zoom.before }
+  const to = bracketWindow(span, bounds)
+  return { zoom: { key, before: win, to }, win: to }
+}
+
 /** A stretch of time, in epoch milliseconds. */
 export interface TimeRange {
   fromMs: number

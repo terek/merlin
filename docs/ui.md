@@ -622,6 +622,11 @@ From top to bottom, the graph and then the box:
   **Hover previews a turn**: with the pointer over a main row (or the keyboard cursor on a turn), the turn a click or Enter would select
   gets the turn tint at half strength and a hollow marker, without the bracket tint; not when it is already selected, and not over an
   agent's or job's row (there the click selects that agent or job, whose own hover mark is the preview).
+  **A bracket's top zooms**: with the pointer over the band at the top of a main row (`BRACKET_H`) and within a drawn bracket's width,
+  that bracket is drawn heavier (stroke 2, label bold), the cursor is a zoom-in, and no turn preview is drawn, since the click will not
+  select a turn. The click zooms the graph's window to the bracket's turns plus 8% of their width each side (`bracketWindow`, at least a
+  minute); a second click on the same bracket, while the window is still the zoomed one, puts back the window from before (the cursor is then a
+  zoom-out). The selection is not touched. A click below the band selects a turn as before.
   The box under the graph does not repeat these marks: it says what the turn or the work was, not what it cost.
 - **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
   switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the

@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- On the session graph, hovering the top of a bracket highlights it; a click zooms to its turns, and a second click zooms back.
 - On the session graph, a click selects one thing — a turn, an agent's work or a background job — and only that is highlighted; hovering a turn marks the one a click would select.
 - Click a background job on the session graph to see it below the graph: its command, how it ended and the turns its output reached.
 - A background job's label on the session graph leaves out "Wait for the …", and its tooltip no longer shows the whole command.

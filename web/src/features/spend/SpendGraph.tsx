@@ -32,6 +32,7 @@ import { Overview, stripAxis } from './Overview'
 import { anchorTurn } from './session'
 import { TimePlot } from './TimeView'
 import {
+  type BracketZoom,
   boundsOf,
   buildTimeline,
   clampWindow,
@@ -43,6 +44,8 @@ import {
   splitDays,
   type TimeRange,
   type Win,
+  zoomBracket,
+  zoomedKey,
 } from './timeline'
 import type { Branch, Tree } from './tree'
 import { useElementWidth } from './useWidth'
@@ -352,6 +355,14 @@ export function SpendGraph({
     if (part) return part
     return { lo: bounds.t0, hi: bounds.t1 }
   })
+  // a click on a decision's bracket zooms the window to it, and a second one puts the window back; a live
+  // session following its end (`followEnd`) only widens a window that reaches the old end, as for any zoom
+  const [zoom, setZoom] = useState<BracketZoom | null>(null)
+  const onZoomBracket = (span: { t0: number; t1: number }, key: string) => {
+    const next = zoomBracket(zoom, win, key, span, bounds)
+    setZoom(next.zoom)
+    setWin(next.win)
+  }
   // what the plot shows is measured on the strip the brush is dragged on, so the strip's width is known here
   // the locator's "Showing … Latest All" line sits in the section's heading row
   const [locator, setLocator] = useState<HTMLElement | null>(null)
@@ -460,6 +471,8 @@ export function SpendGraph({
               onCursor={setCursor}
               onHoverUnit={setHoverUnit}
               onSelect={onSelect}
+              onZoomBracket={onZoomBracket}
+              zoomedKey={zoomedKey(zoom, win)}
               onKey={onKey}
               current={current}
               lockouts={lockouts}
@@ -513,8 +526,8 @@ export function SpendGraph({
                 <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">How to read</h4>
                 <p>
                   Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given.
-                  Click selects it and opens it below. Context per call above each baseline, spend below it, each on one
-                  scale.
+                  Click selects it and opens it below; click a bracket's top to zoom to it. Context per call above each
+                  baseline, spend below it, each on one scale.
                 </p>
               </section>
             </PanelTab>

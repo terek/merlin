@@ -9,6 +9,7 @@ import {
   barSpan,
   boundsOf,
   bracketed,
+  bracketWindow,
   branchRole,
   branchWeight,
   breakWidth,
@@ -63,6 +64,8 @@ import {
   turnPlace,
   turnTier,
   windowDay,
+  zoomBracket,
+  zoomedKey,
 } from './timeline'
 import { buildTree } from './tree'
 
@@ -826,6 +829,47 @@ describe('windows', () => {
   test('a session under a day has no day selection', () => {
     expect(hasDays({ t0: h(5, 9), t1: h(6, 8) })).toBe(false)
     expect(hasDays({ t0: h(5, 9), t1: h(6, 9) })).toBe(true)
+  })
+
+  test('a bracket zoom frames the span with a margin, inside the bounds', () => {
+    // 10 hours: 8% is 48 minutes each side
+    expect(bracketWindow({ t0: h(6, 10), t1: h(6, 20) }, bounds)).toEqual({
+      lo: h(6, 10) - 48 * 60_000,
+      hi: h(6, 20) + 48 * 60_000,
+    })
+    // 10 minutes: 8% would be 48 seconds, a minute each side is the least
+    expect(bracketWindow({ t0: h(6, 10), t1: h(6, 10) + 10 * 60_000 }, bounds)).toEqual({
+      lo: h(6, 10) - 60_000,
+      hi: h(6, 10) + 11 * 60_000,
+    })
+    // at the edge of the session the window slides in rather than shrinking
+    const edge = bracketWindow({ t0: bounds.t0, t1: bounds.t0 + 10 * 3_600_000 }, bounds)
+    expect(edge.lo).toBe(bounds.t0)
+    expect(edge.hi - edge.lo).toBe(10 * 3_600_000 + 2 * 48 * 60_000)
+    // a span of one instant still gets the minimum window
+    const tiny = bracketWindow({ t0: h(6, 10), t1: h(6, 10) }, bounds)
+    expect(tiny.hi - tiny.lo).toBe(MIN_WINDOW_MS)
+    // a span as long as the session is the whole session
+    expect(bracketWindow({ t0: bounds.t0, t1: bounds.t1 }, bounds)).toEqual({ lo: bounds.t0, hi: bounds.t1 })
+  })
+
+  test('a second click on a bracket restores the window before; a changed window or another bracket zooms anew', () => {
+    const w0 = { lo: h(5, 0), hi: h(8, 0) }
+    const span = { t0: h(6, 10), t1: h(6, 20) }
+    const one = zoomBracket(null, w0, 'a', span, bounds)
+    expect(one.win).toEqual(bracketWindow(span, bounds))
+    expect(zoomedKey(one.zoom, one.win)).toBe('a')
+    expect(zoomedKey(one.zoom, w0)).toBeNull()
+    const back = zoomBracket(one.zoom, one.win, 'a', span, bounds)
+    expect(back).toEqual({ zoom: null, win: w0 })
+    // another bracket zooms from the zoomed window, and restoring it goes back to that one
+    const other = zoomBracket(one.zoom, one.win, 'b', { t0: h(6, 12), t1: h(6, 13) }, bounds)
+    expect(other.zoom?.before).toEqual(one.win)
+    // the user moved the window meanwhile: a click zooms again, keeping the window it found
+    const moved = { lo: h(6, 0), hi: h(7, 0) }
+    const again = zoomBracket(one.zoom, moved, 'a', span, bounds)
+    expect(again.zoom?.before).toEqual(moved)
+    expect(again.win).toEqual(one.win)
   })
 
   test('windows stay inside the bounds and are never narrower than the minimum', () => {
