@@ -36,20 +36,39 @@ func TestMockReport(t *testing.T) {
 			mk := func(i int, min int, text string) model.Turn {
 				return model.Turn{Index: i, Origin: model.OriginHuman, UserText: text, StartedAt: s.Add(time.Duration(min) * time.Minute), EndedAt: s.Add(time.Duration(min+50) * time.Minute)}
 			}
-			t0 := mk(0, 0, "Refactor the store so that:\n- reads never block writes\n- tests must pass\n- do not change the API\n"+longText)
+			// the story unfolds: the first weeks hold short prompts; structured prompts with
+			// criteria start in week 3, detailed one-shot specs in week 5
+			text := "Refactor the store"
+			if day <= 56 {
+				text = "Refactor the store so that:\n- reads never block writes\n- tests must pass\n- do not change the API\n" + strings.Repeat("and keep the module layout as it is, ", 8)
+			}
+			if day <= 35 {
+				text += longText
+			}
+			t0 := mk(0, 0, text)
 			t0.ToolCalls, t0.ToolsByName = 24, map[string]int64{"Edit": 6, "Read": 10}
 			if day%3 == 0 {
 				t0.Queued = []model.QueuedPrompt{{At: t0.StartedAt.Add(5 * time.Minute), Origin: model.OriginHuman}}
 			}
 			t1 := mk(1, 60, "add a dark theme toggle")
 			t1.ToolCalls, t1.ToolsByName = 12, map[string]int64{"Edit": 4}
-			if day%5 == 0 {
-				t1.ToolsByName["EnterPlanMode"] = 1
+			if day == 22 || day == 12 {
+				t1.ToolsByName["EnterPlanMode"] = 1 // explored, not a habit
 			}
 			t2 := mk(2, 120, "")
 			t2.Origin, t2.Command = model.OriginCommand, "/review-pr"
+			turns := []model.Turn{t0, t1, t2}
+			if day == 47 || day == 33 {
+				m := mk(3, 125, "")
+				m.Origin, m.Command = model.OriginCommand, "/model sonnet"
+				turns = append(turns, m)
+			}
+			// more typing as the weeks go by, and uneven from day to day
+			for i := 0; i < (day*7+k*3)%6+(70-day)/20; i++ {
+				turns = append(turns, mk(len(turns), 130+i*8, fmt.Sprintf("continue with part %d of the tests", i+1)))
+			}
 			d := &model.SessionDigest{Harness: "claude", ID: fmt.Sprintf("synthetic-%03d", n), Kind: model.KindInteractive,
-				StartedAt: s, LastActivityAt: s.Add(3 * time.Hour), Turns: []model.Turn{t0, t1, t2},
+				StartedAt: s, LastActivityAt: s.Add(3 * time.Hour), Turns: turns,
 				Project: fmt.Sprintf("/work/project-%d", (n*7)%9)}
 			d.Messages = []model.Message{{ID: "m", Model: "claude-opus-5-5", At: s}}
 			if day%2 == 0 {
@@ -77,6 +96,15 @@ func TestMockReport(t *testing.T) {
 			in = append(in, Input{Digest: d})
 		}
 	}
+	// one long session, in the last weeks: the symptom behind a suggestion
+	long := now.AddDate(0, 0, -12).Truncate(24 * time.Hour).Add(14 * time.Hour)
+	ld := &model.SessionDigest{Harness: "claude", ID: "synthetic-long", Kind: model.KindInteractive, StartedAt: long,
+		LastActivityAt: long.Add(10 * time.Hour), Project: "/work/project-1"}
+	for i := 0; i < 45; i++ {
+		st := long.Add(time.Duration(i) * 12 * time.Minute)
+		ld.Turns = append(ld.Turns, model.Turn{Index: i, Origin: model.OriginHuman, UserText: fmt.Sprintf("step %d of the migration", i), StartedAt: st, EndedAt: st.Add(8 * time.Minute)})
+	}
+	in = append(in, Input{Digest: ld})
 	r := Build(in, now, time.UTC)
 	got := map[Status]int{}
 	fresh := 0
@@ -88,6 +116,15 @@ func TestMockReport(t *testing.T) {
 	}
 	if got[StatusHabit] == 0 || got[StatusExplored] == 0 || got[StatusUnseen] == 0 || fresh == 0 || len(r.Suggestions) == 0 {
 		t.Fatalf("the mock report should show every status: %v, %d new, %d suggestions", got, fresh, len(r.Suggestions))
+	}
+	withExample := 0
+	for _, s := range r.Suggestions {
+		if s.Example != nil {
+			withExample++
+		}
+	}
+	if withExample != 2 || len(r.Suggestions) != 3 || r.Suggestions[2].Reason != "" {
+		t.Fatalf("want 3 suggestions, 2 with a symptom and an example, 1 without: %+v", r.Suggestions)
 	}
 	if !*updateMock {
 		return

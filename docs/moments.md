@@ -195,6 +195,26 @@ backdrop) marks a moment's persona in the lists. Download PNG
 saves the card at twice its size (drawn on a canvas in the browser). The Sessions page
 shows a one-row invite with the three reactions that links to `/moments`.
 
+## 5a. The page
+
+`/moments` is the guide next to the instruments (Overview, Cost, the session view): your own story,
+and what to try next. Every claim links to the instrument view that shows it. Top to bottom:
+
+- **Timeline.** Linear time from `since` to `now`, with the human prompts per day as a soft
+  background. Each seen moment is one marker at its first hit: filled when it is a habit, a ring
+  when explored. Moments already present in the first week sit in one stack at the left edge.
+  Hovering a moment (a marker, a row below) shows every later occurrence as ticks under the
+  activity; a click pins it.
+- **Readout.** One line under the timeline, of fixed height: the totals when idle, the moment's
+  title, first date, hits and weeks on hover, and for a pinned moment its sentence and a link to
+  the first time it happened.
+- **Next.** At most three suggestions: the reason, the try text and, when the symptom has one, a
+  link to the session where it shows most.
+- **Your moments.** The seen moments as compact rows, by first hit, each with its latest example.
+- **More to try.** The unseen moments, collapsed.
+
+The personas, their reactions and the share card are not shown for now; the code stays.
+
 ## 6. Sharing (open)
 
 Undecided. Whatever is chosen, only moment ids, statuses, counts and reactions leave the machine,

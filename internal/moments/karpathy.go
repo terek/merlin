@@ -169,36 +169,48 @@ func cleanSlate(c *Corpus, emit func(Hit)) {
 
 const longTurn = 10 * time.Minute
 
-func longTurns(c *Corpus) string {
+func longTurns(c *Corpus) Evidence {
 	n := 0
+	var best pick
 	c.Interactive(func(s *Session) {
+		k := 0
+		var first *model.Turn
 		s.HumanTurns(func(t, _ *model.Turn) {
 			if end(t).Sub(t.StartedAt) >= longTurn {
-				n++
+				k++
+				if first == nil {
+					first = t
+				}
 			}
 		})
+		n += k
+		if first != nil {
+			best.offer(k, turnHit(s, first, ""))
+		}
 	})
 	if n < 3 {
-		return ""
+		return Evidence{}
 	}
-	return fmt.Sprintf("%d of your turns ran longer than 10 minutes: plenty of time to steer.", n)
+	return Evidence{Reason: fmt.Sprintf("%d of your turns ran longer than 10 minutes: plenty of time to steer.", n), Example: best.example()}
 }
 
 const longSession = 40
 
-func longSessions(c *Corpus) string {
+func longSessions(c *Corpus) Evidence {
 	n := 0
+	var best pick
 	c.Interactive(func(s *Session) {
 		k := 0
 		s.HumanTurns(func(*model.Turn, *model.Turn) { k++ })
 		if k >= longSession {
 			n++
+			best.offer(k, sessionHit(s))
 		}
 	})
 	if n == 0 {
-		return ""
+		return Evidence{}
 	}
-	return fmt.Sprintf("%d session%s went past %d prompts in one context.", n, plural(n), longSession)
+	return Evidence{Reason: fmt.Sprintf("%d session%s went past %d prompts in one context.", n, plural(n), longSession), Example: best.example()}
 }
 
 // Helpers.

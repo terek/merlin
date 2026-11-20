@@ -2,6 +2,7 @@ package moments
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 	"time"
 
@@ -254,6 +255,73 @@ func TestDeterministic(t *testing.T) {
 		got, _ := json.Marshal(BuildWith(Registry(), rev, at(100), time.UTC))
 		if string(got) != string(first) {
 			t.Fatal("report depends on input order")
+		}
+	}
+}
+
+func TestFirstHitDaysAndActivity(t *testing.T) {
+	day := 24 * 60
+	mk := func(id string, start int, text string) *model.SessionDigest {
+		tt := turn(0, start, text)
+		tt.Queued = []model.QueuedPrompt{{At: at(start + 1), Origin: model.OriginHuman}}
+		return session(id, model.KindInteractive, tt)
+	}
+	a := mk("a", 0, "one")
+	b := mk("b", 30, "two") // same day as a
+	c := mk("c", 2*day, "three")
+	child := session("d", model.KindInteractive, turn(0, 5*day, "copied"), turn(1, 5*day+10, "own"))
+	child.Turns[0].Queued = []model.QueuedPrompt{{At: at(5*day + 1), Origin: model.OriginHuman}}
+	scripted := session("s", model.KindSDK, turn(0, 3*day, "script"))
+	in := []Input{{Digest: c}, {Digest: b}, {Digest: a}, {Digest: child, Inherited: []int{0}}, {Digest: scripted}}
+	r := BuildWith(Registry(), in, at(10*day), time.UTC)
+
+	m := view(r, "steer-mid-turn")
+	if m.FirstHit == nil || m.FirstHit.Session.ID != "a" || !m.FirstHit.At.Equal(m.First) || m.FirstHit.Turn == nil || *m.FirstHit.Turn != 0 {
+		t.Errorf("firstHit = %+v, first %v", m.FirstHit, m.First)
+	}
+	want := []Day{{"2026-10-01", 2}, {"2026-10-03", 1}}
+	if !slices.Equal(m.Days, want) {
+		t.Errorf("days = %v, want %v", m.Days, want)
+	}
+	if m := view(r, "swarm"); m.FirstHit != nil || m.Days != nil {
+		t.Errorf("unseen moment has firstHit/days: %+v", m)
+	}
+	// prompts per day: the copied turn of d and the scripted session are not counted
+	wantAct := []ActivityDay{{"2026-10-01", 2}, {"2026-10-03", 1}, {"2026-10-06", 1}}
+	if !slices.Equal(r.Activity, wantAct) {
+		t.Errorf("activity = %v, want %v", r.Activity, wantAct)
+	}
+	if got := BuildWith(Registry(), nil, t0, time.UTC); got.Activity != nil {
+		t.Errorf("activity without sessions: %v", got.Activity)
+	}
+}
+
+func TestSuggestionExample(t *testing.T) {
+	compacted := func(id string, start, n int) *model.SessionDigest {
+		d := session(id, model.KindInteractive, turn(0, start, "x"), turn(1, start+10, "y"))
+		for i := range n {
+			d.Compactions = append(d.Compactions, model.Compaction{At: at(start + 20 + i), Turn: 1, Trigger: model.TriggerAuto})
+		}
+		return d
+	}
+	in := []Input{{Digest: compacted("few", 0, 1)}, {Digest: compacted("most", 100, 3)}, {Digest: compacted("tie", 200, 3)}}
+	r := BuildWith(Registry(), in, at(1000), time.UTC)
+	var got *Suggestion
+	for i, s := range r.Suggestions {
+		if s.Moment == "deliberate-compact" {
+			got = &r.Suggestions[i]
+		}
+	}
+	if got == nil || got.Example == nil {
+		t.Fatalf("no example on %+v", r.Suggestions)
+	}
+	// the session with the most auto compactions; the later of two equal ones, at its turn
+	if got.Example.Session.ID != "tie" || got.Example.Turn == nil || *got.Example.Turn != 1 || !got.Example.At.Equal(at(220)) {
+		t.Errorf("example = %+v", got.Example)
+	}
+	for _, s := range r.Suggestions {
+		if s.Reason == "" && s.Example != nil {
+			t.Errorf("example without reason: %+v", s)
 		}
 	}
 }

@@ -49,8 +49,54 @@ type Moment struct {
 	// the same hits.
 	Detect func(c *Corpus, emit func(Hit))
 	// Symptom, when set, looks for a sign that the moment would help someone who has not
-	// shown it yet, and returns a one-sentence reason (with numbers), or "".
-	Symptom func(c *Corpus) string
+	// shown it yet, and returns a one-sentence reason (with numbers), or an empty Evidence.
+	Symptom func(c *Corpus) Evidence
+}
+
+// Evidence is what a Symptom found: the reason, and where it shows most.
+type Evidence struct {
+	Reason string
+	// Example is the session where the evidence is densest (ties: the latest), at a turn
+	// where that makes sense; nil when there is no single place.
+	Example *Hit
+}
+
+// pick keeps the session where a count is highest; of equal counts the one offered last
+// (sessions are offered oldest first, so the latest).
+type pick struct {
+	n   int
+	hit Hit
+}
+
+func (p *pick) offer(n int, h Hit) {
+	if n > 0 && n >= p.n {
+		p.n, p.hit = n, h
+	}
+}
+
+func (p *pick) example() *Hit {
+	if p.n == 0 {
+		return nil
+	}
+	h := p.hit
+	return &h
+}
+
+// sessionHit is a hit that points at a whole session.
+func sessionHit(s *Session) Hit { return Hit{At: s.D.StartedAt, Session: s.Key()} }
+
+func intPtr(i int) *int { return &i }
+
+// Day is a count for one local day ("2006-01-02").
+type Day struct {
+	Day  string `json:"day"`
+	Hits int    `json:"hits,omitempty"`
+}
+
+// ActivityDay is the number of human prompts typed on one local day.
+type ActivityDay struct {
+	Day     string `json:"day"`
+	Prompts int    `json:"prompts"`
 }
 
 // Hit is one occurrence of a moment. Note is Merlin's own description with numbers only,
@@ -73,6 +119,10 @@ type Report struct {
 	// Projects is how many projects (repositories, else directories) the interactive sessions
 	// worked in.
 	Projects int `json:"projects"`
+
+	// Activity is the human prompts per local day in interactive sessions (own turns only),
+	// by day; days without any are left out.
+	Activity []ActivityDay `json:"activity,omitempty"`
 
 	Personas    []PersonaView `json:"personas"`
 	Moments     []MomentView  `json:"moments"` // registry order
@@ -109,7 +159,11 @@ type MomentView struct {
 	RecentHits int       `json:"recentHits"`
 	New        bool      `json:"new,omitempty"`
 	First      time.Time `json:"first,omitzero"`
-	Last       time.Time `json:"last,omitzero"`
+	// FirstHit is the hit that First is the time of.
+	FirstHit *Hit `json:"firstHit,omitempty"`
+	// Days counts every hit per local day, by day.
+	Days []Day     `json:"days,omitempty"`
+	Last time.Time `json:"last,omitzero"`
 	// Examples are the latest hits, newest first, at most maxExamples.
 	Examples []Hit `json:"examples,omitempty"`
 }
@@ -118,6 +172,8 @@ type MomentView struct {
 type Suggestion struct {
 	Moment string `json:"moment"`
 	Reason string `json:"reason,omitempty"` // from the moment's Symptom; empty when none fired
+	// Example is where the symptom shows most: a session, at a turn where that makes sense.
+	Example *Hit `json:"example,omitempty"`
 }
 
 const (
@@ -152,6 +208,7 @@ func BuildWith(catalog []Moment, in []Input, now time.Time, loc *time.Location) 
 		}
 	}
 	r.Projects = len(projects)
+	r.Activity = activity(c, loc)
 
 	for _, m := range catalog {
 		var hits []Hit
@@ -193,6 +250,9 @@ func summarize(m Moment, hits []Hit, windowStart time.Time, loc *time.Location) 
 	}
 	v.Weeks, v.Sessions = len(weeks), len(sessions)
 	v.First, v.Last = hits[0].At, hits[len(hits)-1].At
+	first := hits[0]
+	v.FirstHit = &first
+	v.Days = countDays(hits, loc)
 	v.New = !v.First.Before(windowStart)
 	need := m.HabitWeeks
 	if need == 0 {
@@ -213,4 +273,43 @@ func turnOf(h Hit) int {
 		return -1
 	}
 	return *h.Turn
+}
+
+const dayLayout = "2006-01-02"
+
+// countDays counts hits per local day; hits are sorted by time, so the days come out in order.
+func countDays(hits []Hit, loc *time.Location) []Day {
+	var out []Day
+	for _, h := range hits {
+		d := h.At.In(loc).Format(dayLayout)
+		if n := len(out); n > 0 && out[n-1].Day == d {
+			out[n-1].Hits++
+		} else {
+			out = append(out, Day{Day: d, Hits: 1})
+		}
+	}
+	return out
+}
+
+// activity counts the human prompts of interactive sessions per local day. Copied history is
+// not in Session.Turns, so it is not counted again.
+func activity(c *Corpus, loc *time.Location) []ActivityDay {
+	n := map[string]int{}
+	c.Interactive(func(s *Session) {
+		s.HumanTurns(func(t, _ *model.Turn) {
+			if !t.StartedAt.IsZero() {
+				n[t.StartedAt.In(loc).Format(dayLayout)]++
+			}
+		})
+	})
+	days := make([]string, 0, len(n))
+	for d := range n {
+		days = append(days, d)
+	}
+	slices.Sort(days)
+	var out []ActivityDay
+	for _, d := range days {
+		out = append(out, ActivityDay{Day: d, Prompts: n[d]})
+	}
+	return out
 }

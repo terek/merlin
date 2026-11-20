@@ -274,68 +274,107 @@ func mcpTools(c *Corpus, emit func(Hit)) {
 
 // Symptoms.
 
-func autoCompactions(c *Corpus) string {
+func autoCompactions(c *Corpus) Evidence {
 	auto, cold := 0, 0
+	var best pick
 	c.Interactive(func(s *Session) {
-		for _, k := range s.D.Compactions {
-			if k.Trigger == model.TriggerAuto && s.OwnSince(k.At) {
-				auto++
-				if k.Call != nil && k.Call.Cache == model.CacheCold {
+		k := 0
+		var first *model.Compaction
+		for i := range s.D.Compactions {
+			x := &s.D.Compactions[i]
+			if x.Trigger == model.TriggerAuto && s.OwnSince(x.At) {
+				k++
+				if first == nil {
+					first = x
+				}
+				if x.Call != nil && x.Call.Cache == model.CacheCold {
 					cold++
 				}
 			}
 		}
+		auto += k
+		if first != nil {
+			h := Hit{At: first.At, Session: s.Key()}
+			if first.Turn >= 0 {
+				h.Turn = intPtr(first.Turn)
+			}
+			best.offer(k, h)
+		}
 	})
 	switch {
 	case auto == 0:
-		return ""
+		return Evidence{}
 	case cold > 0:
-		return fmt.Sprintf("Auto-compaction kicked in %d time%s, %d of them on a cold cache (the whole context paid at full price).", auto, plural(auto), cold)
+		return Evidence{Reason: fmt.Sprintf("Auto-compaction kicked in %d time%s, %d of them on a cold cache (the whole context paid at full price).", auto, plural(auto), cold), Example: best.example()}
 	default:
-		return fmt.Sprintf("Auto-compaction kicked in %d time%s.", auto, plural(auto))
+		return Evidence{Reason: fmt.Sprintf("Auto-compaction kicked in %d time%s.", auto, plural(auto)), Example: best.example()}
 	}
 }
 
 const bigContext = 150_000
 
-func bigContexts(c *Corpus) string {
+func bigContexts(c *Corpus) Evidence {
 	n := 0
+	var best pick
 	c.Interactive(func(s *Session) {
+		k := 0
+		var first *model.Turn
 		for _, t := range s.Turns {
 			if t.ContextTokens >= bigContext {
-				n++
+				k++
+				if first == nil {
+					first = t
+				}
 			}
+		}
+		n += k
+		if first != nil {
+			best.offer(k, turnHit(s, first, ""))
 		}
 	})
 	if n < 3 {
-		return ""
+		return Evidence{}
 	}
-	return fmt.Sprintf("%d turns ran with more than 150k tokens of context.", n)
+	return Evidence{Reason: fmt.Sprintf("%d turns ran with more than 150k tokens of context.", n), Example: best.example()}
 }
 
-func unroutedAgents(c *Corpus) string {
+func unroutedAgents(c *Corpus) Evidence {
 	n := 0
+	var best pick
 	c.Interactive(func(s *Session) {
 		main := s.MainModel()
 		if main == "" {
 			return
 		}
+		k := 0
+		var first *model.Agent
 		for _, a := range s.Agents {
 			if a.Kind == model.AgentSubagent && (a.Model == "" || a.Model == main) {
-				n++
+				k++
+				if first == nil {
+					first = a
+				}
 			}
+		}
+		n += k
+		if first != nil {
+			h := Hit{At: first.StartedAt, Session: s.Key(), Turn: first.SpawnTurn}
+			if h.At.IsZero() {
+				h.At = s.D.StartedAt
+			}
+			best.offer(k, h)
 		}
 	})
 	if n < 3 {
-		return ""
+		return Evidence{}
 	}
-	return fmt.Sprintf("%d subagents ran on the main session's model.", n)
+	return Evidence{Reason: fmt.Sprintf("%d subagents ran on the main session's model.", n), Example: best.example()}
 }
 
 // repeatedPrompt is how often the same prompt must be typed to suggest a command.
 const repeatedPrompt = 3
 
-func repeatedPrompts(c *Corpus) string {
+func repeatedPrompts(c *Corpus) Evidence {
 	seen := map[string]int{}
 	c.Interactive(func(s *Session) {
 		s.HumanTurns(func(t, _ *model.Turn) {
@@ -344,12 +383,32 @@ func repeatedPrompts(c *Corpus) string {
 			}
 		})
 	})
-	most := 0
-	for _, n := range seen {
-		most = max(most, n)
+	// the most typed prompt; ties go to the alphabetically first, so the output does not
+	// depend on map order
+	most, text := 0, ""
+	for p, n := range seen {
+		if n > most || (n == most && p < text) {
+			most, text = n, p
+		}
 	}
 	if most < repeatedPrompt {
-		return ""
+		return Evidence{}
 	}
-	return fmt.Sprintf("You typed the same prompt %d times.", most)
+	var best pick
+	c.Interactive(func(s *Session) {
+		k := 0
+		var first *model.Turn
+		s.HumanTurns(func(t, _ *model.Turn) {
+			if norm(t.UserText) == text {
+				k++
+				if first == nil {
+					first = t
+				}
+			}
+		})
+		if first != nil {
+			best.offer(k, turnHit(s, first, ""))
+		}
+	})
+	return Evidence{Reason: fmt.Sprintf("You typed the same prompt %d times.", most), Example: best.example()}
 }

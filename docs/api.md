@@ -1344,15 +1344,20 @@ request. No parameters.
 {
   "now": "…", "windowDays": 28, "sessions": 3419, "scripted": 3133, "since": "…",
   "projects": 41,
+  "activity": [{ "day": "2026-08-24", "prompts": 7 }],
   "personas": [{ "id": "karpathy", "name": "Andrej Karpathy", "focus": "Context",
                  "reaction": "👏", "reason": "Keeping up 8 habits: …",
                  "habits": 8, "explored": 1, "unseen": 0, "new": 0 }],
   "moments": [{ "id": "steer-mid-turn", "persona": "karpathy", "title": "Steering mid-turn",
                 "what": "…", "try": "…", "status": "habit", "hits": 84, "sessions": 49,
                 "weeks": 18, "recentHits": 10, "new": false, "first": "…", "last": "…",
+                "firstHit": { "at": "…", "session": { "harness": "claude", "id": "…" }, "turn": 3,
+                              "note": "sent while the agent was working" },
+                "days": [{ "day": "2026-08-24", "hits": 3 }],
                 "examples": [{ "at": "…", "session": { "harness": "claude", "id": "…" },
                                "turn": 3, "note": "sent while the agent was working" }] }],
-  "suggestions": [{ "moment": "clean-slate", "reason": "3 sessions went past 40 prompts in one context." }],
+  "suggestions": [{ "moment": "clean-slate", "reason": "3 sessions went past 40 prompts in one context.",
+                   "example": { "at": "…", "session": { "harness": "claude", "id": "…" } } }],
   "overYegge": false
 }
 ```
@@ -1363,6 +1368,15 @@ order (Karpathy, Boris, Yegge) and lists every moment, unseen ones
 included. `status` is `habit`, `explored` or `unseen`; `examples` are the latest hits, newest
 first, at most 3. A note never quotes the session. `suggestions[].reason` is absent when the
 moment's symptom did not fire. Clients ignore moment ids they do not know.
+
+For the timeline of the page: `activity` is the human prompts typed per local day in interactive
+sessions (copied history is not counted again; days with none are left out), by day. A seen
+moment has `firstHit`, the hit that `first` is the time of (its session and turn, so a client can
+link to it), and `days`, every hit counted per local day, by day. Days are in the time zone of the
+daemon. Both are absent for an unseen moment, and `activity` when there are no prompts.
+`suggestions[].example` is the session where the symptom shows most (ties: the latest), at a turn
+where that makes sense (the first auto-compaction, the first turn with a big context); it is
+absent when the suggestion has no `reason`.
 
 ## POST /api/upgrade
 

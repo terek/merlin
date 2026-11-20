@@ -143,8 +143,8 @@ func suggest(catalog []Moment, ms []MomentView, c *Corpus) []Suggestion {
 	out := []Suggestion{}
 	picked := map[string]bool{}
 	byPersona := map[Persona]int{}
-	add := func(m Moment, reason string) {
-		out = append(out, Suggestion{Moment: m.ID, Reason: reason})
+	add := func(m Moment, ev Evidence) {
+		out = append(out, Suggestion{Moment: m.ID, Reason: ev.Reason, Example: ev.Example})
 		picked[m.ID] = true
 		byPersona[m.Persona]++
 	}
@@ -154,8 +154,8 @@ func suggest(catalog []Moment, ms []MomentView, c *Corpus) []Suggestion {
 				return out
 			}
 			if status[m.ID] == want && m.Symptom != nil {
-				if r := m.Symptom(c); r != "" {
-					add(m, r)
+				if ev := m.Symptom(c); ev.Reason != "" {
+					add(m, ev)
 				}
 			}
 		}
@@ -165,7 +165,7 @@ func suggest(catalog []Moment, ms []MomentView, c *Corpus) []Suggestion {
 					return out
 				}
 				if m.Persona == p && status[m.ID] == want && !picked[m.ID] && byPersona[p] == 0 {
-					add(m, "")
+					add(m, Evidence{})
 				}
 			}
 		}

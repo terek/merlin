@@ -1,10 +1,212 @@
 {
   "now": "2026-11-01T18:00:00Z",
   "windowDays": 28,
-  "sessions": 100,
+  "sessions": 101,
   "scripted": 0,
   "since": "2026-08-24T09:00:00Z",
   "projects": 9,
+  "activity": [
+    {
+      "day": "2026-08-24",
+      "prompts": 7
+    },
+    {
+      "day": "2026-08-25",
+      "prompts": 11
+    },
+    {
+      "day": "2026-08-26",
+      "prompts": 9
+    },
+    {
+      "day": "2026-08-27",
+      "prompts": 7
+    },
+    {
+      "day": "2026-08-28",
+      "prompts": 11
+    },
+    {
+      "day": "2026-08-31",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-01",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-02",
+      "prompts": 7
+    },
+    {
+      "day": "2026-09-03",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-04",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-07",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-08",
+      "prompts": 7
+    },
+    {
+      "day": "2026-09-09",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-10",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-11",
+      "prompts": 7
+    },
+    {
+      "day": "2026-09-14",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-15",
+      "prompts": 13
+    },
+    {
+      "day": "2026-09-16",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-17",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-18",
+      "prompts": 13
+    },
+    {
+      "day": "2026-09-21",
+      "prompts": 13
+    },
+    {
+      "day": "2026-09-22",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-23",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-24",
+      "prompts": 13
+    },
+    {
+      "day": "2026-09-25",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-28",
+      "prompts": 11
+    },
+    {
+      "day": "2026-09-29",
+      "prompts": 9
+    },
+    {
+      "day": "2026-09-30",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-01",
+      "prompts": 11
+    },
+    {
+      "day": "2026-10-02",
+      "prompts": 11
+    },
+    {
+      "day": "2026-10-05",
+      "prompts": 11
+    },
+    {
+      "day": "2026-10-06",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-07",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-08",
+      "prompts": 11
+    },
+    {
+      "day": "2026-10-09",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-12",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-13",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-14",
+      "prompts": 11
+    },
+    {
+      "day": "2026-10-15",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-16",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-19",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-20",
+      "prompts": 56
+    },
+    {
+      "day": "2026-10-21",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-22",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-23",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-26",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-27",
+      "prompts": 17
+    },
+    {
+      "day": "2026-10-28",
+      "prompts": 15
+    },
+    {
+      "day": "2026-10-29",
+      "prompts": 13
+    },
+    {
+      "day": "2026-10-30",
+      "prompts": 17
+    }
+  ],
   "personas": [
     {
       "id": "karpathy",
@@ -22,11 +224,11 @@
       "name": "Boris Cherny",
       "focus": "Harness",
       "reaction": "🚀",
-      "reason": "New lately: Background agents, Ships.",
-      "habits": 6,
-      "explored": 1,
-      "unseen": 6,
-      "new": 2
+      "reason": "New lately: Plans first, Background agents, Ships.",
+      "habits": 5,
+      "explored": 3,
+      "unseen": 5,
+      "new": 3
     },
     {
       "id": "yegge",
@@ -53,6 +255,85 @@
       "weeks": 10,
       "recentHits": 14,
       "first": "2026-08-24T09:05:00Z",
+      "firstHit": {
+        "at": "2026-08-24T09:05:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-001"
+        },
+        "turn": 0,
+        "note": "sent while the agent was working"
+      },
+      "days": [
+        {
+          "day": "2026-08-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-11",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-17",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-29T09:45:00Z",
       "examples": [
         {
@@ -139,11 +420,182 @@
       "what": "You wrote a structured prompt with constraints or acceptance criteria.",
       "try": "For anything bigger than a quick fix, list what done means: the constraints, what must not change, how to verify it. The agent then checks its own work.",
       "status": "habit",
-      "hits": 100,
-      "sessions": 100,
-      "weeks": 10,
+      "hits": 80,
+      "sessions": 80,
+      "weeks": 8,
       "recentHits": 40,
-      "first": "2026-08-24T09:00:00Z",
+      "first": "2026-09-07T09:00:00Z",
+      "firstHit": {
+        "at": "2026-09-07T09:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-021"
+        },
+        "turn": 0,
+        "note": "3-point spec"
+      },
+      "days": [
+        {
+          "day": "2026-09-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-10",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-11",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-17",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-18",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-30T09:40:00Z",
       "examples": [
         {
@@ -182,11 +634,122 @@
       "what": "A detailed prompt that the agent carried out in one go, with no correction afterwards.",
       "try": "Front-load the thinking: one well-specified prompt usually beats five rounds of corrections, in quality and in tokens.",
       "status": "habit",
-      "hits": 100,
-      "sessions": 100,
-      "weeks": 10,
+      "hits": 50,
+      "sessions": 50,
+      "weeks": 5,
       "recentHits": 40,
-      "first": "2026-08-24T09:00:00Z",
+      "first": "2026-09-28T09:00:00Z",
+      "firstHit": {
+        "at": "2026-09-28T09:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-051"
+        },
+        "turn": 0,
+        "note": "214-word prompt, 24 tool calls, no correction"
+      },
+      "days": [
+        {
+          "day": "2026-09-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-30T09:40:00Z",
       "examples": [
         {
@@ -196,7 +759,7 @@
             "id": "synthetic-100"
           },
           "turn": 0,
-          "note": "150-word prompt, 24 tool calls, no correction"
+          "note": "214-word prompt, 24 tool calls, no correction"
         },
         {
           "at": "2026-10-30T09:00:00Z",
@@ -205,7 +768,7 @@
             "id": "synthetic-099"
           },
           "turn": 0,
-          "note": "150-word prompt, 24 tool calls, no correction"
+          "note": "214-word prompt, 24 tool calls, no correction"
         },
         {
           "at": "2026-10-29T09:40:00Z",
@@ -214,7 +777,7 @@
             "id": "synthetic-098"
           },
           "turn": 0,
-          "note": "150-word prompt, 24 tool calls, no correction"
+          "note": "214-word prompt, 24 tool calls, no correction"
         }
       ]
     },
@@ -225,11 +788,222 @@
       "what": "A prompt of a few words that led to real edits, with no correction afterwards.",
       "try": "Once the agent knows the project, a short prompt can carry a lot. Try a one-liner for a change you both understand well.",
       "status": "habit",
-      "hits": 100,
+      "hits": 120,
       "sessions": 100,
       "weeks": 10,
       "recentHits": 40,
-      "first": "2026-08-24T10:00:00Z",
+      "first": "2026-08-24T09:00:00Z",
+      "firstHit": {
+        "at": "2026-08-24T09:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-001"
+        },
+        "turn": 0,
+        "note": "3 words, 6 edits, no correction"
+      },
+      "days": [
+        {
+          "day": "2026-08-24",
+          "hits": 4
+        },
+        {
+          "day": "2026-08-25",
+          "hits": 4
+        },
+        {
+          "day": "2026-08-26",
+          "hits": 4
+        },
+        {
+          "day": "2026-08-27",
+          "hits": 4
+        },
+        {
+          "day": "2026-08-28",
+          "hits": 4
+        },
+        {
+          "day": "2026-08-31",
+          "hits": 4
+        },
+        {
+          "day": "2026-09-01",
+          "hits": 4
+        },
+        {
+          "day": "2026-09-02",
+          "hits": 4
+        },
+        {
+          "day": "2026-09-03",
+          "hits": 4
+        },
+        {
+          "day": "2026-09-04",
+          "hits": 4
+        },
+        {
+          "day": "2026-09-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-10",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-11",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-17",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-18",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-30T10:40:00Z",
       "examples": [
         {
@@ -279,37 +1053,44 @@
       "title": "Plans first",
       "what": "You had the agent plan before it touched any code.",
       "try": "Use plan mode (Shift+Tab) for anything non-trivial: you review the approach before a single file changes.",
-      "status": "habit",
-      "hits": 20,
-      "sessions": 20,
-      "weeks": 10,
-      "recentHits": 8,
-      "first": "2026-08-28T10:00:00Z",
-      "last": "2026-10-27T10:40:00Z",
+      "status": "explored",
+      "hits": 2,
+      "sessions": 2,
+      "weeks": 1,
+      "recentHits": 2,
+      "new": true,
+      "first": "2026-10-20T10:00:00Z",
+      "firstHit": {
+        "at": "2026-10-20T10:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-083"
+        },
+        "turn": 1,
+        "note": "planned before editing"
+      },
+      "days": [
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        }
+      ],
+      "last": "2026-10-20T10:40:00Z",
       "examples": [
         {
-          "at": "2026-10-27T10:40:00Z",
+          "at": "2026-10-20T10:40:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-094"
+            "id": "synthetic-084"
           },
           "turn": 1,
           "note": "planned before editing"
         },
         {
-          "at": "2026-10-27T10:00:00Z",
+          "at": "2026-10-20T10:00:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-093"
-          },
-          "turn": 1,
-          "note": "planned before editing"
-        },
-        {
-          "at": "2026-10-22T10:40:00Z",
-          "session": {
-            "harness": "claude",
-            "id": "synthetic-088"
+            "id": "synthetic-083"
           },
           "turn": 1,
           "note": "planned before editing"
@@ -328,6 +1109,117 @@
       "weeks": 10,
       "recentHits": 20,
       "first": "2026-08-25T10:50:00Z",
+      "firstHit": {
+        "at": "2026-08-25T10:50:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-003"
+        },
+        "turn": 1,
+        "note": "compacted by hand at 140k tokens"
+      },
+      "days": [
+        {
+          "day": "2026-08-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-31",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-04",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-10",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-18",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-30T11:30:00Z",
       "examples": [
         {
@@ -365,11 +1257,61 @@
       "title": "Right model for the job",
       "what": "You switched the model or the effort in the middle of a session.",
       "try": "Not every task needs the largest model. Switch with /model: a smaller one for mechanical work, the largest for hard reasoning.",
-      "status": "unseen",
-      "hits": 0,
-      "sessions": 0,
-      "weeks": 0,
-      "recentHits": 0
+      "status": "explored",
+      "hits": 4,
+      "sessions": 4,
+      "weeks": 2,
+      "recentHits": 0,
+      "first": "2026-09-15T11:05:00Z",
+      "firstHit": {
+        "at": "2026-09-15T11:05:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-033"
+        },
+        "turn": 3,
+        "note": "/model mid-session"
+      },
+      "days": [
+        {
+          "day": "2026-09-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        }
+      ],
+      "last": "2026-09-29T11:45:00Z",
+      "examples": [
+        {
+          "at": "2026-09-29T11:45:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-054"
+          },
+          "turn": 3,
+          "note": "/model mid-session"
+        },
+        {
+          "at": "2026-09-29T11:05:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-053"
+          },
+          "turn": 3,
+          "note": "/model mid-session"
+        },
+        {
+          "at": "2026-09-15T11:45:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-034"
+          },
+          "turn": 3,
+          "note": "/model mid-session"
+        }
+      ]
     },
     {
       "id": "custom-command",
@@ -383,6 +1325,217 @@
       "weeks": 10,
       "recentHits": 40,
       "first": "2026-08-24T11:00:00Z",
+      "firstHit": {
+        "at": "2026-08-24T11:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-001"
+        },
+        "turn": 2,
+        "note": "ran a command of your own"
+      },
+      "days": [
+        {
+          "day": "2026-08-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-31",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-03",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-04",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-10",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-11",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-17",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-18",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-30T11:40:00Z",
       "examples": [
         {
@@ -438,6 +1591,217 @@
       "weeks": 10,
       "recentHits": 40,
       "first": "2026-08-24T09:02:00Z",
+      "firstHit": {
+        "at": "2026-08-24T09:02:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-001"
+        },
+        "turn": 0,
+        "note": "a subagent made 14 calls in its own context"
+      },
+      "days": [
+        {
+          "day": "2026-08-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-08-31",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-03",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-04",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-10",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-11",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-17",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-18",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-24",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-25",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-01",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-30T09:42:00Z",
       "examples": [
         {
@@ -493,6 +1857,217 @@
       "weeks": 10,
       "recentHits": 20,
       "first": "2026-08-24T09:40:00Z",
+      "firstHit": {
+        "at": "2026-08-24T09:40:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-002"
+        },
+        "turn": 0,
+        "note": "2 sessions working at once"
+      },
+      "days": [
+        {
+          "day": "2026-08-24",
+          "hits": 1
+        },
+        {
+          "day": "2026-08-25",
+          "hits": 1
+        },
+        {
+          "day": "2026-08-26",
+          "hits": 1
+        },
+        {
+          "day": "2026-08-27",
+          "hits": 1
+        },
+        {
+          "day": "2026-08-28",
+          "hits": 1
+        },
+        {
+          "day": "2026-08-31",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-01",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-02",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-03",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-04",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-07",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-08",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-09",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-10",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-11",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-15",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-16",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-17",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-18",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-21",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-22",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-23",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-24",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-25",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-28",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-29",
+          "hits": 1
+        },
+        {
+          "day": "2026-09-30",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-01",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 1
+        }
+      ],
       "last": "2026-10-30T09:40:00Z",
       "examples": [
         {
@@ -549,6 +2124,45 @@
       "recentHits": 84,
       "new": true,
       "first": "2026-10-13T10:05:00Z",
+      "firstHit": {
+        "at": "2026-10-13T10:05:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-073"
+        },
+        "turn": 1,
+        "note": "an agent ran in the background"
+      },
+      "days": [
+        {
+          "day": "2026-10-13",
+          "hits": 12
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 12
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 12
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 12
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 12
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 12
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 12
+        }
+      ],
       "last": "2026-10-29T10:50:00Z",
       "examples": [
         {
@@ -605,6 +2219,20 @@
       "recentHits": 2,
       "new": true,
       "first": "2026-10-23T11:50:00Z",
+      "firstHit": {
+        "at": "2026-10-23T11:50:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-089"
+        },
+        "note": "pull request #42"
+      },
+      "days": [
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-23T12:30:00Z",
       "examples": [
         {
@@ -650,6 +2278,45 @@
       "recentHits": 14,
       "new": true,
       "first": "2026-10-13T10:05:00Z",
+      "firstHit": {
+        "at": "2026-10-13T10:05:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-073"
+        },
+        "turn": 1,
+        "note": "6 teammates"
+      },
+      "days": [
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-29T10:45:00Z",
       "examples": [
         {
@@ -718,6 +2385,45 @@
       "recentHits": 14,
       "new": true,
       "first": "2026-10-13T10:10:00Z",
+      "firstHit": {
+        "at": "2026-10-13T10:10:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-073"
+        },
+        "turn": 1,
+        "note": "6 agents at once"
+      },
+      "days": [
+        {
+          "day": "2026-10-13",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2
+        }
+      ],
       "last": "2026-10-29T10:50:00Z",
       "examples": [
         {
@@ -762,6 +2468,56 @@
       "recentHits": 10,
       "new": true,
       "first": "2026-10-19T09:01:00Z",
+      "firstHit": {
+        "at": "2026-10-19T09:01:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-081"
+        },
+        "note": "3 beads created, 1 links, 1 closed"
+      },
+      "days": [
+        {
+          "day": "2026-10-19",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 1
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 1
+        }
+      ],
       "last": "2026-10-30T09:01:00Z",
       "examples": [
         {
@@ -841,11 +2597,27 @@
   ],
   "suggestions": [
     {
-      "moment": "model-routing",
-      "reason": "184 subagents ran on the main session's model."
+      "moment": "clean-slate",
+      "reason": "1 session went past 40 prompts in one context.",
+      "example": {
+        "at": "2026-10-20T14:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-long"
+        }
+      }
     },
     {
-      "moment": "interrupt-redirect"
+      "moment": "model-routing",
+      "reason": "184 subagents ran on the main session's model.",
+      "example": {
+        "at": "2026-10-29T09:42:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-098"
+        },
+        "turn": 0
+      }
     },
     {
       "moment": "workflow-run"
