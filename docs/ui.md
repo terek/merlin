@@ -615,9 +615,9 @@ From top to bottom, the graph and then the box:
     selects the turn, the piece of work or the job under the pointer, and only that; a click between two turns of one decision, inside
     its bracket, selects its nearest turn, and between two decisions selects nothing; arrow keys move by turn, Enter selects the turn
     the cursor is on, Esc clears the selection.
-- **What is selected, in the graph**: one thing at a time. A selected turn is tinted on its row with a marker over it, and its decision's
-  bracket turns into a thick accent line (its label bold) with its turns lightly tinted across the session's rows (`marks.tsx` holds
-  the opacities and the colour of an agent's kind); the agents and jobs it launched or got reports from come into focus, as for a hovered turn.
+- **What is selected, in the graph**: one thing at a time. A selected turn is tinted on its row with a marker over it, and nothing else:
+  its bracket and the other turns of the bracket stay as they are (`marks.tsx` holds the opacities and the colour of an agent's kind);
+  the agents and jobs it launched or got reports from come into focus, as for a hovered turn.
   A selected piece of work has its frame's top drawn heavy, a selected job its top edge, and nothing is marked on the main row.
   **Hover previews a turn**: with the pointer over a main row (or the keyboard cursor on a turn), the turn a click or Enter would select
   gets the turn tint at half strength and a hollow marker, without the bracket tint; not when it is already selected, and not over an

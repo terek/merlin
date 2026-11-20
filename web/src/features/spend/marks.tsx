@@ -1,13 +1,11 @@
 // What the graph and the box under it share: the colour of an agent's kind and how strongly the graph tints the
-// selected turn and its decision.
+// selected turn.
 import type { Agent } from '../../api/types'
 import { agentSeries, KIND_SERIES } from './model'
 
 type KindOf = Pick<Agent, 'kind' | 'inheritsContext' | 'addressable'>
 
-/** How strongly the graph tints a selected turn's decision, and its panel's title bar the same. */
-export const DECISION_TINT_OPACITY = 0.06
-/** How strongly the graph tints the selected turn, over its decision's tint. */
+/** How strongly the graph tints the selected turn. */
 export const TURN_TINT_OPACITY = 0.16
 /** How strongly the graph tints the turn a click would select (the hover preview), lighter than the selected one's. */
 export const PREVIEW_TINT_OPACITY = TURN_TINT_OPACITY / 2

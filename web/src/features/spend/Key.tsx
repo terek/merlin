@@ -4,6 +4,7 @@
 // change to the plot's look changes its legend; marks the tree cannot have are listed too, faint.
 import { type ReactNode, useId } from 'react'
 import { LockoutPattern } from '../../ui'
+import { TURN_TINT_OPACITY } from './marks'
 import {
   BREAK_DOTS,
   BREAK_VEIL,
@@ -433,11 +434,12 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
         },
         {
           label: 'selected',
-          title: 'The bracket you clicked',
+          title: 'The turn you clicked: tinted, with a marker over it',
           has: true,
           sample: (
             <>
-              <path d={`M3 ${B}V4H${W - 3}V7`} fill="none" stroke="var(--accent)" strokeWidth={3} />
+              <rect x={W / 2 - 5} y={4} width={10} height={B - 4} fill="var(--accent)" opacity={TURN_TINT_OPACITY} />
+              <path d={`M${W / 2 - 4} 2h8l-4 6z`} fill="var(--accent)" />
               {base()}
             </>
           ),

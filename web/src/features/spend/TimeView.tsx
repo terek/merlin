@@ -58,7 +58,7 @@ import {
   SLOT_PX,
   windowRow,
 } from './layout'
-import { DECISION_TINT_OPACITY, PREVIEW_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
+import { PREVIEW_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
 import { KIND_SERIES, type KindKey, missText, type Unit } from './model'
 import type { Pin, Selection, UnitRef } from './SpendGraph'
 import {
@@ -1052,10 +1052,8 @@ export function TimePlot({
         {main &&
           list.map(({ dec, xa, xb, key, span }) => {
             const yy = g.top + 12
-            const held = pinned?.branch === g.row.branch && b.model.cols[pinned.col]?.decision === dec.index
             const under = hoverBracket?.key === key
-            const on =
-              held || under || (cursor?.branch === g.row.branch && b.model.cols[cursor.col]?.decision === dec.index)
+            const on = under || (cursor?.branch === g.row.branch && b.model.cols[cursor.col]?.decision === dec.index)
             const text = formatMoney(dec.usd)
             if (xb - xa >= text.length * 6 + 4 || on)
               labels.push(
@@ -1080,8 +1078,8 @@ export function TimePlot({
                 <path
                   d={`M${f1(axis.x(span.t0))} ${g.base}V${yy}H${f1(xb)}V${yy + 3}`}
                   fill="none"
-                  stroke={held ? 'var(--accent)' : on ? 'var(--text)' : 'var(--faint)'}
-                  strokeWidth={held ? 3 : under ? 2 : 1}
+                  stroke={on ? 'var(--text)' : 'var(--faint)'}
+                  strokeWidth={under ? 2 : 1}
                 />
               </g>
             )
@@ -1540,33 +1538,17 @@ export function TimePlot({
         ),
   )
 
-  // ---- the selected turn, its decision; and, lighter, the turn a click would select
+  // ---- the selected turn (its own tint and a marker, nothing over the rest of its bracket); and, lighter, the
+  // turn a click would select
   const turnMarks = (pinned: Pin, preview: boolean) => {
     const g = mainRow(pinned.branch)
     const l = g?.row.lanes[0]
     const s = l?.turns.find((x) => x.col.index === pinned.col)
     if (!g || !l || !s) return null
-    const b = tree.branches[pinned.branch]
-    const dec = b.model.decisions[b.model.cols[pinned.col].decision]
-    const d0 = l.turns.find((x) => x.col.index >= dec.start)
-    const d1 = [...l.turns].reverse().find((x) => x.col.index <= dec.end)
-    const rowsOf = layout.filter((x) => x.row.branch === pinned.branch)
-    const yTop = rowsOf[0].top
-    const yBot = rowsOf[rowsOf.length - 1].bottom
     const xa = axis.x(s.t0)
     const xb = Math.max(xa + 2, axis.x(s.t1))
     return (
       <g pointerEvents="none" key={preview ? 'preview' : 'selected'}>
-        {!preview && d0 && d1 && (
-          <rect
-            x={axis.x(d0.t0)}
-            y={yTop}
-            width={Math.max(2, axis.x(d1.t1) - axis.x(d0.t0))}
-            height={yBot - yTop}
-            fill="var(--accent)"
-            opacity={DECISION_TINT_OPACITY}
-          />
-        )}
         <rect
           x={xa}
           y={g.top}
