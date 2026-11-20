@@ -19,6 +19,7 @@ import {
   type Col,
   fitKey,
   fitPrices,
+  HOLD_MS,
   type KindKey,
   newBucket,
   promptTokens,
@@ -39,8 +40,8 @@ export const BREAK_MIN_PX = 6
 /** With more breaks than this, a longer idle time is needed for one. */
 export const MAX_BREAKS = 12
 const GAPS = [10, 20, 30, 60, 120, 240, 480, 960].map((m) => m * 60_000)
-/** Context an agent keeps over a pause longer than this is drawn as held, not as a run. */
-export const HOLD_MS = 5 * 60_000
+
+export { HOLD_MS }
 
 const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
 

@@ -6,6 +6,7 @@ import {
   CLASS_SERIES,
   compactionTally,
   fitPrices,
+  groupTurns,
   missCause,
   missText,
   newBucket,
@@ -14,6 +15,9 @@ import {
   stepParts,
   turnAt,
   turnList,
+  UNIT_JOIN_MS,
+  UNIT_SPLIT_MS,
+  UNIT_TINY_MS,
   unitParts,
   unitUnrecorded,
 } from './model'
@@ -334,18 +338,76 @@ describe('buildSpend', () => {
     expect(CLASS_SERIES.map((s) => s.key)).toContain('reread')
   })
 
-  test('a decision is a typed prompt with everything that followed until the next one', () => {
-    expect(m.decisions.map((x) => [x.start, x.end, x.units])).toEqual([
+  test('a decision is the turns grouped by time, with everything that followed in them', () => {
+    // the 35-minute pause before turn 3 joins it to the others
+    expect(m.decisions.map((x) => [x.start, x.end])).toEqual([[0, 3]])
+    // four hours later it is a decision of its own
+    const far = buildSpend(
+      detail(
+        [...turns.slice(0, 3), turn(3, 283, 285)],
+        [...messages.slice(0, -1), msg(283, { output: 200, cacheWrite5m: 54_000 }, { turn: 3 })],
+        agents,
+      ),
+    )
+    expect(far.decisions.map((x) => [x.start, x.end, x.units])).toEqual([
       [0, 2, 3],
       [3, 3, 0],
     ])
-    const [a, b] = m.decisions
-    expect(a.stepsUSD).toBeCloseTo(m.cols[0].usd + m.cols[1].usd + m.cols[2].usd, 10)
-    expect(a.unitsUSD).toBeCloseTo(sum(m.units.map((u) => u.bucket)), 10)
-    expect(a.usd + b.usd).toBeCloseTo(m.total, 10)
+    const [a, b] = far.decisions
+    expect(a.stepsUSD).toBeCloseTo(far.cols[0].usd + far.cols[1].usd + far.cols[2].usd, 10)
+    expect(a.unitsUSD).toBeCloseTo(sum(far.units.map((u) => u.bucket)), 10)
+    expect(a.usd + b.usd).toBeCloseTo(far.total, 10)
     expect(sum(a.parts)).toBeCloseTo(a.usd, 10)
-    expect(b.rereadUSD).toBeCloseTo(m.rereads[0].usd, 10)
-    expect(m.cols.map((c) => c.decision)).toEqual([0, 0, 0, 1])
+    expect(b.rereadUSD).toBeCloseTo(far.rereads[0].usd, 10)
+    expect(far.cols.map((c) => c.decision)).toEqual([0, 0, 0, 1])
+  })
+
+  describe('calls count for the turn they fall in, by time', () => {
+    const turns3 = [turn(0, 0, 10), turn(1, 80, 90), turn(2, 150, 160)]
+    const bg = agent('bg', { spawnTurn: 0, startedAt: at(1), endedAt: at(130) })
+    const main = [
+      msg(0, { output: 100 }, { turn: 0 }),
+      msg(4, { output: 100 }, { turn: 0 }),
+      msg(8, { output: 100 }, { turn: 0 }),
+      msg(81, { output: 100 }, { turn: 1 }),
+      msg(85, { output: 100 }, { turn: 1 }),
+      msg(89, { output: 100 }, { turn: 1 }),
+      msg(151, { output: 100 }, { turn: 2 }),
+      msg(155, { output: 100 }, { turn: 2 }),
+      msg(159, { output: 100 }, { turn: 2 }),
+    ]
+    const agentCalls = (upto: number) =>
+      Array.from({ length: Math.floor(upto / 2) }, (_, k) => msg(1 + 2 * k, { output: 10 }, { agentId: 'bg', turn: 0 }))
+
+    test('an agent that works through the gaps keeps them one decision', () => {
+      const r = buildSpend(detail(turns3, [...main, ...agentCalls(160)], [bg]))
+      expect(r.decisions.map((x) => [x.start, x.end])).toEqual([[0, 2]])
+    })
+
+    test('an agent that stopped early does not stretch its launch turn over the later ones', () => {
+      const r = buildSpend(detail(turns3, [...main, ...agentCalls(10)], [bg]))
+      expect(r.decisions.map((x) => [x.start, x.end])).toEqual([
+        [0, 0],
+        [1, 1],
+        [2, 2],
+      ])
+    })
+  })
+
+  test('turns minutes apart are one decision with several typed prompts; an overnight gap makes two', () => {
+    const day = [turn(0, 0, 3), turn(1, 10, 12), turn(2, 20, 22)]
+    const calls = [msg(1, { output: 100 }, { turn: 0 }), msg(11, { output: 100 }, { turn: 1 })]
+    const one = buildSpend(detail(day, calls))
+    expect(one.decisions.map((x) => [x.start, x.end])).toEqual([[0, 2]])
+    expect(one.cols.filter((c) => c.human)).toHaveLength(3)
+    expect(one.decisions[0].prompt).toBe(one.cols[0].prompt)
+    const night = buildSpend(
+      detail([...day, turn(3, 600, 602), turn(4, 610, 612)], [...calls, msg(601, { output: 100 }, { turn: 3 })]),
+    )
+    expect(night.decisions.map((x) => [x.start, x.end])).toEqual([
+      [0, 2],
+      [3, 4],
+    ])
   })
 
   test('inherited turns are drawn but not counted', () => {
@@ -384,7 +446,7 @@ describe('workflows, compactions and prompts typed while a turn ran', () => {
       userText: '',
       inbox: [{ at: at(4), kind: 'task', taskId: 'task-1', status: 'completed', summary: 'run done' }],
     }),
-    turn(3, 6, 7),
+    turn(3, 246, 247),
   ]
   const agents = [
     agent('w1', { kind: 'workflow', runId: 'run-1', linkage: 'run', spawnTurn: 0, startedAt: at(1), endedAt: at(3) }),
@@ -398,7 +460,7 @@ describe('workflows, compactions and prompts typed while a turn ran', () => {
     msg(3, { output: 50 }, { agentId: 'help', turn: 0 }),
     msg(2, { output: 100, cacheRead: 1000 }, { turn: 1 }),
     msg(4, { output: 100, cacheRead: 1000 }, { turn: 2 }),
-    msg(6, { output: 100, cacheRead: 1000 }, { turn: 3 }),
+    msg(246, { output: 100, cacheRead: 1000 }, { turn: 3 }),
   ]
   const call = (cache: 'warm' | 'cold', usd: number, warmUSD: number) => ({
     model: 'model-a',
@@ -417,7 +479,7 @@ describe('workflows, compactions and prompts typed while a turn ran', () => {
   det.digest.compactions = [
     { at: at(3), turn: 1, call: call('cold', 2, 0.5) },
     { at: at(5), turn: 2, call: call('warm', 0.4, 0.4) },
-    { at: at(7), turn: 3 },
+    { at: at(247), turn: 3 },
   ]
   const m = buildSpend(det)
 
@@ -452,9 +514,11 @@ describe('workflows, compactions and prompts typed while a turn ran', () => {
 describe("compactions of an agent's own conversation", () => {
   // a teammate launched in turn 0 is sent more work in turn 2; its conversation is compacted in
   // each piece of work, and its helper's once during the first
-  const turns = [turn(0, 0, 1), turn(1, 2, 3), turn(2, 4, 5), turn(3, 6, 7)]
+  // each turn is five hours after the one before, so each is a decision of its own
+  const f = (min: number) => min + 298 * Math.floor(min / 2)
+  const turns = [turn(0, f(0), f(1)), turn(1, f(2), f(3)), turn(2, f(4), f(5)), turn(3, f(6), f(7))]
   const cp = (min: number, cache?: 'warm' | 'cold') => ({
-    at: at(min),
+    at: at(f(min)),
     turn: -1,
     trigger: 'auto' as const,
     preTokens: 900_000,
@@ -475,21 +539,21 @@ describe("compactions of an agent's own conversation", () => {
       kind: 'teammate',
       name: 'builder',
       spawnTurn: 0,
-      startedAt: at(0),
-      endedAt: at(7),
-      inbox: [{ at: at(4), from: 'team-lead', text: 'next' }],
+      startedAt: at(f(0)),
+      endedAt: at(f(7)),
+      inbox: [{ at: at(f(4)), from: 'team-lead', text: 'next' }],
       compactions: [cp(2, 'warm'), cp(6, 'cold')],
     }),
-    agent('helper', { parentAgentId: 'mate', depth: 2, spawnTurn: 0, startedAt: at(1), compactions: [cp(3)] }),
+    agent('helper', { parentAgentId: 'mate', depth: 2, spawnTurn: 0, startedAt: at(f(1)), compactions: [cp(3)] }),
   ]
   const messages = [
-    msg(0, { output: 100 }, { turn: 0 }),
-    msg(1, { output: 100 }, { agentId: 'mate', turn: 0 }),
-    msg(1, { output: 100 }, { agentId: 'helper', turn: 0 }),
-    msg(5, { output: 100 }, { agentId: 'mate', turn: 0 }),
-    msg(2, { output: 100 }, { turn: 1 }),
-    msg(4, { output: 100 }, { turn: 2 }),
-    msg(6, { output: 100 }, { turn: 3 }),
+    msg(f(0), { output: 100 }, { turn: 0 }),
+    msg(f(1), { output: 100 }, { agentId: 'mate', turn: 0 }),
+    msg(f(1), { output: 100 }, { agentId: 'helper', turn: 0 }),
+    msg(f(5), { output: 100 }, { agentId: 'mate', turn: 0 }),
+    msg(f(2), { output: 100 }, { turn: 1 }),
+    msg(f(4), { output: 100 }, { turn: 2 }),
+    msg(f(6), { output: 100 }, { turn: 3 }),
   ]
   const m = buildSpend(detail(turns, messages, agents))
 
@@ -637,4 +701,53 @@ test('an unrecorded run nested under a recorded agent makes its decision "at lea
   expect(dec.unrecorded).toBe(0)
   expect(dec.unrecordedRuns).toBe(1)
   expect(m.cols[0].launched.map(unitUnrecorded)).toEqual([1])
+})
+
+describe('groupTurns', () => {
+  const MIN = 60_000
+  // a turn from minute `a` to `b`, with `active` minutes of work
+  const span = (a: number, b: number, active = 10, inherited = false) => ({
+    a: a * MIN,
+    b: b * MIN,
+    active: active * MIN,
+    inherited,
+  })
+
+  test('nothing, and one turn', () => {
+    expect(groupTurns([])).toEqual([])
+    expect(groupTurns([span(0, 1, 0)])).toEqual([0])
+  })
+
+  test('a gap of 3 hours or more separates even two tiny turns', () => {
+    expect(UNIT_SPLIT_MS).toBe(3 * 3_600_000)
+    expect(groupTurns([span(0, 1, 0), span(181, 182, 0)])).toEqual([0, 1])
+    expect(groupTurns([span(0, 1, 0), span(180, 181, 0)])).toEqual([0, 0])
+  })
+
+  test('60 minutes joins; 61 minutes with enough work on both sides stays apart', () => {
+    expect(UNIT_JOIN_MS).toBe(60 * MIN)
+    expect(groupTurns([span(0, 10), span(70, 80)])).toEqual([0, 0])
+    expect(groupTurns([span(0, 10), span(71, 80)])).toEqual([0, 1])
+  })
+
+  test('a tiny decision joins its nearer neighbour, the earlier one on a tie', () => {
+    expect(UNIT_TINY_MS).toBe(5 * MIN)
+    // the middle one is 100 minutes from the first and 90 from the last
+    expect(groupTurns([span(0, 10), span(110, 111, 1), span(200, 210)])).toEqual([0, 1, 1])
+    // 100 and 100
+    expect(groupTurns([span(0, 10), span(110, 111, 1), span(211, 221)])).toEqual([0, 0, 1])
+  })
+
+  test('absorption repeats, the smallest first, and stops at the segment edge', () => {
+    // 1 and 2 minutes of work: the smaller (second) goes to the nearer neighbour, then the bigger
+    // one is still under 5 minutes in total and goes on
+    expect(groupTurns([span(0, 10), span(100, 101, 2), span(160, 161, 1), span(300, 310)])).toEqual([0, 0, 0, 1])
+    // a tiny one alone in its segment stays
+    expect(groupTurns([span(0, 10), span(400, 401, 0)])).toEqual([0, 1])
+  })
+
+  test('inherited and own turns never share a decision', () => {
+    expect(groupTurns([span(0, 1, 0, true), span(2, 3, 0, false)])).toEqual([0, 1])
+    expect(groupTurns([span(0, 10, 10, true), span(11, 12, 10, true), span(13, 20, 10, false)])).toEqual([0, 0, 1])
+  })
 })

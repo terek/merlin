@@ -510,9 +510,14 @@ From top to bottom, the graph and then the box:
     agent, or a piece of work starting or ending) up to the harness's `endedAt` and before the next
     turn starts;
   - a main row has a dot on its baseline for every prompt a person typed: at the start of the turn
-    it began, or hollow where it was typed while a turn ran (`turn.queued`: it starts no turn and no
-    decision, but it steered that turn). From each typed prompt that starts a turn, a bracket rises
-    and runs over the row with the total of everything up to the next one (a **decision**); and the
+    it began, or hollow where it was typed while a turn ran (`turn.queued`: it starts no turn,
+    but it steered that turn). The turns are grouped by time into **decisions**, and each decision has a
+    bracket that rises and runs over the row with the total of everything in its turns, so a decision can
+    carry several prompt dots. A gap of 3 hours or more between two turns always separates two decisions;
+    turns 60 minutes apart or less join; and a decision with under 5 minutes of active work (a turn's
+    active time is its calls, pauses of more than 5 minutes left out) joins its nearer neighbour, the
+    earlier one on a tie. A forked or continued session's copied turns never share a decision with its
+    own. The decision's prompt is the first one a person typed in it; and the
     turn numbers where they fit. A forked or continued session has a main row of its own with only
     its own turns, starting with a spine from its parent's row (below); nothing is merged across
     session ids;
@@ -591,8 +596,9 @@ From top to bottom, the graph and then the box:
     it can be told apart. A sub-agent (clean context) and a continuation branch from the parent's
     baseline and have no hatch;
   - hover reads the clock, the context of the row under the pointer and the slot's spend; between
-    two turns it reads "between turns 0 and 1: main agent idle 38 min" and pins nothing. A click
-    pins the turn or selects the piece of work; arrow keys move by turn.
+    two turns it reads "between turns 0 and 1: main agent idle 38 min". A click
+    pins the turn or selects the piece of work; a click between two turns of one decision, inside
+    its bracket, pins its nearest turn, and between two decisions pins nothing; arrow keys move by turn.
 - **What is pinned, in the graph**: the pinned turn is tinted on its row with a marker over it, and its decision's
   bracket turns into a thick accent line with its turns lightly tinted across the session's rows (`marks.tsx` holds
   the opacities and the colour of an agent's kind); the selected piece of work has its frame's top drawn heavy.

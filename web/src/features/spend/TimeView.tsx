@@ -471,7 +471,24 @@ export function TimePlot({
   /** The turn running at `t`; none between two turns. */
   const turnOn = (l: Lane | undefined, t: number): Pin | null => {
     const p = l ? turnPlace(l.turns, t, slackMs) : undefined
-    return l && p && 'turn' in p ? { branch: l.branch, col: p.turn.col.index } : null
+    if (l && p && 'turn' in p) return { branch: l.branch, col: p.turn.col.index }
+    // between two turns of one decision (main rows): its nearest turn
+    if (l?.main && p && 'after' in p) {
+      const mine = l.turns.filter((s) => s.col.decision === p.after.col.decision)
+      if (mine.length && t >= mine[0].t0 && t <= mine[mine.length - 1].t1) {
+        let best = mine[0]
+        let bd = Number.POSITIVE_INFINITY
+        for (const s of mine) {
+          const d = t < s.t0 ? s.t0 - t : t > s.t1 ? t - s.t1 : 0
+          if (d < bd) {
+            bd = d
+            best = s
+          }
+        }
+        return { branch: l.branch, col: best.col.index }
+      }
+    }
+    return null
   }
   /** When each of a unit's reports came in: the start of the turn it began. */
   const arrivals = (u: Unit) => {

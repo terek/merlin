@@ -6,8 +6,10 @@
 //     sent to it) to the report that came back, with everything it spent, its own sub-agents
 //     included. A unit belongs to the turn that launched it and ends on the turn its result
 //     arrived in;
-//   - a decision is a prompt a person typed, with every step and unit that followed until the
-//     next one.
+//   - a decision is a stretch of turns grouped by time (`groupTurns`): a gap of 3 hours or more
+//     always separates two, a gap of 60 minutes or less joins, and a stretch with under 5 minutes of
+//     active work joins its nearer neighbour. It holds every step and unit of its turns, however many
+//     prompts a person typed in it.
 //
 // Everything is summed from the billed messages (`?messages=1`). Pure; SpendGraph.tsx only draws
 // what this returns.
@@ -188,6 +190,83 @@ export interface Reread {
 }
 
 const ms = (s: string | undefined) => (s ? Date.parse(s) : Number.NaN)
+
+/** Context an agent keeps over a pause longer than this is drawn as held, not as a run; calls closer than this are one stretch of work. */
+export const HOLD_MS = 5 * 60_000
+/** A gap this long or longer always separates two decisions. */
+export const UNIT_SPLIT_MS = 3 * 3_600_000
+/** A gap this short or shorter joins two turns into one decision. */
+export const UNIT_JOIN_MS = 60 * 60_000
+/** A decision with less active time than this joins its nearer neighbour. */
+export const UNIT_TINY_MS = 5 * 60_000
+
+/** One turn as `groupTurns` sees it: when it began and ended, its active time (ms), and whether it was copied from a parent session. */
+export interface UnitSpan {
+  a: number
+  b: number
+  active: number
+  inherited: boolean
+}
+
+/**
+ * Which decision each turn belongs to (0..n-1 in time order). A gap of `UNIT_SPLIT_MS` or more, or a
+ * change between inherited and own turns, always separates. Within that, turns at most `UNIT_JOIN_MS`
+ * apart join; then a group with under `UNIT_TINY_MS` of active time (the smallest first) joins its
+ * nearer neighbour (the earlier on a tie), within the same stretch.
+ */
+export function groupTurns(spans: readonly UnitSpan[]): number[] {
+  interface G {
+    a: number
+    b: number
+    active: number
+    seg: number
+    turns: number[]
+  }
+  const gap = (x: number, y: number) => Math.max(0, y - x)
+  const groups: G[] = []
+  let seg = 0
+  spans.forEach((s, i) => {
+    const last = groups[groups.length - 1]
+    if (last) {
+      const prev = spans[i - 1]
+      if (gap(prev.b, s.a) >= UNIT_SPLIT_MS || prev.inherited !== s.inherited) seg++
+      if (last.seg === seg && gap(prev.b, s.a) <= UNIT_JOIN_MS) {
+        last.b = Math.max(last.b, s.b)
+        last.active += s.active
+        last.turns.push(i)
+        return
+      }
+    }
+    groups.push({ a: s.a, b: s.b, active: s.active, seg, turns: [i] })
+  })
+  for (;;) {
+    let best = -1
+    for (let k = 0; k < groups.length; k++) {
+      const g = groups[k]
+      if (g.active >= UNIT_TINY_MS || (best >= 0 && g.active >= groups[best].active)) continue
+      const l = groups[k - 1]?.seg === g.seg
+      const r = groups[k + 1]?.seg === g.seg
+      if (l || r) best = k
+    }
+    if (best < 0) break
+    const g = groups[best]
+    const l = groups[best - 1]?.seg === g.seg ? groups[best - 1] : undefined
+    const r = groups[best + 1]?.seg === g.seg ? groups[best + 1] : undefined
+    const left = l && (!r || gap(l.b, g.a) <= gap(g.b, r.a))
+    const into = left ? l : r
+    if (!into) break
+    into.a = Math.min(into.a, g.a)
+    into.b = Math.max(into.b, g.b)
+    into.active += g.active
+    into.turns = [...into.turns, ...g.turns].sort((x, y) => x - y)
+    groups.splice(best, 1)
+  }
+  const out: number[] = new Array(spans.length).fill(0)
+  groups.forEach((g, k) => {
+    for (const i of g.turns) out[i] = k
+  })
+  return out
+}
 
 export const promptTokens = (m: Message) =>
   (m.input ?? 0) + (m.cacheRead ?? 0) + (m.cacheWrite5m ?? 0) + (m.cacheWrite1h ?? 0)
@@ -852,6 +931,38 @@ export function buildSpend(detail: SessionDetail): SpendModel {
 
   // ---- decisions and totals
   const decisions: Decision[] = []
+  // each call belongs to the turn it fell in, by time: from that turn's start to the next one's
+  const callsOf: number[][] = cols.map(() => [])
+  if (fromMessages) {
+    const times = messages.map((m) => ms(m.at)).filter((t) => Number.isFinite(t) && t >= starts[0])
+    times.sort((x, y) => x - y)
+    let k = 0
+    for (const t of times) {
+      while (k + 1 < n && starts[k + 1] <= t) k++
+      callsOf[k].push(t)
+    }
+  }
+  const unitOf = groupTurns(
+    cols.map((c) => {
+      const calls = callsOf[c.index]
+      const t0 = ms(c.turn.startedAt)
+      const t1 = ms(c.turn.endedAt ?? c.turn.startedAt)
+      let active = 0
+      let from = 0
+      for (let k = 1; k <= calls.length; k++) {
+        if (k === calls.length || calls[k] - calls[k - 1] > HOLD_MS) {
+          active += calls[k - 1] - calls[from]
+          from = k
+        }
+      }
+      return {
+        a: calls.length ? calls[0] : t0,
+        b: calls.length ? calls[calls.length - 1] : Number.isFinite(t1) ? t1 : t0,
+        active,
+        inherited: c.inherited,
+      }
+    }),
+  )
   const kinds: Record<string, number> = {}
   const classes = zeroClass()
   const rereads: Reread[] = []
@@ -862,14 +973,14 @@ export function buildSpend(detail: SessionDetail): SpendModel {
       const gap = ms(c.turn.startedAt) - ms(cols[c.index - 1].turn.endedAt)
       if (Number.isFinite(gap) && gap >= 0) c.idleMs = gap
     }
-    // a new decision at every typed prompt, and where the session's own turns begin
-    const firstOwn = !c.inherited && c.index > 0 && cols[c.index - 1].inherited
-    if (decisions.length === 0 || (c.human && !c.inherited) || firstOwn) {
+    // a new decision where the grouping by time starts a new one
+    if (decisions.length === 0 || unitOf[c.index] !== unitOf[c.index - 1]) {
+      const first = cols.slice(c.index).find((x) => unitOf[x.index] === unitOf[c.index] && x.human) ?? c
       decisions.push({
         index: decisions.length,
         start: c.index,
         end: c.index,
-        prompt: c.prompt,
+        prompt: first.prompt,
         stepsUSD: 0,
         unitsUSD: 0,
         rereadUSD: 0,
