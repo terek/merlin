@@ -54,6 +54,7 @@ A session is identified by `(harness, id)`; `SessionKey.String()` gives `harness
 | `turns` | the turns, as `Turn` |
 | `agents` | flat list of sub-agents, as `Agent` |
 | `workflows` | the workflow runs launched in the session, as `WorkflowRun`, ordered by start time |
+| `jobs` | the background commands and monitors agents started, as `Job`, ordered by start time, then id. Absent when there were none. Background sub-agents are `agents` and workflow runs `workflows`, not jobs |
 | `messages` | one entry per billed API message, as `Message` |
 | `beads` | the bd (beads issue tracker) calls of the session and its agents that name a bead, as `BeadEvent`, ordered by time, then tool call, then position in the command |
 | `spawnedSessions` | tool calls that started a session which records itself (a bash call running a child Pi without `--no-session`), as `SessionSpawn`, ordered by time, then tool call: `toolUseId`, `turn`, `agentId` (when made inside a subagent), `at`, `endedAt` (zero: no result), `dir` (working directory of the command), `prompts` (the command's prompt arguments, unquoted), `harness` (where the child is expected). Neither session names the other; the catalog links them (kind `spawned`) by directory, start time and exact first prompt |
@@ -372,6 +373,48 @@ One run of a workflow script, launched by one tool call. Its agents are in `agen
 | `status` | how the harness said it ended (`completed`, `failed`, `killed`), or `open` when the files hold no such notice |
 | `agents` | how many agents it ran |
 | `usd` | attributed dollars of its agents and everything below them |
+
+## Job
+
+Work an agent started that runs without the model: a background shell command or a monitor.
+
+| key | meaning |
+|---|---|
+| `id` | the harness's id: Claude Code's task id, Codex's process (session) id |
+| `kind` | `command` or `monitor` |
+| `description` | the launching call's description, whole |
+| `command` | the command, whole |
+| `toolUseId` | the launching call |
+| `turn` | the main agent's turn it was started in; when an agent started it, the main turn running at the time, as `Message.turn` |
+| `agentId` | the agent that started it; omitted for the main agent |
+| `agentTurn` | that agent's turn (`Agent.turns` index), when an agent started it |
+| `startedAt` | time of the launching call |
+| `endedAt` | when it was seen to end; zero when open |
+| `status` | `completed`, `failed`, `killed`, or `open` (no end in the files) |
+| `exitCode` | the exit code, when the harness reported one |
+| `returns` | the moments its output came back to an agent, as `JobReturn`, in time order |
+
+Claude Code: the start is a `Bash` call with `run_in_background` or a `Monitor` call whose result
+names a task id; its reports are task notifications (a final one sets `status`, `endedAt` and,
+for a command, `exitCode` from `(exit code N)` in its summary); `TaskOutput` calls are fetched
+returns and a successful `TaskStop` with no final report ends it as `killed`. Codex: an
+`exec_command` whose output says `Process running with session ID <n>`; each `write_stdin`
+output for that id is a fetched return, and `Process exited with code <c>` ends it (`failed`
+when c is not 0); a `CommandExecution` item with the same `process_id` ends it when no exit
+line was seen. A Codex command that exits within its yield time is not a job.
+
+## JobReturn
+
+| key | meaning |
+|---|---|
+| `at` | when it came back |
+| `how` | `woke` (its report started a turn of the receiver), `delivered` (it arrived while the receiver was working), `fetched` (the agent read the output with a tool call; Codex returns are always this) |
+| `turn` | the main agent's turn it started or arrived in |
+| `agentId` | the receiving agent; omitted for the main agent |
+| `agentTurn` | that agent's turn, when an agent received it |
+| `final` | it reported the end |
+| `status` | as reported, on a final return |
+| `summary` | the harness's summary line of the report, whole (Claude Code) |
 
 ## InboxMessage
 

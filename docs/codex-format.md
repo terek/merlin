@@ -180,6 +180,21 @@ What `internal/codex/hooks` writes and reads, checked against Codex 0.164's own 
   fixed script path, so trust survives reinstalls and binary upgrades. Merlin never writes
   `config.toml`; `merlin hooks status` reads it.
 
+## Background processes
+
+Codex does not push a finished command's output to the model. `exec_command` (`function_call`,
+`arguments` JSON `{cmd, workdir, tty, yield_time_ms, max_output_tokens}`) returns after its yield
+time. Its `function_call_output` `output` is text: `Chunk ID:`, `Wall time:`, then either
+`Process running with session ID <n>` or `Process exited with code <c>`, `Original token
+count:`, `Output:` and the output. When the process still runs, the agent reads on with
+`write_stdin` (`{session_id, chars, yield_time_ms, max_output_tokens}`); each output has the same
+header, and the one that carries `Process exited with code <c>` is the end. Newer rollouts also
+have `event_msg/item_completed` `CommandExecution` with `process_id`, `status`, `exit_code` and
+`duration`. The digest's `jobs` (see digest-schema) are the processes that outlived their first
+output: id the session id, `fetched` returns from the `write_stdin` outputs, ended by the exit
+line or else by the `CommandExecution` with the same `process_id`. A command whose first output
+already has an exit is not a job (parser version 14).
+
 ## Not recorded
 
 - Approval decisions: only the policy, the command prefixes approved for the session and the

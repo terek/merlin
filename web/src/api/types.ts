@@ -721,6 +721,52 @@ export interface WorkflowRun {
   usd: number
 }
 
+export type JobKind = 'command' | 'monitor'
+export type JobReturnHow = 'woke' | 'delivered' | 'fetched'
+
+/** One moment a job's output came back to an agent. */
+export interface JobReturn {
+  at: string
+  /** woke: its report started a turn of the receiver; delivered: it arrived while the receiver was
+   * working; fetched: the agent read the output with a tool call. */
+  how: JobReturnHow
+  /** The main agent's turn it started or arrived in. */
+  turn?: number
+  /** The receiving agent; absent for the main agent. */
+  agentId?: string
+  /** The receiving agent's turn (`Agent.turns` index). */
+  agentTurn?: number
+  /** It reported the end. */
+  final?: boolean
+  /** As reported, on a final return. */
+  status?: string
+  summary?: string
+}
+
+/** Work an agent started that runs without the model: a background command or a monitor. */
+export interface Job {
+  /** The harness's id: Claude Code's task id, Codex's process/session id. */
+  id: string
+  kind: JobKind
+  description?: string
+  command?: string
+  /** The launching call. */
+  toolUseId?: string
+  /** The main agent's turn it was started in (the one running at the time, when an agent started it). */
+  turn?: number
+  /** The agent that started it; absent for the main agent. */
+  agentId?: string
+  agentTurn?: number
+  startedAt: string
+  /** When it was seen to end; absent when open. */
+  endedAt?: string
+  /** completed, failed, killed, or open (no end in the files). */
+  status: string
+  exitCode?: number
+  /** In time order. */
+  returns?: JobReturn[]
+}
+
 export type InboxKind = 'message' | 'idle' | 'task' | 'assignment'
 
 /**
@@ -875,6 +921,8 @@ export interface SessionDigest {
   agents?: Agent[]
   /** The workflow runs launched in the session, by start time. */
   workflows?: WorkflowRun[]
+  /** Background commands and monitors, by start time. Absent from an older daemon. */
+  jobs?: Job[]
   messages?: Message[]
   diagnostics: Diagnostics
 }

@@ -125,7 +125,11 @@ type Builder struct {
 	spawnRes     []SpawnResult
 	notes        []TaskNotification
 	workflows    []WorkflowLaunch
-	compVersions []string // harness version at each compaction, parallel to compactions
+	jobPending   map[string]JobStart // background launches without a result yet, by tool_use id
+	jobStarts    []JobStart
+	jobCalls     []JobCall
+	jobCallIdx   map[string]int // index into jobCalls by tool_use id
+	compVersions []string       // harness version at each compaction, parallel to compactions
 	killed       []AgentsKilled
 	costStates   []CostStateRecord
 	recaps       []model.Recap
@@ -167,6 +171,8 @@ func NewBuilder(pricer Pricer) *Builder {
 		pendingSummary: -1,
 		spawnIDs:       make(map[string]struct{}),
 		bash:           make(map[string]bashCall),
+		jobPending:     make(map[string]JobStart),
+		jobCallIdx:     make(map[string]int),
 		unknown:        make(map[string]int64),
 	}
 }
@@ -564,6 +570,7 @@ func (b *Builder) toolResult(r *transcript.Record, ts time.Time) {
 			delete(b.bash, blk.ToolUseID)
 			b.bashResult(blk.ToolUseID, call, &beads.Result{Output: blk.ResultText(), Failed: blk.IsError}, ts)
 		}
+		b.jobResult(blk, ts)
 		if hasTUR && tur.RunID != "" {
 			b.workflows = append(b.workflows, WorkflowLaunch{
 				ToolUseID: blk.ToolUseID, Turn: b.cur, At: ts, RunID: tur.RunID, TaskID: tur.TaskID,
@@ -661,6 +668,7 @@ func (b *Builder) assistant(r *transcript.Record, ts time.Time, pos int) {
 			if blk.IsAgentSpawn() {
 				b.spawn(blk, m, ts)
 			}
+			b.jobCall(blk, m, ts)
 			if script, ok := bashScript(blk); ok && blk.ID != "" {
 				if _, dup := b.bash[blk.ID]; !dup {
 					b.bash[blk.ID] = bashCall{script: script, cwd: cwd, msg: idx, at: ts}

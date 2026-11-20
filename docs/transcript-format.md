@@ -331,6 +331,28 @@ script that starts agents itself; no tool call names them one by one.
 - `<session>/remote-agents/remote-agent-<id>.meta.json` exists in the code for agents run
   in the cloud; none seen, and they would have no local transcript.
 
+### 5b. Background commands and monitors
+
+Checked against real transcripts (2026-11). Work an agent starts that runs without the model.
+Background sub-agents are agents (§5) and workflow runs are §5a: neither is a job.
+
+- Start: an assistant `tool_use` named `Bash` with `input.run_in_background: true`, or named
+  `Monitor` (`input` `{command, description, persistent, timeout_ms}`). Its `tool_result` text
+  names the task: Bash `Command running in background with ID: <id>. Output is being written
+  to: <path>`; Monitor `Monitor started (task <id>, timeout <n>ms). …`. A result without an id
+  (an error, a denial) started nothing. The id is the task id of the notifications below.
+- Reports are `<task-notification>` prompts (§4a, §4b): `task-id`, `tool-use-id` (the launching
+  call), `output-file`, then `status` and `summary` (`Background command "<description>"
+  completed (exit code N)`), or for a monitor event no `status` and an `<event>` element. A
+  notification that starts a turn woke the agent; one that is a `queued_command` attachment
+  arrived while the turn ran. A notification of a background agent or a workflow carries that
+  agent's or run's id and matches no job.
+- `TaskOutput` (`input` `{task_id, block, timeout}`) reads a job's output; `TaskStop`
+  (`input` `{task_id}`) stops it, and its result is `Successfully stopped task: <id> (<command>)`
+  (an error result, `Task <id> is not running (status: …)`, when it had ended).
+- A job started inside a sub-agent is in the sub-agent's file, and its reports are in that file
+  too.
+
 ## 6. Compaction
 
 Two adjacent records, in main or subagent files:

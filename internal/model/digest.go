@@ -63,7 +63,10 @@ type SessionDigest struct {
 	Turns       []Turn        `json:"turns,omitempty"`
 	Agents      []Agent       `json:"agents,omitempty"`
 	Workflows   []WorkflowRun `json:"workflows,omitempty"`
-	Messages    []Message     `json:"messages,omitempty"`
+	// Jobs are the background commands and monitors agents started, ordered by start time,
+	// then id.
+	Jobs     []Job     `json:"jobs,omitempty"`
+	Messages []Message `json:"messages,omitempty"`
 	// Beads are the bd (beads issue tracker) calls of the session and its agents that name a
 	// bead, ordered by time, then tool call, then position in the command.
 	Beads []BeadEvent `json:"beads,omitempty"`
@@ -469,6 +472,46 @@ type WorkflowRun struct {
 	Status string  `json:"status"`
 	Agents int     `json:"agents"`
 	USD    float64 `json:"usd"` // its agents and everything below them
+}
+
+// Job is work an agent started that runs without the model: a background shell command or a
+// monitor. A background sub-agent is an Agent and a workflow run a WorkflowRun, not a Job.
+type Job struct {
+	ID          string  `json:"id"`                    // the harness's id: Claude Code's task id, Codex's process/session id
+	Kind        JobKind `json:"kind"`                  // command or monitor
+	Description string  `json:"description,omitempty"` // the launching call's description, whole
+	Command     string  `json:"command,omitempty"`     // the command, whole
+	ToolUseID   string  `json:"toolUseId,omitempty"`   // the launching call
+	// Turn is the main-agent turn it was started in; set also when an agent started it (the
+	// main turn running at the time, as Message.Turn is).
+	Turn *int `json:"turn,omitempty"`
+	// AgentID is the agent that started it; empty = main agent. AgentTurn is that agent's turn
+	// (Agent.Turns index), when an agent started it.
+	AgentID   string    `json:"agentId,omitempty"`
+	AgentTurn *int      `json:"agentTurn,omitempty"`
+	StartedAt time.Time `json:"startedAt"`
+	// EndedAt is when it was seen to end; zero when open.
+	EndedAt time.Time `json:"endedAt,omitzero"`
+	// Status is completed, failed, killed, or open (no end in the files).
+	Status   string `json:"status"`
+	ExitCode *int   `json:"exitCode,omitempty"`
+	// Returns are the moments its output came back to an agent, in time order.
+	Returns []JobReturn `json:"returns,omitempty"`
+}
+
+// JobReturn is one moment a job's output came back to an agent.
+type JobReturn struct {
+	At  time.Time    `json:"at"`
+	How JobReturnHow `json:"how"`
+	// Turn is the main-agent turn it started or arrived in; AgentID the receiver when an agent
+	// (empty = main agent); AgentTurn that agent's turn.
+	Turn      *int   `json:"turn,omitempty"`
+	AgentID   string `json:"agentId,omitempty"`
+	AgentTurn *int   `json:"agentTurn,omitempty"`
+	// Final: it reported the end. Status is as reported, on a final return.
+	Final   bool   `json:"final,omitempty"`
+	Status  string `json:"status,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 // Message is one billed API message. It exists so cross-session rules (a message id is

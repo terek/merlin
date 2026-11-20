@@ -41,6 +41,11 @@ type FileResult struct {
 	Notifications []TaskNotification
 	// Workflows lists the workflow runs launched from this file (Workflow tool results).
 	Workflows []WorkflowLaunch
+	// JobStarts lists the background commands and monitors started from this file whose
+	// result named a task id, in the order the results arrived.
+	JobStarts []JobStart
+	// JobCalls lists the TaskOutput and TaskStop calls of the file that name a task, in order.
+	JobCalls []JobCall
 	// AgentsKilled lists system/agents_killed events.
 	AgentsKilled []AgentsKilled
 
@@ -200,6 +205,36 @@ type WorkflowLaunch struct {
 	TaskID    string // the id its task notification carries
 	Name      string
 	Summary   string
+}
+
+// JobStart is a Bash call with run_in_background, or a Monitor call, whose result named the
+// task it started.
+type JobStart struct {
+	ToolUseID string
+	// MessageID is the id of the assistant message that holds the tool_use.
+	MessageID string
+	Turn      int // the turn it was made in (-1 before any turn)
+	At        time.Time
+	Kind      model.JobKind
+	// TaskID is the id the result named.
+	TaskID      string
+	Description string
+	Command     string
+}
+
+// JobCall is a TaskOutput call (the agent reads a job's output) or a TaskStop call (it
+// stops the job).
+type JobCall struct {
+	ToolUseID string
+	MessageID string
+	Turn      int
+	At        time.Time
+	Stop      bool
+	TaskID    string
+	// ResultAt is when the result came back (zero when it did not); Failed says the result
+	// was an error, as a stop of a task that was not running is.
+	ResultAt time.Time
+	Failed   bool
 }
 
 // AgentsKilled is a system/agents_killed event.

@@ -39,6 +39,8 @@ type Assembly struct {
 	Messages []model.Message
 	// Workflows are the session's workflow runs, ordered by start time.
 	Workflows []model.WorkflowRun
+	// Jobs are the session's background commands and monitors, ordered by start time.
+	Jobs []model.Job
 	// Beads are the bead events of the main file and the agents, ordered by time, then tool
 	// call. An agent's event is kept only when the agent owns the message that made the call
 	// (a fork's copy of its parent's calls is not its own); it carries the agent's id, its
@@ -305,6 +307,7 @@ func Assemble(main *FileResult, files []AgentFile) *Assembly {
 			agents[i].Turns[k].WorkDirs = w.list()
 		}
 	}
+	asm.Jobs = buildJobs(main, ags, agents, asm.Turns, owned, msgTurns)
 	asm.Agents = agents
 	mergeDiagnostics(&asm.Diagnostics, main, ags)
 	return asm

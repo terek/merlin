@@ -147,3 +147,23 @@ const (
 	BeadFailed  BeadOutcome = "failed"  // the output reports an error for it, or the call failed unconfirmed
 	BeadUnknown BeadOutcome = "unknown" // no output yet, or the output does not say
 )
+
+// JobKind says what a background job is.
+type JobKind string
+
+const (
+	JobCommand JobKind = "command" // a shell command running in the background
+	JobMonitor JobKind = "monitor" // a monitor: a command whose output lines each report back
+)
+
+// JobReturnHow says how a job's output came back to an agent.
+type JobReturnHow string
+
+const (
+	// ReturnWoke: its report started a turn of the receiver.
+	ReturnWoke JobReturnHow = "woke"
+	// ReturnDelivered: it arrived while the receiver was working.
+	ReturnDelivered JobReturnHow = "delivered"
+	// ReturnFetched: the agent read the output with a tool call.
+	ReturnFetched JobReturnHow = "fetched"
+)

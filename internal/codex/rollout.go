@@ -225,6 +225,7 @@ type thread struct {
 	Reports   []reportRec
 	Compacts  []compactRec
 	Beads     []beadRec
+	Jobs      []jobRec
 	Limits    []model.LimitReading // token_count rate_limits and refusals, unfiltered
 	Cwds      []string
 	FirstAt   time.Time
@@ -362,6 +363,11 @@ type parser struct {
 	review bool
 	// changed holds the records whose file changes were counted, by form and id.
 	changed map[string]bool
+	// execs and stdins are the exec_command and write_stdin calls waiting for their output;
+	// jobAt maps the session id of a process still running to its place in thread.Jobs.
+	execs  map[string]execCall
+	stdins map[string]string
+	jobAt  map[string]int
 }
 
 // countRec is a token_count event with usage: the last call's tokens and the running total.
@@ -713,6 +719,7 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 			Cwd      string          `json:"cwd"`
 			Output   string          `json:"aggregated_output"`
 			ExitCode *int            `json:"exit_code"`
+			Process  json.RawMessage `json:"process_id"`
 		} `json:"item"`
 	}
 	if json.Unmarshal(raw, &e) != nil {
@@ -763,6 +770,9 @@ func (p *parser) item(raw json.RawMessage, at time.Time) {
 		tr.Review = true
 	case "CommandExecution":
 		p.command(it.ID, it.Command, it.Cwd, it.Status, it.Output, it.ExitCode, at)
+		if id := strings.Trim(string(it.Process), `"`); id != "" && id != "null" {
+			p.jobEnded(id, it.Status, it.ExitCode, at)
+		}
 	case "McpToolCall", "SubAgentActivity", "CollabAgentToolCall", "ContextCompaction",
 		"Reasoning", "FunctionCallOutput", "ExitedReviewMode":
 		// Known, and carried by other records (the tool calls and their outputs, the reasoning
@@ -894,11 +904,12 @@ func fileURLPath(s string) string {
 func (p *parser) responseItem(raw json.RawMessage, at time.Time) {
 	t := p.t
 	var r struct {
-		Type      string `json:"type"`
-		Name      string `json:"name"`
-		CallID    string `json:"call_id"`
-		Arguments string `json:"arguments"`
-		Author    string `json:"author"`
+		Type      string          `json:"type"`
+		Name      string          `json:"name"`
+		CallID    string          `json:"call_id"`
+		Arguments string          `json:"arguments"`
+		Author    string          `json:"author"`
+		Output    json.RawMessage `json:"output"`
 		Content   []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
@@ -918,6 +929,7 @@ func (p *parser) responseItem(raw json.RawMessage, at time.Time) {
 			}
 			tr.ToolsByName[r.Name]++
 		}
+		p.jobCall(r.Name, r.CallID, r.Arguments, at)
 		switch r.Name {
 		case "spawn_agent", "followup_task", "send_message", "interrupt_agent":
 			var a struct {
@@ -954,7 +966,9 @@ func (p *parser) responseItem(raw json.RawMessage, at time.Time) {
 			}
 		}
 		t.Reports = append(t.Reports, reportRec{At: at, Author: r.Author, Text: strings.Join(parts, "\n"), Turn: p.cur})
-	case "message", "reasoning", "custom_tool_call_output", "function_call_output", "additional_tools", "compaction",
+	case "function_call_output":
+		p.jobOutput(r.CallID, r.Output, at)
+	case "message", "reasoning", "custom_tool_call_output", "additional_tools", "compaction",
 		"web_search_call", "local_shell_call":
 	default:
 		t.Unknown["response_item/"+r.Type]++

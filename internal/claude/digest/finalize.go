@@ -27,6 +27,8 @@ func (b *Builder) Result() *FileResult {
 		SpawnResults:    slices.Clone(b.spawnRes),
 		Notifications:   slices.Clone(b.notes),
 		Workflows:       slices.Clone(b.workflows),
+		JobStarts:       slices.Clone(b.jobStarts),
+		JobCalls:        slices.Clone(b.jobCalls),
 		AgentsKilled:    slices.Clone(b.killed),
 		CostStates:      slices.Clone(b.costStates),
 		Recaps:          slices.Clone(b.recaps),
