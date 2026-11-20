@@ -92,7 +92,7 @@ func contextIsolation(c *Corpus, emit func(Hit)) {
 			explore := strings.EqualFold(a.AgentType, "Explore")
 			if explore || (reads >= isolationCalls && countTools(a.ToolsByName, editTools) == 0) {
 				emit(Hit{At: a.StartedAt, Session: s.Key(), Turn: a.SpawnTurn,
-					Note: fmt.Sprintf("a subagent made %d calls in its own context", a.ToolCalls)})
+					Note: fmt.Sprintf("a subagent made %d call%s in its own context", a.ToolCalls, plural(int(a.ToolCalls)))})
 			}
 		}
 	})
@@ -169,7 +169,7 @@ func parallelSessions(c *Corpus, emit func(Hit)) {
 		if n >= 2 {
 			h := at.ref
 			h.At = at.from
-			h.Note = fmt.Sprintf("%d sessions working at once", n)
+			h.Note = fmt.Sprintf("%d session%s working at once", n, plural(n))
 			emit(h)
 		}
 	}
@@ -335,7 +335,7 @@ func bigContexts(c *Corpus) Evidence {
 	if n < 3 {
 		return Evidence{}
 	}
-	return Evidence{Reason: fmt.Sprintf("%d turns ran with more than 150k tokens of context.", n), Example: best.example()}
+	return Evidence{Reason: fmt.Sprintf("%d turn%s ran with more than 150k tokens of context.", n, plural(n)), Example: best.example()}
 }
 
 func unroutedAgents(c *Corpus) Evidence {
@@ -368,7 +368,7 @@ func unroutedAgents(c *Corpus) Evidence {
 	if n < 3 {
 		return Evidence{}
 	}
-	return Evidence{Reason: fmt.Sprintf("%d subagents ran on the main session's model.", n), Example: best.example()}
+	return Evidence{Reason: fmt.Sprintf("%d subagent%s ran on the main session's model.", n, plural(n)), Example: best.example()}
 }
 
 // repeatedPrompt is how often the same prompt must be typed to suggest a command.

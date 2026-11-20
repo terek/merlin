@@ -2474,7 +2474,7 @@
           "harness": "claude",
           "id": "synthetic-081"
         },
-        "note": "3 beads created, 1 links, 1 closed"
+        "note": "3 beads created, 1 link, 1 closed"
       },
       "days": [
         {
@@ -2526,7 +2526,7 @@
             "harness": "claude",
             "id": "synthetic-099"
           },
-          "note": "3 beads created, 1 links, 1 closed"
+          "note": "3 beads created, 1 link, 1 closed"
         },
         {
           "at": "2026-10-29T09:01:00Z",
@@ -2534,7 +2534,7 @@
             "harness": "claude",
             "id": "synthetic-097"
           },
-          "note": "3 beads created, 1 links, 1 closed"
+          "note": "3 beads created, 1 link, 1 closed"
         },
         {
           "at": "2026-10-28T09:01:00Z",
@@ -2542,7 +2542,7 @@
             "harness": "claude",
             "id": "synthetic-095"
           },
-          "note": "3 beads created, 1 links, 1 closed"
+          "note": "3 beads created, 1 link, 1 closed"
         }
       ]
     },

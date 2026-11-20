@@ -49,7 +49,7 @@ func nestedAgents(c *Corpus, emit func(Hit)) {
 			}
 		}
 		if deep != nil {
-			emit(Hit{At: deep.StartedAt, Session: s.Key(), Turn: deep.SpawnTurn, Note: fmt.Sprintf("agents %d levels deep", deepest)})
+			emit(Hit{At: deep.StartedAt, Session: s.Key(), Turn: deep.SpawnTurn, Note: fmt.Sprintf("agents %d level%s deep", deepest, plural(deepest))})
 		}
 	})
 }
@@ -68,7 +68,7 @@ func swarm(c *Corpus, emit func(Hit)) {
 		}
 		if n, at := peak(iv); n >= swarmSize {
 			h := at.ref
-			h.At, h.Note = at.from, fmt.Sprintf("%d agents at once", n)
+			h.At, h.Note = at.from, fmt.Sprintf("%d agent%s at once", n, plural(n))
 			emit(h)
 		}
 	})
@@ -100,7 +100,7 @@ func beadsGraph(c *Corpus, emit func(Hit)) {
 			}
 		}
 		if created >= 3 && linked >= 1 && closed >= 1 {
-			emit(Hit{At: at, Session: s.Key(), Note: fmt.Sprintf("%d beads created, %d links, %d closed", created, linked, closed)})
+			emit(Hit{At: at, Session: s.Key(), Note: fmt.Sprintf("%d bead%s created, %d link%s, %d closed", created, plural(created), linked, plural(linked), closed)})
 		}
 	})
 }
@@ -143,7 +143,7 @@ func twoHarnesses(c *Corpus, emit func(Hit)) {
 	})
 	for _, k := range order {
 		if s := weeks[k].second; s != nil {
-			emit(Hit{At: s.D.StartedAt, Session: s.Key(), Note: fmt.Sprintf("%d harnesses in one week", len(weeks[k].harnesses))})
+			emit(Hit{At: s.D.StartedAt, Session: s.Key(), Note: fmt.Sprintf("%d harness%s in one week", len(weeks[k].harnesses), map[bool]string{true: "", false: "es"}[len(weeks[k].harnesses) == 1])})
 		}
 	}
 }
@@ -165,7 +165,7 @@ func nightShift(c *Corpus, emit func(Hit)) {
 				continue
 			}
 			if last != nil && machine >= awayMachines && t.StartedAt.Sub(end(last)) >= awayFor {
-				h := turnHit(s, last, fmt.Sprintf("%d turns of agent work over %s while you were away", machine, hours(t.StartedAt.Sub(end(last)))))
+				h := turnHit(s, last, fmt.Sprintf("%d turn%s of agent work over %s while you were away", machine, plural(machine), hours(t.StartedAt.Sub(end(last)))))
 				h.At = end(last)
 				emit(h)
 			}

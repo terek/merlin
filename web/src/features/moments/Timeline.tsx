@@ -7,7 +7,7 @@ import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { MomentStatus, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatCount, plural } from '../../lib/format'
+import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { parseTime, shortDate } from '../../lib/time'
 import { useWidth } from '../spend/useWidth'
@@ -15,8 +15,12 @@ import {
   activityArea,
   dayTicks,
   EDGE_ID,
+  EDGE_LABEL,
+  LABEL_SIZE,
+  labelWidth,
   layoutTimeline,
   MARKER_GAP,
+  MARKER_R,
   monthTicks,
   seenMoments,
   type TimelineLayout,
@@ -26,7 +30,7 @@ import {
 const AREA_H = 72
 const TICK_H = 14
 const AXIS_H = 20
-const R = 4.5
+const R = MARKER_R
 const MARKER_TOP = 10
 
 /** The mark of a moment's status: filled for a habit, a ring for explored. Same look as on the timeline. */
@@ -173,7 +177,7 @@ function Chart({
           tabIndex={0}
           aria-pressed={pin === EDGE_ID}
           aria-label={`Already doing when your history starts (${l.edge.length})`}
-          className="cursor-pointer outline-none [&:focus-visible>rect:last-of-type]:stroke-[2.5]"
+          className="cursor-pointer outline-none [&:focus-visible>rect:nth-of-type(2)]:stroke-[2.5]"
           opacity={dim && !edgeActive ? 0.3 : 1}
           onMouseEnter={() => onHover(EDGE_ID)}
           onMouseLeave={() => onHover(null)}
@@ -184,24 +188,15 @@ function Chart({
         >
           <title>{`Already doing when your history starts (${l.edge.length})`}</title>
           <rect
-            x={l.edgeX - 9}
-            y={laneY(0) - 11}
-            width={26}
-            height={16}
-            rx={8}
-            style={{ fill: 'var(--surface)', stroke: 'var(--line)' }}
-          />
-          <rect
-            x={l.edgeX - 11}
-            y={laneY(0) - 9}
-            width={26}
-            height={16}
-            rx={8}
-            style={{ fill: 'var(--surface)', stroke: 'var(--faint)' }}
+            x={0}
+            y={laneY(0) - MARKER_GAP / 2}
+            width={l.edgeLabelX + labelWidth(EDGE_LABEL(l.edge.length))}
+            height={MARKER_GAP}
+            fill="transparent"
           />
           <rect
             x={l.edgeX - 13}
-            y={laneY(0) - 7}
+            y={laneY(0) - 8}
             width={26}
             height={16}
             rx={8}
@@ -210,7 +205,7 @@ function Chart({
           />
           <text
             x={l.edgeX}
-            y={laneY(0) + 5}
+            y={laneY(0) + 4}
             textAnchor="middle"
             fontSize={11}
             fontWeight={600}
@@ -218,10 +213,19 @@ function Chart({
           >
             {l.edge.length}
           </text>
+          <text
+            x={l.edgeLabelX}
+            y={laneY(0) + 4}
+            fontSize={LABEL_SIZE}
+            fontWeight={edgeActive ? 600 : 400}
+            style={{ fill: edgeActive ? 'var(--text)' : 'var(--muted)' }}
+          >
+            {EDGE_LABEL(l.edge.length)}
+          </text>
         </g>
       )}
 
-      {l.markers.map(({ moment: m, x, lane }) => {
+      {l.markers.map(({ moment: m, x, lane, flip, labelX, labelW }) => {
         const y = laneY(lane)
         const on = active === m.id
         const faded = dim && !on
@@ -243,7 +247,13 @@ function Chart({
             onKeyDown={key(m.id)}
           >
             <title>{m.title}</title>
-            <circle cx={x} cy={y} r={MARKER_GAP / 2 + 1} fill="transparent" />
+            <rect
+              x={flip ? labelX - labelW - 2 : x - MARKER_GAP / 2}
+              y={y - MARKER_GAP / 2}
+              width={flip ? x + MARKER_GAP / 2 - (labelX - labelW - 2) : labelX + labelW + 2 - (x - MARKER_GAP / 2)}
+              height={MARKER_GAP}
+              fill="transparent"
+            />
             <circle
               cx={x}
               cy={y}
@@ -251,6 +261,16 @@ function Chart({
               strokeWidth={m.status === 'habit' ? 0 : 1.5}
               style={{ fill: m.status === 'habit' ? 'var(--accent)' : 'var(--surface)', stroke: 'var(--accent)' }}
             />
+            <text
+              x={labelX}
+              y={y + 4}
+              textAnchor={flip ? 'end' : 'start'}
+              fontSize={LABEL_SIZE}
+              fontWeight={on ? 600 : 400}
+              style={{ fill: on ? 'var(--text)' : 'var(--muted)' }}
+            >
+              {m.title}
+            </text>
           </g>
         )
       })}
@@ -279,6 +299,8 @@ export function Readout({
 }) {
   const now = new Date(report.now)
   const seen = seenMoments(report.moments)
+  const habits = seen.filter((x) => x.status === 'habit').length
+  const explored = seen.filter((x) => x.status === 'explored').length
   const layout = report.since ? layoutTimeline(report.moments, report.since, report.now, 1000) : null
   const edge = layout?.edge ?? []
   const edgeIds = new Set(edge.map((m) => m.id))
@@ -345,9 +367,8 @@ export function Readout({
         </div>
       ) : (
         <p className="text-muted">
-          From {formatCount(report.sessions - report.scripted)} sessions
-          {report.since ? ` since ${dateOf(report.since, now)}` : ''}: {seen.filter((x) => x.status === 'habit').length}{' '}
-          habits, {seen.filter((x) => x.status === 'explored').length} explored.
+          From {plural(report.sessions - report.scripted, 'session')}
+          {report.since ? ` since ${dateOf(report.since, now)}` : ''}: {plural(habits, 'habit')}, {explored} explored.
           <span className="text-faint"> Hover a mark to see when it came back; click to pin it.</span>
         </p>
       )}

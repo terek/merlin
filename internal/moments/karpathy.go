@@ -150,7 +150,7 @@ func vibeOneShot(c *Corpus, emit func(Hit)) {
 			if w < 2 || w > vibeWords || t.Interrupted || edits < vibeEdits || approval.MatchString(t.UserText) || isCorrection(t, next) {
 				return
 			}
-			emit(turnHit(s, t, fmt.Sprintf("%d words, %d edits, no correction", w, edits)))
+			emit(turnHit(s, t, fmt.Sprintf("%d word%s, %d edit%s, no correction", w, plural(w), edits, plural(int(edits)))))
 		})
 	})
 }

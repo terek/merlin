@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { MomentView } from '../../api/types'
-import { activityArea, dayTicks, EDGE_DAYS, layoutTimeline, MARKER_GAP, monthTicks, seenMoments, xOf } from './layout'
+import { activityArea, dayTicks, EDGE_DAYS, LABEL_SPACE, layoutTimeline, monthTicks, seenMoments, xOf } from './layout'
 
 const SINCE = '2026-08-24T09:00:00Z'
 const NOW = '2026-11-01T18:00:00Z'
@@ -42,16 +42,26 @@ describe('layoutTimeline', () => {
     expect(l.markers).toHaveLength(1)
   })
 
-  test('markers that would overlap stack in lanes, greedily', () => {
+  test('markers whose labels would overlap stack in lanes, greedily', () => {
     // 600 px over about 70 days: a day is about 8 px, so these are 1 day apart
     const ms = [moment('a', 20), moment('b', 21), moment('c', 22), moment('d', 40)]
     const l = layoutTimeline(ms, SINCE, NOW, 600)
-    expect(l.markers.map((m) => m.lane)).toEqual([0, 1, 0, 0])
-    expect(l.lanes).toBe(2)
-    for (const lane of [0, 1]) {
-      const xs = l.markers.filter((m) => m.lane === lane).map((m) => m.x)
-      for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(MARKER_GAP)
+    expect(l.markers[0].lane).toBe(0)
+    expect(l.markers[1].lane).toBe(1)
+    expect(l.lanes).toBeGreaterThan(1)
+    for (let lane = 0; lane < l.lanes; lane++) {
+      const spans = l.markers
+        .filter((m) => m.lane === lane)
+        .map((m) => (m.flip ? [m.labelX - m.labelW, m.x] : [m.x, m.labelX + m.labelW]))
+      for (let i = 1; i < spans.length; i++) expect(spans[i][0] - spans[i - 1][1]).toBeGreaterThanOrEqual(LABEL_SPACE)
     }
+  })
+
+  test('a label that would pass the right edge goes to the left of its marker', () => {
+    const l = layoutTimeline([moment('a', 20), moment('z', 69)], SINCE, NOW, 600)
+    expect(l.markers[0].flip).toBe(false)
+    expect(l.markers[1].flip).toBe(true)
+    expect(l.markers[1].labelX).toBeLessThan(l.markers[1].x)
   })
 
   test('x runs from the left pad to the right pad', () => {

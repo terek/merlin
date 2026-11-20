@@ -8,9 +8,23 @@ import { dayStart, localDay } from '../../lib/time'
 export const EDGE_DAYS = 7
 /** The id the edge stack goes by, as a hover or a pin. */
 export const EDGE_ID = '@edge'
-/** Centres of two markers in one lane are at least this far apart. */
-export const MARKER_GAP = 14
+/** The height of one lane of markers. */
+export const MARKER_GAP = 16
 export const PAD_X = 12
+/** The marker's radius, and the space between a marker and its label. */
+export const MARKER_R = 4.5
+export const LABEL_GAP = 5
+/** Two labels in one lane end at least this far before the next marker. */
+export const LABEL_SPACE = 8
+export const LABEL_SIZE = 12
+const CHAR_W = 6.3
+
+/** The width of a label at LABEL_SIZE, estimated from its length (no canvas: the layout stays pure). */
+export function labelWidth(text: string): number {
+  return Math.ceil(text.length * CHAR_W)
+}
+
+export const EDGE_LABEL = (n: number) => `already doing (${n})`
 
 const DAY_MS = 86_400_000
 
@@ -30,6 +44,11 @@ export interface Marker {
   moment: MomentView
   x: number
   lane: number
+  /** The label sits to the left of the circle (near the right edge) instead of to its right. */
+  flip: boolean
+  /** Where the label's text starts (or ends, when flipped). */
+  labelX: number
+  labelW: number
 }
 
 export interface TimelineLayout {
@@ -43,6 +62,8 @@ export interface TimelineLayout {
   /** Moments already there when the history starts: one stack at the left edge. */
   edge: MomentView[]
   edgeX: number
+  /** Where the edge stack's label starts. */
+  edgeLabelX: number
 }
 
 /** The x of a time, clamped to the axis. */
@@ -59,21 +80,34 @@ export function xOf(l: Pick<TimelineLayout, 'from' | 'to' | 'width'>, t: number)
 export function layoutTimeline(moments: MomentView[], since: string, now: string, width: number): TimelineLayout {
   const from = Date.parse(since)
   const to = Math.max(Date.parse(now), from + DAY_MS)
-  const l: TimelineLayout = { from, to, width, markers: [], lanes: 1, edge: [], edgeX: PAD_X + 10 }
-  const lastX: number[] = []
-  for (const m of seenMoments(moments)) {
+  const l: TimelineLayout = { from, to, width, markers: [], lanes: 1, edge: [], edgeX: PAD_X + 13, edgeLabelX: 0 }
+  l.edgeLabelX = l.edgeX + 13 + LABEL_GAP
+  // the spans [from, to] taken in each lane; the edge stack and its label take the start of the first
+  const taken: [number, number][][] = [[]]
+  const seen = seenMoments(moments)
+  l.edge = seen.filter((m) => Date.parse(m.first ?? '') - from < EDGE_DAYS * DAY_MS)
+  if (l.edge.length > 0) taken[0].push([0, l.edgeLabelX + labelWidth(EDGE_LABEL(l.edge.length))])
+  for (const m of seen) {
     const t = Date.parse(m.first ?? '')
-    if (t - from < EDGE_DAYS * DAY_MS) {
-      l.edge.push(m)
-      continue
-    }
+    if (t - from < EDGE_DAYS * DAY_MS) continue
     const x = xOf(l, t)
-    let lane = lastX.findIndex((last) => x - last >= MARKER_GAP)
-    if (lane < 0) lane = lastX.push(x) - 1
-    else lastX[lane] = x
-    l.markers.push({ moment: m, x, lane })
+    const w = labelWidth(m.title)
+    const flip = x + MARKER_R + LABEL_GAP + w > width - PAD_X
+    const a = flip ? x - MARKER_R - LABEL_GAP - w : x - MARKER_R
+    const b = flip ? x + MARKER_R : x + MARKER_R + LABEL_GAP + w
+    let lane = taken.findIndex((spans) => spans.every(([s, e]) => a - e >= LABEL_SPACE || s - b >= LABEL_SPACE))
+    if (lane < 0) lane = taken.push([]) - 1
+    taken[lane].push([a, b])
+    l.markers.push({
+      moment: m,
+      x,
+      lane,
+      flip,
+      labelX: flip ? x - MARKER_R - LABEL_GAP : x + MARKER_R + LABEL_GAP,
+      labelW: w,
+    })
   }
-  l.lanes = Math.max(1, lastX.length)
+  l.lanes = taken.length
   return l
 }
 

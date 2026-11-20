@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
 import type { MomentHit, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
-import { formatCount } from '../../lib/format'
+import { plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { sessionPath } from '../../lib/paths'
 import { markSeen } from '../../shell/momentsBadge'
@@ -99,8 +99,8 @@ function Report({ report }: { report: MomentsReport }) {
       {unseen.length > 0 && <MoreToTry moments={unseen} />}
 
       <p className="px-4 py-3 text-sec text-faint">
-        From {formatCount(report.sessions - report.scripted)} sessions
-        {report.scripted > 0 && <> and {formatCount(report.scripted)} scripted runs</>}
+        From {plural(report.sessions - report.scripted, 'session')}
+        {report.scripted > 0 && <> and {plural(report.scripted, 'scripted run')}</>}
         {report.since && <> since {dateOf(report.since, new Date(report.now))}</>}.
       </p>
     </div>
@@ -151,7 +151,7 @@ function MomentRow({
         onFocus={() => onHover(m.id)}
         onBlur={() => onHover(null)}
         title={m.what}
-        className="flex h-8 min-w-0 flex-1 items-center gap-2.5 text-left"
+        className="flex h-8 shrink-0 items-center gap-2.5 text-left"
       >
         <Glyph status={m.status} />
         <span className="w-56 shrink-0 truncate text-body font-medium">{m.title}</span>
@@ -166,7 +166,7 @@ function MomentRow({
         </span>
       </button>
       {latest && (
-        <Link to={hitPath(latest)} className="w-56 shrink-0 truncate text-sec" title={latest.note}>
+        <Link to={hitPath(latest)} className="min-w-0 flex-1 truncate text-sec" title={latest.note}>
           {latest.note || 'Open the latest'} →
         </Link>
       )}
