@@ -88,7 +88,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/s/:harness/:id` | Redirects into the Overview with the session open (section 10b, "A session in place") | `#t<index>`, `#a<agentId>`, `#c<index>` are carried over; `from`, `to` become `sfrom`, `sto` |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
-| `/moments` | Moments (experimental, [moments.md](moments.md)): the card, the personas' reactions, what to try, the moments by status | none (the card's handle is kept in `localStorage`) |
+| `/moments` | Moments (experimental, [moments.md](moments.md)): a timeline of your history, what to try next, your moments; see section 7a | none (the last visit is kept in `localStorage`, `merlin.moments.seen`) |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -239,6 +239,10 @@ same whether or not a session is open in the Overview, and no page puts tools in
 - **Left**: the wizard logo (`public/logo-48.png`, shown at 22 px) and "Merlin", linking to `/`. The favicons and the
   apple-touch icon are in `public/`.
 - **Left, after the logo**: the tabs **Overview** (`/`), **Cost**, **Moments**, described below.
+- **The Moments badge**: a small accent count after "Moments" of what is new since the page was last opened: moments
+  whose first time is later than the last visit, plus suggestions not shown then (first visit: the suggestions). Opening
+  Moments writes `merlin.moments.seen` (`{ at, suggestions }`, every access in try/catch) and clears it; hidden at 0. It
+  reads the `useMoments` query without refetching on focus or reconnect (`shell/momentsBadge.ts`).
 - **Middle**: a flexible spacer that keeps the right-hand buttons at the right. Pages put nothing in the bar: the
   Overview's search and range and folder controls are in the content area's header row (section 10b).
 - **The tabs**: Overview and Cost link with the scope (`range`
@@ -262,6 +266,18 @@ same whether or not a session is open in the Overview, and no page puts tools in
   its tooltip "indexing 120 / 3,355 · n unchanged · n failed". Nothing otherwise.
 - **Shortcuts**: `g o` Overview, `g s` Sessions, `g c` Cost, `g m` Moments, `l` the legend panel (where a page filled it); `/` focuses the search on the
   Overview (expanding it) and on Sessions.
+
+## 7a. Moments page (`/moments`)
+
+Full width, in frames like Cost. **Your history**: an SVG timeline from `since` to `now` with a soft activity area
+(prompts per day), one marker per seen moment at its first time (filled: habit; ring: explored; greedy lanes, 14 px
+apart) and month labels. Moments first seen within 7 days of `since` form one edge stack with their count. Hovering a
+marker, a list row or an edge-stack entry draws a tick per day of its `days` under the area and dims the other markers;
+a click pins (Enter on a focused marker; click again or Esc unpins; hover shows over the pin). The readout below has a
+fixed height: idle it summarises the history, hovered it gives title, first date, times in weeks and the first hit's note,
+pinned it adds the `what` sentence and "Open the first time →". **Next**: at most three suggestions, each with its reason
+and a link to its example session. **Your moments**: rows by first time, sharing the hover and pin. **More to try**: the
+unseen moments, collapsed. The personas, their reactions and the card are not shown.
 
 ## 8. Sessions page (`/sessions`)
 

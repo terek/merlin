@@ -2,7 +2,7 @@
 // what to try next (each with the place it shows), your moments as a list and the ones not seen yet. The personas, their
 // reactions and the card to share are not shown for now (MomentCard and PersonaAvatar stay).
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
 import type { MomentHit, MomentsReport, MomentView } from '../../api/types'
@@ -10,6 +10,7 @@ import { cn } from '../../lib/cn'
 import { formatCount } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { sessionPath } from '../../lib/paths'
+import { markSeen } from '../../shell/momentsBadge'
 import { useShortcut } from '../../shell/useShortcut'
 import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, Skeleton } from '../../ui'
 import { seenMoments } from './layout'
@@ -51,6 +52,8 @@ function hitPath(h: MomentHit): string {
 function Report({ report }: { report: MomentsReport }) {
   const [hover, setHover] = useState<string | null>(null)
   const [pin, setPin] = useState<string | null>(null)
+  // opening the page clears the count on its tab
+  useEffect(() => markSeen(report), [report])
   useShortcut('Escape', () => setPin(null), { enabled: pin !== null })
   const togglePin = (id: string) => setPin((p) => (p === id ? null : id))
   const byId = useMemo(() => new Map(report.moments.map((m) => [m.id, m])), [report.moments])

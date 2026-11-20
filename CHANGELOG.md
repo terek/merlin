@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The Moments page shows a timeline of your history with a marker for each moment's first time, what to try next with a link to where it shows in your sessions, and your moments as a list; hover or click a marker to see every later time.
+- A small count on the Moments tab shows what is new since you last opened the page.
 - On the session graph, hovering the top of a bracket highlights it; a click zooms to its turns, and a second click zooms back.
 - On the session graph, a click selects one thing — a turn, an agent's work or a background job — and only that is highlighted; hovering a turn marks the one a click would select.
 - Click a background job on the session graph to see it below the graph: its command, how it ended and the turns its output reached.

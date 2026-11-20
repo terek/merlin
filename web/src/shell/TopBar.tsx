@@ -8,6 +8,7 @@ import { formatCount } from '../lib/format'
 import { type Available, availableToShow, releaseUrl } from '../lib/version'
 import { Button, IconButton } from '../ui'
 import { lensLinks } from './lastOverview'
+import { useMomentsBadge } from './momentsBadge'
 import { PanelButton } from './Panel'
 import { nextTheme, useTheme } from './theme'
 import { useShortcut } from './useShortcut'
@@ -184,6 +185,7 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 export function TopBar() {
   const { pathname, search } = useLocation()
   const links = lensLinks(pathname, search)
+  const fresh = useMomentsBadge()
   return (
     <header className="relative z-30 flex h-11 shrink-0 items-center gap-4 border-b border-line bg-surface px-4">
       <Link to="/" className="flex items-center gap-2 font-semibold text-fg hover:no-underline" aria-label="Merlin">
@@ -199,6 +201,15 @@ export function TopBar() {
         </NavLink>
         <NavLink to="/moments" className={navClass} title="Moments: what your sessions say about how you work (g m)">
           Moments
+          {fresh > 0 && (
+            <span
+              className="ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-meta font-medium text-surface tabular-nums leading-4"
+              title={`${fresh} new since you last opened Moments`}
+            >
+              <span className="sr-only">{fresh} new, </span>
+              {fresh}
+            </span>
+          )}
         </NavLink>
       </nav>
       <div className="flex-1" />

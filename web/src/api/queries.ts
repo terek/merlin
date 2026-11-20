@@ -218,10 +218,13 @@ export function useSpend7d(): UseQueryResult<CostTable> {
 }
 
 /** The moments report (experimental): recomputed by the daemon on every request. */
-export function useMoments(): UseQueryResult<MomentsReport> {
+export function useMoments(opts: { passive?: boolean } = {}): UseQueryResult<MomentsReport> {
   return useQuery({
     queryKey: queryKeys.moments(),
     queryFn: ({ signal }) => get<MomentsReport>('/api/moments', undefined, signal),
+    // the top bar's badge only reads it: it never refetches on its own, so the report is recomputed no more often than
+    // before (when the Moments page is open and on its own mount and focus)
+    ...(opts.passive ? { refetchOnWindowFocus: false, refetchOnReconnect: false } : {}),
   })
 }
 
