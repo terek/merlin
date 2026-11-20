@@ -59,8 +59,8 @@ export interface OverviewProps {
   /** What the plot really shows: `win`, grown to the end of the turn it cuts (`effectiveWindow`). */
   eff: Win
   onWin: (w: Win) => void
-  /** The start of the pinned turn, if there is one. */
-  pinnedT?: number
+  /** The start of the selected turn (or the turn the selected work was launched in), if there is one. */
+  selectedT?: number
   /** The last work episode: what "Latest" goes back to. */
   latest: Win
   /** The lockouts the session graph draws: the strip shows them too, softly, so the whole session's are in view. */
@@ -85,7 +85,7 @@ export function Overview({
   win,
   eff,
   onWin,
-  pinnedT,
+  selectedT,
   latest,
   lockouts,
   controlsHost,
@@ -380,18 +380,18 @@ export function Overview({
               {l.text}
             </text>
           ))}
-          {pinnedT !== undefined && Number.isFinite(pinnedT) && (
+          {selectedT !== undefined && Number.isFinite(selectedT) && (
             <g pointerEvents="none">
               <line
-                x1={axis.x(pinnedT)}
-                x2={axis.x(pinnedT)}
+                x1={axis.x(selectedT)}
+                x2={axis.x(selectedT)}
                 y1={LABEL_H}
                 y2={H}
                 stroke="var(--accent)"
                 strokeWidth={1}
                 opacity={0.8}
               />
-              <path d={`M${axis.x(pinnedT) - 4} ${LABEL_H - 1}h8l-4 6z`} fill="var(--accent)" />
+              <path d={`M${axis.x(selectedT) - 4} ${LABEL_H - 1}h8l-4 6z`} fill="var(--accent)" />
             </g>
           )}
           {/* what is outside the window is dimmed */}

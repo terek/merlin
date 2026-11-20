@@ -318,7 +318,7 @@ page draws them: a session and every session forked or continued from it are one
 
 *Since 2026-11-15 the Session page lives in the Overview's focus (section 10b, "A session in place"; epic
 `merlin-bj5`). `/s/:harness/:id` only redirects. What is left of it is two things: the **graph** (its key in the Legend
-panel's Graph tab) and, under it, the **box** for the pinned turn or piece of agent work (`TurnBox.tsx`). The header,
+panel's Graph tab) and, under it, the **box** for what is selected: a turn, a piece of agent work or a background job (`TurnBox.tsx`). The header,
 the resume box, the family strip, the banners, the diagnostics, the decision panel and the list of the most expensive
 decisions were removed (the paginator has a copy button for the resume command; the Cost page ranks decisions). The
 zoom is state, not address; `sfrom`/`sto` only come in from links.*
@@ -340,10 +340,10 @@ From top to bottom, the graph and then the box:
     Its first line is the pointer's (`TimePlot`): the clock time, the row's context (held, or waiting for a
     message), this slot's spend on the row; or, over an overhead band, what that band stands for; or, on a
     collapsed swarm, what it stands for. The lines under it (`TurnReadout` in `SpendGraph.tsx`) are the turn
-    under the cursor or pinned (its prompt, step, launched work, decision total, context, idle time, the
+    under the cursor or selected (its prompt, step, launched work, decision total, context, idle time, the
     by-who chips and notes on cache misses, compactions, typed-while-running prompts and reports) or the
-    selected or hovered piece of agent work. With nothing hovered, pinned or selected the block is one hint:
-    how to read and pin, and the scales;
+    selected or hovered piece of agent work (the readout starts from the selection's turn: the selected turn, or the one an agent's work or a job was launched in). With nothing hovered or selected the block is one hint:
+    how to read and select, and the scales;
   - the plot's **key** (`Key.tsx`, `Legend`) is always shown: no button, no toggle, nothing
     in `localStorage`. It sits under the plot, below a rule, in three balanced columns (a grid of `auto-fit` columns of at
     least 17rem, so about three above 900 px and fewer below): *Sessions and agents*; *Context*; *Your turns*, *Spend* and *Time*. Entries are
@@ -352,7 +352,7 @@ From top to bottom, the graph and then the box:
     groups with a small heading (the same on the three columns): *Sessions and agents* (session line by tier, forked or continued session,
     agent spine, fork with its copied context, agent frame, fork notch, workflow dashed, swarm "+", report),
     *Context* (the context area, held strong and faint, cache miss, compactions cold, warm, unknown), *Your
-    turns* (prompt, typed while a turn ran, turns close in time, pinned), *Spend* (spend per slot, not explained
+    turns* (prompt, typed while a turn ran, turns close in time, selected), *Spend* (spend per slot, not explained
     by messages) and *Time* (break, drawn as the veil over a baseline and a gridline). All entries are always listed: a mark the tree cannot have (`keyFacts`:
     cache misses, each kind of compaction, queued prompts, agents, forks, workflows, swarms, reports, sessions,
     overhead) is drawn faint, with the title "not in this session". The samples use the constants and patterns
@@ -380,7 +380,7 @@ From top to bottom, the graph and then the box:
     not eat the strip). It draws the context of the main rows as a light area (the largest of the main
     lanes, `contextEnvelope`), the spend as thin columns along the bottom, one grey with the cache miss in its colour like the plot
     (`spendDensity`), a line at each day boundary (the faint text colour at 70 % opacity, clearly stronger than the strip's other lines), the date of each day (from `splitDays`: the
-    day-of-month, with the month where it changes) where its activity starts, and the pinned turn's
+    day-of-month, with the month where it changes) where its activity starts, and the selected turn's
     marker. The **brush** is the window: a light accent band, no outline, centred on the line between the context area
     and the spend bars, with an accent marker at each edge (as on the Overview's timeline); the rest
     dimmed. Dragging across the strip selects a new range; dragging the window moves it rigidly, its width on the
@@ -417,7 +417,7 @@ From top to bottom, the graph and then the box:
     first (`defaultWindow`, `episodes`); an episode that spent under 1% of the tree (a resume that only
     compacted) is passed over for the one before. The window is that episode's day (a day of three
     sittings would otherwise open on its last half hour), or the episode itself, with a little pad,
-    when the tree had no night and its one day runs for more than 30 hours. Pinning a
+    when the tree had no night and its one day runs for more than 30 hours. Selecting a
     turn (in the graph, a panel, the list of decisions, `#t<n>`) or moving the keyboard cursor brings
     it into view: when it is outside the effective window, the window moves to hold it, keeping its width, or
     snaps to the turn's day if it was a day (`revealWindow`); a turn asked for on opening picks the
@@ -469,7 +469,7 @@ From top to bottom, the graph and then the box:
     per turn every turn has its tick, thick stretch and number and every decision its bracket and
     dollars. From 12 to 40 px the numbers still show only where they fit, and only the 8 most
     expensive decisions in view (`bracketed`), plus those of the hovered or cursor turn and of the
-    pinned turn, have a bracket; the others show only their prompt dot. Below 12 px the turns are
+    selected turn, have a bracket; the others show only their prompt dot. Below 12 px the turns are
     only the turn in focus has a tick and number, and the brackets are the same top 8 plus focus;
   - a diamond is a **cache miss**, on the call that missed: the part of an agent's previous prompt
     that its next message did not read from the cache, written to it again (Claude Code) or charged
@@ -559,10 +559,9 @@ From top to bottom, the graph and then the box:
     stem. Its spine starts on the launcher's baseline (the main row, or the row of the agent that started it) at
     `startedAt`, as an agent's does. Each return is a dashed line to the receiver's row at its time, like an agent's
     report (`woke` and `delivered`); `fetched` is dotted, lighter and points back at the job. The lines show for the
-    job in focus (hovered, or started or answered in the turn under the cursor or pinned). Hovering a job
+    job in focus (hovered, or started or answered in the turn under the cursor or selected). Hovering a job
     puts a line above the plot (kind, description, duration, how it ended, what woke what), without the command;
-    a click selects the job: it stays in focus, the turn that started it is
-    pinned, and the box under the graph shows the job (kind, description, status, the command in code font, and
+    a click selects the job: it stays in focus (and only it is selected: the main session is not marked), and the box under the graph shows the job (kind, description, status, the command in code font, and
     its returns with links to the turns). The turn card says "Started in the background" and "Came back". Jobs add nothing to any total and do not
     change how turns are grouped into decisions. The key lists "background job" only when the graph has one;
   - **spines** show who launched whom. Every agent lane, and every forked or continued session's main
@@ -574,7 +573,7 @@ From top to bottom, the graph and then the box:
     session's line is. It is in the
     lane's kind colour, faint (35%) and drawn under the areas and
     frames; at full strength for the work in focus: hovered, selected, or launched or reported in the
-    turn under the cursor or pinned. Context-carrying branches are skeleton, not detail: a forked or
+    turn under the cursor or selected. Context-carrying branches are skeleton, not detail: a forked or
     continued session's spine and an agent fork's are always at full strength, a clean-context
     sub-agent's elbow stays thin and faint, while its own line along its baseline is always drawn in
     full. Every row's gridlines and zero line are drawn first, under all of this. Agents packed into one row
@@ -613,11 +612,16 @@ From top to bottom, the graph and then the box:
     baseline and have no hatch;
   - hover reads the clock, the context of the row under the pointer and the slot's spend; between
     two turns it reads "between turns 0 and 1: main agent idle 38 min". A click
-    pins the turn or selects the piece of work; a click between two turns of one decision, inside
-    its bracket, pins its nearest turn, and between two decisions pins nothing; arrow keys move by turn.
-- **What is pinned, in the graph**: the pinned turn is tinted on its row with a marker over it, and its decision's
-  bracket turns into a thick accent line with its turns lightly tinted across the session's rows (`marks.tsx` holds
-  the opacities and the colour of an agent's kind); the selected piece of work has its frame's top drawn heavy.
+    selects the turn, the piece of work or the job under the pointer, and only that; a click between two turns of one decision, inside
+    its bracket, selects its nearest turn, and between two decisions selects nothing; arrow keys move by turn, Enter selects the turn
+    the cursor is on, Esc clears the selection.
+- **What is selected, in the graph**: one thing at a time. A selected turn is tinted on its row with a marker over it, and its decision's
+  bracket turns into a thick accent line (its label bold) with its turns lightly tinted across the session's rows (`marks.tsx` holds
+  the opacities and the colour of an agent's kind); the agents and jobs it launched or got reports from come into focus, as for a hovered turn.
+  A selected piece of work has its frame's top drawn heavy, a selected job its top edge, and nothing is marked on the main row.
+  **Hover previews a turn**: with the pointer over a main row (or the keyboard cursor on a turn), the turn a click or Enter would select
+  gets the turn tint at half strength and a hollow marker, without the bracket tint; not when it is already selected, and not over an
+  agent's or job's row (there the click selects that agent or job, whose own hover mark is the preview).
   The box under the graph does not repeat these marks: it says what the turn or the work was, not what it cost.
 - **Breakdown** (`Breakdown.tsx`, numbers in `partition.ts`; the card's top, in place of the old
   switch "By who / By token class / By model tier", which coloured the bars and no longer does, as the
@@ -665,31 +669,31 @@ From top to bottom, the graph and then the box:
   tier, and for each row its **model runs** (consecutive calls on one model, `{ t0, t1, model, tier }`)
   and its main model, for drawing the weight of a line by model;
 - **The box under the graph** (`TurnBox.tsx`; pure parts in `thread.ts`; bead `merlin-bj5.3`): one section of the focus's frame
-  (full-bleed, a hairline under it, no border or corners), shown while a turn or a piece of agent work is pinned. It reads as the conversation: who said what, in
+  (full-bleed, a hairline under it, no border or corners), shown while a turn, a piece of agent work or a background job is selected. It reads as the conversation: who said what, in
   order, with times, and **no dollars, tokens or cost bars** (the graph and its hover carry those). Texts are
   rendered as markdown (`Prose`) and fold at 12 lines with "show more"; a typed prompt is plain text; lines are
   capped at 100ch.
-  - **A pinned main turn**: a heading row (`Turn 12`, its time and duration, marks for interrupted, abandoned or a
-    slash command, ‹ › to the previous and next turn of the session, ✕ to unpin); the **prompt**, with who it came
+  - **A selected main turn**: a heading row (`Turn 12`, its time and duration, marks for interrupted, abandoned or a
+    slash command, ‹ › to the previous and next turn of the session, ✕ to clear the selection); the **prompt**, with who it came
     from (you typed it; a teammate wrote; a background task reported; a wake-up; ...), its text, and each delivered
-    `inbox` message as a block with its sender (a link that pins that agent's work when `agentId` is set), its kind
+    `inbox` message as a block with its sender (a link that selects that agent's work when `agentId` is set), its kind
     (message, task result, idle, assignment) and time, prompts that arrived while the turn ran in place (`queued`),
     "N images"; one line of **what it did** (`18 tool calls (Edit 6, Bash 5, Read 4, …) · 3 files · launched
     reviewer, Explore`, the agents being links that open their work); the **reply** (`finalText`, whole), or "No
     reply (interrupted)".
-  - **A pinned piece of agent work** (an agent and one of its `turns[]`): a head line (the agent's name, its
-    description, its role and model, its time, its status, ✕ back to the turn); "Launched in turn 12" and "reached
+  - **A selected piece of agent work** (an agent and one of its `turns[]`): a head line (the agent's name, its
+    description, its role and model, its time, its status, ✕ clears the selection); "Launched in turn 12" and "reached
     the main agent in turn 15" (links; `Unit.launch` and `Unit.reports`); the **exchange** as a thread, oldest first:
     for each of the agent's turns the request (the main agent's prompt, or the message that set it working again,
-    with its sender) and the response (`finalText`). The pinned turn is open, the others are one folded line each
+    with its sender) and the response (`finalText`). The selected turn is open, the others are one folded line each
     (sender, first line, time) that open on a click. A one-shot sub-agent is one request and one response. A prompt
     the harness keeps encrypted (Codex) says so. Then what it did in a line, and its own sub-agents as links.
-  - The two address forms (`#t<n>`, `#a<id>`) and the Esc behaviour (one Esc takes the pin back, the next closes the
+  - The two address forms (`#t<n>`, `#a<id>`) and the Esc behaviour (one Esc clears the selection, the next closes the
     session) are unchanged.
 
-Addresses: `#t<n>` pins turn n (a copied turn on the session that ran it), `#a<agentId>` opens that
-agent's piece of work (a nested agent opens the piece it is inside), `#c<n>` pins the turn of
-compaction n; search results and the Cost page link with these. `?pin=`, `?unit=`
+Addresses: `#t<n>` selects turn n (a copied turn on the session that ran it), `#a<agentId>` opens that
+agent's piece of work (a nested agent opens the piece it is inside), `#c<n>` selects the turn of
+compaction n; search results and the Cost page link with these. `?pin=` (selects that turn), `?unit=`
 and `?cursor=` exist for screenshots. The prototype's address `/dev/spend/:harness/:id` redirects
 here.
 
@@ -1120,7 +1124,7 @@ a history entry, so Back is the undo.
   sort (`listRows` is the one place both take the ordered list from); at either end the arrow is disabled. A session
   that is not in the list (the scope or the search leaves it out, or an id prefix resolves outside it) says "Not in
   this list" and has no arrows. Keys: `[` and `]`, and `Esc` closes, after the graph's own Esc has taken back a
-  pinned turn (one Esc, one thing); none of them while a field has focus. The previous and next sessions' details are
+  selection (one Esc, one thing); none of them while a field has focus. The previous and next sessions' details are
   prefetched once the current one has loaded. Line 2: the **locator** (the whole session on the distorted axis, with
   its brush; `spend/Overview.tsx`), the full width of the head with the body's 16 px side padding, so that it lines up
   with the main graph below. The graph owns the window; it draws the locator into the head's slot (a portal, the
@@ -1134,12 +1138,12 @@ a history entry, so Back is the undo.
   heading row (name, time, duration; ‹ › ✕ at the right).
 - **The zoom never writes the address.** Drag, click, Latest, All and the keys change state only: no URL
   change, no history entry. `sfrom`/`sto` come in from links (an old `/s/` link) and are
-  read once, when the session opens. A pinned turn (`#t<n>`) is read from the hash on open and on a later hash
-  change; pinning in the page does not write it.
+  read once, when the session opens. A selected turn (`#t<n>`) is read from the hash on open and on a later hash
+  change; selecting in the page does not write it.
   A window whose right edge is at the session's end follows the end as a live session grows; one pulled back
   from the end stays where it is.
 - **Body**: the session's graph with its key in the Legend panel's Graph tab (the Overview's list fills no tab), and
-  the box for the pinned turn or piece of agent work under it (section 9). The zoom window is the user's: toggling the panel resizes the plot and keeps the window
+  the box for what is selected under it (section 9). The zoom window is the user's: toggling the panel resizes the plot and keeps the window
   in time. The graph's vertical frame (`spend/layout.ts`) is built for the width the plot has with the panel open,
   whether it is or not, so a toggle does not move it; going to another session builds a new one. The scroll
   container has `scrollbar-gutter: stable`. An unknown or ambiguous id shows its message (candidates, "No such
@@ -1149,7 +1153,7 @@ a history entry, so Back is the undo.
   `pin`, `unit` and `cursor` are carried. Nothing else is special-cased: Moments, the Bead page and search keep
   linking to `/s/…`.
 - Code: `features/overview/focus.ts` (pure: the address, the redirect target, the position in the list, the
-  "outside this range" line), `RowParts.tsx` (the row's parts), `SessionFocus.tsx`, `SessionView.tsx` (the graph and the pinned box), `TurnBox.tsx`, `thread.ts`.
+  "outside this range" line), `RowParts.tsx` (the row's parts), `SessionFocus.tsx`, `SessionView.tsx` (the graph and the selection's box), `TurnBox.tsx`, `thread.ts`.
 
 ### Limit windows (added 2026-11-15, `merlin-6py`)
 

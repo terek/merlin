@@ -422,7 +422,7 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
         {
           label: 'turns close in time',
           title:
-            'One bracket over turns that ran close together, with what they cost; a break of a few hours starts a new one. Click inside to pin.',
+            'One bracket over turns that ran close together, with what they cost; a break of a few hours starts a new one. Click inside to select.',
           has: true,
           sample: (
             <>
@@ -432,7 +432,7 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
           ),
         },
         {
-          label: 'pinned',
+          label: 'selected',
           title: 'The bracket you clicked',
           has: true,
           sample: (

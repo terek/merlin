@@ -2,7 +2,7 @@
 
 import type { Job } from '../../api/types'
 import type { Col } from './model'
-import type { Pin, UnitRef } from './SpendGraph'
+import type { Pin, Selection } from './SpendGraph'
 import type { Tree } from './tree'
 
 // ---- hash addressing --------------------------------------------------------------------
@@ -23,16 +23,11 @@ export function parseHash(hash: string): Target | null {
 }
 
 /**
- * What a hash target of the session `home` opens in the tree: the turn to pin, and the piece of
- * agent work to open with it. A turn the session copied is pinned on the ancestor that ran it; an
+ * What a hash target of the session `home` selects in the tree: a turn, or a piece of agent work. A turn the session copied is selected on the ancestor that ran it; an
  * agent nested inside another opens the piece of work of the agent the session launched; a
- * compaction pins the turn it happened in. Null when the target is not in the tree.
+ * compaction selects the turn it happened in. Null when the target is not in the tree.
  */
-export function resolveTarget(
-  tree: Tree,
-  home: number,
-  target: Target | null,
-): { pin: Pin; unit: UnitRef | null } | null {
+export function resolveTarget(tree: Tree, home: number, target: Target | null): Selection | null {
   const b = tree.branches[home]
   if (!b || !target) return null
   if (target.kind === 'agent') {
@@ -40,7 +35,7 @@ export function resolveTarget(
     const order = [b, ...tree.branches.filter((x) => x !== b)]
     for (const x of order) {
       const u = x.model.units.find((v) => v.agent.id === target.id || v.nested.some((a) => a.id === target.id))
-      if (u) return { pin: { branch: x.index, col: u.launch }, unit: { branch: x.index, id: u.id } }
+      if (u) return { kind: 'unit', branch: x.index, id: u.id }
     }
     return null
   }
@@ -48,7 +43,7 @@ export function resolveTarget(
   if (index === undefined) return null
   for (let x: typeof b | undefined = b; x; x = x.parent !== undefined ? tree.branches[x.parent] : undefined) {
     const c = x.model.cols[index]
-    if (c && !c.inherited) return { pin: { branch: x.index, col: index }, unit: null }
+    if (c && !c.inherited) return { kind: 'turn', branch: x.index, col: index }
   }
   return null
 }
@@ -73,4 +68,22 @@ export function jobLaunchTurn(
     if (!best || t >= best.t) best = { index: c.index, t }
   }
   return best?.index
+}
+
+/**
+ * The turn a selection stands for, where the readout, the keys and the locator start from: the selected turn,
+ * the turn an agent's work was launched in, the turn a job was started in. Null when nothing is selected or
+ * the selection is not in the tree.
+ */
+export function anchorTurn(tree: Tree, sel: Selection | null): Pin | null {
+  const b = sel ? tree.branches[sel.branch] : undefined
+  if (!sel || !b) return null
+  if (sel.kind === 'turn') return b.model.cols[sel.col] ? { branch: sel.branch, col: sel.col } : null
+  if (sel.kind === 'unit') {
+    const u = b.model.units.find((x) => x.id === sel.id)
+    return u ? { branch: sel.branch, col: u.launch } : null
+  }
+  const j = b.detail.digest.jobs?.find((x) => x.id === sel.id)
+  const col = j ? jobLaunchTurn(b.model.cols, j) : undefined
+  return col === undefined ? null : { branch: sel.branch, col }
 }

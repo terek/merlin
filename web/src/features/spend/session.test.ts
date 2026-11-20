@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, FamilyMember, Message, SessionDetail, Turn } from '../../api/types'
 import type { Col } from './model'
-import { jobLaunchTurn, parseHash, resolveTarget } from './session'
+import { anchorTurn, jobLaunchTurn, parseHash, resolveTarget } from './session'
 import { buildTree } from './tree'
 
 const at = (min: number) => new Date(Date.UTC(2026, 0, 1, 10, min)).toISOString()
@@ -130,21 +130,22 @@ describe('resolveTarget', () => {
   const home = tree.branches.findIndex((b) => b.key.id === 'fork')
   const top = tree.branches.findIndex((b) => b.key.id === 'trunk')
 
-  test('an own turn is pinned on the session itself', () => {
-    expect(resolveTarget(tree, home, { kind: 'turn', index: 2 })).toEqual({ pin: { branch: home, col: 2 }, unit: null })
+  test('an own turn is selected on the session itself', () => {
+    expect(resolveTarget(tree, home, { kind: 'turn', index: 2 })).toEqual({ kind: 'turn', branch: home, col: 2 })
   })
-  test('a copied turn is pinned on the session that ran it', () => {
-    expect(resolveTarget(tree, home, { kind: 'turn', index: 1 })?.pin).toEqual({ branch: top, col: 1 })
+  test('a copied turn is selected on the session that ran it', () => {
+    expect(resolveTarget(tree, home, { kind: 'turn', index: 1 })).toEqual({ kind: 'turn', branch: top, col: 1 })
   })
-  test('a compaction pins its turn', () => {
-    expect(resolveTarget(tree, home, { kind: 'compaction', index: 0 })?.pin).toEqual({ branch: home, col: 3 })
+  test('a compaction selects its turn', () => {
+    expect(resolveTarget(tree, home, { kind: 'compaction', index: 0 })).toEqual({ kind: 'turn', branch: home, col: 3 })
   })
-  test('an agent opens its piece of work, a nested one that of the agent it is inside', () => {
+  test('an agent selects its piece of work, a nested one that of the agent it is inside', () => {
     for (const id of ['sub', 'kid']) {
       const r = resolveTarget(tree, home, { kind: 'agent', id })
-      expect(r?.pin).toEqual({ branch: top, col: 1 })
-      expect(r?.unit?.branch).toBe(top)
-      expect(tree.branches[top].model.units.find((u) => u.id === r?.unit?.id)?.agent.id).toBe('sub')
+      expect(r?.kind).toBe('unit')
+      expect(r?.branch).toBe(top)
+      const unit = r?.kind === 'unit' ? tree.branches[top].model.units.find((u) => u.id === r.id) : undefined
+      expect(unit?.agent.id).toBe('sub')
     }
   })
   test('anything not in the tree is null', () => {
@@ -172,5 +173,20 @@ describe('jobLaunchTurn', () => {
   })
   test('none when the job started before every own turn', () => {
     expect(jobLaunchTurn(cols, { startedAt: at(1) })).toBeUndefined()
+  })
+})
+
+describe('anchorTurn', () => {
+  const t = buildTree([detail({ id: 'trunk', turns: 4, agents: [agent('sub', 1)] })])
+  test('a turn is its own anchor, an agent anchors on the turn that launched it', () => {
+    expect(anchorTurn(t, { kind: 'turn', branch: 0, col: 2 })).toEqual({ branch: 0, col: 2 })
+    expect(anchorTurn(t, { kind: 'turn', branch: 0, col: 9 })).toBeNull()
+    const u = t.branches[0].model.units[0]
+    expect(anchorTurn(t, { kind: 'unit', branch: 0, id: u.id })).toEqual({ branch: 0, col: u.launch })
+  })
+  test('nothing, or something not in the tree, has none', () => {
+    expect(anchorTurn(t, null)).toBeNull()
+    expect(anchorTurn(t, { kind: 'unit', branch: 0, id: 'nope' })).toBeNull()
+    expect(anchorTurn(t, { kind: 'job', branch: 0, id: 'nope' })).toBeNull()
   })
 })

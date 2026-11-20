@@ -1506,7 +1506,7 @@ export const detailAt = (px: number): Detail => (px > FULL_TURN_PX ? 'full' : px
 
 /**
  * The decisions that get a bracket: all of them in full detail; otherwise the `k` most expensive and
- * those in `focus` (the hovered and the pinned turn's). The others show only their prompt dot.
+ * those in `focus` (the hovered and the selected turn's). The others show only their prompt dot.
  */
 export function bracketed(
   decisions: readonly { index: number; usd: number }[],

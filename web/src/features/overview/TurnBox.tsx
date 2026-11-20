@@ -1,4 +1,4 @@
-// The box under the focus's graph (docs/ui.md section 9): what a pinned turn or a piece of agent work says, read
+// The box under the focus's graph (docs/ui.md section 9): what a selected turn, piece of agent work or background job says, read
 // as a conversation. A main turn: the prompt (who it came from), what the turn did in a line, the reply. A piece
 // of agent work: the exchange between the main agent and the agent, a request and its response at a time.
 // No dollars, no tokens: the graph and its hover carry those.
@@ -18,7 +18,9 @@ import { agentLabel } from '../agents/model'
 import { jobKind } from '../spend/jobs'
 import { kindColor } from '../spend/marks'
 import type { Col, SpendModel, Unit } from '../spend/model'
+import type { Selection } from '../spend/SpendGraph'
 import { jobLaunchTurn } from '../spend/session'
+import type { Branch } from '../spend/tree'
 import {
   agentThread,
   type Exchange,
@@ -226,25 +228,33 @@ function TurnPrompt({ turn: t, onOpenAgent }: { turn: Turn; onOpenAgent: (agentI
   )
 }
 
-export interface TurnBoxProps {
+/** What the parts of the box take: the model and the handlers, as the box derives them from the selection. */
+interface BoxParts {
   model: SpendModel
   col: Col
   /** The session's title, when the tree has more than one. */
   branchTitle?: string
-  /** The piece of agent work pinned with the turn, if any. */
-  unit?: Unit
-  /** The background job selected with the turn, if any (it takes the box's place like a piece of agent work). */
-  job?: Job
-  /** Close the job (null) and go back to the turn. */
-  onSelectJob: (id: string | null) => void
-  /** Pin another turn of the session (null unpins). */
+  /** Select another turn of the session (null clears the selection). */
   onPin: (index: number | null) => void
-  /** Open a piece of agent work of this turn, or (null) go back to the turn. */
+  /** Select a piece of agent work of this turn, or (null) clear the selection. */
   onSelectUnit: (id: string | null) => void
-  /** Open the work of an agent by its id (a sender of a message), wherever in the tree it is. */
+  /** Close the background job (null clears the selection). */
+  onSelectJob: (id: string | null) => void
+  /** Select the work of an agent by its id (a sender of a message), wherever in the tree it is. */
   onOpenAgent: (agentId: string) => void
-  /** Pin a turn and leave the agent's work (a link from the agent's box to its turn). */
+  /** Select a turn (a link from the agent's or the job's box to its turn). */
   onOpenTurn: (index: number) => void
+}
+
+export interface TurnBoxProps {
+  /** The session the selection is in. */
+  branch: Branch
+  /** The session's title, when the tree has more than one. */
+  branchTitle?: string
+  selection: Selection
+  onSelect: (selection: Selection | null) => void
+  /** Select the work of an agent by its id, wherever in the tree it is. */
+  onOpenAgent: (agentId: string) => void
 }
 
 /** What the main agent did in a turn, and the reply. */
@@ -255,7 +265,7 @@ function MainTurn({
   onPin,
   onSelectUnit,
   onOpenAgent,
-}: Omit<TurnBoxProps, 'unit' | 'job' | 'onSelectJob' | 'onOpenTurn'>) {
+}: Omit<BoxParts, 'onSelectJob' | 'onOpenTurn'>) {
   const t = col.turn
   const started = parseTime(t.startedAt)
   // previous and next among the session's own turns
@@ -293,7 +303,7 @@ function MainTurn({
           <IconButton label="Next turn" disabled={next === undefined} onClick={() => next !== undefined && onPin(next)}>
             <ChevronRight size={14} />
           </IconButton>
-          <IconButton label="Unpin the turn" onClick={() => onPin(null)}>
+          <IconButton label="Close the turn" onClick={() => onPin(null)}>
             <X size={14} />
           </IconButton>
         </div>
@@ -363,12 +373,12 @@ function AgentWork({
   onSelectUnit,
   onOpenAgent,
   onOpenTurn,
-}: Omit<TurnBoxProps, 'col' | 'unit' | 'job' | 'onSelectJob' | 'onPin' | 'model'> & { unit: Unit }) {
+}: Omit<BoxParts, 'col' | 'onSelectJob' | 'onPin' | 'model'> & { unit: Unit }) {
   const a = u.agent
   const label = agentLabel(a)
   const open = openTurn(a, u.startMs, u.ordinal)
   const thread = agentThread(a, open)
-  // turns the reader has opened or closed by hand; the pinned one starts open
+  // turns the reader has opened or closed by hand; the selected one starts open
   const [toggled, setToggled] = useState<Set<number>>(new Set())
   const isOpen = (x: Exchange) => x.open !== toggled.has(x.index)
   const flip = (i: number) =>
@@ -490,7 +500,7 @@ function JobWork({
   onOpenAgent,
   onOpenTurn,
   launch,
-}: Pick<TurnBoxProps, 'branchTitle' | 'onSelectJob' | 'onOpenAgent' | 'onOpenTurn'> & { job: Job; launch?: number }) {
+}: Pick<BoxParts, 'branchTitle' | 'onSelectJob' | 'onOpenAgent' | 'onOpenTurn'> & { job: Job; launch?: number }) {
   const agents = useContext(AgentNames)
   const [all, setAll] = useState(false)
   const nameOf = (id: string) => {
@@ -591,40 +601,57 @@ function JobWork({
   )
 }
 
-/** The box under the graph: a pinned turn, a piece of agent work, or a background job. */
-export function TurnBox({ unit, ...rest }: TurnBoxProps) {
-  return (
-    <AgentNames.Provider value={rest.model.agentsById}>
-      <Inner unit={unit} {...rest} />
-    </AgentNames.Provider>
-  )
-}
-
-function Inner({ unit, job, ...rest }: TurnBoxProps) {
-  if (job) {
-    return (
-      <JobWork
-        key={job.id}
-        job={job}
-        launch={jobLaunchTurn(rest.model.cols, job)}
-        branchTitle={rest.branchTitle}
-        onSelectJob={rest.onSelectJob}
-        onOpenAgent={rest.onOpenAgent}
-        onOpenTurn={rest.onOpenTurn}
-      />
-    )
+/** The box under the graph: what is selected, a turn, a piece of agent work or a background job. */
+export function TurnBox({ branch, branchTitle, selection, onSelect, onOpenAgent }: TurnBoxProps) {
+  const model = branch.model
+  const at = branch.index
+  const onOpenTurn = (col: number) => onSelect({ kind: 'turn', branch: at, col })
+  const clear = () => onSelect(null)
+  let body: ReactNode = null
+  if (selection.kind === 'job') {
+    const job = branch.detail.digest.jobs?.find((j) => j.id === selection.id)
+    if (job) {
+      body = (
+        <JobWork
+          key={job.id}
+          job={job}
+          launch={jobLaunchTurn(model.cols, job)}
+          branchTitle={branchTitle}
+          onSelectJob={clear}
+          onOpenAgent={onOpenAgent}
+          onOpenTurn={onOpenTurn}
+        />
+      )
+    }
+  } else if (selection.kind === 'unit') {
+    const unit = model.units.find((u) => u.id === selection.id)
+    if (unit) {
+      body = (
+        <AgentWork
+          key={unit.id}
+          unit={unit}
+          branchTitle={branchTitle}
+          onSelectUnit={(id) => (id === null ? clear() : onSelect({ kind: 'unit', branch: at, id }))}
+          onOpenAgent={onOpenAgent}
+          onOpenTurn={onOpenTurn}
+        />
+      )
+    }
+  } else {
+    const col = model.cols[selection.col]
+    if (col) {
+      body = (
+        <MainTurn
+          key={col.index}
+          model={model}
+          col={col}
+          branchTitle={branchTitle}
+          onPin={(i) => (i === null ? clear() : onOpenTurn(i))}
+          onSelectUnit={(id) => (id === null ? clear() : onSelect({ kind: 'unit', branch: at, id }))}
+          onOpenAgent={onOpenAgent}
+        />
+      )
+    }
   }
-  if (unit) {
-    return (
-      <AgentWork
-        key={unit.id}
-        unit={unit}
-        branchTitle={rest.branchTitle}
-        onSelectUnit={rest.onSelectUnit}
-        onOpenAgent={rest.onOpenAgent}
-        onOpenTurn={rest.onOpenTurn}
-      />
-    )
-  }
-  return <MainTurn {...rest} />
+  return <AgentNames.Provider value={model.agentsById}>{body}</AgentNames.Provider>
 }

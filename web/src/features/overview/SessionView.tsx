@@ -1,8 +1,8 @@
 // A session in the Overview's focus (docs/ui.md section 9): a session and everything forked or continued from it
-// as one tree, the graph at its centre; a click pins a turn (or a piece of agent work) and opens it underneath.
+// as one tree, the graph at its centre; a click selects a turn, a piece of agent work or a background job and opens it underneath.
 // `SessionView` is what the Overview draws for `?open=<harness>:<id>`; the old address /s/:harness/:id redirects there.
-// URL: #t<n> pins turn n, #a<agentId> opens that agent's work, #c<n> pins the turn of compaction n
-// (search results and other pages link with these). The zoom is `sfrom`/`sto`. Also pin=<turn>, unit=<agentId>#<n>,
+// URL: #t<n> selects turn n, #a<agentId> opens that agent's work, #c<n> selects the turn of compaction n
+// (search results and other pages link with these). The zoom is `sfrom`/`sto`. Also pin=<turn> (selects the turn), unit=<agentId>#<n>,
 // cursor=<turn> for development and screenshots.
 import { useQueries } from '@tanstack/react-query'
 import { SearchX } from 'lucide-react'
@@ -15,8 +15,8 @@ import { useDocumentTitle } from '../../lib/hooks'
 import { sessionTitle } from '../../lib/session'
 import { isTyping } from '../../shell/useShortcut'
 import { EmptyState, ErrorState, Id, ProjectName, QueryBoundary, RelTime, Skeleton, SkeletonRows } from '../../ui'
-import { type JobRef, type Pin, SpendGraph, type UnitRef } from '../spend/SpendGraph'
-import { jobLaunchTurn, parseHash, resolveTarget } from '../spend/session'
+import { type Selection, SpendGraph } from '../spend/SpendGraph'
+import { parseHash, resolveTarget } from '../spend/session'
 import { parseTime, type TimeRange } from '../spend/timeline'
 import { buildTree } from '../spend/tree'
 import { sessionKey } from './model'
@@ -54,72 +54,23 @@ function Loaded({
     tree.branches.findIndex((b) => same(b.key, home.summary.key)),
   )
   const fromHash = resolveTarget(tree, homeIndex, parseHash(address.hash))
-  const [unit, setUnit] = useState<UnitRef | null>(() => {
-    if (fromHash) return fromHash.unit
-    const want = params.get('unit')
-    return want && tree.branches[homeIndex]?.model.units.some((u) => u.id === want)
-      ? { branch: homeIndex, id: want }
-      : null
-  })
-  const [pinned, setPinned] = useState<Pin | null>(() => {
-    if (fromHash) return fromHash.pin
+  // the one selection: a turn, a piece of agent work or a background job; the box under the graph shows it
+  const [selected, setSelected] = useState<Selection | null>(() => {
+    if (fromHash) return fromHash
     const b = tree.branches[homeIndex]
+    const want = params.get('unit')
+    if (want && b?.model.units.some((u) => u.id === want)) return { kind: 'unit', branch: homeIndex, id: want }
     const p = num(params.get('pin'))
-    if (b && p !== null && b.model.cols[p] && !b.model.cols[p].inherited) return { branch: homeIndex, col: p }
-    const u = unit ? b?.model.units.find((x) => x.id === unit.id) : undefined
-    return u ? { branch: homeIndex, col: u.launch } : null
+    if (b && p !== null && b.model.cols[p] && !b.model.cols[p].inherited)
+      return { kind: 'turn', branch: homeIndex, col: p }
+    return null
   })
-  const branch = pinned ? tree.branches[pinned.branch] : undefined
-  const col = branch && pinned ? branch.model.cols[pinned.col] : undefined
-  const unitOf = (r: UnitRef | null) =>
-    r ? tree.branches[r.branch]?.model.units.find((u) => u.id === r.id) : undefined
+  const branch = selected ? tree.branches[selected.branch] : undefined
 
-  // a background job: the digest's, and the turns it belongs to (the one that launched it, the ones its output reached)
-  const [job, setJob] = useState<JobRef | null>(null)
-  const jobOf = (r: JobRef | null) => tree.branches[r?.branch ?? -1]?.detail.digest.jobs?.find((j) => j.id === r?.id)
-  const jobTurns = (r: JobRef | null) => {
-    const j = jobOf(r)
-    const b = r ? tree.branches[r.branch] : undefined
-    if (!j || !b) return []
-    const launch = jobLaunchTurn(b.model.cols, j)
-    return [
-      ...(launch === undefined ? [] : [launch]),
-      ...(j.returns ?? []).flatMap((x) => (x.turn === undefined ? [] : [x.turn])),
-    ]
-  }
-
-  const pin = (p: Pin | null) => {
-    setPinned(p)
-    // a job stays open on the turn that launched it and the ones its output reached
-    if (!p || !job || p.branch !== job.branch || !jobTurns(job).includes(p.col)) setJob(null)
-    // a piece of agent work stays open on the turn that launched it and the ones its reports came in
-    const u = unitOf(unit)
-    if (!p || !unit || !u || p.branch !== unit.branch || (u.launch !== p.col && !u.reports.includes(p.col)))
-      setUnit(null)
-  }
-  const selectUnit = (r: UnitRef | null) => {
-    setUnit(r)
-    if (r) setJob(null)
-    const u = unitOf(r)
-    if (r && u && !(pinned?.branch === r.branch && (pinned.col === u.launch || u.reports.includes(pinned.col))))
-      setPinned({ branch: r.branch, col: u.launch })
-  }
-
-  const selectJob = (r: JobRef) => {
-    setJob(r)
-    setUnit(null)
-    const j = jobOf(r)
-    const launch = j ? jobLaunchTurn(tree.branches[r.branch].model.cols, j) : undefined
-    if (launch !== undefined && !(pinned?.branch === r.branch && jobTurns(r).includes(pinned.col)))
-      setPinned({ branch: r.branch, col: launch })
-  }
   // a sender of a message, or a sub-agent: its work, wherever in the tree it is
   const openAgent = (id: string) => {
     const t = resolveTarget(tree, homeIndex, { kind: 'agent', id })
-    if (!t) return
-    setPinned(t.pin)
-    setUnit(t.unit)
-    setJob(null)
+    if (t) setSelected(t)
   }
 
   // a link to a turn, a compaction or an agent (from search) opens it, here or on a later hash change
@@ -128,26 +79,22 @@ function Loaded({
   useEffect(() => {
     const t = resolveTarget(tree, homeIndex, parseHash(address.hash))
     if (!t) return
-    setPinned(t.pin)
-    setUnit(t.unit)
-    setJob(null)
+    setSelected(t)
     requestAnimationFrame(() => opened.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }, [address.hash])
 
-  // Esc takes the pin back before it closes the session: one Esc does one thing (the focus closes on an Esc
+  // Esc takes the selection back before it closes the session: one Esc does one thing (the focus closes on an Esc
   // nobody has handled). Listened to in the capture phase, so that it is settled before anything else sees it.
   useEffect(() => {
-    if (!pinned && !unit && !job) return
+    if (!selected) return
     const on = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target)) return
       e.preventDefault()
-      setPinned(null)
-      setUnit(null)
-      setJob(null)
+      setSelected(null)
     }
     window.addEventListener('keydown', on, true)
     return () => window.removeEventListener('keydown', on, true)
-  }, [pinned, unit, job])
+  }, [selected])
 
   const multi = tree.branches.length > 1
   // the harness's limit lockouts (the plot clips them to its axis)
@@ -170,12 +117,8 @@ function Loaded({
         tree={tree}
         home={homeIndex}
         current={home.summary.key}
-        pinned={pinned}
-        onPin={pin}
-        selectedUnit={unit}
-        onSelectUnit={selectUnit}
-        selectedJob={job}
-        onSelectJob={selectJob}
+        selected={selected}
+        onSelect={setSelected}
         initialCursor={num(params.get('cursor')) ?? undefined}
         initialWindow={{ lo: parseTime(params.get('sfrom')), hi: parseTime(params.get('sto')) }}
         keyInPanel
@@ -185,23 +128,14 @@ function Loaded({
         scope={scope}
       />
       <div ref={opened} className="scroll-mt-12">
-        {branch && col && pinned && (
+        {branch && selected && (
           <TurnBox
-            key={`${pinned.branch}/${col.index}`}
-            model={branch.model}
-            col={col}
+            key={`${selected.kind}/${selected.branch}/${'col' in selected ? selected.col : selected.id}`}
+            branch={branch}
             branchTitle={multi ? branch.title : undefined}
-            unit={unit?.branch === pinned.branch ? branch.model.units.find((u) => u.id === unit.id) : undefined}
-            job={job?.branch === pinned.branch ? jobOf(job) : undefined}
-            onSelectJob={(id) => id === null && setJob(null)}
-            onPin={(i) => pin(i === null ? null : { branch: pinned.branch, col: i })}
-            onSelectUnit={(id) => (id === null ? setUnit(null) : selectUnit({ branch: pinned.branch, id }))}
+            selection={selected}
+            onSelect={setSelected}
             onOpenAgent={openAgent}
-            onOpenTurn={(i) => {
-              setUnit(null)
-              setJob(null)
-              setPinned({ branch: pinned.branch, col: i })
-            }}
           />
         )}
       </div>
@@ -297,7 +231,7 @@ export interface SessionViewProps {
   scope?: TimeRange
 }
 
-/** The session the Overview has open: its graph, and the pinned turn under it. */
+/** The session the Overview has open: its graph, and what is selected under it. */
 export function SessionView({ harness, id, search, hash, hrefFor, locatorHost, scope }: SessionViewProps) {
   const query = useSession(harness, id, { messages: true })
   useDocumentTitle(query.data ? sessionTitle(query.data.summary) : undefined)

@@ -1,6 +1,6 @@
 // The spend graph: the card around the time view (TimeView.tsx), with the bars and their names (Breakdown.tsx) and the plot's key below the plot (Key.tsx), the compactions,
-// the readout of what is under the cursor and the key handling. The pinned turn and the selected
-// piece of agent work are the page's; the panels under the card open them.
+// the readout of what is under the cursor and the key handling. The selection (a turn, a piece of
+// agent work or a background job) is the page's; the panels under the card open it.
 import { type KeyboardEvent, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { usePrices } from '../../api/queries'
@@ -29,6 +29,7 @@ import {
   unitUnrecorded,
 } from './model'
 import { Overview, stripAxis } from './Overview'
+import { anchorTurn } from './session'
 import { TimePlot } from './TimeView'
 import {
   boundsOf,
@@ -64,17 +65,17 @@ export interface JobRef {
   id: string
 }
 
+/** What the page has selected, and the box under the graph shows: one turn, one piece of agent work, or one job. */
+export type Selection = ({ kind: 'turn' } & Pin) | ({ kind: 'unit' } & UnitRef) | ({ kind: 'job' } & JobRef)
+
 export interface SpendGraphProps {
   tree: Tree
-  /** The branch the page was opened on: the keys move along it until something else is pinned. */
+  /** The branch the page was opened on: the keys move along it until something else is selected. */
   home: number
   /** The turn the inspector shows. */
-  pinned: Pin | null
-  onPin: (pin: Pin | null) => void
-  selectedUnit: UnitRef | null
-  onSelectUnit: (unit: UnitRef) => void
-  selectedJob: JobRef | null
-  onSelectJob: (job: JobRef) => void
+  selected: Selection | null
+  /** A click or Enter selects; Esc (null) clears. */
+  onSelect: (selection: Selection | null) => void
   /** Dev and screenshots: start with the cursor on this turn of the home branch. */
   initialCursor?: number
   /** Dev and screenshots: the window of time to show first (`?from=&to=`). */
@@ -95,8 +96,6 @@ export interface SpendGraphProps {
    */
   locatorHost?: HTMLElement | null
 }
-
-const pinKey = (p: Pin | null | undefined) => (p ? `${p.branch}/${p.col}` : '')
 
 function Swatch({ color }: { color: string }) {
   return <span aria-hidden className="inline-block size-2 shrink-0 rounded-[2px]" style={{ background: color }} />
@@ -287,12 +286,8 @@ function TurnReadout({
 export function SpendGraph({
   tree,
   home,
-  pinned,
-  onPin,
-  selectedUnit,
-  onSelectUnit,
-  selectedJob,
-  onSelectJob,
+  selected,
+  onSelect,
   initialCursor,
   initialWindow,
   scope,
@@ -313,7 +308,10 @@ export function SpendGraph({
   const [hoverPart, setHoverPart] = useState<Hover | null>(null)
 
   const { branches } = tree
-  const focus = pinned?.branch ?? home
+  // the turn the selection stands for: itself, the turn an agent's work was launched in, the turn a job was started in
+  const anchor = anchorTurn(tree, selected)
+  const focus = anchor?.branch ?? home
+  const selectedUnit = selected?.kind === 'unit' ? selected : null
   // agent runs that left no record of their spend (a Pi `--no-session` child): unknown, so in no figure
   const unrecordedRuns = branches.reduce((n, b) => n + (b.detail.digest.cost.unrecordedAgents ?? 0), 0)
   const compactions = useMemo(
@@ -380,20 +378,21 @@ export function SpendGraph({
     const next = followEnd(win, prevT1, bounds.t1)
     if (next !== win) setWin(next)
   }
-  const [seen, setSeen] = useState(pinKey(pinned))
-  if (seen !== pinKey(pinned)) {
-    setSeen(pinKey(pinned))
-    reveal(turnStart(pinned))
+  const selKey = selected ? `${selected.kind}/${selected.branch}/${'col' in selected ? selected.col : selected.id}` : ''
+  const [seen, setSeen] = useState(selKey)
+  if (seen !== selKey) {
+    setSeen(selKey)
+    reveal(turnStart(anchor))
   }
 
   const breakdown = useBreakdown(tree, timeline, eff)
 
   if (branches.length === 0) return null
 
-  // ---- what is under the cursor, pinned, selected
+  // ---- what is under the cursor, and what is selected
   const valid = (p: Pin | null): p is Pin => !!p && !!branches[p.branch]?.model.cols[p.col]
   const cur = valid(cursor) ? cursor : undefined
-  const shown = cur ?? (valid(pinned) ? pinned : undefined)
+  const shown = cur ?? (valid(anchor) ? anchor : undefined)
   const unitOf = (r: UnitRef | null) => {
     const branch = r ? branches[r.branch] : undefined
     const unit = branch?.model.units.find((u) => u.id === r?.id)
@@ -402,7 +401,7 @@ export function SpendGraph({
   const shownUnit = unitOf(hoverUnit) ?? (cur ? undefined : unitOf(selectedUnit))
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const here = cur ?? (valid(pinned) ? pinned : undefined)
+    const here = cur ?? (valid(anchor) ? anchor : undefined)
     const b = branches[here?.branch ?? focus]
     if (!b || b.own.length === 0) return
     const k = here ? b.own.indexOf(here.col) : b.own.length - 1
@@ -413,11 +412,11 @@ export function SpendGraph({
     else if (e.key === 'Home') next = 0
     else if (e.key === 'End') next = b.own.length - 1
     else if (e.key === 'Escape') {
-      onPin(null)
+      onSelect(null)
       return
     } else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      if (cur) onPin(cur)
+      if (cur) onSelect({ kind: 'turn', ...cur })
       return
     } else return
     e.preventDefault()
@@ -433,7 +432,7 @@ export function SpendGraph({
         win={win}
         eff={eff}
         onWin={setWin}
-        pinnedT={turnStart(pinned)}
+        selectedT={turnStart(anchor)}
         latest={latest}
         lockouts={lockouts}
         controlsHost={locator}
@@ -455,16 +454,12 @@ export function SpendGraph({
               tree={tree}
               timeline={timeline}
               range={eff}
-              pinned={valid(pinned) ? pinned : null}
+              selected={selected && (selected.kind !== 'turn' || valid(selected)) ? selected : null}
               cursor={cur}
-              selectedUnit={selectedUnit}
-              selectedJob={selectedJob}
               hoverUnit={hoverUnit}
               onCursor={setCursor}
               onHoverUnit={setHoverUnit}
-              onPin={onPin}
-              onSelectUnit={onSelectUnit}
-              onSelectJob={onSelectJob}
+              onSelect={onSelect}
               onKey={onKey}
               current={current}
               lockouts={lockouts}
@@ -518,7 +513,7 @@ export function SpendGraph({
                 <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">How to read</h4>
                 <p>
                   Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given.
-                  Click pins it and opens it below. Context per call above each baseline, spend below it, each on one
+                  Click selects it and opens it below. Context per call above each baseline, spend below it, each on one
                   scale.
                 </p>
               </section>

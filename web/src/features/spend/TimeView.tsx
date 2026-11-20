@@ -58,9 +58,9 @@ import {
   SLOT_PX,
   windowRow,
 } from './layout'
-import { DECISION_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
+import { DECISION_TINT_OPACITY, PREVIEW_TINT_OPACITY, TURN_TINT_OPACITY } from './marks'
 import { KIND_SERIES, type KindKey, missText, type Unit } from './model'
-import type { JobRef, Pin, UnitRef } from './SpendGraph'
+import type { Pin, Selection, UnitRef } from './SpendGraph'
 import {
   addCall,
   axisSpans,
@@ -245,18 +245,14 @@ export interface TimePlotProps {
   timeline: Timeline
   /** The window of time to show, of a tree too long for one view. */
   range: Win | undefined
-  pinned: Pin | null
+  selected: Selection | null
   cursor: Pin | undefined
-  selectedUnit: UnitRef | null
-  selectedJob: JobRef | null
   hoverUnit: UnitRef | null
   onCursor: (p: Pin | null) => void
   onHoverUnit: (u: UnitRef | null) => void
-  onPin: (p: Pin | null) => void
-  onSelectUnit: (u: UnitRef) => void
-  onSelectJob: (j: JobRef) => void
+  onSelect: (s: Selection | null) => void
   onKey: (e: KeyboardEvent<HTMLDivElement>) => void
-  /** The turn or piece of work under the cursor, pinned or selected (lines under the pointer's own); null if none. */
+  /** The turn or piece of work under the cursor or selected (lines under the pointer's own); null if none. */
   turnLines: ReactNode
   /** The session the page is about: its main row is marked "this session". */
   current?: SessionKey
@@ -302,16 +298,12 @@ export function TimePlot({
   tree,
   timeline,
   range,
-  pinned,
+  selected,
   cursor,
-  selectedUnit,
-  selectedJob,
   hoverUnit,
   onCursor,
   onHoverUnit,
-  onPin,
-  onSelectUnit,
-  onSelectJob,
+  onSelect,
   onKey,
   turnLines,
   current,
@@ -337,6 +329,9 @@ export function TimePlot({
   // swarms (found on the whole timeline, so that a window keeps their ids) are one row each until opened
   const swarms = useMemo(() => findSwarms(timeline.lanes), [timeline])
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
+  const pinned = selected?.kind === 'turn' ? selected : null
+  const selectedUnit = selected?.kind === 'unit' ? selected : null
+  const selectedJob = selected?.kind === 'job' ? selected : null
   const toggle = (id: string) =>
     setOpen((o) => {
       const n = new Set(o)
@@ -1181,7 +1176,7 @@ export function TimePlot({
   }
 
   // ---- spines, launches and reports between the rows
-  // the work in focus: hovered or selected, or launched or reported in the turn under the cursor or pinned
+  // the work in focus: hovered or selected, or launched or reported in the turn under the cursor or selected
   const focusTurns = [cursor, pinned].filter((p): p is Pin => !!p)
   const inFocus = (l: Lane, u: Unit) =>
     isOn(l, u) || focusTurns.some((p) => p.branch === l.branch && (u.launch === p.col || u.reports.includes(p.col)))
@@ -1358,7 +1353,7 @@ export function TimePlot({
       })}
     </g>
   ))
-  // a job is in focus when hovered, or when the turn under the cursor (or pinned) started it or got its output
+  // a job is in focus when hovered, or when the turn under the cursor (or selected) started it or got its output
   const jobFocus = (l: Lane) =>
     jobOn(l) ||
     focusTurns.some(
@@ -1519,9 +1514,8 @@ export function TimePlot({
         ),
   )
 
-  // ---- pinned turn, its decision, the cursor
-  const pinMarks = (() => {
-    if (!pinned) return null
+  // ---- the selected turn, its decision; and, lighter, the turn a click would select
+  const turnMarks = (pinned: Pin, preview: boolean) => {
     const g = mainRow(pinned.branch)
     const l = g?.row.lanes[0]
     const s = l?.turns.find((x) => x.col.index === pinned.col)
@@ -1536,8 +1530,8 @@ export function TimePlot({
     const xa = axis.x(s.t0)
     const xb = Math.max(xa + 2, axis.x(s.t1))
     return (
-      <g pointerEvents="none">
-        {d0 && d1 && (
+      <g pointerEvents="none" key={preview ? 'preview' : 'selected'}>
+        {!preview && d0 && d1 && (
           <rect
             x={axis.x(d0.t0)}
             y={yTop}
@@ -1553,12 +1547,31 @@ export function TimePlot({
           width={xb - xa}
           height={g.bottom - g.top}
           fill="var(--accent)"
-          opacity={TURN_TINT_OPACITY}
+          opacity={preview ? PREVIEW_TINT_OPACITY : TURN_TINT_OPACITY}
         />
-        <path d={`M${f1(xa - 4)} ${g.top - 1}h8l-4 6z`} fill="var(--accent)" />
+        <path
+          d={`M${f1(xa - 4)} ${g.top - 1}h8l-4 6z`}
+          fill={preview ? 'none' : 'var(--accent)'}
+          stroke={preview ? 'var(--accent)' : undefined}
+          strokeWidth={preview ? 1 : undefined}
+        />
       </g>
     )
-  })()
+  }
+  // the turn a click or Enter would select: under the pointer on a main row (on an agent's or a job's row the click
+  // takes that, whose own mark is the preview), or the keyboard's; not the one already selected
+  const previewOf =
+    cursor &&
+    !(px && !layout[px.row]?.row.main) &&
+    !(pinned && pinned.branch === cursor.branch && pinned.col === cursor.col)
+      ? cursor
+      : null
+  const selectionMarks = (
+    <>
+      {previewOf && turnMarks(previewOf, true)}
+      {pinned && turnMarks(pinned, false)}
+    </>
+  )
 
   // the labels along the top, left to right, each where it does not run into the one before: clock
   // times (with the date where it changes), and how long each break was
@@ -1641,7 +1654,7 @@ export function TimePlot({
           ) : (
             <div className="text-faint">
               Hover, or press ← →, to read a turn; hover a piece of agent work to read what an agent was given. Click
-              pins it and opens it below. Context per call above each baseline, spend per {slotText(slot)} below it,
+              selects it and opens it below. Context per call above each baseline, spend per {slotText(slot)} below it,
               each on one scale (the tallest bar is {formatMoney(maxSlot)}).
             </div>
           )
@@ -1708,12 +1721,12 @@ export function TimePlot({
           }
           if (layout[h.row]?.row.job) {
             const jl = jobAt(h.row, h.x)
-            if (jl?.job) onSelectJob({ branch: jl.branch, id: jl.job.id })
+            if (jl?.job) onSelect({ kind: 'job', branch: jl.branch, id: jl.job.id })
             return
           }
           const r = read(h)
-          if (r.unit) onSelectUnit(r.unit)
-          else if (r.pin) onPin(r.pin)
+          if (r.unit) onSelect({ kind: 'unit', ...r.unit })
+          else if (r.pin) onSelect({ kind: 'turn', ...r.pin })
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -1805,7 +1818,7 @@ export function TimePlot({
           </defs>
           {grid}
           {spend}
-          {pinMarks}
+          {selectionMarks}
           {spines}
           {layout.map(drawRow)}
           {branches}
