@@ -1132,7 +1132,22 @@ export interface MomentView {
   new?: boolean
   first?: string
   last?: string
+  /** The hit that `first` is the time of. */
+  firstHit?: MomentHit
+  /** Every hit counted per local day, by day. */
+  days?: MomentDay[]
   examples?: MomentHit[]
+}
+
+export interface MomentDay {
+  day: string
+  hits: number
+}
+
+/** Human prompts typed on one local day (interactive sessions). */
+export interface MomentActivityDay {
+  day: string
+  prompts: number
 }
 
 export interface PersonaView {
@@ -1151,6 +1166,8 @@ export interface PersonaView {
 export interface MomentSuggestion {
   moment: string
   reason?: string
+  /** Where the symptom shows most: a session, at a turn where that makes sense. */
+  example?: MomentHit
 }
 
 /** GET /api/moments */
@@ -1162,6 +1179,8 @@ export interface MomentsReport {
   since?: string
   /** Projects the interactive sessions worked in: repositories (worktrees count once), else directories. */
   projects: number
+  /** Human prompts per local day, by day; days with none are left out. */
+  activity?: MomentActivityDay[]
   personas: PersonaView[]
   moments: MomentView[]
   suggestions: MomentSuggestion[]
