@@ -1247,6 +1247,31 @@ export function splitHeld(t0: number, t1: number, busy: readonly { t0: number; t
 }
 
 /**
+ * `[t0, t1]` cut where it crosses the held stretches (`splitHeld`, sorted, not overlapping): each
+ * piece says whether the context over it is held, strongly (a turn or piece of work still ran) or
+ * faintly (between them), so that a baseline can be dashed where the context above it is.
+ */
+export function dashPieces(
+  t0: number,
+  t1: number,
+  held: readonly { t0: number; t1: number; busy: boolean }[],
+): { t0: number; t1: number; held?: 'strong' | 'faint' }[] {
+  if (!(t1 > t0)) return [{ t0, t1 }]
+  const out: { t0: number; t1: number; held?: 'strong' | 'faint' }[] = []
+  let at = t0
+  for (const h of held) {
+    if (h.t1 <= at) continue
+    if (h.t0 >= t1) break
+    if (h.t0 > at) out.push({ t0: at, t1: h.t0 })
+    const end = Math.min(h.t1, t1)
+    out.push({ t0: Math.max(at, h.t0), t1: end, held: h.busy ? 'strong' : 'faint' })
+    at = end
+  }
+  if (at < t1) out.push({ t0: at, t1 })
+  return out
+}
+
+/**
  * Where `t` falls among a main lane's turns: in one (`slack` past its end still counts, so that a
  * turn of no width can be hovered), between two, or after the last.
  */

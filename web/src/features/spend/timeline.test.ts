@@ -18,6 +18,7 @@ import {
   clampWindow,
   collapseSwarms,
   contextEnvelope,
+  dashPieces,
   dayAt,
   dayParts,
   defaultWindow,
@@ -1180,5 +1181,25 @@ describe('scopeWindow', () => {
   test('a window at the end of the session stays at its end, so that it follows', () => {
     const w = scopeWindow({ fromMs: 48 * H, toMs: 500 * H }, b)
     expect(w?.hi).toBe(b.t1)
+  })
+})
+
+describe('dashPieces', () => {
+  const held = [
+    { t0: 10, t1: 20, busy: true },
+    { t0: 30, t1: 50, busy: false },
+  ]
+  test('cuts a stretch where the context over it is held, strongly within a turn and faintly between', () => {
+    expect(dashPieces(0, 40, held)).toEqual([
+      { t0: 0, t1: 10 },
+      { t0: 10, t1: 20, held: 'strong' },
+      { t0: 20, t1: 30 },
+      { t0: 30, t1: 40, held: 'faint' },
+    ])
+  })
+  test('a stretch inside one held stretch is held all along; one with none is one plain piece', () => {
+    expect(dashPieces(32, 45, held)).toEqual([{ t0: 32, t1: 45, held: 'faint' }])
+    expect(dashPieces(21, 29, held)).toEqual([{ t0: 21, t1: 29 }])
+    expect(dashPieces(5, 5, held)).toEqual([{ t0: 5, t1: 5 }])
   })
 })

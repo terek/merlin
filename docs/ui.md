@@ -499,7 +499,8 @@ From top to bottom, the graph and then the box:
     turn does), over a faint full-width axis (0.75 px) that keeps the scale readable outside it. It is as
     heavy as the tier of the model in effect (3.5 px heavy, 2 px mid, 1 px light; unpriced is mid): during a
     turn the model that ran, between turns and across breaks the model last in effect, before the first
-    run the first run's (`tierSegments`, `carrierWeight`). It is never thinned while idle. Each turn has a
+    run the first run's (`tierSegments`, `carrierWeight`). It is never thinned while idle, but where the context above it is held (dotted) it is dashed at the same
+    weight, in shorter gaps while a turn still runs and longer ones between turns (`dashPieces`). Each turn has a
     tick where it starts, drawn over the line; the band level of detail keeps only the ticks and numbers
     of the turns in focus, the line is the same. Where the main agent's model changes
     (`lane.runs`), and where its first call in the window is, the model's short name (`Fable 5.1`)
@@ -555,7 +556,8 @@ From top to bottom, the graph and then the box:
     its branch, or the row of the agent a later message names as its sender, `u.from`; for a forked
     or continued session, the main row of its parent session at the moment the new session begins),
     runs vertically to the agent's row, turns with a rounded elbow (radius 6 px) onto its baseline and
-    runs along it over the agent's life, from its first launch to its last activity. It is in the
+    runs along it over the agent's life, from its first launch to its last activity, dashed where its context is held, as a
+    session's line is. It is in the
     lane's kind colour, faint (35%) and drawn under the areas and
     frames; at full strength for the work in focus: hovered, selected, or launched or reported in the
     turn under the cursor or pinned. Context-carrying branches are skeleton, not detail: a forked or

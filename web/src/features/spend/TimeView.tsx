@@ -69,6 +69,7 @@ import {
   branchWeight,
   carrierWeight,
   clockTicks,
+  dashPieces,
   detailAt,
   findSwarms,
   HOLD_MS,
@@ -133,6 +134,8 @@ export const HELD_LINE = {
   strong: { opacity: 1, width: 1.5, dash: '1.5 2.5' },
   faint: { opacity: 0.4, width: 1.25, dash: '1.5 4' },
 }
+/** A baseline (a session's line, an agent's spine) where the context above it is held: as heavy, dashed, more open between turns. */
+export const BASE_DASH = { strong: '5 3', faint: '3 5' }
 /** A compaction's mark: solid on a cold cache, dashed otherwise. */
 export const COMPACT_MARK = {
   cold: { width: 2, dash: undefined as string | undefined },
@@ -618,9 +621,8 @@ export function TimePlot({
   const hatchOf = (color: string) => `url(#${hatch}-${colors.indexOf(color)})`
   // text a break's veil must not fade: the labels written on rows are drawn after it
   const labels: ReactNode[] = []
-  const drawLane = (g: Layout, l: Lane) => {
-    const color = COLOR[l.kind]
-    const inherited = inheritOf(l)
+  /** A lane's context in runs (an area each) and what its agent was busy with; the context between two runs is held. */
+  const contextOf = (l: Lane) => {
     const own = l.series.find((s) => s.own)
     // an agent waits between its turns or pieces of work (for a message), however short the wait
     const starts = l.main ? l.turns.map((t) => t.t0) : l.units.map((u) => u.startMs)
@@ -630,7 +632,6 @@ export function TimePlot({
           starts.toSorted((a, b) => a - b),
         )
       : []
-    const top = g.row.main ? g.top + BRACKET_H : g.top
     // what the agent was busy with: a main agent's turns, a one-shot agent's piece of work; an addressable agent's whole life, so that the
     // context it holds between its pieces of work joins them as strongly as a main agent's turns do
     const busy: { t0: number; t1: number }[] = l.main
@@ -640,6 +641,18 @@ export function TimePlot({
         : l.units
             .filter((u) => Number.isFinite(u.startMs))
             .map((u) => ({ t0: u.startMs, t1: Math.max(u.startMs, u.endMs) }))
+    return { runs, busy }
+  }
+  /** Where a lane holds its context over a pause: strong while a turn or piece of work ran, faint between. */
+  const heldOf = (l: Lane) => {
+    const { runs, busy } = contextOf(l)
+    return runs.slice(1).flatMap((run, i) => splitHeld(runs[i][runs[i].length - 1].t, run[0].t, busy))
+  }
+  const drawLane = (g: Layout, l: Lane) => {
+    const color = COLOR[l.kind]
+    const inherited = inheritOf(l)
+    const { runs, busy } = contextOf(l)
+    const top = g.row.main ? g.top + BRACKET_H : g.top
     return (
       <g key={l.key}>
         {/* the agent's work: one light frame over all of it, as over a decision (its start down to the
@@ -975,27 +988,36 @@ export function TimePlot({
               return null
             })
           })()}
-        {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included) */}
+        {/* a main session's line: one continuous stretch from its first moment to its last, as heavy as the model in effect (idle and breaks included),
+            dashed where the context above it is held */}
         {whole &&
           Number.isFinite(whole.t0) &&
           Number.isFinite(whole.t1) &&
-          tierSegments(whole.runs, whole.t0, whole.t1).map((sg, k, all) => {
-            const x0 = Math.max(X0, axis.x(sg.t0))
-            const x1 = Math.min(X1, k === all.length - 1 ? Math.max(axis.x(sg.t1), axis.x(sg.t0) + 1.5) : axis.x(sg.t1))
-            if (!(x1 > x0)) return null
-            return (
-              <line
-                key={sg.t0}
-                pointerEvents="none"
-                x1={x0}
-                x2={x1}
-                y1={g.base + 0.5}
-                y2={g.base + 0.5}
-                stroke={COLOR.main}
-                strokeWidth={branchWeight(sg.tier)}
-              />
-            )
-          })}
+          (() => {
+            const held = heldOf(whole)
+            return tierSegments(whole.runs, whole.t0, whole.t1).flatMap((sg, k, all) => {
+              const last = k === all.length - 1
+              return dashPieces(sg.t0, sg.t1, held).map((pc, j, pcs) => {
+                const x0 = Math.max(X0, axis.x(pc.t0))
+                const end = axis.x(pc.t1)
+                const x1 = Math.min(X1, last && j === pcs.length - 1 ? Math.max(end, axis.x(sg.t0) + 1.5) : end)
+                if (!(x1 > x0)) return null
+                return (
+                  <line
+                    key={`${sg.t0}/${pc.t0}`}
+                    pointerEvents="none"
+                    x1={x0}
+                    x2={x1}
+                    y1={g.base + 0.5}
+                    y2={g.base + 0.5}
+                    stroke={COLOR.main}
+                    strokeWidth={branchWeight(sg.tier)}
+                    strokeDasharray={pc.held ? BASE_DASH[pc.held] : undefined}
+                  />
+                )
+              })
+            })
+          })()}
         {/* a main row's turns, and their numbers */}
         {main?.turns.map((s) => {
           const x = axis.x(s.t0)
@@ -1070,6 +1092,7 @@ export function TimePlot({
     // every agent leaves its sender's baseline; a fork takes the whole context and its elbow is as heavy as the agent
     const y0 = from && from.g !== g ? from.g.base : undefined
     const turn = y0 !== undefined ? Math.min(ELBOW_R, Math.abs(g.base - y0)) : 0
+    const held = heldOf(fullLane.get(l.key) ?? l)
     return (
       <g key={`s${l.key}`} pointerEvents="none">
         {/* the spawn is light unless in focus; the agent's own line, as heavy as its model, is always drawn in full */}
@@ -1084,21 +1107,25 @@ export function TimePlot({
           />
         )}
         {y0 !== undefined && l.kind === 'fork' && <BranchNode x={xa} y={y0} color={color} />}
-        {tierSegments(l.runs, t0, l.t1).map((sg, k, all) => {
-          const x0 = k === 0 ? xa + turn : axis.x(sg.t0)
-          const x1 = Math.max(k === all.length - 1 ? xb : axis.x(sg.t1), x0)
-          return (
-            <line
-              key={sg.t0}
-              x1={x0}
-              x2={x1}
-              y1={g.base}
-              y2={g.base}
-              stroke={sg.tier === 'unknown' ? 'var(--muted)' : color}
-              strokeWidth={TIER_WEIGHT[sg.tier]}
-            />
-          )
-        })}
+        {/* dashed where the context above it is held, as a main session's line */}
+        {tierSegments(l.runs, t0, l.t1).flatMap((sg, k, all) =>
+          dashPieces(sg.t0, sg.t1, held).map((pc, j, pcs) => {
+            const x0 = k === 0 && j === 0 ? xa + turn : axis.x(pc.t0)
+            const x1 = Math.max(k === all.length - 1 && j === pcs.length - 1 ? xb : axis.x(pc.t1), x0)
+            return (
+              <line
+                key={`${sg.t0}/${pc.t0}`}
+                x1={x0}
+                x2={x1}
+                y1={g.base}
+                y2={g.base}
+                stroke={sg.tier === 'unknown' ? 'var(--muted)' : color}
+                strokeWidth={TIER_WEIGHT[sg.tier]}
+                strokeDasharray={pc.held ? BASE_DASH[pc.held] : undefined}
+              />
+            )
+          }),
+        )}
         {early && <path d={edgeChevron(X0, g.base, 'l')} fill={color} />}
       </g>
     )

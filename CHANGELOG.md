@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- On the session graph, a session's line and an agent's line are dashed where the agent was waiting, matching the dotted context above them.
 - The session graph groups turns into decisions by time, so a long session has a few large brackets to click instead of one per prompt; a click anywhere inside a bracket pins its nearest turn.
 - The Overview keeps its range and folder controls when nothing ran in the range, so you can switch back.
 - The search box moved from the top bar into the list's header row, beside the range; it is hidden while a session is open and shrinks to an icon when the row is narrow.
