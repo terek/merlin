@@ -26,6 +26,10 @@ export const CTX_MIN = 12
 export const UNRECORDED_MIN_H = 22
 /** A collapsed swarm's row is at least this tall: its label, and a few pixels of lines under it. */
 export const SWARM_MIN_H = 24
+/** A row of background jobs: this tall (the frame's top to its baseline), with no context scale and no spend. */
+export const JOB_H = 14
+/** The gap above a row of jobs. */
+export const JOB_GAP = 6
 /** The most expensive slot of the session is this tall. */
 export const SPEND_FULL = 40
 export const SPEND_MIN = 5
@@ -99,7 +103,7 @@ export function buildFrame(
   const strips: Frame['strips'] = []
   let y = AXIS_H
   rows.forEach((row, i) => {
-    if (i > 0) y += row.main ? BRANCH_GAP : ROW_GAP
+    if (i > 0) y += row.main ? BRANCH_GAP : row.job ? JOB_GAP : ROW_GAP
     const top = y
     const peak = Math.max(...row.lanes.map((l) => l.peak))
     // a swarm's row has room for its frame label and a few pixels of lines under it
@@ -108,8 +112,8 @@ export function buildFrame(
       : row.lanes.some((l) => l.agent?.unrecorded)
         ? UNRECORDED_MIN_H
         : CTX_MIN
-    const ctxH = Math.max(minH, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
-    const spendH = Math.max(SPEND_MIN, Math.ceil(maxes[i] * kUsd) + 2) + (row.main ? TURNS_H : 0)
+    const ctxH = row.job ? JOB_H : Math.max(minH, Math.ceil(peak * kCtx) + 3) + (row.main ? BRACKET_H : 0)
+    const spendH = row.job ? 0 : Math.max(SPEND_MIN, Math.ceil(maxes[i] * kUsd) + 2) + (row.main ? TURNS_H : 0)
     layout.push({ row, top, base: top + ctxH, ctxH, spendH, bottom: top + ctxH + spendH })
     y = top + ctxH + spendH
     // the session's overhead, under its last row

@@ -15,6 +15,7 @@ import { KindIcon } from '../agents/AgentRow'
 import { agentLabel } from '../agents/model'
 import { type LockoutSpan, waitUntil } from '../overview/windows'
 import { Breakdown, BreakdownKey, type Hover, useBreakdown } from './Breakdown'
+import { turnJobs } from './jobs'
 import { keyFacts, Legend } from './Key'
 import { kindColor } from './marks'
 import {
@@ -125,6 +126,7 @@ function TurnReadout({
   const dec = b.model.decisions[c.decision]
   const launchedUSD = c.launched.reduce((s, u) => s + u.bucket.usd, 0)
   const u = unit?.unit
+  const jobs = turnJobs(b.detail.digest.jobs, c.index)
   const notes = [
     ...c.step.rereads.map((r) => ({
       key: `r${r.at}`,
@@ -151,6 +153,20 @@ function TurnReadout({
           },
         ]
       : []),
+    ...(jobs.started.length > 0
+      ? [
+          {
+            key: 'jobs',
+            cls: 'text-muted',
+            text: `Started in the background: ${jobs.started.slice(0, 3).join(', ')}${jobs.started.length > 3 ? ` and ${jobs.started.length - 3} more` : ''}`,
+          },
+        ]
+      : []),
+    ...jobs.came.slice(0, 3).map((j) => ({
+      key: `job${j.key}`,
+      cls: j.woke ? 'text-text' : 'text-muted',
+      text: `Came back: ${j.text}`,
+    })),
   ]
   return (
     // one line each, so that what is under the pointer never moves the graph

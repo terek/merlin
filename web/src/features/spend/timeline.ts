@@ -9,7 +9,7 @@
 //
 // Pure; TimeView.tsx draws what this returns.
 
-import type { Agent, Compaction, LinkKind } from '../../api/types'
+import type { Agent, Compaction, Job, JobReturnHow, LinkKind } from '../../api/types'
 import { modelLabel } from '../../lib/models'
 import { type Prices, TIERS, type Tier, tierOf } from '../../lib/tiers'
 import {
@@ -106,6 +106,47 @@ export interface TurnSpan {
   t1: number
 }
 
+/** One moment a background job's output came back to an agent. */
+export interface JobReturnMark {
+  t: number
+  how: JobReturnHow
+  /** It reported the end. */
+  final: boolean
+  /** The main agent's turn it started or arrived in. */
+  turn?: number
+  /** Key of the lane the receiver is on: its agent's, or the branch's main lane. */
+  toKey: string
+  /** The receiving agent's name; empty for the main agent. */
+  to: string
+  status?: string
+  summary?: string
+}
+
+/**
+ * What a background command or monitor looks like on a job lane: it costs nothing and has no context,
+ * so it is only a span of time, who started it and where its output went.
+ */
+export interface JobMark {
+  id: string
+  kind: Job['kind']
+  description: string
+  command: string
+  /** completed, failed, killed, or open. */
+  status: string
+  exitCode?: number
+  startMs: number
+  /** When it ended; of an open job, the end of its session (or the start when nothing came after). */
+  endMs: number
+  open: boolean
+  /** The main agent's turn it was started in. */
+  turn?: number
+  /** Key of the lane that started it: its agent's, or the branch's main lane. */
+  fromKey: string
+  /** The agent that started it; empty for the main agent. */
+  from: string
+  returns: JobReturnMark[]
+}
+
 export interface Lane {
   key: string
   branch: number
@@ -114,7 +155,7 @@ export interface Lane {
   /** The agent of an agent lane. */
   agent?: Agent
   /** Its colour and its look: an addressable agent keeps a lane of its own. */
-  kind: KindKey | 'main'
+  kind: KindKey | 'main' | 'job'
   title: string
   /** Its pieces of work (agent lanes). */
   units: Unit[]
@@ -135,6 +176,8 @@ export interface Lane {
   t1: number
   /** Set on an agent lane that belongs to a swarm (`collapseSwarms`), and on the lane standing for a collapsed one. */
   swarm?: SwarmInfo
+  /** On a job lane (kind `job`): the background job it draws. It has no units, turns, calls or context. */
+  job?: JobMark
 }
 
 export interface Timeline {
@@ -280,9 +323,85 @@ export function buildTimeline(tree: Tree, prices?: Prices): Timeline {
       lane.model = mainModel(lane.calls)
       measure(lane)
     }
-    lanes.push(main, ...agentLanes.filter((l) => l.calls.length > 0 || l.units.length > 0))
+    const kept = agentLanes.filter((l) => l.calls.length > 0 || l.units.length > 0)
+    // the session's last moment: an open job runs up to it
+    const ends = [main, ...kept].map((l) => l.t1).filter(Number.isFinite)
+    const end = ends.length ? Math.max(...ends) : Number.NaN
+    const keyOf = (id: string | undefined) => {
+      const a = id ? m.agentsById.get(id) : undefined
+      return (a && byRoot.get(rootOf(a).id)?.key) || main.key
+    }
+    const jobLanes = (b.detail.digest.jobs ?? []).flatMap((j) => {
+      const lane = jobLane(b.index, j, end, keyOf, (id) => m.agentsById.get(id), since)
+      if (!lane?.job) return []
+      spans.push([lane.job.startMs, lane.job.startMs])
+      if (!lane.job.open) spans.push([lane.job.endMs, lane.job.endMs])
+      return [lane]
+    })
+    lanes.push(main, ...kept, ...jobLanes)
   }
   return withBounds(lanes, spans)
+}
+
+/**
+ * The lane of a background job: its span, who started it and where each return went. `end` is the end
+ * of its session, where an open job stops; `keyOf` is the key of the lane an agent (empty: the main
+ * agent) is on; `since` drops a job a forked session copied from its parent. Undefined when it has no start.
+ */
+export function jobLane(
+  branch: number,
+  job: Job,
+  end: number,
+  keyOf: (agentId: string | undefined) => string,
+  agentOf: (agentId: string) => Agent | undefined,
+  since = Number.NEGATIVE_INFINITY,
+): Lane | undefined {
+  const startMs = ms(job.startedAt)
+  if (!Number.isFinite(startMs) || startMs < since) return undefined
+  const stop = ms(job.endedAt)
+  const open = !Number.isFinite(stop) || job.status === 'open'
+  const name = (id: string | undefined) => {
+    const a = id ? agentOf(id) : undefined
+    return id ? (a?.name ?? a?.agentType ?? a?.kind ?? id) : ''
+  }
+  const returns = (job.returns ?? []).flatMap((r): JobReturnMark[] => {
+    const t = ms(r.at)
+    return Number.isFinite(t)
+      ? [
+          {
+            t,
+            how: r.how,
+            final: !!r.final,
+            turn: r.turn,
+            toKey: keyOf(r.agentId || undefined),
+            to: name(r.agentId || undefined),
+            status: r.status,
+            summary: r.summary,
+          },
+        ]
+      : []
+  })
+  const last = Math.max(startMs, ...returns.map((r) => r.t))
+  const endMs = open ? Math.max(startMs, Number.isFinite(end) ? end : startMs, last) : Math.max(startMs, stop)
+  const lane = mkLane(`${branch}/job:${job.id}`, branch, false, undefined, 'job', job.description || job.command || '')
+  lane.job = {
+    id: job.id,
+    kind: job.kind,
+    description: job.description || job.command || '',
+    command: job.command ?? '',
+    status: open ? 'open' : job.status,
+    exitCode: job.exitCode,
+    startMs,
+    endMs,
+    open,
+    turn: job.turn,
+    fromKey: keyOf(job.agentId || undefined),
+    from: name(job.agentId || undefined),
+    returns,
+  }
+  lane.t0 = startMs
+  lane.t1 = endMs
+  return lane
 }
 
 /** Consecutive calls (in time order) on the same model, as runs. */
@@ -312,6 +431,7 @@ export function mainModel(calls: readonly Pick<Call, 'model'>[]): string {
 
 /** Sets a lane's first and last moment and its largest context from what is on it. */
 function measure(lane: Lane): Lane {
+  if (lane.job) return lane
   const times = [
     ...lane.calls.map((c) => c.t),
     ...lane.turns.flatMap((t) => [t.t0, t.t1]),
@@ -693,6 +813,7 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
   const on = (t: number) => t >= lo && t < hi
   const workSpans = new Set(tl.lanes.flatMap((l) => l.units.map((u) => `${u.startMs}/${Math.max(u.startMs, u.endMs)}`)))
   const lanes = tl.lanes.map((l) => {
+    if (l.job) return l
     const calls = l.calls.filter((c) => on(c.t))
     return measure({
       ...l,
@@ -713,7 +834,13 @@ export function sliceTimeline(tl: Timeline, lo: number, hi: number, whole = true
     lanes.filter((l) => l.calls.length > 0 || l.units.length > 0 || l.turns.length > 0).map((l) => l.branch),
   )
   const out = withBounds(
-    lanes.filter((l) => (l.main ? busy.has(l.branch) : l.calls.length > 0 || l.units.length > 0)),
+    lanes.filter((l) =>
+      l.main
+        ? busy.has(l.branch)
+        : l.job
+          ? l.job.startMs < hi && l.job.endMs >= lo && busy.has(l.branch)
+          : l.calls.length > 0 || l.units.length > 0,
+    ),
     tl.spans.flatMap(([a, b]) => {
       if (a >= hi || b < lo) return []
       // work that goes on past the window does not stretch its axis; a turn that starts inside is whole
@@ -1008,6 +1135,8 @@ export interface Row {
   lanes: Lane[]
   branch: number
   main: boolean
+  /** A row of background jobs: thin, with no context or spend. */
+  job?: boolean
 }
 
 /**
@@ -1021,18 +1150,21 @@ export function packLanes(lanes: readonly Lane[], x: (t: number) => number, gapP
   for (const br of branches) {
     const mine = lanes.filter((l) => l.branch === br)
     for (const l of mine.filter((l) => l.main)) rows.push({ lanes: [l], branch: br, main: true })
-    const rest = mine.filter((l) => !l.main).sort((a, b) => a.t0 - b.t0)
-    const packed: { row: Row; end: number }[] = []
-    for (const l of rest) {
-      const a = x(l.t0)
-      const slot = packed.find((p) => p.end + gapPx <= a)
-      if (slot) {
-        slot.row.lanes.push(l)
-        slot.end = x(l.t1)
-      } else {
-        const row: Row = { lanes: [l], branch: br, main: false }
-        packed.push({ row, end: x(l.t1) })
-        rows.push(row)
+    // agents first, then the branch's background jobs, which share rows of their own
+    for (const jobs of [false, true]) {
+      const rest = mine.filter((l) => !l.main && (l.kind === 'job') === jobs).sort((a, b) => a.t0 - b.t0)
+      const packed: { row: Row; end: number }[] = []
+      for (const l of rest) {
+        const a = x(l.t0)
+        const slot = packed.find((p) => p.end + gapPx <= a)
+        if (slot) {
+          slot.row.lanes.push(l)
+          slot.end = x(l.t1)
+        } else {
+          const row: Row = { lanes: [l], branch: br, main: false, ...(jobs ? { job: true } : {}) }
+          packed.push({ row, end: x(l.t1) })
+          rows.push(row)
+        }
       }
     }
   }

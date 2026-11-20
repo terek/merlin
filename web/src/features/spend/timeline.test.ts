@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { Agent, AgentTurn, Message, SessionDetail, Turn } from '../../api/types'
+import type { Agent, AgentTurn, Job, Message, SessionDetail, Turn } from '../../api/types'
 import type { Col } from './model'
 import {
   addCall,
@@ -122,7 +122,7 @@ const agent = (id: string, extra: Partial<Agent>): Agent => ({
 
 const session = (
   id: string,
-  digest: { turns: Turn[]; messages: Message[]; agents?: Agent[] },
+  digest: { turns: Turn[]; messages: Message[]; agents?: Agent[]; jobs?: Job[] },
   inherited: number[] = [],
 ) =>
   ({
@@ -1201,5 +1201,98 @@ describe('dashPieces', () => {
     expect(dashPieces(32, 45, held)).toEqual([{ t0: 32, t1: 45, held: 'faint' }])
     expect(dashPieces(21, 29, held)).toEqual([{ t0: 21, t1: 29 }])
     expect(dashPieces(5, 5, held)).toEqual([{ t0: 5, t1: 5 }])
+  })
+})
+
+describe('background jobs', () => {
+  const job = (id: string, start: number, extra: Partial<Job> = {}): Job => ({
+    id,
+    kind: 'command',
+    description: `job ${id}`,
+    startedAt: at(start),
+    status: 'completed',
+    ...extra,
+  })
+  const worker = agent('worker', { spawnTurn: 0, startedAt: at(1), endedAt: at(30) })
+  const build = (jobs: Job[], agents: Agent[] = []) =>
+    buildTimeline(
+      buildTree([
+        session('j', {
+          turns: [turn(0, 0, 10), turn(1, 20, 40)],
+          messages: [msg('m0', 1, 20_000, { turn: 0 }), msg('m1', 21, 30_000, { turn: 1 })],
+          agents,
+          jobs,
+        }),
+      ]),
+    )
+  const jobsOf = (tl: Timeline) => tl.lanes.filter((l) => l.kind === 'job')
+
+  test('a job is a lane of its own with no context, calls or spend', () => {
+    const [l] = jobsOf(
+      build([job('a', 2, { endedAt: at(8), returns: [{ at: at(8), how: 'woke', turn: 1, final: true }] })]),
+    )
+    expect(l.key).toBe('0/job:a')
+    expect(l.main).toBe(false)
+    expect(l.usd).toBe(0)
+    expect(l.peak).toBe(0)
+    expect(l.calls).toEqual([])
+    expect(l.units).toEqual([])
+    expect(l.job?.endMs).toBe(Date.parse(at(8)))
+    expect(l.job?.open).toBe(false)
+  })
+
+  test('jobs add nothing to the totals', () => {
+    const without = build([])
+    const withJobs = build([job('a', 2, { endedAt: at(8) })])
+    expect(withJobs.lanes.reduce((a, l) => a + l.usd, 0)).toBe(without.lanes.reduce((a, l) => a + l.usd, 0))
+    expect(withJobs.peak).toBe(without.peak)
+  })
+
+  test('an open job runs to the end of the last call, a closed one ends where it ended', () => {
+    const tl = build([job('o', 2, { status: 'open' }), job('c', 3, { endedAt: at(5) })])
+    const [o, c] = jobsOf(tl)
+    expect(o.job?.open).toBe(true)
+    expect(o.job?.endMs).toBe(Date.parse(at(21)))
+    expect(c.job?.endMs).toBe(Date.parse(at(5)))
+  })
+
+  test('returns are placed at their time, on the receiver, and the launcher is the main lane or the agent', () => {
+    const tl = build(
+      [
+        job('a', 2, {
+          endedAt: at(8),
+          returns: [{ at: at(8), how: 'woke', turn: 1, final: true, status: 'completed' }],
+        }),
+        job('b', 3, {
+          agentId: 'worker',
+          endedAt: at(9),
+          returns: [{ at: at(25), how: 'fetched', agentId: 'worker' }],
+        }),
+      ],
+      [worker],
+    )
+    const [a, b] = jobsOf(tl)
+    expect(a.job?.fromKey).toBe('0/main')
+    expect(a.job?.returns[0]).toMatchObject({ t: Date.parse(at(8)), how: 'woke', final: true, toKey: '0/main' })
+    expect(b.job?.fromKey).toBe(tl.lanes.find((l) => l.agent?.id === 'worker')?.key)
+    expect(b.job?.returns[0].toKey).toBe(b.job?.fromKey)
+  })
+
+  test('jobs are packed into rows after the agents, by life', () => {
+    const tl = build(
+      [job('a', 2, { endedAt: at(5) }), job('b', 3, { endedAt: at(6) }), job('c', 7, { endedAt: at(9) })],
+      [worker],
+    )
+    const rows = packLanes(tl.lanes, (t) => t)
+    expect(rows.map((r) => !!r.job)).toEqual([false, false, true, true])
+    expect(rows[2].lanes.map((l) => l.key)).toEqual(['0/job:a', '0/job:c'])
+    expect(rows[3].lanes.map((l) => l.key)).toEqual(['0/job:b'])
+  })
+
+  test('a job works in a session with no agents, and a slice keeps it', () => {
+    const tl = build([job('a', 2, { endedAt: at(8) })])
+    expect(tl.lanes.map((l) => l.kind)).toEqual(['main', 'job'])
+    const day = sliceDay(tl, splitDays(tl)[0])
+    expect(jobsOf(day)).toHaveLength(1)
   })
 })

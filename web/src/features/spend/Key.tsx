@@ -20,9 +20,11 @@ import {
   HELD_LINE,
   HELD_TINT,
   InheritPattern,
+  JOB_COLOR,
   MISS_COLOR,
   MISS_SIZE,
   markColor,
+  OPEN_DASH,
   OverheadPattern,
   REPORT_DASH,
   SPEND_COLOR,
@@ -43,6 +45,8 @@ export interface KeyFacts {
   agents: boolean
   forks: boolean
   workflows: boolean
+  /** The graph has a background job (a command that ran on its own, a monitor). */
+  jobs: boolean
   swarms: boolean
   reports: boolean
   sessions: boolean
@@ -55,12 +59,13 @@ export interface KeyFacts {
 }
 
 export function keyFacts(tree: Tree, timeline: Timeline, lockedOut = false): KeyFacts {
-  const lanes = timeline.lanes.filter((l) => !l.main)
+  const lanes = timeline.lanes.filter((l) => !l.main && l.kind !== 'job')
   const cs = tree.branches.flatMap((b) => [...b.model.compactions, ...b.model.agentCompactions])
   return {
     agents: lanes.length > 0,
     forks: lanes.some((l) => l.kind === 'fork'),
     workflows: lanes.some((l) => l.agent?.kind === 'workflow'),
+    jobs: timeline.lanes.some((l) => l.kind === 'job'),
     swarms: findSwarms(timeline.lanes).length > 0,
     reports: lanes.some((l) => l.units.some((u) => u.reports.length > 0)),
     sessions: tree.branches.length > 1,
@@ -300,6 +305,25 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
                 strokeWidth={1.25}
                 fill="none"
               />
+            </>
+          ),
+        },
+        {
+          label: 'background job',
+          title:
+            'A command or monitor an agent left running: its own thin row, grey, no context or spend. Dashed line: its output woke or reached a turn; dotted: an agent fetched it. Dotted frame: a monitor; fading end: still open; red stem: failed or killed',
+          has: f.jobs,
+          sample: (
+            <>
+              <path d={`M2 ${B}V3H${W - 9}`} fill="none" stroke={JOB_COLOR} strokeOpacity={FRAME_OPACITY} />
+              <path
+                d={`M${W - 9} 3H${W - 2}`}
+                fill="none"
+                stroke={JOB_COLOR}
+                strokeOpacity={FRAME_OPACITY * 0.6}
+                strokeDasharray={OPEN_DASH}
+              />
+              <line x1={0} x2={W} y1={B + 0.5} y2={B + 0.5} stroke="var(--line)" />
             </>
           ),
         },

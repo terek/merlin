@@ -12,6 +12,7 @@ import type {
   CostFlag,
   EndState,
   InboxMessage,
+  Job,
   Link,
   Message,
   ModelCost,
@@ -873,6 +874,98 @@ export function finishSession(r: Rng, spec: Spec, p: Parts, inherited?: { turns:
   }
 }
 
+/**
+ * Background jobs for a mock session (the digest's `jobs`): a command that woke a turn, one delivered
+ * mid-turn, a failed one, a monitor with three events still open, and one started by a sub-agent.
+ */
+export function addJobs(s: Sess) {
+  const d = s.detail.digest
+  const turns = d.turns ?? []
+  const at = (i: number, plusMs: number) =>
+    iso(Date.parse(turns[Math.min(i, turns.length - 1)].startedAt ?? '') + plusMs)
+  const end = (i: number) => iso(Date.parse(turns[Math.min(i, turns.length - 1)].endedAt ?? ''))
+  const agent = (d.agents ?? []).find((a) => a.kind !== 'compact' && a.spawnTurn !== undefined && a.spawnTurn >= 3)
+  const jobs: Job[] = [
+    {
+      id: 'bk1wake',
+      kind: 'command',
+      description: 'Run lemmatization with main-checkout venv python',
+      command: 'cd /Users/dev/merlin && .venv/bin/python -m lemma.run --all > /tmp/lemma.log 2>&1',
+      turn: 2,
+      startedAt: at(2, 60_000),
+      endedAt: at(3, -30_000),
+      status: 'completed',
+      exitCode: 0,
+      returns: [{ at: at(3, -30_000), how: 'woke', turn: 3, final: true, status: 'completed', summary: 'exit 0' }],
+    },
+    {
+      id: 'bk2deliv',
+      kind: 'command',
+      description: 'Build the docs site',
+      command: 'make docs',
+      turn: 5,
+      startedAt: at(5, 20_000),
+      endedAt: at(5, 100_000),
+      status: 'completed',
+      exitCode: 0,
+      returns: [
+        { at: at(5, 100_000), how: 'delivered', turn: 5, final: true, status: 'completed', summary: 'exit 0' },
+        { at: at(6, 40_000), how: 'fetched', turn: 6 },
+      ],
+    },
+    {
+      id: 'bk3fail',
+      kind: 'command',
+      description: 'Run the integration suite',
+      command: 'go test ./... -run Integration',
+      turn: 7,
+      startedAt: at(7, 30_000),
+      endedAt: at(8, -60_000),
+      status: 'failed',
+      exitCode: 1,
+      returns: [{ at: at(8, -60_000), how: 'woke', turn: 8, final: true, status: 'failed', summary: 'exit 1' }],
+    },
+    {
+      id: 'bk4mon',
+      kind: 'monitor',
+      description: 'Watch the deploy log for errors',
+      command: 'tail -f deploy.log | grep -i error',
+      turn: 9,
+      startedAt: at(9, 10_000),
+      status: 'open',
+      returns: [
+        { at: at(9, 90_000), how: 'delivered', turn: 9 },
+        { at: at(10, 20_000), how: 'woke', turn: 10 },
+        { at: at(12, 50_000), how: 'woke', turn: 12 },
+      ],
+    },
+  ]
+  if (agent)
+    jobs.push({
+      id: 'bk5agent',
+      kind: 'command',
+      description: 'Index the vendored sources',
+      command: 'bun run index --vendor',
+      turn: agent.spawnTurn,
+      agentId: agent.id,
+      startedAt: iso(Date.parse(agent.startedAt ?? '') + 5000),
+      endedAt: end(Math.min(turns.length - 1, (agent.spawnTurn ?? 0) + 1)),
+      status: 'completed',
+      exitCode: 0,
+      returns: [
+        {
+          at: end(Math.min(turns.length - 1, (agent.spawnTurn ?? 0) + 1)),
+          how: 'woke',
+          agentId: agent.id,
+          final: true,
+          status: 'completed',
+          summary: 'exit 0',
+        },
+      ],
+    })
+  d.jobs = jobs
+}
+
 /** Hand-built message lists (the showcase session), by session id: served as they are. */
 export const recordedMessages = new Map<string, Message[]>()
 
@@ -1176,6 +1269,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
   // 3b. the showcase tree: a session and a fork of it (own random stream: nothing else changes)
   const showcase = buildShowcase(now)
   clampPast(showcase.main, now)
+  addJobs(showcase.main)
   sessions.push(showcase.main, showcase.fork)
 
   linkFamilies(sessions)
@@ -1211,6 +1305,7 @@ export function buildDataset(now: number, seed = 20260915): Dataset {
     now,
   )
   clampPast(zooSession, now)
+  addJobs(zooSession)
   sessions.push(zooSession)
 
   sessions.sort(order)

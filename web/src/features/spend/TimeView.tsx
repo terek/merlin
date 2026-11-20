@@ -46,6 +46,7 @@ import { formatDuration, formatMoney, formatTokens } from '../../lib/format'
 import { modelLabel } from '../../lib/models'
 import { LockoutPattern, useLockoutId } from '../../ui'
 import { type LockoutSpan, lockoutTitle } from '../overview/windows'
+import { jobLabel, jobLine } from './jobs'
 import {
   AXIS_H,
   BRACKET_H,
@@ -74,6 +75,7 @@ import {
   findSwarms,
   HOLD_MS,
   inheritedContext,
+  type JobMark,
   type Lane,
   mergeBusy,
   modelMarks,
@@ -110,8 +112,12 @@ const MR = 12
 /** A spend bar is drawn at least this wide, centred on its calls. */
 const BAR_MIN_PX = 2
 
-export const COLOR: Record<KindKey | 'main', string> = {
+/** A background job: one quiet colour, as it spends nothing. */
+export const JOB_COLOR = 'var(--muted)'
+
+export const COLOR: Record<KindKey | 'main' | 'job', string> = {
   ...(Object.fromEntries(KIND_SERIES.map((s) => [s.key, s.color])) as Record<KindKey, string>),
+  job: JOB_COLOR,
 }
 
 /** Whether a run of points holds the point `p` (the run may start earlier, at the start of its turn or piece of work). */
@@ -154,6 +160,15 @@ export const REPORT_DASH = '2 2'
 export const FRAME_OPACITY = 0.55
 /** The dash of a workflow's frame. */
 export const WORKFLOW_DASH = '4 2'
+
+/** The dash of a monitor's frame (a background command's is solid). */
+export const MONITOR_DASH = '1.5 2.5'
+/** How long (px) the end of an open job's frame fades out over, and the dash of the faded part. */
+export const OPEN_FADE_PX = 28
+export const OPEN_DASH = '2 3'
+/** The dash of the line of a job's output that an agent fetched, and how strongly it is drawn. */
+export const FETCH_DASH = '1 3'
+export const FETCH_OPACITY = 0.6
 
 /** The chip on the frame of a swarm: "+" on a collapsed one, "−" on the first agent of an expanded one. */
 export const CHIP = 12
@@ -509,6 +524,28 @@ export function TimePlot({
     return [a, Math.max(a + 3, axis.x(Number.isFinite(u.endMs) ? u.endMs : u.startMs))]
   }
 
+  /** Where a job's frame is, left to right (an open job runs to the end of the plot). */
+  const jobX = (m: JobMark): [number, number] => {
+    const a = axis.x(m.startMs)
+    return [a, Math.max(a + 3, axis.x(m.endMs))]
+  }
+  /** The row of the lane `key` (a swarm's lane when it is one of a collapsed swarm), else the branch's main row. */
+  const hostRow = (key: string, branch: number): Layout | undefined =>
+    layout.find((g) =>
+      g.full.lanes.some(
+        (l) => l.key === key || (l.swarm && swarms.find((s) => s.id === l.swarm?.id)?.keys.includes(key)),
+      ),
+    ) ?? mainRow(branch)
+  /** The job lane of row `k` under `x`. */
+  const jobAt = (k: number, x: number): Lane | undefined =>
+    layout[k]?.row.job
+      ? layout[k].row.lanes.find((l) => {
+          if (!l.job) return false
+          const [a, b] = jobX(l.job)
+          return x >= a - 4 && x <= b + 4
+        })
+      : undefined
+
   /** Where a swarm lane's frame is, left to right (with its chip to the left of it). */
   const frameX = (l: Lane): [number, number] => {
     const xs = l.units.map(uX)
@@ -523,6 +560,8 @@ export function TimePlot({
     })
   /** The collapsed swarm under the pointer. */
   const hot = px ? swarmAt(px.row, px.x) : undefined
+  /** The background job under the pointer. */
+  const hoverJob = px ? jobAt(px.row, px.x) : undefined
   /** The expanded swarm whose collapse chip is at (x, y) of row `k`. */
   const chipAt = (k: number, x: number, yy: number): string | undefined => {
     const g = layout[k]
@@ -546,6 +585,8 @@ export function TimePlot({
     if (g.row.main) {
       return { pin: turnOn(g.row.lanes[0], h.t), unit: null }
     }
+    // a job is read by hovering (see `hoverJob`); it is not a piece of work to select
+    if (g.row.job) return { pin: null, unit: null }
     // a collapsed swarm is read as a whole
     if (swarmAt(h.row, h.x)) return { pin: turnOn(mainRow(g.row.branch)?.row.lanes[0], h.t), unit: null }
     // the piece of work under the pointer, or the nearest within a few pixels
@@ -887,7 +928,75 @@ export function TimePlot({
     )
   }
 
+  const jobOn = (l: Lane) => hoverJob?.key === l.key
+  /** A background job: a thin frame from its start to its end, the description at its top left; an open one fades out. */
+  const drawJob = (g: Layout, l: Lane) => {
+    const m = l.job
+    if (!m) return null
+    const [a, b] = jobX(m)
+    const top = g.top
+    const dash = m.kind === 'monitor' ? MONITOR_DASH : undefined
+    const bad = m.status === 'failed' || m.status === 'killed'
+    const text = jobLabel(m, b - a - 8)
+    if (text)
+      labels.push(
+        <text
+          key={`t${l.key}`}
+          x={a + 4}
+          y={top + 10.5}
+          fontSize={9.5}
+          fill="var(--muted)"
+          stroke="var(--surface)"
+          strokeWidth={3}
+          paintOrder="stroke"
+          pointerEvents="none"
+        >
+          {text}
+        </text>,
+      )
+    const fade = Math.max(a, b - OPEN_FADE_PX)
+    return (
+      <g key={l.key}>
+        <path
+          d={m.open ? `M${f1(a)} ${g.base}V${top}H${f1(fade)}` : `M${f1(a)} ${g.base}V${top}H${f1(b)}`}
+          fill="none"
+          stroke={JOB_COLOR}
+          strokeOpacity={FRAME_OPACITY}
+          strokeWidth={1}
+          strokeDasharray={dash}
+        />
+        {m.open ? (
+          // it never came back: no end stem, the top fades out
+          <path
+            d={`M${f1(fade)} ${top}H${f1(b)}`}
+            fill="none"
+            stroke={JOB_COLOR}
+            strokeOpacity={FRAME_OPACITY * 0.6}
+            strokeWidth={1}
+            strokeDasharray={OPEN_DASH}
+          />
+        ) : (
+          <path
+            d={`M${f1(b)} ${top}V${top + 4}`}
+            fill="none"
+            stroke={bad ? 'var(--bad)' : JOB_COLOR}
+            strokeOpacity={bad ? 0.9 : FRAME_OPACITY}
+            strokeWidth={bad ? 1.5 : 1}
+          />
+        )}
+        {jobOn(l) && (
+          <line x1={a} x2={b} y1={top} y2={top} stroke={JOB_COLOR} strokeWidth={2.5} strokeDasharray={dash} />
+        )}
+        {/* the whole of the label, the command and how it ended are the frame's tooltip */}
+        <rect x={f1(a)} y={top} width={Math.max(4, b - a)} height={g.base - top} fill="transparent">
+          <title>{[jobLine(m), m.command].filter(Boolean).join('\n')}</title>
+        </rect>
+      </g>
+    )
+  }
+
   const drawRow = (g: Layout) => {
+    if (g.row.job) return <g key={g.full.lanes[0].key}>{g.row.lanes.map((l) => drawJob(g, l))}</g>
     const main = g.row.main ? g.row.lanes[0] : undefined
     // the session's whole life, not the window's slice of it: its line runs through the window even where no turn does
     const whole = main && fullLane.get(main.key)
@@ -1191,22 +1300,31 @@ export function TimePlot({
   }
   // an agent's spine runs under the rows; a session's branch is skeleton and passes over them
   // the coordinate system of every row, under everything drawn on it: its token gridlines, labelled, and its zero
-  const grid = layout.map((g) => (
-    <g key={`grid${g.full.lanes[0].key}`}>
-      {cTicks
-        .filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2)
-        .map((t) => (
-          <g key={t}>
-            <line x1={X0} x2={X1} y1={yCtx(g, t)} y2={yCtx(g, t)} stroke="var(--line)" strokeWidth={1} />
-            <text x={X0 - 4} y={yCtx(g, t)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--faint)">
-              {formatTokens(t)}
-            </text>
-          </g>
-        ))}
-      {/* the row's zero: an axis, darker than the gridlines and reaching into the scale's gutter */}
-      <line x1={ZERO_X} x2={X1} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--faint)" strokeWidth={1} />
-    </g>
-  ))
+  const grid = layout.map((g) =>
+    g.row.job ? null : (
+      <g key={`grid${g.full.lanes[0].key}`}>
+        {cTicks
+          .filter((t) => t > 0 && t * kCtx <= g.ctxH - (g.row.main ? BRACKET_H : 0) - 2)
+          .map((t) => (
+            <g key={t}>
+              <line x1={X0} x2={X1} y1={yCtx(g, t)} y2={yCtx(g, t)} stroke="var(--line)" strokeWidth={1} />
+              <text
+                x={X0 - 4}
+                y={yCtx(g, t)}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fontSize={9}
+                fill="var(--faint)"
+              >
+                {formatTokens(t)}
+              </text>
+            </g>
+          ))}
+        {/* the row's zero: an axis, darker than the gridlines and reaching into the scale's gutter */}
+        <line x1={ZERO_X} x2={X1} y1={g.base + 0.5} y2={g.base + 0.5} stroke="var(--faint)" strokeWidth={1} />
+      </g>
+    ),
+  )
   // the spend per slot, down from each baseline: a thin grey stroke per slot, under the lines drawn on the
   // baseline, its cache miss (context billed again in full) in the miss colour at the bottom
   const spend = layout.map((g, i) => (
@@ -1235,7 +1353,84 @@ export function TimePlot({
       })}
     </g>
   ))
-  const spines = layout.map((g) => (g.row.main ? null : g.row.lanes.map((l) => laneSpine(g, l))))
+  // a job is in focus when hovered, or when the turn under the cursor (or pinned) started it or got its output
+  const jobFocus = (l: Lane) =>
+    jobOn(l) ||
+    focusTurns.some(
+      (p) => p.branch === l.branch && (l.job?.turn === p.col || l.job?.returns.some((r) => r.turn === p.col)),
+    )
+  /** A job's spine: from its launcher's baseline at its start, down with an elbow, then a thin line along its life. */
+  const jobSpine = (g: Layout, l: Lane) => {
+    const m = l.job
+    if (!m) return null
+    const [xa, xb] = jobX(m)
+    const early = range !== undefined && m.startMs < range.lo
+    const from = early ? undefined : hostRow(m.fromKey, l.branch)
+    const y0 = from && from !== g ? from.base : undefined
+    const turn = y0 !== undefined ? Math.min(ELBOW_R, Math.abs(g.base - y0)) : 0
+    return (
+      <g key={`s${l.key}`} pointerEvents="none">
+        {y0 !== undefined && (
+          <path
+            d={elbow(xa, y0, g.base)}
+            fill="none"
+            opacity={jobFocus(l) ? 1 : SPINE_OPACITY}
+            stroke={JOB_COLOR}
+            strokeWidth={SPINE_W}
+            strokeLinecap="round"
+          />
+        )}
+        <line x1={xa + turn} x2={Math.max(xb, xa + turn)} y1={g.base} y2={g.base} stroke={JOB_COLOR} strokeWidth={1} />
+        {early && <path d={edgeChevron(X0, g.base, 'l')} fill={JOB_COLOR} />}
+      </g>
+    )
+  }
+  const spines = layout.map((g) =>
+    g.row.main ? null : g.row.job ? g.row.lanes.map((l) => jobSpine(g, l)) : g.row.lanes.map((l) => laneSpine(g, l)),
+  )
+  // the output of the jobs in focus, to the turn or agent it came to: dashed to a turn it woke or reached
+  // (as a report), dotted and light, pointing down at the job, where an agent fetched it
+  const jobConnectors = layout.flatMap((g) =>
+    g.row.job
+      ? g.row.lanes.flatMap((l) => {
+          const m = l.job
+          if (!m || !jobFocus(l)) return []
+          const on = jobOn(l)
+          return m.returns.flatMap((r) => {
+            const to = hostRow(r.toKey, l.branch)
+            if (!to) return []
+            const edge = range && r.t < range.lo ? 'l' : range && r.t >= range.hi ? 'r' : undefined
+            const xb = edge === 'l' ? X0 + 1 : edge === 'r' ? X1 - 1 : axis.x(r.t)
+            const fetched = r.how === 'fetched'
+            return (
+              <g key={`j${l.key}/${r.how}${r.t}`} pointerEvents="none" opacity={on ? 1 : 0.7}>
+                <line
+                  x1={xb}
+                  x2={xb}
+                  y1={fetched ? to.base + 5 : g.top}
+                  y2={fetched ? g.top : to.base + 5}
+                  stroke={JOB_COLOR}
+                  strokeOpacity={fetched ? FETCH_OPACITY : 1}
+                  strokeWidth={on ? 1.5 : 1}
+                  strokeDasharray={fetched ? FETCH_DASH : REPORT_DASH}
+                />
+                <path
+                  d={
+                    edge
+                      ? edgeChevron(xb, to.base + 3, edge)
+                      : fetched
+                        ? `M${f1(xb - 3)} ${g.top - 5}L${f1(xb)} ${g.top - 0.5}L${f1(xb + 3)} ${g.top - 5}Z`
+                        : `M${f1(xb - 3)} ${to.base + 6}L${f1(xb)} ${to.base + 1.5}L${f1(xb + 3)} ${to.base + 6}Z`
+                  }
+                  fill={JOB_COLOR}
+                  fillOpacity={fetched ? FETCH_OPACITY : 1}
+                />
+              </g>
+            )
+          })
+        })
+      : [],
+  )
   const branches = layout.map((g) => (g.row.main ? branchSpine(g) : null))
   // the reports of the work in focus, and the launch of its later pieces (the first one is the spine)
   const reported = new Set<string>()
@@ -1414,7 +1609,14 @@ export function TimePlot({
       .pop()
     const place = g.row.main ? turnPlace(g.row.lanes[0].turns, crossT, slackMs) : undefined
     const between = place && 'after' in place ? place : undefined
-    return { g, s, ctx, between, swarm: px && px.row === layout.indexOf(g) ? hot : undefined }
+    return {
+      g,
+      s,
+      ctx,
+      between,
+      swarm: px && px.row === layout.indexOf(g) ? hot : undefined,
+      job: px && px.row === layout.indexOf(g) ? hoverJob?.job : undefined,
+    }
   })()
   const betweenText = (p: { after: TurnSpan; next?: TurnSpan }) =>
     p.next
@@ -1448,7 +1650,8 @@ export function TimePlot({
                   <span className="font-mono text-text">{clock(crossT ?? 0)}</span>
                   {under.between && <span>{betweenText(under.between)}</span>}
                   {under.swarm?.swarm && <SwarmText l={under.swarm} />}
-                  {under.ctx && (
+                  {under.job && <span className="min-w-0 truncate">{jobLine(under.job)}</span>}
+                  {!under.job && under.ctx && (
                     <span>
                       {under.ctx.l.main ? 'main agent' : under.ctx.l.title}:{' '}
                       <span className="font-mono text-text">{formatTokens(under.ctx.p.tokens)}</span> context
@@ -1459,10 +1662,12 @@ export function TimePlot({
                           `, held ${idleText(crossT - under.ctx.p.t)}`}
                     </span>
                   )}
-                  <span>
-                    this {slotText(slot)} on the row:{' '}
-                    <span className="font-mono text-text">{formatMoney(under.s?.total ?? 0)}</span>
-                  </span>
+                  {!under.job && (
+                    <span>
+                      this {slotText(slot)} on the row:{' '}
+                      <span className="font-mono text-text">{formatMoney(under.s?.total ?? 0)}</span>
+                    </span>
+                  )}
                 </>
               ) : null}
             </div>
@@ -1634,6 +1839,7 @@ export function TimePlot({
             }),
           )}
           {connectors}
+          {jobConnectors}
           {/* a break's veil: the page colour over what crosses it, so that it fades without a band of its own */}
           {axis.breaks.flatMap((b) =>
             veilSpans.flatMap(([y0, y1]) =>
