@@ -352,7 +352,7 @@ From top to bottom, the graph and then the box:
     groups with a small heading (the same on the three columns): *Sessions and agents* (session line by tier, forked or continued session,
     agent spine, fork with its copied context, agent frame, fork notch, workflow dashed, swarm "+", report),
     *Context* (the context area, held strong and faint, cache miss, compactions cold, warm, unknown), *Your
-    turns* (prompt, typed while a turn ran, decision, pinned decision), *Spend* (spend per slot, not explained
+    turns* (prompt, typed while a turn ran, turns close in time, pinned), *Spend* (spend per slot, not explained
     by messages) and *Time* (break, drawn as the veil over a baseline and a gridline). All entries are always listed: a mark the tree cannot have (`keyFacts`:
     cache misses, each kind of compaction, queued prompts, agents, forks, workflows, swarms, reports, sessions,
     overhead) is drawn faint, with the title "not in this session". The samples use the constants and patterns

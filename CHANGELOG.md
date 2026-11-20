@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The graph legend calls the brackets "turns close in time" instead of "decision".
 - On the session graph, a session's line and an agent's line are dashed where the agent was waiting, matching the dotted context above them.
 - The session graph shows background commands and monitors as thin grey rows of their own, from start to end, with a line to the turn they woke or reached; hover one for what it was and how it ended, and a turn's card says what it started and what came back.
 - The session graph groups turns into decisions by time, so a long session has a few large brackets to click instead of one per prompt; a click anywhere inside a bracket pins its nearest turn.

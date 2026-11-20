@@ -399,7 +399,7 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
       entries: [
         {
           label: 'your prompt',
-          title: 'A message you sent; the bracket over it totals everything up to your next one',
+          title: 'A message you sent',
           has: true,
           sample: (
             <>
@@ -420,8 +420,9 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
           ),
         },
         {
-          label: 'decision',
-          title: 'The total of everything between a prompt of yours and your next one',
+          label: 'turns close in time',
+          title:
+            'One bracket over turns that ran close together, with what they cost; a break of a few hours starts a new one. Click inside to pin.',
           has: true,
           sample: (
             <>
@@ -431,7 +432,8 @@ export function Legend({ facts, stacked }: { facts: KeyFacts; stacked?: boolean 
           ),
         },
         {
-          label: 'pinned decision',
+          label: 'pinned',
+          title: 'The bracket you clicked',
           has: true,
           sample: (
             <>
