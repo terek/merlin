@@ -109,7 +109,9 @@ before touching `web/`.
   home, without hooks, on the port your bead gives you:
   `HOME=<scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<scratch dir> ./bin/merlin serve --no-hooks --port <port>`.
   The scratch `HOME` keeps every other harness (`~/.codex`, `~/.pi`) out too.
-  Start it as a background command and stop it when you are done.
+  Start it as a background command and stop it when you are done. Stop whatever you started (daemon, mock, Vite) by its PID or listening port
+  (`lsof -tiTCP:<port> -sTCP:LISTEN | xargs kill`), never by pattern (`pkill -f vite`): that also kills the
+  user's `make dev`.
 - **Look at what you build.** `web/dev/shot.sh <url> <out.png> [width] [height]` screenshots a
   page with headless Chrome (a wrapper over `web/dev/shot.ts`, DevTools protocol, no dependency);
   read the PNG. It waits for the network to go idle (the event stream does not count), so
