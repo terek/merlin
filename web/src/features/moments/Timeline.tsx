@@ -5,7 +5,7 @@
 
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { MomentHit, MomentStatus, MomentsReport, MomentView } from '../../api/types'
+import type { MomentDepth, MomentHit, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
@@ -37,20 +37,63 @@ const AREA_H = 22
 const AXIS_H = 20
 const R = GLYPH_R
 
-/** The mark of a moment's status: filled for a habit, a ring for explored. Same look as on the timeline. */
-export function Glyph({ status, size = 11 }: { status: MomentStatus; size?: number }) {
-  const habit = status === 'habit'
+/** The depth of a moment; an older API without `depth` is read from the status. */
+export function depthOf(m: Pick<MomentView, 'status' | 'depth'>): MomentDepth {
+  return m.depth ?? (m.status === 'habit' ? 'routine' : 'tried')
+}
+
+/** What each depth looks like, in a 12 x 12 box: a filled dot, a ring, a half-filled ring, a dot in a ring. */
+function DepthShapes({ depth }: { depth: MomentDepth }) {
+  const ring = { fill: 'var(--surface)', stroke: 'var(--accent)' }
+  switch (depth) {
+    case 'routine':
+      return <circle cx="6" cy="6" r="5" style={{ fill: 'var(--accent)' }} />
+    case 'new':
+      return (
+        <>
+          <circle cx="6" cy="6" r="4.75" strokeWidth="1.25" style={ring} />
+          <circle cx="6" cy="6" r="2.5" style={{ fill: 'var(--accent)' }} />
+        </>
+      )
+    case 'paused':
+      return (
+        <>
+          <circle cx="6" cy="6" r="4.5" strokeWidth="1.5" style={ring} />
+          <path d="M6 1.5 A4.5 4.5 0 0 0 6 10.5 Z" style={{ fill: 'var(--accent)' }} />
+        </>
+      )
+    default:
+      return <circle cx="6" cy="6" r="4.5" strokeWidth="1.5" style={ring} />
+  }
+}
+
+/** The mark of a moment's depth, with its word as the tooltip. The same look in the rows and the legend. */
+export function Glyph({ depth, size = 11 }: { depth: MomentDepth; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden className="shrink-0">
-      <title>{habit ? 'habit' : 'explored'}</title>
-      <circle
-        cx="6"
-        cy="6"
-        r={habit ? 5 : 4.25}
-        style={{ fill: habit ? 'var(--accent)' : 'var(--surface)', stroke: 'var(--accent)' }}
-        strokeWidth={habit ? 0 : 1.5}
-      />
+      <title>{depth}</title>
+      <DepthShapes depth={depth} />
     </svg>
+  )
+}
+
+/** One quiet line that says what the marks before the labels mean. */
+export function Legend() {
+  const items: [MomentDepth, string][] = [
+    ['routine', 'part of your routine'],
+    ['paused', 'quiet lately'],
+    ['tried', 'tried a few times'],
+    ['new', 'new'],
+  ]
+  return (
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-sec text-faint">
+      {items.map(([d, text]) => (
+        <span key={d} className="inline-flex items-center gap-1.5">
+          <Glyph depth={d} size={10} />
+          {text}
+        </span>
+      ))}
+    </p>
   )
 }
 
@@ -199,7 +242,7 @@ function Chart({
             role="button"
             tabIndex={0}
             aria-pressed={on}
-            aria-label={`${m.title}, ${m.status}, first ${dateOf(m.first, now)}`}
+            aria-label={`${m.title}, ${depthOf(m)}, first ${dateOf(m.first, now)}`}
             className="cursor-pointer outline-none [&:focus-visible>rect:first-of-type]:stroke-accent [&:focus-visible>rect:first-of-type]:stroke-[1.5]"
             onMouseEnter={() => onHover(m.id)}
             onMouseLeave={() => onHover(null)}
@@ -222,7 +265,10 @@ function Chart({
               rx={4}
               style={{ fill: on ? 'var(--chip-sel)' : raised ? 'var(--surface-2)' : 'transparent' }}
             />
-            <StatusDot status={m.status} cx={PAD_X + R} cy={cy} />
+            <svg x={PAD_X + R - 5} y={cy - 5} width={10} height={10} viewBox="0 0 12 12">
+              <title>{depthOf(m)}</title>
+              <DepthShapes depth={depthOf(m)} />
+            </svg>
             <text x={ROW_GLYPH_W} y={cy + 4} fontSize={ROW_LABEL_SIZE} style={{ fill: 'var(--text)' }}>
               {text}
               {text !== m.title && <title>{m.title}</title>}
@@ -286,20 +332,6 @@ function Chart({
   )
 }
 
-/** The status mark of a row, in the label column. */
-function StatusDot({ status, cx, cy }: { status: MomentStatus; cx: number; cy: number }) {
-  const habit = status === 'habit'
-  return (
-    <circle
-      cx={cx}
-      cy={cy}
-      r={habit ? R : R - 0.75}
-      strokeWidth={habit ? 0 : 1.5}
-      style={{ fill: habit ? 'var(--accent)' : 'none', stroke: 'var(--accent)' }}
-    />
-  )
-}
-
 /** Height of the readout, fixed so that nothing under the timeline moves with the content. */
 export const READOUT_H = 'h-[128px]'
 
@@ -325,8 +357,7 @@ export function Readout({
 }) {
   const now = new Date(report.now)
   const seen = seenMoments(report.moments)
-  const habits = seen.filter((x) => x.status === 'habit').length
-  const explored = seen.filter((x) => x.status === 'explored').length
+  const count = (d: MomentDepth) => seen.filter((x) => depthOf(x) === d).length
   const id = pin ?? hover
   const m = id ? report.moments.find((x) => x.id === id) : undefined
   const pinned = m !== undefined && pin === m.id
@@ -348,8 +379,9 @@ export function Readout({
             </button>
           )}
           <p className="flex flex-wrap items-center gap-x-2">
-            <Glyph status={m.status} />
+            <Glyph depth={depthOf(m)} />
             <span className="font-medium">{m.title}</span>
+            <span className="text-muted">{depthOf(m)}</span>
             <span className="text-muted">first {dateOf(m.first, now)}</span>
             <span aria-hidden className="text-faint">
               ·
@@ -400,7 +432,8 @@ export function Readout({
       ) : (
         <p className="text-muted">
           From {plural(report.sessions - report.scripted, 'session')}
-          {report.since ? ` since ${dateOf(report.since, now)}` : ''}: {plural(habits, 'habit')}, {explored} explored.
+          {report.since ? ` since ${dateOf(report.since, now)}` : ''}: {count('routine')} routine, {count('paused')}{' '}
+          paused, {count('tried')} tried, {count('new')} new.
           <span className="text-faint"> Hover a mark to see when it came back; click to pin it.</span>
         </p>
       )}

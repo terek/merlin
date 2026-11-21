@@ -212,8 +212,8 @@
       "id": "karpathy",
       "name": "Andrej Karpathy",
       "focus": "Context",
-      "reaction": "👏",
-      "reason": "Keeping up 4 habits: Steering mid-turn, Spec with criteria, One-shot spec and 1 more.",
+      "reaction": "😬",
+      "reason": "Lots of agents lately, and not much steering of them.",
       "habits": 4,
       "explored": 0,
       "unseen": 5,
@@ -223,8 +223,8 @@
       "id": "boris",
       "name": "Boris Cherny",
       "focus": "Harness",
-      "reaction": "🚀",
-      "reason": "New lately: Plans first, Background agents, Ships.",
+      "reaction": "🫠",
+      "reason": "Lots of agents lately, and many of them did not finish.",
       "habits": 5,
       "explored": 3,
       "unseen": 5,
@@ -234,8 +234,8 @@
       "id": "yegge",
       "name": "Steve Yegge",
       "focus": "Frontier",
-      "reaction": "🤘",
-      "reason": "Tried something new: Agent team, Swarm, Beads as the plan.",
+      "reaction": "🤯",
+      "reason": "A lot of frontier work lately. He loves it; the other two are less sure.",
       "habits": 2,
       "explored": 1,
       "unseen": 6,
@@ -251,10 +251,11 @@
       "try": "You don't have to wait for the agent to finish. Type while it works: the message reaches it mid-turn, so a wrong assumption is fixed before it turns into twenty edits.",
       "detects": "Counted when you send a message while the agent is still working on a turn.",
       "status": "habit",
-      "hits": 34,
-      "sessions": 34,
-      "weeks": 10,
-      "recentHits": 14,
+      "depth": "paused",
+      "hits": 16,
+      "sessions": 16,
+      "weeks": 5,
+      "recentHits": 0,
       "first": "2026-08-24T09:05:00Z",
       "firstHit": {
         "at": "2026-08-24T09:05:00Z",
@@ -369,150 +370,33 @@
             "turn": 0,
             "note": "sent while the agent was working"
           }
-        },
-        {
-          "day": "2026-09-29",
-          "hits": 2,
-          "example": {
-            "at": "2026-09-29T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-054"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-02",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-02T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-060"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-05",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-05T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-062"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-08",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-08T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-068"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-14",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-14T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-076"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-20",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-20T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-084"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-23",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-23T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-090"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-26",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-26T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-092"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
-        },
-        {
-          "day": "2026-10-29",
-          "hits": 2,
-          "example": {
-            "at": "2026-10-29T09:45:00Z",
-            "session": {
-              "harness": "claude",
-              "id": "synthetic-098"
-            },
-            "turn": 0,
-            "note": "sent while the agent was working"
-          }
         }
       ],
-      "last": "2026-10-29T09:45:00Z",
+      "last": "2026-09-23T09:45:00Z",
       "examples": [
         {
-          "at": "2026-10-29T09:45:00Z",
+          "at": "2026-09-23T09:45:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-098"
+            "id": "synthetic-046"
           },
           "turn": 0,
           "note": "sent while the agent was working"
         },
         {
-          "at": "2026-10-29T09:05:00Z",
+          "at": "2026-09-23T09:05:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-097"
+            "id": "synthetic-045"
           },
           "turn": 0,
           "note": "sent while the agent was working"
         },
         {
-          "at": "2026-10-26T09:45:00Z",
+          "at": "2026-09-17T09:45:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-092"
+            "id": "synthetic-038"
           },
           "turn": 0,
           "note": "sent while the agent was working"
@@ -579,6 +463,7 @@
       "try": "For anything bigger than a quick fix, list what done means: the constraints, what must not change, how to verify it. The agent then checks its own work.",
       "detects": "Counted when a long prompt (300 bytes or more) has three or more list items and a word like must, never, verify or test.",
       "status": "habit",
+      "depth": "routine",
       "hits": 80,
       "sessions": 80,
       "weeks": 8,
@@ -1154,6 +1039,7 @@
       "try": "Front-load the thinking: one well-specified prompt usually beats five rounds of corrections, in quality and in tokens.",
       "detects": "Counted when a prompt of 120 words or more leads to ten or more tool calls, without an interruption or a correction after it.",
       "status": "habit",
+      "depth": "routine",
       "hits": 50,
       "sessions": 50,
       "weeks": 5,
@@ -1534,6 +1420,7 @@
       "try": "Once the agent knows the project, a short prompt can carry a lot. Try a one-liner for a change you both understand well.",
       "detects": "Counted when a short prompt (2 to 25 words, not a plain approval) leads to three or more edits with no correction after it.",
       "status": "habit",
+      "depth": "routine",
       "hits": 120,
       "sessions": 100,
       "weeks": 10,
@@ -2252,6 +2139,7 @@
       "try": "Use plan mode (Shift+Tab) for anything non-trivial: you review the approach before a single file changes.",
       "detects": "Counted when a turn uses plan mode.",
       "status": "explored",
+      "depth": "new",
       "hits": 2,
       "sessions": 2,
       "weeks": 1,
@@ -2312,6 +2200,7 @@
       "try": "Context grows with every call, and so does the price of each call. Run /compact at a natural break, saying what to keep, before auto-compaction picks a worse moment.",
       "detects": "Counted when you compact the conversation yourself, not when it compacts on its own.",
       "status": "habit",
+      "depth": "routine",
       "hits": 50,
       "sessions": 50,
       "weeks": 10,
@@ -2692,6 +2581,7 @@
       "try": "Not every task needs the largest model. Switch with /model: a smaller one for mechanical work, the largest for hard reasoning.",
       "detects": "Counted when you change model, effort or fast mode with /model, /effort or /fast during a session.",
       "status": "explored",
+      "depth": "tried",
       "hits": 4,
       "sessions": 4,
       "weeks": 2,
@@ -2773,6 +2663,7 @@
       "try": "Typing the same instructions again and again? Make them a skill or a slash command and run them with one word.",
       "detects": "Counted when you run a slash command that is not built in, or the agent uses a skill.",
       "status": "habit",
+      "depth": "routine",
       "hits": 100,
       "sessions": 100,
       "weeks": 10,
@@ -3491,6 +3382,7 @@
       "try": "Send exploration to a subagent: it reads twenty files in its own context and returns a page, so the main context stays small and cheap.",
       "detects": "Counted when a subagent starts with a fresh context and explores, or reads five or more times without editing.",
       "status": "habit",
+      "depth": "routine",
       "hits": 100,
       "sessions": 100,
       "weeks": 10,
@@ -4209,6 +4101,7 @@
       "try": "While one agent works, start another on an independent task in a second terminal. Two to five at once is where many experienced users settle.",
       "detects": "Counted when two or more sessions work at once; turns less than five minutes apart form one stretch. One time per day.",
       "status": "habit",
+      "depth": "routine",
       "hits": 50,
       "sessions": 50,
       "weeks": 10,
@@ -4927,6 +4820,7 @@
       "try": "Long work (a test suite, a broad search) can run as a background agent while you keep talking to the main one.",
       "detects": "Counted when a subagent runs in the background.",
       "status": "habit",
+      "depth": "routine",
       "hits": 84,
       "sessions": 14,
       "weeks": 3,
@@ -5087,6 +4981,7 @@
       "try": "Let the agent take a change all the way: branch, commit, push and open the pull request.",
       "detects": "Counted when a session links a pull request.",
       "status": "explored",
+      "depth": "new",
       "hits": 2,
       "sessions": 2,
       "weeks": 1,
@@ -5156,6 +5051,7 @@
       "try": "An agent team splits a big job over teammates that message each other. Start with two or three on clearly separate parts.",
       "detects": "Counted when a session has teammates, subagents you can address by name. Once per session.",
       "status": "habit",
+      "depth": "routine",
       "hits": 14,
       "sessions": 14,
       "weeks": 3,
@@ -5329,6 +5225,7 @@
       "try": "Independent pieces of work (one per package, one per test file) can run as many agents at once. Watch the bill.",
       "detects": "Counted when five or more agents run at the same moment. Once per session.",
       "status": "habit",
+      "depth": "routine",
       "hits": 14,
       "sessions": 14,
       "weeks": 3,
@@ -5476,6 +5373,7 @@
       "try": "A plan in markdown gets rewritten over and over. Beads (bd) keeps it as a graph of issues that agents claim and close across sessions.",
       "detects": "Counted when one session creates three or more beads, links at least one and closes at least one.",
       "status": "explored",
+      "depth": "new",
       "hits": 10,
       "sessions": 10,
       "weeks": 2,
@@ -5720,5 +5618,6 @@
     {
       "moment": "workflow-run"
     }
-  ]
+  ],
+  "overYegge": true
 }

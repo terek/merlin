@@ -32,6 +32,18 @@ from the session.
 | `explored` | at least one hit, in fewer weeks |
 | `unseen` | no hit |
 
+**Depth.** Status never falls back, so a second field says how a moment sits in the work right
+now. It is read from the hits and the report's time, and leaves `status` alone:
+
+| Depth | Rule |
+|---|---|
+| `routine` | at least the weeks a `habit` needs, and a hit in the last 28 days |
+| `paused` | that many weeks, but no hit in the last 28 days |
+| `new` | fewer weeks, the first hit in the last 28 days: too early to tell |
+| `tried` | fewer weeks, the first hit older than 28 days |
+
+The words are neutral; they describe and do not judge. An unseen moment has no depth.
+
 A moment is **new** when its first hit falls in the recent window (the last 28 days). Statuses
 only grow as history grows; a habit never falls back because of a quiet month. The reactions,
 which look at the recent window, are what moves.

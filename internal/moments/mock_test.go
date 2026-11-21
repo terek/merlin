@@ -47,7 +47,8 @@ func TestMockReport(t *testing.T) {
 			}
 			t0 := mk(0, 0, text)
 			t0.ToolCalls, t0.ToolsByName = 24, map[string]int64{"Edit": 6, "Read": 10}
-			if day%3 == 0 {
+			// steering mid-turn stops after week 5: a habit that went quiet
+			if day%3 == 0 && day >= 35 {
 				t0.Queued = []model.QueuedPrompt{{At: t0.StartedAt.Add(5 * time.Minute), Origin: model.OriginHuman}}
 			}
 			t1 := mk(1, 60, "add a dark theme toggle")

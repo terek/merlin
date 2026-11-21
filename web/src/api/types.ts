@@ -1108,6 +1108,8 @@ export interface EventMap {
 
 export type MomentPersona = 'karpathy' | 'boris' | 'yegge'
 export type MomentStatus = 'habit' | 'explored' | 'unseen'
+/** How a moment sits in the work now; absent when unseen. */
+export type MomentDepth = 'routine' | 'paused' | 'new' | 'tried'
 
 /** One occurrence of a moment. The note is Merlin's wording with numbers only. */
 export interface MomentHit {
@@ -1127,6 +1129,7 @@ export interface MomentView {
   /** One plain sentence on what counts as an occurrence. */
   detects?: string
   status: MomentStatus
+  depth?: MomentDepth
   hits: number
   sessions: number
   weeks: number

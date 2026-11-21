@@ -136,6 +136,44 @@ func TestHabitNeedsWeeks(t *testing.T) {
 	}
 }
 
+func TestDepth(t *testing.T) {
+	var in []Input
+	for w := range 3 {
+		tt := turn(0, w*7*24*60, "x")
+		tt.Queued = []model.QueuedPrompt{{At: at(w*7*24*60 + 1), Origin: model.OriginHuman}}
+		in = append(in, Input{Digest: session(string(rune('a'+w)), model.KindInteractive, tt)})
+	}
+	depth := func(in []Input, days int) (Depth, Status) {
+		m := view(BuildWith(Registry(), in, at(days*24*60), time.UTC), "steer-mid-turn")
+		return m.Depth, m.Status
+	}
+	// hits on days 0, 7 and 14; the window is the last 28 days
+	for _, c := range []struct {
+		name string
+		in   []Input
+		days int
+		want Depth
+	}{
+		{"three weeks and a hit in the window", in, 20, DepthRoutine},
+		{"three weeks, the last hit exactly at the window's start", in, 42, DepthRoutine},
+		{"three weeks, nothing in the window", in, 43, DepthPaused},
+		{"two weeks, first hit in the window", in[:2], 10, DepthNew},
+		{"two weeks, first hit older than the window", in[:2], 40, DepthTried},
+		{"one hit long ago", in[:1], 90, DepthTried},
+	} {
+		if got, _ := depth(c.in, c.days); got != c.want {
+			t.Errorf("%s: depth %q, want %q", c.name, got, c.want)
+		}
+	}
+	// status does not fall back
+	if d, s := depth(in, 90); d != DepthPaused || s != StatusHabit {
+		t.Errorf("a dropped habit: depth %q status %q, want paused and habit", d, s)
+	}
+	if d, _ := depth(nil, 10); d != "" {
+		t.Errorf("unseen: depth %q, want none", d)
+	}
+}
+
 func TestParallelSessionsAndScripted(t *testing.T) {
 	a := session("a", model.KindInteractive, turn(0, 0, "a"))
 	b := session("b", model.KindInteractive, turn(0, 1, "b"))

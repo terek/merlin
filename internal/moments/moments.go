@@ -28,6 +28,17 @@ const (
 	StatusUnseen   Status = "unseen"
 )
 
+// Depth is how a moment sits in the user's work right now, read from the hits and the report's time. Status
+// never falls back; depth does. The words are neutral: they describe, they do not judge.
+type Depth string
+
+const (
+	DepthRoutine Depth = "routine" // seen in at least HabitWeeks distinct weeks, and in the last WindowDays
+	DepthPaused  Depth = "paused"  // seen in at least HabitWeeks weeks, but not in the last WindowDays
+	DepthNew     Depth = "new"     // fewer weeks, the first hit in the last WindowDays: too early to tell
+	DepthTried   Depth = "tried"   // fewer weeks, the first hit older than WindowDays
+)
+
 // DefaultHabitWeeks is how many distinct weeks a moment must be seen in to count as a habit.
 const DefaultHabitWeeks = 3
 
@@ -156,11 +167,13 @@ type MomentView struct {
 	What    string  `json:"what"`
 	Try     string  `json:"try"`
 	// Detects is what counts as one occurrence, in a plain sentence.
-	Detects  string `json:"detects"`
-	Status   Status `json:"status"`
-	Hits     int    `json:"hits"`
-	Sessions int    `json:"sessions"`
-	Weeks    int    `json:"weeks"`
+	Detects string `json:"detects"`
+	Status  Status `json:"status"`
+	// Depth is the usage depth (routine, paused, new, tried); empty for an unseen moment.
+	Depth    Depth `json:"depth,omitempty"`
+	Hits     int   `json:"hits"`
+	Sessions int   `json:"sessions"`
+	Weeks    int   `json:"weeks"`
 	// RecentHits are the hits in the window; New is set when the first hit is in the window.
 	RecentHits int       `json:"recentHits"`
 	New        bool      `json:"new,omitempty"`
@@ -267,6 +280,16 @@ func summarize(m Moment, hits []Hit, windowStart time.Time, loc *time.Location) 
 	v.Status = StatusExplored
 	if v.Weeks >= need {
 		v.Status = StatusHabit
+	}
+	switch recent := !v.Last.Before(windowStart); {
+	case v.Weeks >= need && recent:
+		v.Depth = DepthRoutine
+	case v.Weeks >= need:
+		v.Depth = DepthPaused
+	case v.New:
+		v.Depth = DepthNew
+	default:
+		v.Depth = DepthTried
 	}
 	for i := len(hits) - 1; i >= 0 && len(v.Examples) < maxExamples; i-- {
 		v.Examples = append(v.Examples, hits[i])

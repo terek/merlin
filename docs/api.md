@@ -1367,7 +1367,7 @@ request. No parameters.
 `projects` counts where the interactive sessions worked: a session's repository when it has
 one (so its worktrees count once), else the directory it started in. `moments` is in registry
 order (Karpathy, Boris, Yegge) and lists every moment, unseen ones
-included. `status` is `habit`, `explored` or `unseen`; `examples` are the latest hits, newest
+included. `status` is `habit`, `explored` or `unseen`; `depth` is how the moment sits in the work now: `routine` (habit weeks and a hit in the last `windowDays`), `paused` (habit weeks, none in the window), `new` (fewer weeks, first hit in the window) or `tried` (fewer weeks, first hit older), absent when unseen, and `status` never changes with it; `examples` are the latest hits, newest
 first, at most 3. A note never quotes the session. `suggestions[].reason` is absent when the
 moment's symptom did not fire. Clients ignore moment ids they do not know.
 

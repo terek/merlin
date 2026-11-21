@@ -14,7 +14,7 @@ import { markSeen } from '../../shell/momentsBadge'
 import { useShortcut } from '../../shell/useShortcut'
 import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, SegmentedControl, Skeleton } from '../../ui'
 import { bucketDays, seenMoments } from './layout'
-import { dateOf, Glyph, Readout, Timeline, tickPath, timesInWeeks } from './Timeline'
+import { dateOf, depthOf, Glyph, Legend, Readout, Timeline, tickPath, timesInWeeks } from './Timeline'
 
 export function MomentsPage() {
   useDocumentTitle('Moments')
@@ -132,6 +132,7 @@ function Report({ report }: { report: MomentsReport }) {
           onTick={setHoverTick}
           onK={setK}
         />
+        <Legend />
         <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} onClear={() => setPin(null)} />
       </FrameSection>
 
@@ -239,7 +240,7 @@ function MomentRow({
           onBlur={() => onHover(null)}
           className="flex h-7 shrink-0 items-center gap-2.5 text-left"
         >
-          <Glyph status={m.status} />
+          <Glyph depth={depthOf(m)} />
           <span
             className={cn('w-56 shrink-0 truncate text-body', pinned ? 'font-semibold text-accent' : 'font-medium')}
           >
