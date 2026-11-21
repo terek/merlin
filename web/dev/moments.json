@@ -2588,7 +2588,7 @@
       "id": "model-switch",
       "persona": "boris",
       "category": "context",
-      "title": "Right model for the job",
+      "title": "Switches model mid-session",
       "what": "You switched the model or the effort in the middle of a session.",
       "try": "Not every task needs the largest model. Switch with /model: a smaller one for mechanical work, the largest for hard reasoning.",
       "detects": "Counted when you change model, effort or fast mode with /model, /effort or /fast during a session.",

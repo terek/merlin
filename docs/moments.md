@@ -136,7 +136,7 @@ starting like "no", "wrong", "still", "doesn't work", "revert", ….
 |---|---|---|---|---|
 | `plans-first` | Plans first | prompt | a turn used plan mode (`EnterPlanMode`/`ExitPlanMode`) | digest |
 | `deliberate-compact` | Compacts on purpose | context | a manual compaction | digest |
-| `model-switch` | Right model for the job | context | `/model`, `/effort` or `/fast` mid-session | digest |
+| `model-switch` | Switches model mid-session | context | `/model`, `/effort` or `/fast` mid-session | digest |
 | `custom-command` | Own commands and skills | harness | a slash command that is not built in, or the `Skill` tool | digest |
 | `builds-harness` | Builds the harness | harness | a turn with edits touched CLAUDE.md, AGENTS.md, `.claude/skills`, commands, agents, hooks or settings | digest |
 | `context-isolation` | Context isolation | context | a fresh-context subagent of type Explore, or one with 5+ read-only calls and no edits | digest |

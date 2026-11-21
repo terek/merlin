@@ -92,7 +92,7 @@ func Registry() []Moment {
 			Symptom: autoCompactions,
 		},
 		{
-			ID: "model-switch", Category: CategoryContext, Persona: Boris, Title: "Right model for the job",
+			ID: "model-switch", Category: CategoryContext, Persona: Boris, Title: "Switches model mid-session",
 			Detects: "Counted when you change model, effort or fast mode with /model, /effort or /fast during a session.",
 			What:    "You switched the model or the effort in the middle of a session.",
 			Try:     "Not every task needs the largest model. Switch with /model: a smaller one for mechanical work, the largest for hard reasoning.",
