@@ -3,7 +3,7 @@
 // reactions and the card to share are not shown for now (MomentCard and PersonaAvatar stay).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
 import type { MomentHit, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
@@ -12,7 +12,7 @@ import { useDocumentTitle } from '../../lib/hooks'
 import { sessionPath } from '../../lib/paths'
 import { markSeen } from '../../shell/momentsBadge'
 import { useShortcut } from '../../shell/useShortcut'
-import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, Skeleton } from '../../ui'
+import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, SegmentedControl, Skeleton } from '../../ui'
 import { seenMoments } from './layout'
 import { dateOf, Glyph, Readout, Timeline, tickPath, timesInWeeks } from './Timeline'
 
@@ -57,6 +57,29 @@ function Report({ report }: { report: MomentsReport }) {
   const [hoverTick, setHoverTick] = useState<string | null>(null)
   const [selTick, setSelTick] = useState<string | null>(null)
   const navigate = useNavigate()
+  const [sp, setSp] = useSearchParams()
+  const view: 'moments' | 'next' = sp.get('view') === 'next' ? 'next' : 'moments'
+  // the lower part's mode is view state: in the URL, replacing the entry rather than adding one
+  const setView = (v: 'moments' | 'next') =>
+    setSp(
+      (prev) => {
+        const n = new URLSearchParams(prev)
+        if (v === 'next') n.set('view', 'next')
+        else n.delete('view')
+        return n
+      },
+      { replace: true },
+    )
+  const [scrollTo, setScrollTo] = useState<string | null>(null)
+  useEffect(() => {
+    if (!scrollTo || view !== 'next') return
+    document.getElementById(scrollTo)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    setScrollTo(null)
+  }, [scrollTo, view])
+  const showNext = (id: string | null) => {
+    setView('next')
+    setScrollTo(id ? `next-${id}` : 'moments-lower')
+  }
   const byId = useMemo(() => new Map(report.moments.map((m) => [m.id, m])), [report.moments])
   const pinnedDays = pin ? (byId.get(pin)?.days ?? []) : []
   useShortcut('Escape', () => setPin(null), { enabled: pin !== null })
@@ -104,40 +127,54 @@ function Report({ report }: { report: MomentsReport }) {
           onPin={togglePin}
           tickDay={tickDay}
           onTick={setHoverTick}
+          onNext={showNext}
         />
-        <Readout report={report} hover={hover} pin={pin} onHover={setHover} tickDay={tickDay} />
+        <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} />
       </FrameSection>
 
-      {next.length > 0 && (
-        <FrameSection title="Next">
-          <ul className="divide-y divide-line">
-            {next.map((s) => {
-              const m = byId.get(s.moment)
-              return m ? <NextRow key={s.moment} moment={m} reason={s.reason} example={s.example} /> : null
-            })}
-          </ul>
-        </FrameSection>
-      )}
-
-      {seen.length > 0 && (
-        <FrameSection title={`Your moments (${seen.length})`}>
-          <ul className="-mx-2">
-            {seen.map((m) => (
-              <MomentRow
-                key={m.id}
-                moment={m}
-                now={new Date(report.now)}
-                active={(hover ?? pin) === m.id}
-                pinned={pin === m.id}
-                onHover={setHover}
-                onPin={togglePin}
+      <div id="moments-lower">
+        <FrameSection
+          title={view === 'next' ? "What's next" : `Your moments (${seen.length})`}
+          actions={
+            (next.length > 0 || unseen.length > 0) && seen.length > 0 ? (
+              <SegmentedControl
+                label="Lower part"
+                value={view}
+                onChange={setView}
+                options={[
+                  { value: 'moments', label: 'Your moments' },
+                  { value: 'next', label: "What's next" },
+                ]}
               />
-            ))}
-          </ul>
+            ) : undefined
+          }
+          className="border-b-0"
+        >
+          {view === 'moments' || (next.length === 0 && unseen.length === 0) ? (
+            <ul className="-mx-2">
+              {seen.map((m) => (
+                <MomentRow
+                  key={m.id}
+                  moment={m}
+                  now={new Date(report.now)}
+                  active={(hover ?? pin) === m.id}
+                  pinned={pin === m.id}
+                  onHover={setHover}
+                  onPin={togglePin}
+                />
+              ))}
+            </ul>
+          ) : (
+            <ul className="divide-y divide-line">
+              {next.map((s) => {
+                const m = byId.get(s.moment)
+                return m ? <NextRow key={s.moment} moment={m} reason={s.reason} example={s.example} /> : null
+              })}
+            </ul>
+          )}
         </FrameSection>
-      )}
-
-      {unseen.length > 0 && <MoreToTry moments={unseen} />}
+        {view === 'next' && unseen.length > 0 && <MoreToTry moments={unseen} />}
+      </div>
 
       <p className="px-4 py-3 text-sec text-faint">
         From {plural(report.sessions - report.scripted, 'session')}
@@ -150,7 +187,7 @@ function Report({ report }: { report: MomentsReport }) {
 
 function NextRow({ moment, reason, example }: { moment: MomentView; reason?: string; example?: MomentHit }) {
   return (
-    <li className="space-y-0.5 py-2">
+    <li id={`next-${moment.id}`} className="space-y-0.5 py-2">
       <div className="text-body font-semibold">{moment.title}</div>
       {reason && <p className="text-body">{reason}</p>}
       <p className="text-sec text-muted">{moment.try}</p>

@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import type { MomentView } from '../../api/types'
-import { activityArea, dayTicks, EDGE_DAYS, LABEL_SPACE, layoutTimeline, monthTicks, seenMoments, xOf } from './layout'
+import {
+  activityArea,
+  dayTicks,
+  EDGE_COL,
+  EDGE_DAYS,
+  FUTURE_W,
+  LABEL_SPACE,
+  layoutTimeline,
+  monthTicks,
+  seenMoments,
+  xOf,
+} from './layout'
 
 const SINCE = '2026-08-24T09:00:00Z'
 const NOW = '2026-11-01T18:00:00Z'
@@ -120,5 +131,15 @@ describe('dayTicks hit areas', () => {
     const [a, b] = dayTicks(m(['2026-09-10', '2026-09-11']), l)
     expect(a.x1).toBeLessThanOrEqual(b.x0 + 0.001)
     expect(a.x1).toBeCloseTo((a.x + b.x) / 2, 5)
+  })
+
+  test('the plot starts right of the edge column and stops before the future zone', () => {
+    const edge = [moment('a', 0)]
+    const l = layoutTimeline(edge, SINCE, NOW, 1000, true)
+    expect(l.left).toBe(EDGE_COL)
+    expect(l.right).toBe(1000 - FUTURE_W)
+    expect(xOf(l, Date.parse(SINCE))).toBe(EDGE_COL + 12)
+    expect(xOf(l, Date.parse(NOW))).toBe(1000 - FUTURE_W - 12)
+    expect(layoutTimeline([], SINCE, NOW, 1000).left).toBe(0)
   })
 })

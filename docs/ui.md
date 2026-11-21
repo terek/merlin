@@ -271,14 +271,18 @@ same whether or not a session is open in the Overview, and no page puts tools in
 
 Full width, in frames like Cost. **Your history**: an SVG timeline from `since` to `now` with a soft activity area
 (prompts per day), one marker per seen moment at its first time (filled: habit; ring: explored; greedy lanes, 14 px
-apart) and month labels. Moments first seen within 7 days of `since` form one edge stack with their count. Hovering a
-marker, a list row or an edge-stack entry draws a tick per day of its `days` under the area and dims the other markers;
+apart) and month labels. Moments first seen within 7 days of `since` are listed in a fixed 190 px column left of the plot, headed "Already doing
+when your history starts", and behave like markers. Under the axis an event strip has one 3 px row per seen moment
+(oldest first, a staircase), with a tick per day of its `days`, opacity by hits. Hovering a marker, a column entry, a
+strip row or a list row lights that moment (row accent, marker, label and stem) and dims the rest to 0.45;
 a click pins (Enter on a focused marker; click again or Esc unpins; hover shows over the pin). The readout below has a
 fixed height: idle it summarises the history, hovered it gives title, first date, times in weeks and the first hit's note,
-pinned it adds the `what` sentence and "Open the first time →". **Next**: at most three suggestions, each with its reason
-and a link to its example session. **Your moments**: rows by first time, sharing the hover and pin. **More to try**: the
-unseen moments, collapsed. Every marker has a stem, a faint dotted line down to the axis (solid and accent while the
-moment is active; labels carry a halo in the page background). While a moment is shown, its ticks are interactive
+pinned it adds the `what` sentence and "Open the first time →". The next ~200 px after a dashed "now" line is a tinted "Next for you" zone with up to three dashed hollow
+markers (no stems or ticks); clicking one switches the lower part to "What's next" and scrolls to it, hovering shows its
+reason and try text in the readout. The lower part has a segmented switch, "Your moments" (default) or "What's next"
+(`?view=next`, kept with `replace`): the suggestions with their reason and example link, then the unseen ones. **Your moments**: rows by first time, sharing the hover and pin. **More to try**: the
+unseen moments. Every marker has a stem, a faint dotted line down to the axis (solid and accent while the
+moment is active; labels carry a halo in the page background). While a moment is shown, its strip ticks are interactive
 (8 px minimum hit area, the nearest day winning; height scales with the day's hits): hovering one adds a line to the
 readout, a click opens that day's `example` session at its turn, and while pinned the arrow keys step through the ticks
 and Enter opens the chosen one. The readout shows `what` on hover and, pinned, "How Merlin spots it" (`detects`); a

@@ -6,8 +6,12 @@ import { dayStart, localDay } from '../../lib/time'
 
 /** Moments whose first hit is this close to the start of the history are not placed one by one. */
 export const EDGE_DAYS = 7
-/** The id the edge stack goes by, as a hover or a pin. */
-export const EDGE_ID = '@edge'
+/** The prefix of the hover id of a suggestion in the future zone. */
+export const NEXT_PREFIX = '@next:'
+/** The width of the column that lists the moments already there when the history starts. */
+export const EDGE_COL = 190
+/** The width of the zone after "now" that holds what is next for you. */
+export const FUTURE_W = 200
 /** The height of one lane of markers. */
 export const MARKER_GAP = 16
 export const PAD_X = 12
@@ -23,8 +27,6 @@ const CHAR_W = 6.3
 export function labelWidth(text: string): number {
   return Math.ceil(text.length * CHAR_W)
 }
-
-export const EDGE_LABEL = (n: number) => `already doing (${n})`
 
 const DAY_MS = 86_400_000
 
@@ -56,43 +58,49 @@ export interface TimelineLayout {
   from: number
   to: number
   width: number
+  /** The plot's left and right edges in px (the edge column is left of it, the future zone right of it). */
+  left: number
+  right: number
   /** Markers placed one by one, with their lanes. */
   markers: Marker[]
   lanes: number
   /** Moments already there when the history starts: one stack at the left edge. */
   edge: MomentView[]
-  edgeX: number
-  /** Where the edge stack's label starts. */
-  edgeLabelX: number
 }
 
 /** The x of a time, clamped to the axis. */
-export function xOf(l: Pick<TimelineLayout, 'from' | 'to' | 'width'>, t: number): number {
+export function xOf(l: Pick<TimelineLayout, 'from' | 'to' | 'left' | 'right'>, t: number): number {
   const span = Math.max(1, l.to - l.from)
   const f = Math.min(1, Math.max(0, (t - l.from) / span))
-  return PAD_X + f * Math.max(1, l.width - 2 * PAD_X)
+  return l.left + PAD_X + f * Math.max(1, l.right - l.left - 2 * PAD_X)
 }
 
 /**
  * Lays the seen moments out over `width` px. Markers that would sit closer than MARKER_GAP take the first lane
  * (counted from the area upwards) whose last marker is far enough to the left; the edge stack holds lane 0's start.
  */
-export function layoutTimeline(moments: MomentView[], since: string, now: string, width: number): TimelineLayout {
+export function layoutTimeline(
+  moments: MomentView[],
+  since: string,
+  now: string,
+  width: number,
+  future = false,
+): TimelineLayout {
   const from = Date.parse(since)
   const to = Math.max(Date.parse(now), from + DAY_MS)
-  const l: TimelineLayout = { from, to, width, markers: [], lanes: 1, edge: [], edgeX: PAD_X + 13, edgeLabelX: 0 }
-  l.edgeLabelX = l.edgeX + 13 + LABEL_GAP
-  // the spans [from, to] taken in each lane; the edge stack and its label take the start of the first
-  const taken: [number, number][][] = [[]]
   const seen = seenMoments(moments)
-  l.edge = seen.filter((m) => Date.parse(m.first ?? '') - from < EDGE_DAYS * DAY_MS)
-  if (l.edge.length > 0) taken[0].push([0, l.edgeLabelX + labelWidth(EDGE_LABEL(l.edge.length))])
+  const edge = seen.filter((m) => Date.parse(m.first ?? '') - from < EDGE_DAYS * DAY_MS)
+  const left = edge.length > 0 ? EDGE_COL : 0
+  const right = future ? width - FUTURE_W : width
+  const l: TimelineLayout = { from, to, width, left, right, markers: [], lanes: 1, edge }
+  // the spans [from, to] taken in each lane
+  const taken: [number, number][][] = [[]]
   for (const m of seen) {
     const t = Date.parse(m.first ?? '')
     if (t - from < EDGE_DAYS * DAY_MS) continue
     const x = xOf(l, t)
     const w = labelWidth(m.title)
-    const flip = x + MARKER_R + LABEL_GAP + w > width - PAD_X
+    const flip = x + MARKER_R + LABEL_GAP + w > right - PAD_X
     const a = flip ? x - MARKER_R - LABEL_GAP - w : x - MARKER_R
     const b = flip ? x + MARKER_R : x + MARKER_R + LABEL_GAP + w
     let lane = taken.findIndex((spans) => spans.every(([s, e]) => a - e >= LABEL_SPACE || s - b >= LABEL_SPACE))
@@ -107,7 +115,7 @@ export function layoutTimeline(moments: MomentView[], since: string, now: string
       labelW: w,
     })
   }
-  l.lanes = taken.length
+  l.lanes = Math.max(1, taken.length)
   return l
 }
 

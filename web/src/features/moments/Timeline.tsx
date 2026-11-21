@@ -5,7 +5,7 @@
 
 import { useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { MomentStatus, MomentsReport, MomentView } from '../../api/types'
+import type { MomentHit, MomentStatus, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
@@ -15,20 +15,19 @@ import {
   activityArea,
   type DayTick,
   dayTicks,
-  EDGE_ID,
-  EDGE_LABEL,
+  LABEL_GAP,
   LABEL_SIZE,
-  labelWidth,
   layoutTimeline,
   MARKER_GAP,
   MARKER_R,
   monthTicks,
+  NEXT_PREFIX,
+  PAD_X,
   seenMoments,
   type TimelineLayout,
 } from './layout'
 
 const AREA_H = 72
-const TICK_H = 22
 const AXIS_H = 20
 const R = MARKER_R
 /** A label's halo in the page background, so a stem never strikes through text. */
@@ -38,7 +37,7 @@ const HALO = { paintOrder: 'stroke', stroke: 'var(--bg)', strokeWidth: 3, stroke
 function stem(on: boolean, dim: boolean) {
   return on
     ? { strokeWidth: 1.5, style: { stroke: 'var(--accent)', opacity: 0.75 } }
-    : { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: dim ? 0.25 : 0.6 } }
+    : { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: dim ? 0.3 : 0.6 } }
 }
 const MARKER_TOP = 10
 
@@ -80,6 +79,8 @@ interface TimelineProps {
   /** The day of the tick under the pointer or chosen with the arrow keys. */
   tickDay: string | null
   onTick: (day: string | null) => void
+  /** A suggestion (or the header, null) was clicked: show what is next. */
+  onNext: (id: string | null) => void
 }
 
 /** A day of a moment as a link into its example session. */
@@ -88,13 +89,12 @@ export function tickPath(t: Pick<DayTick, 'example'>): string | undefined {
   return h ? sessionPath(h.session, h.turn !== undefined ? `t${h.turn}` : undefined) : undefined
 }
 
-export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick }: TimelineProps) {
+export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, onNext }: TimelineProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const since = report.since
-  const layout = since ? layoutTimeline(report.moments, since, report.now, width) : null
+  const layout = since ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0) : null
   const active = hover ?? pin
-  const activeMoment = active && active !== EDGE_ID ? report.moments.find((m) => m.id === active) : undefined
   return (
     <div ref={wrap} className="w-full">
       {since && layout && (
@@ -103,183 +103,165 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick }
           since={since}
           layout={layout}
           active={active}
-          activeMoment={activeMoment}
           pin={pin}
           onHover={onHover}
           onPin={onPin}
           tickDay={tickDay}
           onTick={onTick}
+          onNext={onNext}
         />
       )}
     </div>
   )
 }
 
+const EDGE_HEAD_H = 22
+const ROW_H = 3
+const ROW_PITCH = 4
+const DIM = 0.45
+
 function Chart({
   report,
   since,
   layout: l,
   active,
-  activeMoment,
   pin,
   onHover,
   onPin,
   tickDay,
   onTick,
+  onNext,
 }: Omit<TimelineProps, 'hover'> & {
   since: string
   layout: TimelineLayout
   active: string | null
-  activeMoment?: MomentView
 }) {
   const navigate = useNavigate()
-  const markersH = l.lanes * MARKER_GAP + MARKER_TOP
+  const now = new Date(report.now)
+  const seen = seenMoments(report.moments)
+  const nexts = report.suggestions
+    .slice(0, 3)
+    .map((s) => report.moments.find((m) => m.id === s.moment))
+    .filter((m): m is MomentView => m !== undefined)
+  const futureX = l.right
+  const hasFuture = nexts.length > 0
+  const listH = (n: number) => (n > 0 ? EDGE_HEAD_H + n * MARKER_GAP + 6 : 0)
+  const markersH = Math.max(l.lanes * MARKER_GAP + MARKER_TOP, listH(l.edge.length), listH(nexts.length))
   const laneY = (lane: number) => markersH - MARKER_GAP / 2 - lane * MARKER_GAP
+  const listY = (i: number) => EDGE_HEAD_H + i * MARKER_GAP + MARKER_GAP / 2
   const areaBottom = markersH + AREA_H
-  const height = areaBottom + TICK_H + AXIS_H
+  const stripTop = areaBottom + AXIS_H
+  const height = stripTop + seen.length * ROW_PITCH + 8
   const area = activityArea(report.activity ?? [], l, since, report.now)
   const areaPath =
     area.length > 0
       ? `M${area[0].x},${areaBottom} ${area.map((p) => `L${p.x.toFixed(1)},${(areaBottom - p.v * (AREA_H - 6)).toFixed(1)}`).join(' ')} L${area[area.length - 1].x},${areaBottom} Z`
       : ''
-  const ticks = activeMoment ? dayTicks(activeMoment, l) : []
-  const edgeIds = new Set(l.edge.map((m) => m.id))
-  const edgeActive = active === EDGE_ID || (!!active && edgeIds.has(active))
   const dim = active !== null
-  const edgeMark = l.edge.length > 0
   const key = (id: string) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
       onPin(id)
     }
   }
+  // what a moment's mark does on the timeline: hover, focus and click act as one
+  const markProps = (m: MomentView) => ({
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-pressed': pin === m.id,
+    'aria-label': `${m.title}, ${m.status}, first ${dateOf(m.first, now)}`,
+    className: 'cursor-pointer outline-none [&:focus-visible>circle:first-of-type]:stroke-accent',
+    opacity: dim && active !== m.id ? DIM : 1,
+    onMouseEnter: () => onHover(m.id),
+    onMouseLeave: () => onHover(null),
+    onFocus: () => onHover(m.id),
+    onBlur: () => onHover(null),
+    onClick: () => onPin(m.id),
+    onKeyDown: key(m.id),
+  })
+  const dot = (m: MomentView, x: number, y: number) => (
+    <circle
+      cx={x}
+      cy={y}
+      r={active === m.id ? R + 1 : R}
+      strokeWidth={m.status === 'habit' ? 0 : 1.5}
+      style={{ fill: m.status === 'habit' ? 'var(--accent)' : 'var(--surface)', stroke: 'var(--accent)' }}
+    />
+  )
+  const label = (m: MomentView, x: number, y: number, anchor: 'start' | 'end' = 'start') => (
+    <text
+      x={x}
+      y={y + 4}
+      textAnchor={anchor}
+      fontSize={LABEL_SIZE}
+      fontWeight={active === m.id ? 600 : 400}
+      style={{ fill: active === m.id ? 'var(--text)' : 'var(--muted)', ...HALO }}
+    >
+      {m.title}
+    </text>
+  )
+  const rows = seen.map((m, i) => ({ m, y: stripTop + i * ROW_PITCH }))
+  const ordered = [...rows.filter((r) => r.m.id !== active), ...rows.filter((r) => r.m.id === active)]
   return (
     <svg width={l.width} height={height} role="img" aria-label="Timeline of your moments" className="block">
       <title>Timeline of your moments</title>
-      <line x1={0} x2={l.width} y1={areaBottom + 0.5} y2={areaBottom + 0.5} style={{ stroke: 'var(--line)' }} />
-      {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.2 }} />}
+      {hasFuture && (
+        <>
+          <rect
+            x={futureX}
+            y={0}
+            width={l.width - futureX}
+            height={areaBottom}
+            style={{ fill: 'var(--accent)', opacity: 0.05 }}
+          />
+          <line
+            x1={futureX + 0.5}
+            x2={futureX + 0.5}
+            y1={0}
+            y2={areaBottom}
+            strokeDasharray="3 3"
+            style={{ stroke: 'var(--faint)' }}
+          />
+        </>
+      )}
+      <line x1={l.left} x2={futureX} y1={areaBottom + 0.5} y2={areaBottom + 0.5} style={{ stroke: 'var(--line)' }} />
+      {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.32 }} />}
 
       {/* stems: from each marker down to the axis, behind everything; the active one is solid */}
-      {edgeMark && <line x1={l.edgeX} x2={l.edgeX} y1={laneY(0) + 8} y2={areaBottom} {...stem(edgeActive, dim)} />}
       {l.markers.map(({ moment: m, x, lane }) => (
         <line key={m.id} x1={x} x2={x} y1={laneY(lane) + R + 1} y2={areaBottom} {...stem(active === m.id, dim)} />
       ))}
 
-      {ticks.map((t) => {
-        const on = t.day === tickDay
-        const href = tickPath(t)
-        return (
-          <g key={t.day} opacity={tickDay !== null && !on ? 0.55 : 1}>
-            <rect
-              x={t.x - (on ? 1.5 : 1)}
-              y={areaBottom + 2}
-              width={on ? 3 : 2}
-              height={4 + t.h * (TICK_H - 6)}
-              rx={1}
-              style={{ fill: 'var(--accent)', opacity: on ? 1 : 0.4 + t.h * 0.5 }}
-            />
-            <rect
-              x={t.x0}
-              y={areaBottom}
-              width={Math.max(1, t.x1 - t.x0)}
-              height={TICK_H}
-              fill="transparent"
-              className={href ? 'cursor-pointer' : undefined}
-              onMouseEnter={() => onTick(t.day)}
-              onMouseLeave={() => onTick(null)}
-              onClick={() => href && navigate(href)}
-            >
-              <title>{`${t.day}: ${plural(t.hits, 'time')}`}</title>
-            </rect>
-          </g>
-        )
-      })}
-
       {monthTicks(l).map((t) => (
         <g key={t.label}>
           <line x1={t.x} x2={t.x} y1={areaBottom} y2={areaBottom + 4} style={{ stroke: 'var(--line)' }} />
-          <text x={t.x + 4} y={areaBottom + TICK_H + 12} fontSize={11} style={{ fill: 'var(--faint)' }}>
+          <text x={t.x + 4} y={areaBottom + 14} fontSize={11} style={{ fill: 'var(--muted)' }}>
             {t.label}
           </text>
         </g>
       ))}
 
-      {edgeMark && (
-        // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a <button>
-        <g
-          role="button"
-          tabIndex={0}
-          aria-pressed={pin === EDGE_ID}
-          aria-label={`Already doing when your history starts (${l.edge.length})`}
-          className="cursor-pointer outline-none [&:focus-visible>rect:nth-of-type(2)]:stroke-[2.5]"
-          opacity={dim && !edgeActive ? 0.3 : 1}
-          onMouseEnter={() => onHover(EDGE_ID)}
-          onMouseLeave={() => onHover(null)}
-          onFocus={() => onHover(EDGE_ID)}
-          onBlur={() => onHover(null)}
-          onClick={() => onPin(EDGE_ID)}
-          onKeyDown={key(EDGE_ID)}
-        >
-          <title>{`Already doing when your history starts (${l.edge.length})`}</title>
-          <rect
-            x={0}
-            y={laneY(0) - MARKER_GAP / 2}
-            width={l.edgeLabelX + labelWidth(EDGE_LABEL(l.edge.length))}
-            height={MARKER_GAP}
-            fill="transparent"
-          />
-          <rect
-            x={l.edgeX - 13}
-            y={laneY(0) - 8}
-            width={26}
-            height={16}
-            rx={8}
-            strokeWidth={edgeActive ? 2 : 1.5}
-            style={{ fill: 'var(--surface)', stroke: 'var(--accent)' }}
-          />
-          <text
-            x={l.edgeX}
-            y={laneY(0) + 4}
-            textAnchor="middle"
-            fontSize={11}
-            fontWeight={600}
-            style={{ fill: 'var(--accent)' }}
-          >
-            {l.edge.length}
-          </text>
-          <text
-            x={l.edgeLabelX}
-            y={laneY(0) + 4}
-            fontSize={LABEL_SIZE}
-            fontWeight={edgeActive ? 600 : 400}
-            style={{ fill: edgeActive ? 'var(--text)' : 'var(--muted)', ...HALO }}
-          >
-            {EDGE_LABEL(l.edge.length)}
-          </text>
-        </g>
+      {l.edge.length > 0 && (
+        <text x={PAD_X} y={13} fontSize={11} letterSpacing="0.04em" style={{ fill: 'var(--muted)' }}>
+          ALREADY DOING WHEN YOUR HISTORY STARTS
+        </text>
       )}
+      {l.edge.map((m, i) => {
+        const y = listY(i)
+        return (
+          <g key={m.id} {...markProps(m)}>
+            <title>{m.title}</title>
+            <rect x={0} y={y - MARKER_GAP / 2} width={l.left - 8} height={MARKER_GAP} fill="transparent" />
+            {dot(m, PAD_X + R, y)}
+            {label(m, PAD_X + 2 * R + LABEL_GAP, y)}
+          </g>
+        )
+      })}
 
       {l.markers.map(({ moment: m, x, lane, flip, labelX, labelW }) => {
         const y = laneY(lane)
-        const on = active === m.id
-        const faded = dim && !on
         return (
-          // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a <button>
-          <g
-            key={m.id}
-            role="button"
-            tabIndex={0}
-            aria-pressed={pin === m.id}
-            aria-label={`${m.title}, ${m.status}, first ${dateOf(m.first, new Date(report.now))}`}
-            className="cursor-pointer outline-none [&:focus-visible>circle:first-of-type]:stroke-accent"
-            opacity={faded ? 0.3 : 1}
-            onMouseEnter={() => onHover(m.id)}
-            onMouseLeave={() => onHover(null)}
-            onFocus={() => onHover(m.id)}
-            onBlur={() => onHover(null)}
-            onClick={() => onPin(m.id)}
-            onKeyDown={key(m.id)}
-          >
+          <g key={m.id} {...markProps(m)}>
             <title>{m.title}</title>
             <rect
               x={flip ? labelX - labelW - 2 : x - MARKER_GAP / 2}
@@ -288,26 +270,132 @@ function Chart({
               height={MARKER_GAP}
               fill="transparent"
             />
-            <circle
-              cx={x}
-              cy={y}
-              r={on ? R + 1 : R}
-              strokeWidth={m.status === 'habit' ? 0 : 1.5}
-              style={{ fill: m.status === 'habit' ? 'var(--accent)' : 'var(--surface)', stroke: 'var(--accent)' }}
-            />
-            <text
-              x={labelX}
-              y={y + 4}
-              textAnchor={flip ? 'end' : 'start'}
-              fontSize={LABEL_SIZE}
-              fontWeight={on ? 600 : 400}
-              style={{ fill: on ? 'var(--text)' : 'var(--muted)', ...HALO }}
-            >
-              {m.title}
-            </text>
+            {dot(m, x, y)}
+            {label(m, labelX, y, flip ? 'end' : 'start')}
           </g>
         )
       })}
+
+      {/* the event strip: a thin row per moment, a tick for every day it happened, oldest first */}
+      {ordered.map(({ m, y }) => {
+        const on = active === m.id
+        const ticks = dayTicks(m, l)
+        const href = (t: { example?: MomentHit }) => tickPath(t)
+        return (
+          <g
+            key={m.id}
+            onMouseEnter={() => onHover(m.id)}
+            onMouseLeave={() => onHover(null)}
+            onClick={() => onPin(m.id)}
+            className="cursor-pointer"
+          >
+            <rect x={l.left} y={y - 0.5} width={Math.max(1, futureX - l.left)} height={ROW_PITCH} fill="transparent" />
+            {ticks.map((t) => (
+              <rect
+                key={t.day}
+                x={t.x - 1}
+                y={t.day === tickDay && on ? y - 2 : y}
+                width={t.day === tickDay && on ? 3 : 2}
+                height={t.day === tickDay && on ? ROW_H + 4 : ROW_H}
+                style={{
+                  fill: on ? 'var(--accent)' : 'var(--muted)',
+                  opacity: on ? 0.55 + t.h * 0.45 : (0.14 + t.h * 0.3) * (dim ? DIM + 0.2 : 1),
+                }}
+              />
+            ))}
+            {on &&
+              ticks.map((t) => (
+                <rect
+                  key={`hit-${t.day}`}
+                  x={t.x0}
+                  y={y - 4}
+                  width={Math.max(1, t.x1 - t.x0)}
+                  height={ROW_PITCH + 8}
+                  fill="transparent"
+                  onMouseEnter={() => onTick(t.day)}
+                  onMouseLeave={() => onTick(null)}
+                  onClick={(e) => {
+                    const to = href(t)
+                    if (!to) return
+                    e.stopPropagation()
+                    navigate(to)
+                  }}
+                >
+                  <title>{`${t.day}: ${plural(t.hits, 'time')}`}</title>
+                </rect>
+              ))}
+          </g>
+        )
+      })}
+
+      {hasFuture && (
+        <>
+          <text
+            x={futureX + 12}
+            y={13}
+            fontSize={11}
+            letterSpacing="0.04em"
+            className="cursor-pointer"
+            style={{ fill: 'var(--muted)' }}
+            onClick={() => onNext(null)}
+          >
+            NEXT FOR YOU
+          </text>
+          {nexts.map((m, i) => {
+            const y = listY(i)
+            const id = NEXT_PREFIX + m.id
+            const on = active === id
+            return (
+              // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a <button>
+              <g
+                key={m.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Next for you: ${m.title}`}
+                className="cursor-pointer outline-none"
+                opacity={dim && !on ? DIM : 1}
+                onMouseEnter={() => onHover(id)}
+                onMouseLeave={() => onHover(null)}
+                onFocus={() => onHover(id)}
+                onBlur={() => onHover(null)}
+                onClick={() => onNext(m.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onNext(m.id)
+                  }
+                }}
+              >
+                <rect
+                  x={futureX + 4}
+                  y={y - MARKER_GAP / 2}
+                  width={l.width - futureX - 8}
+                  height={MARKER_GAP}
+                  fill="transparent"
+                />
+                <circle
+                  cx={futureX + 12 + R}
+                  cy={y}
+                  r={R}
+                  fill="none"
+                  strokeWidth={1.5}
+                  strokeDasharray="2 1.5"
+                  style={{ stroke: 'var(--accent)' }}
+                />
+                <text
+                  x={futureX + 12 + 2 * R + LABEL_GAP}
+                  y={y + 4}
+                  fontSize={LABEL_SIZE}
+                  fontWeight={on ? 600 : 400}
+                  style={{ fill: on ? 'var(--text)' : 'var(--muted)', ...HALO }}
+                >
+                  {m.title}
+                </text>
+              </g>
+            )
+          })}
+        </>
+      )}
     </svg>
   )
 }
@@ -324,53 +412,34 @@ export function Readout({
   report,
   hover,
   pin,
-  onHover,
   tickDay,
 }: {
   report: MomentsReport
   hover: string | null
   pin: string | null
-  onHover: (id: string | null) => void
   tickDay: string | null
 }) {
   const now = new Date(report.now)
   const seen = seenMoments(report.moments)
   const habits = seen.filter((x) => x.status === 'habit').length
   const explored = seen.filter((x) => x.status === 'explored').length
-  const layout = report.since ? layoutTimeline(report.moments, report.since, report.now, 1000) : null
-  const edge = layout?.edge ?? []
-  const edgeIds = new Set(edge.map((m) => m.id))
-  const showEdge = pin === EDGE_ID && (hover === null || hover === EDGE_ID || edgeIds.has(hover))
-  const id = hover && hover !== EDGE_ID ? hover : pin && pin !== EDGE_ID ? pin : null
+  const nextId = hover?.startsWith(NEXT_PREFIX) ? hover.slice(NEXT_PREFIX.length) : null
+  const next = nextId ? report.suggestions.find((x) => x.moment === nextId) : undefined
+  const nextMoment = nextId ? report.moments.find((x) => x.id === nextId) : undefined
+  const id = hover && !nextId ? hover : pin
   const m = id ? report.moments.find((x) => x.id === id) : undefined
-  const pinned = !showEdge && m !== undefined && pin === m.id
+  const pinned = m !== undefined && pin === m.id
   const tick = m && tickDay ? m.days?.find((d) => d.day === tickDay) : undefined
   return (
     <div className={cn(READOUT_H, 'overflow-y-auto pt-2 text-body')} aria-live="polite">
-      {showEdge ? (
+      {nextMoment ? (
         <div>
-          <p className="text-muted">
-            Already doing when your history starts ({edge.length}). Hover one to see when it came back.
+          <p className="flex flex-wrap items-center gap-x-2">
+            <span className="font-medium">{nextMoment.title}</span>
+            <span className="text-muted">next for you</span>
           </p>
-          <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-            {edge.map((e) => (
-              <li key={e.id}>
-                <button
-                  type="button"
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-card px-1.5 py-0.5 hover:bg-surface-2',
-                    hover === e.id && 'bg-surface-2',
-                  )}
-                  onMouseEnter={() => onHover(e.id)}
-                  onMouseLeave={() => onHover(EDGE_ID)}
-                >
-                  <Glyph status={e.status} />
-                  {e.title}
-                  <span className="text-faint text-sec">{e.hits > 0 && timesInWeeks(e)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {next?.reason && <p className="mt-1">{next.reason}</p>}
+          <p className="mt-1 text-sec text-muted">{nextMoment.try}</p>
         </div>
       ) : m?.firstHit ? (
         <div>
