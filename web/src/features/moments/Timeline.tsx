@@ -595,7 +595,7 @@ function SortButton({
       onClick={() => onSort(clickSort(sort, k))}
       title={`Sort by ${label.toLowerCase()}`}
       className={cn(
-        'inline-flex h-5 cursor-pointer items-center hover:text-fg',
+        'inline-flex h-5 cursor-pointer items-center align-top hover:text-fg',
         halo && 'rounded bg-bg',
         active ? 'text-fg' : 'text-muted',
       )}
