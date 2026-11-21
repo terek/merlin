@@ -85,6 +85,7 @@ export function layoutTimeline(
   now: string,
   width: number,
   future = false,
+  measure: (text: string) => number = labelWidth,
 ): TimelineLayout {
   const from = Date.parse(since)
   const to = Math.max(Date.parse(now), from + DAY_MS)
@@ -99,7 +100,7 @@ export function layoutTimeline(
     const t = Date.parse(m.first ?? '')
     if (t - from < EDGE_DAYS * DAY_MS) continue
     const x = xOf(l, t)
-    const w = labelWidth(m.title)
+    const w = measure(m.title)
     const flip = x + MARKER_R + LABEL_GAP + w > right - PAD_X
     const a = flip ? x - MARKER_R - LABEL_GAP - w : x - MARKER_R
     const b = flip ? x + MARKER_R : x + MARKER_R + LABEL_GAP + w

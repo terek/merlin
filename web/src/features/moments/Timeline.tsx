@@ -19,7 +19,6 @@ import {
   daysPerBucket,
   LABEL_GAP,
   LABEL_SIZE,
-  labelWidth,
   layoutTimeline,
   MARKER_GAP,
   MARKER_R,
@@ -29,6 +28,7 @@ import {
   seenMoments,
   type TimelineLayout,
 } from './layout'
+import { useLabelMeasure } from './measure'
 
 const AREA_H = 72
 const AXIS_H = 20
@@ -108,7 +108,10 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const since = report.since
-  const layout = since ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0) : null
+  const measure = useLabelMeasure()
+  const layout = since
+    ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0, measure)
+    : null
   const k = layout ? daysPerBucket(layout) : 1
   useEffect(() => onK(k), [k, onK])
   return (
@@ -118,6 +121,7 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
           report={report}
           since={since}
           layout={layout}
+          measure={measure}
           hover={hover}
           pin={pin}
           onHover={onHover}
@@ -139,6 +143,7 @@ function Chart({
   report,
   since,
   layout: l,
+  measure,
   hover,
   pin,
   onHover,
@@ -149,6 +154,7 @@ function Chart({
 }: Omit<TimelineProps, 'onK'> & {
   since: string
   layout: TimelineLayout
+  measure: (text: string, weight?: number) => number
 }) {
   const navigate = useNavigate()
   const now = new Date(report.now)
@@ -204,7 +210,7 @@ function Chart({
   )
   const label = (m: MomentView, x: number, y: number, anchor: 'start' | 'end' = 'start') => {
     const state = st(m.id)
-    const w = Math.round(labelWidth(m.title) * 0.93)
+    const w = measure(m.title, state === 'sel' ? 600 : 400)
     return (
       <>
         {state !== 'none' && (
@@ -223,7 +229,10 @@ function Chart({
           textAnchor={anchor}
           fontSize={LABEL_SIZE}
           fontWeight={state === 'sel' ? 600 : 400}
-          style={{ fill: state !== 'none' ? 'var(--text)' : 'var(--muted)', ...(state === 'none' ? HALO : {}) }}
+          style={{
+            fill: state === 'sel' ? 'var(--accent)' : state === 'hov' ? 'var(--text)' : 'var(--muted)',
+            ...(state === 'none' ? HALO : {}),
+          }}
         >
           {m.title}
         </text>

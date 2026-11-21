@@ -174,4 +174,14 @@ describe('event strip buckets', () => {
     expect(xOf(l, Date.parse(NOW))).toBe(1000 - FUTURE_W - 12)
     expect(layoutTimeline([], SINCE, NOW, 1000).left).toBe(0)
   })
+
+  test('label widths come from the measure given: the flip and the lanes follow them', () => {
+    const ms = [moment('a', 20), moment('b', 40)]
+    const narrow = layoutTimeline(ms, SINCE, NOW, 800, false, () => 10)
+    const wide = layoutTimeline(ms, SINCE, NOW, 800, false, () => 300)
+    expect(narrow.markers[0].labelW).toBe(10)
+    expect(narrow.lanes).toBe(1)
+    expect(wide.markers[0].labelW).toBe(300)
+    expect(wide.lanes).toBeGreaterThan(1)
+  })
 })

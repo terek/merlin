@@ -251,7 +251,11 @@ function MomentRow({
           className="flex h-7 shrink-0 items-center gap-2.5 text-left"
         >
           <Glyph status={m.status} />
-          <span className="w-56 shrink-0 truncate text-body font-medium">{m.title}</span>
+          <span
+            className={cn('w-56 shrink-0 truncate text-body', pinned ? 'font-semibold text-accent' : 'font-medium')}
+          >
+            {m.title}
+          </span>
           <span className="w-28 shrink-0 text-sec text-muted">since {dateOf(m.first, now)}</span>
           <span className="w-44 shrink-0 text-sec text-muted tabular-nums">{timesInWeeks(m)}</span>
           <span className="w-28 shrink-0 text-sec text-faint">
