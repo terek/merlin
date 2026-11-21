@@ -1119,10 +1119,14 @@ export interface MomentHit {
   note?: string
 }
 
+export type MomentCategory = 'prompt' | 'context' | 'harness' | 'parallelism'
+
 export interface MomentView {
   /** Durable name; clients ignore ids they do not know. */
   id: string
   persona: MomentPersona
+  /** What part of the work it changes; an older API has none. */
+  category?: MomentCategory
   title: string
   what: string
   try: string

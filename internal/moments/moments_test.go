@@ -383,3 +383,15 @@ func TestEveryMomentSaysHowItIsSpotted(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryMomentHasACategory(t *testing.T) {
+	for _, m := range Registry() {
+		ok := false
+		for _, c := range Categories {
+			ok = ok || m.Category == c
+		}
+		if !ok {
+			t.Errorf("%s has category %q, want one of %v", m.ID, m.Category, Categories)
+		}
+	}
+}

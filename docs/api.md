@@ -1348,7 +1348,7 @@ request. No parameters.
   "personas": [{ "id": "karpathy", "name": "Andrej Karpathy", "focus": "Context",
                  "reaction": "👏", "reason": "Keeping up 8 habits: …",
                  "habits": 8, "explored": 1, "unseen": 0, "new": 0 }],
-  "moments": [{ "id": "steer-mid-turn", "persona": "karpathy", "title": "Steering mid-turn",
+  "moments": [{ "id": "steer-mid-turn", "persona": "karpathy", "category": "prompt", "title": "Steering mid-turn",
                 "what": "…", "try": "…", "detects": "Counted when you …", "status": "habit", "hits": 84, "sessions": 49,
                 "weeks": 18, "recentHits": 10, "new": false, "first": "…", "last": "…",
                 "firstHit": { "at": "…", "session": { "harness": "claude", "id": "…" }, "turn": 3,

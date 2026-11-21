@@ -46,14 +46,29 @@ const DefaultHabitWeeks = 3
 const WindowDays = 28
 
 // Moment is one entry of the catalog.
+// Category is the kind of habit a moment is: what part of the work it changes.
+type Category string
+
+const (
+	CategoryPrompt      Category = "prompt"      // how you write and steer prompts
+	CategoryContext     Category = "context"     // how you manage what the agent knows
+	CategoryHarness     Category = "harness"     // what you build around the agent
+	CategoryParallelism Category = "parallelism" // how much runs at once
+)
+
+// Categories lists every category, in the order the page names them.
+var Categories = []Category{CategoryPrompt, CategoryContext, CategoryHarness, CategoryParallelism}
+
 type Moment struct {
 	// ID is the moment's durable name: stable across changes of its detector, never reused
 	// for another meaning. Consumers (the web UI, a shared card) ignore ids they do not know.
 	ID      string
 	Persona Persona
-	Title   string // a few words: "Steering mid-turn"
-	What    string // one sentence: what was seen
-	Try     string // one or two sentences: why and how to try it, for someone who has not
+	// Category is required: every moment belongs to one.
+	Category Category
+	Title    string // a few words: "Steering mid-turn"
+	What     string // one sentence: what was seen
+	Try      string // one or two sentences: why and how to try it, for someone who has not
 	// Detects says in a plain sentence what counts as one occurrence, in the user's words.
 	Detects string
 	// HabitWeeks overrides DefaultHabitWeeks when non-zero.
@@ -163,9 +178,11 @@ type PersonaView struct {
 type MomentView struct {
 	ID      string  `json:"id"`
 	Persona Persona `json:"persona"`
-	Title   string  `json:"title"`
-	What    string  `json:"what"`
-	Try     string  `json:"try"`
+	// Category is the kind of habit: prompt, context, harness or parallelism.
+	Category Category `json:"category"`
+	Title    string   `json:"title"`
+	What     string   `json:"what"`
+	Try      string   `json:"try"`
 	// Detects is what counts as one occurrence, in a plain sentence.
 	Detects string `json:"detects"`
 	Status  Status `json:"status"`
@@ -252,7 +269,7 @@ func summarize(m Moment, hits []Hit, windowStart time.Time, loc *time.Location) 
 		return cmp.Or(a.At.Compare(b.At), cmp.Compare(a.Session.String(), b.Session.String()),
 			cmp.Compare(turnOf(a), turnOf(b)))
 	})
-	v := MomentView{ID: m.ID, Persona: m.Persona, Title: m.Title, What: m.What, Try: m.Try, Detects: m.Detects,
+	v := MomentView{ID: m.ID, Persona: m.Persona, Category: m.Category, Title: m.Title, What: m.What, Try: m.Try, Detects: m.Detects,
 		Status: StatusUnseen, Hits: len(hits)}
 	if len(hits) == 0 {
 		return v

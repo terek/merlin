@@ -16,6 +16,7 @@ Two goals are served by one mechanism:
 ## 1. Concepts
 
 **Moment.** One entry of the catalog (`internal/moments/registry.go`): an `id`, a persona, a
+category (`prompt`, `context`, `harness` or `parallelism`: what part of the work it changes), a
 title, a `what` sentence (what was seen), a `try` text (for someone who has not done it yet) and a
 detector. The detector is a heuristic over digests, with no AI. Moments have no order and no
 prerequisites: any of them can be found first.
@@ -114,63 +115,63 @@ a text heuristic over the prompt.
 
 ### Karpathy
 
-| id | Title | Detected when | Source |
-|---|---|---|---|
-| `steer-mid-turn` | Steering mid-turn | a human prompt is queued while a turn runs (`Turn.queued`, origin human) | digest |
-| `interrupt-redirect` | Interrupt and redirect | an interrupted human turn is followed within 2 min by a different human prompt | digest |
-| `rewind` | Takes the other branch | an abandoned human turn (rewind), or a session forked from another | digest |
-| `grounded-prompt` | Grounded prompt | the prompt names a file (by base name) that the turn then touched | digest + heur |
-| `pasted-evidence` | Shows the evidence | an image is attached, or the prompt holds 2+ lines that look like an error or stack trace | digest + heur |
-| `acceptance-criteria` | Spec with criteria | a prompt of 300+ bytes with 3+ list items and a constraint word (must, never, verify, test, …) | heur |
-| `one-shot-spec` | One-shot spec | a prompt of 120+ words, 10+ tool calls, not interrupted, no correction next | heur |
-| `vibe-one-shot` | Vibe one-shot | a prompt of 2–25 words (not an approval like "yes do it") leading to 3+ edits, no correction next | heur |
-| `clean-slate` | Clean slate | `/clear` | digest |
+| id | Title | Category | Detected when | Source |
+|---|---|---|---|---|
+| `steer-mid-turn` | Steering mid-turn | prompt | a human prompt is queued while a turn runs (`Turn.queued`, origin human) | digest |
+| `interrupt-redirect` | Interrupt and redirect | prompt | an interrupted human turn is followed within 2 min by a different human prompt | digest |
+| `rewind` | Takes the other branch | prompt | an abandoned human turn (rewind), or a session forked from another | digest |
+| `grounded-prompt` | Grounded prompt | prompt | the prompt names a file (by base name) that the turn then touched | digest + heur |
+| `pasted-evidence` | Shows the evidence | prompt | an image is attached, or the prompt holds 2+ lines that look like an error or stack trace | digest + heur |
+| `acceptance-criteria` | Spec with criteria | prompt | a prompt of 300+ bytes with 3+ list items and a constraint word (must, never, verify, test, …) | heur |
+| `one-shot-spec` | One-shot spec | prompt | a prompt of 120+ words, 10+ tool calls, not interrupted, no correction next | heur |
+| `vibe-one-shot` | Vibe one-shot | prompt | a prompt of 2–25 words (not an approval like "yes do it") leading to 3+ edits, no correction next | heur |
+| `clean-slate` | Clean slate | context | `/clear` | digest |
 
 A **correction** is the next human prompt arriving within 30 minutes, at most 60 words, and
 starting like "no", "wrong", "still", "doesn't work", "revert", ….
 
 ### Boris
 
-| id | Title | Detected when | Source |
-|---|---|---|---|
-| `plans-first` | Plans first | a turn used plan mode (`EnterPlanMode`/`ExitPlanMode`) | digest |
-| `deliberate-compact` | Compacts on purpose | a manual compaction | digest |
-| `model-switch` | Right model for the job | `/model`, `/effort` or `/fast` mid-session | digest |
-| `custom-command` | Own commands and skills | a slash command that is not built in, or the `Skill` tool | digest |
-| `builds-harness` | Builds the harness | a turn with edits touched CLAUDE.md, AGENTS.md, `.claude/skills`, commands, agents, hooks or settings | digest |
-| `context-isolation` | Context isolation | a fresh-context subagent of type Explore, or one with 5+ read-only calls and no edits | digest |
-| `model-routing` | Model routing | a subagent on a model with a lower output price than the session's main model | digest |
-| `parallel-sessions` | Parallel sessions | 2+ sessions working at once (turns less than 5 min apart form one stretch); one hit per day | digest |
-| `worktrees` | Worktrees | `EnterWorktree`, or a working directory under `worktrees/` | digest |
-| `background-agents` | Background agents | a background subagent | digest |
-| `automation` | Automation | scripted sessions (one hit per day), scheduled turns, or `ScheduleWakeup`/`CronCreate` | digest |
-| `ships-pr` | Ships | a PR linked from the session | digest |
-| `mcp-tools` | Plugged in | an MCP tool call | digest |
+| id | Title | Category | Detected when | Source |
+|---|---|---|---|---|
+| `plans-first` | Plans first | prompt | a turn used plan mode (`EnterPlanMode`/`ExitPlanMode`) | digest |
+| `deliberate-compact` | Compacts on purpose | context | a manual compaction | digest |
+| `model-switch` | Right model for the job | context | `/model`, `/effort` or `/fast` mid-session | digest |
+| `custom-command` | Own commands and skills | harness | a slash command that is not built in, or the `Skill` tool | digest |
+| `builds-harness` | Builds the harness | harness | a turn with edits touched CLAUDE.md, AGENTS.md, `.claude/skills`, commands, agents, hooks or settings | digest |
+| `context-isolation` | Context isolation | context | a fresh-context subagent of type Explore, or one with 5+ read-only calls and no edits | digest |
+| `model-routing` | Model routing | harness | a subagent on a model with a lower output price than the session's main model | digest |
+| `parallel-sessions` | Parallel sessions | parallelism | 2+ sessions working at once (turns less than 5 min apart form one stretch); one hit per day | digest |
+| `worktrees` | Worktrees | parallelism | `EnterWorktree`, or a working directory under `worktrees/` | digest |
+| `background-agents` | Background agents | parallelism | a background subagent | digest |
+| `automation` | Automation | harness | scripted sessions (one hit per day), scheduled turns, or `ScheduleWakeup`/`CronCreate` | digest |
+| `ships-pr` | Ships | harness | a PR linked from the session | digest |
+| `mcp-tools` | Plugged in | harness | an MCP tool call | digest |
 
 ### Yegge
 
-| id | Title | Detected when | Source |
-|---|---|---|---|
-| `agent-team` | Agent team | addressable subagents (teammates); one hit per session | digest |
-| `workflow-run` | Workflow | a workflow run | digest |
-| `nested-agents` | Agents spawning agents | an agent with a parent agent; one hit per session, at the deepest | digest |
-| `swarm` | Swarm | 5+ agents running at the same moment; one hit per session | digest |
-| `beads-graph` | Beads as the plan | in one session, 3+ beads created, 1+ linked (dep or parent), 1+ closed | digest |
-| `personas` | Persistent personas | `/wake`, `/sleep` or `/handoff`, or a file under `personas/` touched; one hit per session ([model welfare](https://yegge.ai/essays/model-welfare/)) | digest |
-| `forked-agents` | Forks itself | a subagent that inherits its parent's context | digest |
-| `two-harnesses` | Two harnesses | sessions in two harnesses in one ISO week | digest |
-| `night-shift` | Night shift | 2h+ between two human prompts with 3+ machine-started turns in between | digest |
+| id | Title | Category | Detected when | Source |
+|---|---|---|---|---|
+| `agent-team` | Agent team | parallelism | addressable subagents (teammates); one hit per session | digest |
+| `workflow-run` | Workflow | harness | a workflow run | digest |
+| `nested-agents` | Agents spawning agents | parallelism | an agent with a parent agent; one hit per session, at the deepest | digest |
+| `swarm` | Swarm | parallelism | 5+ agents running at the same moment; one hit per session | digest |
+| `beads-graph` | Beads as the plan | harness | in one session, 3+ beads created, 1+ linked (dep or parent), 1+ closed | digest |
+| `personas` | Persistent personas | harness | `/wake`, `/sleep` or `/handoff`, or a file under `personas/` touched; one hit per session ([model welfare](https://yegge.ai/essays/model-welfare/)) | digest |
+| `forked-agents` | Forks itself | parallelism | a subagent that inherits its parent's context | digest |
+| `two-harnesses` | Two harnesses | harness | sessions in two harnesses in one ISO week | digest |
+| `night-shift` | Night shift | parallelism | 2h+ between two human prompts with 3+ machine-started turns in between | digest |
 
 ### Symptoms
 
 | Moment | Fires when |
 |---|---|
-| `steer-mid-turn` | 3+ human turns ran longer than 10 minutes |
-| `clean-slate` | a session went past 40 human prompts |
-| `deliberate-compact` | any auto-compaction (cold ones are counted separately) |
-| `custom-command` | the same prompt (20+ characters) was typed 3+ times |
-| `context-isolation` | 3+ turns ran with 150k+ tokens of context |
-| `model-routing` | 3+ subagents ran on the main session's model |
+| `steer-mid-turn` | 3+ human turns ran longer than 10 minutes | prompt |
+| `clean-slate` | a session went past 40 human prompts | context |
+| `deliberate-compact` | any auto-compaction (cold ones are counted separately) | context |
+| `custom-command` | the same prompt (20+ characters) was typed 3+ times | harness |
+| `context-isolation` | 3+ turns ran with 150k+ tokens of context | context |
+| `model-routing` | 3+ subagents ran on the main session's model | harness |
 
 ### Planned (need parser work)
 
