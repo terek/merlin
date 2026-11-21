@@ -256,7 +256,7 @@ same whether or not a session is open in the Overview, and no page puts tools in
   "offline, retrying"). While an update is offered (and the connection is not offline) the button's icon turns accent and an accent dot sits on its top-right corner with a ring pulsing behind it (`animate-ping`, `motion-safe` only: reduced motion gets a steady dot), and the tooltip reads "Update available: X". Its popover (closes on an outside click and Escape, 288 px) holds the connection and the running version; when an update is offered, a block under them is the most prominent thing in it: "Update available" with X (a link to that release's page) and a full-width primary button **Install X** (not while the "updated" notice is up, nor when X is the version running). The daemon's `update` event gives the state: `ready` and `available` show the button (the latter downloads first, and may carry the last failure as a quiet line); `downloading` shows it with a quiet "downloading…" hint; `blocked` has no button, only the reason (the `sudo` command, selectable). A click POSTs `/api/upgrade` and the button reads "Installing…", then "Restarting…" after the 200; a failed call shows its message under the button and enables it again. The block ends with the quiet hint "Turn on auto-upgrade: `merlin autoupgrade`". The tab that clicked Install reloads itself as soon as the daemon's hello reports the version it installed (the flag lives in the event store, not in storage); other tabs keep the "Merlin updated to X · Reload" notice.
 - **The legend panel** (added 2026-11-15, `merlin-bj5.1`): a column at the right of main, 300 px, full height under
   the bar, `bg-surface`, a left border, its own scroll. It pushes main (main narrows; the Cost chart follows its
-  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal); the known ids, in order, are `overview` ("Overview"), `graph` ("Graph"), `cost` ("Cost") and `moments` ("Moments": the rows' marks and rules, the square, the strip, the one-year limit and the four categories). Only filled tabs show; the one
+  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal); the known ids, in order, are `overview` ("Overview"), `graph` ("Graph"), `cost` ("Cost") and `moments` ("Moments": the depth marks, the square and the strip). Only filled tabs show; the one
   picked by hand wins while it stays filled, else the one filled last; a single tab shows its title in place of
   a strip. The **Legend button** (`PanelRight`, before the theme button, pressed while open) shows only while the
   page filled a tab (the Overview fills one only when limits touched it); `l` toggles it (not while typing), Escape does not close it. Open or
@@ -269,11 +269,14 @@ same whether or not a session is open in the Overview, and no page puts tools in
 
 ## 7a. Moments page (`/moments`)
 
-Full width, in a frame like Cost: one table, the whole page. The key is in the shell's legend panel
-(`<PanelTab id="moments">`, `MomentsKey`): the depth marks with their rules, "to try" and the "try again" tag, what a
-square is, the strip, the one-year limit and the four categories. There is no legend line under the table.
+Full width, on the page surface like Overview and Cost (`bg-surface`, the page scrolls inside itself, the title block and
+section borders as on the other pages): one table, the whole page. The key is in the shell's legend panel
+(`<PanelTab id="moments">`, `MomentsKey`), a map key as on the session page (`spend/Key.tsx`): the same section heading
+and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, to try, and
+the "try again" tag; Timeline: a square is a day (darker, more), the strip is your activity. No sentences, thresholds or
+category texts; those are in the row's panel. There is no legend line under the table.
 
-**Header.** One band, about 24 px, directly under the section heading: the thin intensity strip (the prompts per day smoothed
+**Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed
 over a week) is the track column's background, with the month ticks and their small muted labels along its bottom (a
 label is hidden when it would collide with Start or End, by the measured widths). On the same baseline, at the band's
 bottom: Depth (a narrow first column, `DEPTH_W` 48 px, the header centred over the mark), Moment, Category, Count

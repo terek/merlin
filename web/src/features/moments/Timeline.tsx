@@ -104,74 +104,64 @@ export function Glyph({ depth, size = 11 }: { depth: GlyphKind; size?: number })
   )
 }
 
-const KEY_HEAD = 'text-faint text-meta uppercase tracking-wide'
-
-/** What each mark means, with the rule behind it. */
-const DEPTH_RULES: [GlyphKind, string, string][] = [
-  ['routine', 'Part of your routine', 'Seen in at least three different weeks, and again in the last four weeks.'],
-  ['paused', 'Quiet lately', 'A routine once, but not seen in the last four weeks.'],
-  ['new', 'New', 'Seen in fewer than three weeks, the first time in the last four weeks.'],
-  ['tried', 'Tried a few times', 'Seen in fewer than three weeks, the first time more than four weeks ago.'],
-  ['next', 'To try', 'An idea for you, at the end of the list; opened, it says why and how.'],
+/** The depth marks, in the order of the Depth sort. */
+const DEPTH_KEY: [GlyphKind, string][] = [
+  ['routine', 'routine'],
+  ['paused', 'quiet lately'],
+  ['new', 'new'],
+  ['tried', 'tried'],
+  ['next', 'to try'],
 ]
 
-const CATEGORIES: [string, string][] = [
-  ['prompt', 'how you write and steer your prompts'],
-  ['context', 'how you manage what the agent knows'],
-  ['harness', 'what you build around the agent'],
-  ['parallelism', 'how much runs at once'],
-]
-
-/** The key of the Moments page, for the shell's legend panel. */
+/** The key of the Moments page, for the shell's legend panel: symbols and a few words, as on the session page. */
 export function MomentsKey() {
+  const group = (title: string, children: React.ReactNode) => (
+    <section className="mb-2.5">
+      <h4 className="mb-1 font-medium text-[0.6875rem] text-faint uppercase tracking-wide">{title}</h4>
+      <ul className="m-0 grid list-none grid-cols-[28px_1fr] items-center gap-x-2 gap-y-1.5 p-0">{children}</ul>
+    </section>
+  )
+  const sample = (title: string, children: React.ReactNode) => (
+    <svg width={28} height={16} className="shrink-0">
+      <title>{title}</title>
+      {children}
+    </svg>
+  )
   return (
-    <div data-testid="moments-key" className="space-y-3 text-sec">
-      <div className={cn(KEY_HEAD, 'pt-2')}>Depth</div>
-      <ul className="m-0 list-none space-y-2 p-0">
-        {DEPTH_RULES.map(([d, word, rule]) => (
-          <li key={d} className="flex items-start gap-2">
-            <span className="mt-[3px]">
-              <Glyph depth={d} size={10} />
-            </span>
-            <span className="min-w-0">
-              <span className="text-fg">{word}</span>
-              <span className="block text-muted">{rule}</span>
-            </span>
+    <div data-testid="moments-key" className="text-meta text-muted">
+      {group(
+        'Depth',
+        <>
+          {DEPTH_KEY.map(([d, word]) => (
+            <li key={d} className="contents">
+              <span className="flex justify-center">
+                <Glyph depth={d} size={10} />
+              </span>
+              <span>{word}</span>
+            </li>
+          ))}
+          <li className="contents">
+            <span />
+            <span className="text-faint">try again</span>
           </li>
-        ))}
-        <li className="min-w-0">
-          <span className="text-fg">try again</span>
-          <span className="block text-muted">
-            A moment you have seen that is worth another go; opened, it says why.
-          </span>
-        </li>
-      </ul>
-      <div className={cn(KEY_HEAD, 'pt-2')}>Timeline</div>
-      <ul className="m-0 list-none space-y-2 p-0">
-        <li>
-          <span className="text-fg">A square</span>
-          <span className="block text-muted">
-            A day, or a few days together, when it happened; darker means more. On the open row a click opens that
-            session.
-          </span>
-        </li>
-        <li>
-          <span className="text-fg">The grey strip</span>
-          <span className="block text-muted">The prompts you typed per day, smoothed over a week.</span>
-        </li>
-        <li>
-          <span className="text-fg">One year</span>
-          <span className="block text-muted">The axis never covers more than the last year; counts still do.</span>
-        </li>
-      </ul>
-      <div className={cn(KEY_HEAD, 'pt-2')}>Categories</div>
-      <ul className="m-0 list-none space-y-1 p-0">
-        {CATEGORIES.map(([c, text]) => (
-          <li key={c}>
-            <span className="text-fg">{c}</span> <span className="text-muted">{text}</span>
+        </>,
+      )}
+      {group(
+        'Timeline',
+        <>
+          <li className="contents">
+            {sample('A day', <rect x={12} y={6} width={4} height={4} style={{ fill: 'var(--muted)' }} />)}
+            <span>day, darker = more</span>
           </li>
-        ))}
-      </ul>
+          <li className="contents">
+            {sample(
+              'Prompts per day',
+              <rect x={2} y={4} width={24} height={9} style={{ fill: 'var(--faint)', opacity: 0.32 }} />,
+            )}
+            <span>your activity</span>
+          </li>
+        </>,
+      )}
     </div>
   )
 }
@@ -298,8 +288,8 @@ function Chart({
       ? `M${area[0].x},${areaBottom} ${area.map((p) => `L${p.x.toFixed(1)},${(areaBottom - p.v * (AREA_H - 2)).toFixed(1)}`).join(' ')} L${area[area.length - 1].x},${areaBottom} Z`
       : ''
   const months = monthTicks(l)
-  const startW = measure('Start', 400, 12) + ARROW_SLOT + 8
-  const endW = measure('End', 400, 12) + ARROW_SLOT + 8
+  const startW = measure('START', 400, 12) * 1.1 + ARROW_SLOT + 8
+  const endW = measure('END', 400, 12) * 1.1 + ARROW_SLOT + 8
   const { again, rows: suggested } = placeSuggestions(report.moments, report.suggestions)
   // up and down move the focus from row to row
   const step = (e: React.KeyboardEvent, el: HTMLElement) => {
@@ -396,7 +386,7 @@ function Chart({
           />
           {months.map((t) => {
             const end = t.x > l.right - 40
-            const mw = measure(t.label, 400, 11)
+            const mw = measure(t.label.toUpperCase(), 400, 11) * 1.1
             const x0 = end ? t.x - 4 - mw : t.x + 4
             const hit = (a: number, b: number) => x0 < b && x0 + mw > a
             const hidden = hit(l.left - 4, l.left + startW + 4) || hit(l.right - endW - 4, l.right + 4)
@@ -409,9 +399,10 @@ function Chart({
                     textAnchor={end ? 'end' : 'start'}
                     y={areaBottom - 7}
                     fontSize={11}
-                    style={{ fill: 'var(--muted)' }}
+                    letterSpacing="0.04em"
+                    style={{ fill: 'var(--faint)' }}
                   >
-                    {t.label}
+                    {t.label.toUpperCase()}
                   </text>
                 )}
               </g>
@@ -595,9 +586,9 @@ function SortButton({
       onClick={() => onSort(clickSort(sort, k))}
       title={`Sort by ${label.toLowerCase()}`}
       className={cn(
-        'inline-flex h-5 cursor-pointer items-center align-top hover:text-fg',
-        halo && 'rounded bg-bg',
-        active ? 'text-fg' : 'text-muted',
+        'inline-flex h-5 cursor-pointer items-center align-top text-meta uppercase tracking-wide hover:text-fg',
+        halo && 'rounded bg-surface',
+        active ? 'text-fg' : 'text-faint',
       )}
     >
       {balanced && <span style={{ width: ARROW_SLOT }} aria-hidden />}

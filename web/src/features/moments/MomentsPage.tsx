@@ -20,7 +20,7 @@ export function MomentsPage() {
   useDocumentTitle('Moments')
   const q = useMoments()
   return (
-    <div>
+    <div className="h-full w-full overflow-y-auto bg-surface [scrollbar-gutter:stable]">
       <header className="border-line border-b px-4 py-3">
         <h1 className="text-page font-semibold">Moments</h1>
         <p className="text-sec text-muted">
