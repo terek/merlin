@@ -3,7 +3,7 @@
 // reactions and the card to share are not shown for now (MomentCard and PersonaAvatar stay).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
 import type { MomentHit, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
@@ -14,7 +14,7 @@ import { markSeen } from '../../shell/momentsBadge'
 import { useShortcut } from '../../shell/useShortcut'
 import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, Skeleton } from '../../ui'
 import { seenMoments } from './layout'
-import { dateOf, Glyph, Readout, Timeline, timesInWeeks } from './Timeline'
+import { dateOf, Glyph, Readout, Timeline, tickPath, timesInWeeks } from './Timeline'
 
 export function MomentsPage() {
   useDocumentTitle('Moments')
@@ -54,17 +54,58 @@ function Report({ report }: { report: MomentsReport }) {
   const [pin, setPin] = useState<string | null>(null)
   // opening the page clears the count on its tab
   useEffect(() => markSeen(report), [report])
-  useShortcut('Escape', () => setPin(null), { enabled: pin !== null })
-  const togglePin = (id: string) => setPin((p) => (p === id ? null : id))
+  const [hoverTick, setHoverTick] = useState<string | null>(null)
+  const [selTick, setSelTick] = useState<string | null>(null)
+  const navigate = useNavigate()
   const byId = useMemo(() => new Map(report.moments.map((m) => [m.id, m])), [report.moments])
+  const pinnedDays = pin ? (byId.get(pin)?.days ?? []) : []
+  useShortcut('Escape', () => setPin(null), { enabled: pin !== null })
+  // while a moment is pinned: the arrows step through its days and Enter opens the chosen one
+  useShortcut(
+    ['ArrowLeft', 'ArrowRight'],
+    (e) => {
+      const i = pinnedDays.findIndex((d) => d.day === selTick)
+      const n = pinnedDays.length
+      const next = e.key === 'ArrowRight' ? (i < 0 ? 0 : Math.min(n - 1, i + 1)) : i < 0 ? n - 1 : Math.max(0, i - 1)
+      setSelTick(pinnedDays[next].day)
+    },
+    { enabled: pinnedDays.length > 0 },
+  )
+  const selDay = pinnedDays.find((d) => d.day === selTick)
+  useEffect(() => {
+    if (!selDay?.example) return
+    const open = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey) return
+      e.preventDefault()
+      e.stopPropagation()
+      const path = tickPath(selDay)
+      if (path) navigate(path)
+    }
+    // in the capture phase, so that a focused marker does not take the Enter as a pin
+    window.addEventListener('keydown', open, true)
+    return () => window.removeEventListener('keydown', open, true)
+  }, [selDay, navigate])
+  const togglePin = (id: string) => {
+    setSelTick(null)
+    setPin((p) => (p === id ? null : id))
+  }
+  const tickDay = hoverTick ?? (selDay ? selDay.day : null)
   const seen = useMemo(() => seenMoments(report.moments), [report.moments])
   const unseen = report.moments.filter((m) => m.status === 'unseen')
   const next = report.suggestions.slice(0, 3)
   return (
     <div>
       <FrameSection title="Your history">
-        <Timeline report={report} hover={hover} pin={pin} onHover={setHover} onPin={togglePin} />
-        <Readout report={report} hover={hover} pin={pin} onHover={setHover} />
+        <Timeline
+          report={report}
+          hover={hover}
+          pin={pin}
+          onHover={setHover}
+          onPin={togglePin}
+          tickDay={tickDay}
+          onTick={setHoverTick}
+        />
+        <Readout report={report} hover={hover} pin={pin} onHover={setHover} tickDay={tickDay} />
       </FrameSection>
 
       {next.length > 0 && (
@@ -138,38 +179,56 @@ function MomentRow({
   onPin: (id: string) => void
 }) {
   const latest = m.examples?.[0]
+  const [how, setHow] = useState(false)
   return (
     <li
-      className={cn('flex items-center gap-3 rounded-card px-2 hover:bg-surface-2', active && 'bg-surface-2')}
+      className={cn('rounded-card px-2 py-1 hover:bg-surface-2', active && 'bg-surface-2')}
       onMouseEnter={() => onHover(m.id)}
       onMouseLeave={() => onHover(null)}
     >
-      <button
-        type="button"
-        aria-pressed={pinned}
-        onClick={() => onPin(m.id)}
-        onFocus={() => onHover(m.id)}
-        onBlur={() => onHover(null)}
-        title={m.what}
-        className="flex h-8 shrink-0 items-center gap-2.5 text-left"
-      >
-        <Glyph status={m.status} />
-        <span className="w-56 shrink-0 truncate text-body font-medium">{m.title}</span>
-        <span className="w-28 shrink-0 text-sec text-muted">since {dateOf(m.first, now)}</span>
-        <span className="w-44 shrink-0 text-sec text-muted tabular-nums">{timesInWeeks(m)}</span>
-        <span className="w-28 shrink-0 text-sec text-faint">
-          {m.last && (
-            <>
-              last <RelTime time={m.last} />
-            </>
-          )}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-pressed={pinned}
+          onClick={() => onPin(m.id)}
+          onFocus={() => onHover(m.id)}
+          onBlur={() => onHover(null)}
+          className="flex h-7 shrink-0 items-center gap-2.5 text-left"
+        >
+          <Glyph status={m.status} />
+          <span className="w-56 shrink-0 truncate text-body font-medium">{m.title}</span>
+          <span className="w-28 shrink-0 text-sec text-muted">since {dateOf(m.first, now)}</span>
+          <span className="w-44 shrink-0 text-sec text-muted tabular-nums">{timesInWeeks(m)}</span>
+          <span className="w-28 shrink-0 text-sec text-faint">
+            {m.last && (
+              <>
+                last <RelTime time={m.last} />
+              </>
+            )}
+          </span>
+        </button>
+        {latest && (
+          <Link to={hitPath(latest)} className="min-w-0 flex-1 truncate text-sec" title={latest.note}>
+            {latest.note || 'Open the latest'} →
+          </Link>
+        )}
+      </div>
+      <p className="ml-[19px] flex items-baseline gap-2 pb-0.5 text-sec text-muted">
+        <span className="min-w-0 truncate" title={m.what}>
+          {m.what}
         </span>
-      </button>
-      {latest && (
-        <Link to={hitPath(latest)} className="min-w-0 flex-1 truncate text-sec" title={latest.note}>
-          {latest.note || 'Open the latest'} →
-        </Link>
-      )}
+        {m.detects && (
+          <button
+            type="button"
+            aria-expanded={how}
+            onClick={() => setHow(!how)}
+            className="shrink-0 text-faint underline decoration-dotted hover:text-muted"
+          >
+            how
+          </button>
+        )}
+      </p>
+      {how && m.detects && <p className="ml-[19px] pb-0.5 text-sec text-faint">{m.detects}</p>}
     </li>
   )
 }
@@ -187,6 +246,7 @@ function MoreToTry({ moments }: { moments: MomentView[] }) {
             <li key={m.id} className="py-2">
               <div className="text-body font-medium">{m.title}</div>
               <p className="text-sec text-muted">{m.try}</p>
+              {m.detects && <p className="text-sec text-faint">{m.detects}</p>}
             </li>
           ))}
         </ul>

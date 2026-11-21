@@ -1124,6 +1124,8 @@ export interface MomentView {
   title: string
   what: string
   try: string
+  /** One plain sentence on what counts as an occurrence. */
+  detects?: string
   status: MomentStatus
   hits: number
   sessions: number
@@ -1142,6 +1144,8 @@ export interface MomentView {
 export interface MomentDay {
   day: string
   hits: number
+  /** That day's session with the most hits, at the turn of its first hit that day. */
+  example?: MomentHit
 }
 
 /** Human prompts typed on one local day (interactive sessions). */

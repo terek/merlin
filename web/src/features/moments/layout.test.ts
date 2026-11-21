@@ -110,3 +110,15 @@ describe('month labels and ticks', () => {
     expect(seenMoments([moment('b', 5), moment('a', 1)]).map((m) => m.id)).toEqual(['a', 'b'])
   })
 })
+
+describe('dayTicks hit areas', () => {
+  const l = layoutTimeline([], SINCE, NOW, 200)
+  const m = (days: string[]) => ({ ...moment('a', 20), days: days.map((day) => ({ day, hits: 2 })) })
+  test('a lone tick is at least 8 px wide; close days share the gap, the nearest winning', () => {
+    const lone = dayTicks(m(['2026-09-10']), l)[0]
+    expect(lone.x1 - lone.x0).toBeGreaterThanOrEqual(8)
+    const [a, b] = dayTicks(m(['2026-09-10', '2026-09-11']), l)
+    expect(a.x1).toBeLessThanOrEqual(b.x0 + 0.001)
+    expect(a.x1).toBeCloseTo((a.x + b.x) / 2, 5)
+  })
+})

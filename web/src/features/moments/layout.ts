@@ -1,7 +1,7 @@
 // The Moments timeline's arithmetic (docs/moments.md, "The page"): where a marker goes, which lane it
 // takes, what the edge stack holds, the soft activity area, the month labels. Pure, so it is tested.
 
-import type { MomentActivityDay, MomentView } from '../../api/types'
+import type { MomentActivityDay, MomentHit, MomentView } from '../../api/types'
 import { dayStart, localDay } from '../../lib/time'
 
 /** Moments whose first hit is this close to the start of the history are not placed one by one. */
@@ -178,9 +178,40 @@ export function monthTicks(l: TimelineLayout): MonthTick[] {
   return out
 }
 
-/** Hits per day of a moment as tick positions and heights (0..1 of its busiest day). */
-export function dayTicks(m: MomentView, l: TimelineLayout): { x: number; h: number; hits: number }[] {
+export interface DayTick {
+  day: string
+  x: number
+  /** 0..1 of the moment's busiest day. */
+  h: number
+  hits: number
+  example?: MomentHit
+  /** The tick's hit area: where the pointer picks this day (at least 8 px wide, never over a neighbour's). */
+  x0: number
+  x1: number
+}
+
+/** The least width of a tick's hit area. */
+export const TICK_HIT = 8
+
+/** Hits per day of a moment as ticks: position, height (0..1 of its busiest day) and hit area. */
+export function dayTicks(m: MomentView, l: TimelineLayout): DayTick[] {
   const days = m.days ?? []
   const max = Math.max(...days.map((d) => d.hits), 1)
-  return days.map((d) => ({ x: xOf(l, dayStart(d.day).getTime() + DAY_MS / 2), h: d.hits / max, hits: d.hits }))
+  const ticks = days.map((d) => ({
+    day: d.day,
+    x: xOf(l, dayStart(d.day).getTime() + DAY_MS / 2),
+    h: d.hits / max,
+    hits: d.hits,
+    example: d.example,
+    x0: 0,
+    x1: 0,
+  }))
+  // the nearest day wins: an area reaches half way to a neighbour at most
+  ticks.forEach((t, i) => {
+    const prev = ticks[i - 1]
+    const next = ticks[i + 1]
+    t.x0 = prev ? Math.max(t.x - TICK_HIT / 2, (prev.x + t.x) / 2) : t.x - TICK_HIT / 2
+    t.x1 = next ? Math.min(t.x + TICK_HIT / 2, (next.x + t.x) / 2) : t.x + TICK_HIT / 2
+  })
+  return ticks
 }

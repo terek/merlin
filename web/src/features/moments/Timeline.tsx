@@ -4,15 +4,16 @@
 // later occurrence as a tick under the area, and dims the other markers; a click pins it. Nothing else moves.
 
 import { useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import type { MomentStatus, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
-import { parseTime, shortDate } from '../../lib/time'
+import { dayStart, parseTime, shortDate } from '../../lib/time'
 import { useWidth } from '../spend/useWidth'
 import {
   activityArea,
+  type DayTick,
   dayTicks,
   EDGE_ID,
   EDGE_LABEL,
@@ -24,13 +25,21 @@ import {
   monthTicks,
   seenMoments,
   type TimelineLayout,
-  xOf,
 } from './layout'
 
 const AREA_H = 72
-const TICK_H = 14
+const TICK_H = 22
 const AXIS_H = 20
 const R = MARKER_R
+/** A label's halo in the page background, so a stem never strikes through text. */
+const HALO = { paintOrder: 'stroke', stroke: 'var(--bg)', strokeWidth: 3, strokeLinejoin: 'round' } as const
+
+/** A marker's stem: dotted and faint; solid and in the accent when it is the active one; dimmed with the rest. */
+function stem(on: boolean, dim: boolean) {
+  return on
+    ? { strokeWidth: 1.5, style: { stroke: 'var(--accent)', opacity: 0.75 } }
+    : { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: dim ? 0.25 : 0.6 } }
+}
 const MARKER_TOP = 10
 
 /** The mark of a moment's status: filled for a habit, a ring for explored. Same look as on the timeline. */
@@ -68,9 +77,18 @@ interface TimelineProps {
   pin: string | null
   onHover: (id: string | null) => void
   onPin: (id: string) => void
+  /** The day of the tick under the pointer or chosen with the arrow keys. */
+  tickDay: string | null
+  onTick: (day: string | null) => void
 }
 
-export function Timeline({ report, hover, pin, onHover, onPin }: TimelineProps) {
+/** A day of a moment as a link into its example session. */
+export function tickPath(t: Pick<DayTick, 'example'>): string | undefined {
+  const h = t.example
+  return h ? sessionPath(h.session, h.turn !== undefined ? `t${h.turn}` : undefined) : undefined
+}
+
+export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick }: TimelineProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const since = report.since
@@ -89,6 +107,8 @@ export function Timeline({ report, hover, pin, onHover, onPin }: TimelineProps) 
           pin={pin}
           onHover={onHover}
           onPin={onPin}
+          tickDay={tickDay}
+          onTick={onTick}
         />
       )}
     </div>
@@ -104,12 +124,15 @@ function Chart({
   pin,
   onHover,
   onPin,
+  tickDay,
+  onTick,
 }: Omit<TimelineProps, 'hover'> & {
   since: string
   layout: TimelineLayout
   active: string | null
   activeMoment?: MomentView
 }) {
+  const navigate = useNavigate()
   const markersH = l.lanes * MARKER_GAP + MARKER_TOP
   const laneY = (lane: number) => markersH - MARKER_GAP / 2 - lane * MARKER_GAP
   const areaBottom = markersH + AREA_H
@@ -123,7 +146,6 @@ function Chart({
   const edgeIds = new Set(l.edge.map((m) => m.id))
   const edgeActive = active === EDGE_ID || (!!active && edgeIds.has(active))
   const dim = active !== null
-  const activeX = activeMoment?.first ? xOf(l, Date.parse(activeMoment.first)) : undefined
   const edgeMark = l.edge.length > 0
   const key = (id: string) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -137,29 +159,41 @@ function Chart({
       <line x1={0} x2={l.width} y1={areaBottom + 0.5} y2={areaBottom + 0.5} style={{ stroke: 'var(--line)' }} />
       {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.2 }} />}
 
-      {activeX !== undefined && (
-        <line
-          x1={activeX}
-          x2={activeX}
-          y1={laneY(l.markers.find((m) => m.moment.id === active)?.lane ?? 0)}
-          y2={areaBottom + TICK_H}
-          strokeDasharray="2 3"
-          style={{ stroke: 'var(--accent)', opacity: 0.45 }}
-        />
-      )}
-      {ticks.map((t) => (
-        <rect
-          key={t.x}
-          x={t.x - 1}
-          y={areaBottom + 2}
-          width={2}
-          height={3 + t.h * (TICK_H - 5)}
-          rx={1}
-          style={{ fill: 'var(--accent)', opacity: 0.35 + t.h * 0.65 }}
-        >
-          <title>{plural(t.hits, 'time')}</title>
-        </rect>
+      {/* stems: from each marker down to the axis, behind everything; the active one is solid */}
+      {edgeMark && <line x1={l.edgeX} x2={l.edgeX} y1={laneY(0) + 8} y2={areaBottom} {...stem(edgeActive, dim)} />}
+      {l.markers.map(({ moment: m, x, lane }) => (
+        <line key={m.id} x1={x} x2={x} y1={laneY(lane) + R + 1} y2={areaBottom} {...stem(active === m.id, dim)} />
       ))}
+
+      {ticks.map((t) => {
+        const on = t.day === tickDay
+        const href = tickPath(t)
+        return (
+          <g key={t.day} opacity={tickDay !== null && !on ? 0.55 : 1}>
+            <rect
+              x={t.x - (on ? 1.5 : 1)}
+              y={areaBottom + 2}
+              width={on ? 3 : 2}
+              height={4 + t.h * (TICK_H - 6)}
+              rx={1}
+              style={{ fill: 'var(--accent)', opacity: on ? 1 : 0.4 + t.h * 0.5 }}
+            />
+            <rect
+              x={t.x0}
+              y={areaBottom}
+              width={Math.max(1, t.x1 - t.x0)}
+              height={TICK_H}
+              fill="transparent"
+              className={href ? 'cursor-pointer' : undefined}
+              onMouseEnter={() => onTick(t.day)}
+              onMouseLeave={() => onTick(null)}
+              onClick={() => href && navigate(href)}
+            >
+              <title>{`${t.day}: ${plural(t.hits, 'time')}`}</title>
+            </rect>
+          </g>
+        )
+      })}
 
       {monthTicks(l).map((t) => (
         <g key={t.label}>
@@ -218,7 +252,7 @@ function Chart({
             y={laneY(0) + 4}
             fontSize={LABEL_SIZE}
             fontWeight={edgeActive ? 600 : 400}
-            style={{ fill: edgeActive ? 'var(--text)' : 'var(--muted)' }}
+            style={{ fill: edgeActive ? 'var(--text)' : 'var(--muted)', ...HALO }}
           >
             {EDGE_LABEL(l.edge.length)}
           </text>
@@ -267,7 +301,7 @@ function Chart({
               textAnchor={flip ? 'end' : 'start'}
               fontSize={LABEL_SIZE}
               fontWeight={on ? 600 : 400}
-              style={{ fill: on ? 'var(--text)' : 'var(--muted)' }}
+              style={{ fill: on ? 'var(--text)' : 'var(--muted)', ...HALO }}
             >
               {m.title}
             </text>
@@ -279,7 +313,7 @@ function Chart({
 }
 
 /** Height of the readout, fixed so that nothing under the timeline moves with the content. */
-export const READOUT_H = 'h-[88px]'
+export const READOUT_H = 'h-[128px]'
 
 /**
  * The line under the timeline. Idle: the totals. On a moment: its title, first date and counts, and the note of
@@ -291,11 +325,13 @@ export function Readout({
   hover,
   pin,
   onHover,
+  tickDay,
 }: {
   report: MomentsReport
   hover: string | null
   pin: string | null
   onHover: (id: string | null) => void
+  tickDay: string | null
 }) {
   const now = new Date(report.now)
   const seen = seenMoments(report.moments)
@@ -308,6 +344,7 @@ export function Readout({
   const id = hover && hover !== EDGE_ID ? hover : pin && pin !== EDGE_ID ? pin : null
   const m = id ? report.moments.find((x) => x.id === id) : undefined
   const pinned = !showEdge && m !== undefined && pin === m.id
+  const tick = m && tickDay ? m.days?.find((d) => d.day === tickDay) : undefined
   return (
     <div className={cn(READOUT_H, 'overflow-y-auto pt-2 text-body')} aria-live="polite">
       {showEdge ? (
@@ -354,14 +391,36 @@ export function Readout({
               </>
             )}
           </p>
-          {pinned && (
-            <p className="mt-1 text-sec text-muted">
-              {m.what}{' '}
-              <Link
-                to={sessionPath(m.firstHit.session, m.firstHit.turn !== undefined ? `t${m.firstHit.turn}` : undefined)}
-              >
-                Open the first time →
-              </Link>
+          <p className="mt-1 text-sec text-muted">
+            {m.what}
+            {pinned && m.firstHit && (
+              <>
+                {' '}
+                <Link
+                  to={sessionPath(
+                    m.firstHit.session,
+                    m.firstHit.turn !== undefined ? `t${m.firstHit.turn}` : undefined,
+                  )}
+                >
+                  Open the first time →
+                </Link>
+              </>
+            )}
+          </p>
+          {pinned && m.detects && (
+            <p className="text-sec text-muted">
+              <span className="text-faint">How Merlin spots it:</span> {m.detects}
+            </p>
+          )}
+          {tick && (
+            <p className="mt-1 text-sec">
+              <span className="font-medium">{shortDate(dayStart(tick.day), now)}</span>
+              <span className="text-muted">
+                {' '}
+                · {plural(tick.hits, 'time')}
+                {tick.example?.note ? ` · ${tick.example.note}` : ''}
+              </span>
+              {tick.example && <span className="text-faint"> · click to open</span>}
             </p>
           )}
         </div>

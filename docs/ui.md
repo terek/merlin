@@ -277,7 +277,12 @@ a click pins (Enter on a focused marker; click again or Esc unpins; hover shows 
 fixed height: idle it summarises the history, hovered it gives title, first date, times in weeks and the first hit's note,
 pinned it adds the `what` sentence and "Open the first time →". **Next**: at most three suggestions, each with its reason
 and a link to its example session. **Your moments**: rows by first time, sharing the hover and pin. **More to try**: the
-unseen moments, collapsed. The personas, their reactions and the card are not shown.
+unseen moments, collapsed. Every marker has a stem, a faint dotted line down to the axis (solid and accent while the
+moment is active; labels carry a halo in the page background). While a moment is shown, its ticks are interactive
+(8 px minimum hit area, the nearest day winning; height scales with the day's hits): hovering one adds a line to the
+readout, a click opens that day's `example` session at its turn, and while pinned the arrow keys step through the ticks
+and Enter opens the chosen one. The readout shows `what` on hover and, pinned, "How Merlin spots it" (`detects`); a
+row of Your moments has its `what` and a "how" disclosure with `detects`; the unseen ones show `detects` too. The personas, their reactions and the card are not shown.
 
 ## 8. Sessions page (`/sessions`)
 

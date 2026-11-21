@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- On the Moments timeline every marker has a line down to the axis, and the days a moment came back can be hovered and opened; each moment says in plain words how Merlin spots it.
 - The Moments page shows a timeline of your history with a marker for each moment's first time, what to try next with a link to where it shows in your sessions, and your moments as a list; hover or click a marker to see every later time.
 - A small count on the Moments tab shows what is new since you last opened the page.
 - On the session graph, hovering the top of a bracket highlights it; a click zooms to its turns, and a second click zooms back.
