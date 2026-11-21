@@ -140,10 +140,6 @@ export function MomentsKey() {
               <span>{word}</span>
             </li>
           ))}
-          <li className="contents">
-            <span />
-            <span className="text-faint">try again</span>
-          </li>
         </>,
       )}
       {group(
@@ -386,7 +382,7 @@ function Chart({
           />
           {months.map((t) => {
             const end = t.x > l.right - 40
-            const mw = measure(t.label.toUpperCase(), 400, 11) * 1.1
+            const mw = measure(t.label, 400, 11)
             const x0 = end ? t.x - 4 - mw : t.x + 4
             const hit = (a: number, b: number) => x0 < b && x0 + mw > a
             const hidden = hit(l.left - 4, l.left + startW + 4) || hit(l.right - endW - 4, l.right + 4)
@@ -399,10 +395,9 @@ function Chart({
                     textAnchor={end ? 'end' : 'start'}
                     y={areaBottom - 7}
                     fontSize={11}
-                    letterSpacing="0.04em"
                     style={{ fill: 'var(--faint)' }}
                   >
-                    {t.label.toUpperCase()}
+                    {t.label}
                   </text>
                 )}
               </g>
