@@ -6,22 +6,13 @@ import {
   bucketDays,
   bucketTicks,
   daysPerBucket,
-  EDGE_COL,
-  EDGE_DAYS,
-  FUTURE_W,
   fitText,
   GUTTER_MAX,
   GUTTER_MIN,
-  LABEL_SPACE,
   layoutRows,
-  layoutTimeline,
   monthTicks,
   ROW_GLYPH_W,
-  ROWS_HEAD,
-  ROWS_PITCH,
-  rowsY,
   seenMoments,
-  timelineRows,
   xOf,
 } from './layout'
 
@@ -45,58 +36,48 @@ function moment(id: string, daysIn: number, status: MomentView['status'] = 'habi
   }
 }
 
-describe('layoutTimeline', () => {
-  test('moments in the first week go to the edge stack, the others to markers by time', () => {
-    const l = layoutTimeline(
-      [moment('a', 0), moment('b', EDGE_DAYS - 1), moment('c', 20), moment('d', 40)],
-      SINCE,
-      NOW,
-      1000,
-    )
-    expect(l.edge.map((m) => m.id)).toEqual(['a', 'b'])
-    expect(l.markers.map((m) => m.moment.id)).toEqual(['c', 'd'])
-    expect(l.markers[0].x).toBeLessThan(l.markers[1].x)
-    expect(l.lanes).toBe(1)
-  })
+/** A layout without a label column, to test the arithmetic of the plot by itself. */
+const plain = (w: number) => ({ ...layoutRows([], SINCE, NOW, w), left: 0 })
 
-  test('unseen moments are not drawn', () => {
-    const u = { ...moment('u', 30), status: 'unseen' as const, first: undefined }
-    const l = layoutTimeline([u, moment('a', 30)], SINCE, NOW, 1000)
-    expect(l.markers).toHaveLength(1)
-  })
-
-  test('markers whose labels would overlap stack in lanes, greedily', () => {
-    // 600 px over about 70 days: a day is about 8 px, so these are 1 day apart
-    const ms = [moment('a', 20), moment('b', 21), moment('c', 22), moment('d', 40)]
-    const l = layoutTimeline(ms, SINCE, NOW, 600)
-    expect(l.markers[0].lane).toBe(0)
-    expect(l.markers[1].lane).toBe(1)
-    expect(l.lanes).toBeGreaterThan(1)
-    for (let lane = 0; lane < l.lanes; lane++) {
-      const spans = l.markers
-        .filter((m) => m.lane === lane)
-        .map((m) => (m.flip ? [m.labelX - m.labelW, m.x] : [m.x, m.labelX + m.labelW]))
-      for (let i = 1; i < spans.length; i++) expect(spans[i][0] - spans[i - 1][1]).toBeGreaterThanOrEqual(LABEL_SPACE)
-    }
-  })
-
-  test('a label that would pass the right edge goes to the left of its marker', () => {
-    const l = layoutTimeline([moment('a', 20), moment('z', 69)], SINCE, NOW, 600)
-    expect(l.markers[0].flip).toBe(false)
-    expect(l.markers[1].flip).toBe(true)
-    expect(l.markers[1].labelX).toBeLessThan(l.markers[1].x)
-  })
-
+describe('layoutRows', () => {
   test('x runs from the left pad to the right pad', () => {
-    const l = layoutTimeline([], SINCE, NOW, 800)
+    const l = plain(800)
     expect(xOf(l, Date.parse(SINCE))).toBe(12)
     expect(xOf(l, Date.parse(NOW))).toBe(788)
     expect(xOf(l, Date.parse(NOW) + DAY)).toBe(788)
   })
+  test('one row per seen moment, by first hit; unseen moments have none', () => {
+    const rows = layoutRows(
+      [
+        moment('late', 40),
+        moment('edge', 2),
+        { ...moment('u', 0), status: 'unseen', first: undefined },
+        moment('mid', 20),
+      ],
+      SINCE,
+      NOW,
+      900,
+    ).rows
+    expect(rows.map((m) => m.id)).toEqual(['edge', 'mid', 'late'])
+  })
+  test('the label column follows the longest label, within bounds, and the plot runs to now', () => {
+    const ms = [moment('a', 1)]
+    expect(layoutRows(ms, SINCE, NOW, 900, () => 10).left).toBe(GUTTER_MIN)
+    expect(layoutRows(ms, SINCE, NOW, 900, () => 1000).left).toBe(GUTTER_MAX)
+    const l = layoutRows(ms, SINCE, NOW, 900, () => 150)
+    expect(l.left).toBe(Math.ceil(ROW_GLYPH_W + 150 + 16))
+    expect(l.right).toBe(900)
+  })
+  test('fitText ellipsises to the room', () => {
+    const m = (t: string) => t.length * 10
+    expect(fitText('short', 100, m)).toBe('short')
+    expect(fitText('a long label here', 100, m)).toBe('a long la…')
+    expect(m(fitText('a long label here', 100, m))).toBeLessThanOrEqual(100)
+  })
 })
 
 describe('activityArea', () => {
-  const l = layoutTimeline([], SINCE, NOW, 800)
+  const l = plain(800)
   test('empty without prompts', () => {
     expect(activityArea([], l, SINCE, NOW)).toEqual([])
   })
@@ -115,7 +96,7 @@ describe('activityArea', () => {
 
 describe('month labels and ticks', () => {
   test('a label at the start of each month inside the axis, the year on the first', () => {
-    const l = layoutTimeline([], SINCE, NOW, 1000)
+    const l = plain(1000)
     expect(monthTicks(l).map((t) => t.label)).toEqual(['Sep 2026', 'Oct', 'Nov'])
   })
   test('seenMoments is ordered by first hit', () => {
@@ -127,7 +108,7 @@ describe('event strip buckets', () => {
   const days = (xs: [string, number][]) =>
     xs.map(([day, hits]) => ({ day, hits, example: { at: day, session: day as unknown as SessionKey, turn: hits } }))
   test('days per bucket follows the width: a square is at least 4 px wide', () => {
-    const k = (w: number) => daysPerBucket(layoutTimeline([], SINCE, NOW, w))
+    const k = (w: number) => daysPerBucket(plain(w))
     expect(k(1200)).toBe(1)
     expect(k(400)).toBe(1)
     expect(k(200)).toBe(2)
@@ -152,7 +133,7 @@ describe('event strip buckets', () => {
     expect(b[1].h).toBeCloseTo(2 / 7)
   })
   test('with k = 1 every active day is a bucket, centred in its day when the day is wider than a square', () => {
-    const l = layoutTimeline([], SINCE, NOW, 1000)
+    const l = plain(1000)
     const m = {
       ...moment('a', 20),
       days: days([
@@ -166,71 +147,11 @@ describe('event strip buckets', () => {
     expect(c.x - a.x).toBeGreaterThan(4)
   })
   test('a lone bucket is at least 8 px wide; neighbours share the gap, the nearest winning', () => {
-    const l = layoutTimeline([], SINCE, NOW, 200)
+    const l = plain(200)
     const m = (ds: string[]) => ({ ...moment('a', 20), days: days(ds.map((x) => [x, 2] as [string, number])) })
     const lone = bucketTicks(m(['2026-09-10']), l, SINCE)[0]
     expect(lone.x1 - lone.x0).toBeGreaterThanOrEqual(8)
     const [a, b] = bucketTicks(m(['2026-09-10', '2026-09-11']), l, SINCE)
     expect(a.x1).toBeLessThanOrEqual(b.x0 + 0.001)
-  })
-
-  test('the plot starts right of the edge column and stops before the future zone', () => {
-    const edge = [moment('a', 0)]
-    const l = layoutTimeline(edge, SINCE, NOW, 1000, true)
-    expect(l.left).toBe(EDGE_COL)
-    expect(l.right).toBe(1000 - FUTURE_W)
-    expect(xOf(l, Date.parse(SINCE))).toBe(EDGE_COL + 12)
-    expect(xOf(l, Date.parse(NOW))).toBe(1000 - FUTURE_W - 12)
-    expect(layoutTimeline([], SINCE, NOW, 1000).left).toBe(0)
-  })
-
-  test('label widths come from the measure given: the flip and the lanes follow them', () => {
-    const ms = [moment('a', 20), moment('b', 40)]
-    const narrow = layoutTimeline(ms, SINCE, NOW, 800, false, () => 10)
-    const wide = layoutTimeline(ms, SINCE, NOW, 800, false, () => 300)
-    expect(narrow.markers[0].labelW).toBe(10)
-    expect(narrow.lanes).toBe(1)
-    expect(wide.markers[0].labelW).toBe(300)
-    expect(wide.lanes).toBeGreaterThan(1)
-  })
-})
-
-describe('rows layout', () => {
-  const ms = [moment('late', 40), moment('edge', 2), moment('mid', 20), moment('same', 20)]
-  test('edge group first, the rest by first hit, then the suggestions', () => {
-    const rows = timelineRows([...ms, { ...moment('s', 0), status: 'unseen', first: undefined }], SINCE, ['s'])
-    const names = rows.map((r) => (r.kind === 'head' ? `# ${r.text}` : `${r.kind}:${r.moment.id}`))
-    expect(names).toEqual([
-      '# Already doing when your history starts',
-      'moment:edge',
-      'moment:mid',
-      'moment:same',
-      'moment:late',
-      '# Next for you',
-      'next:s',
-    ])
-  })
-  test('no heads when nothing is in a group', () => {
-    const rows = timelineRows([moment('late', 40)], SINCE, [])
-    expect(rows.map((r) => r.kind)).toEqual(['moment'])
-  })
-  test('row tops add up the pitches', () => {
-    const rows = timelineRows(ms, SINCE, [])
-    const { tops, height } = rowsY(rows)
-    expect(tops[0]).toBe(0)
-    expect(tops[1]).toBe(ROWS_HEAD)
-    expect(height).toBe(ROWS_HEAD + 4 * ROWS_PITCH)
-  })
-  test('the gutter follows the longest label, within bounds', () => {
-    const rows = timelineRows(ms, SINCE, [])
-    expect(layoutRows(rows, SINCE, NOW, 900, true, () => 10).left).toBe(GUTTER_MIN)
-    expect(layoutRows(rows, SINCE, NOW, 900, true, () => 1000).left).toBe(GUTTER_MAX)
-    expect(layoutRows(rows, SINCE, NOW, 900, true, () => 150).left).toBe(Math.ceil(ROW_GLYPH_W + 150 + 16))
-  })
-  test('fitText ellipsises to the room', () => {
-    const m = (t: string) => t.length * 10
-    expect(fitText('short', 100, m)).toBe('short')
-    expect(fitText('a long label here', 100, m)).toBe('a long la…')
-    expect(m(fitText('a long label here', 100, m))).toBeLessThanOrEqual(100)
   })
 })

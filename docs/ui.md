@@ -269,26 +269,32 @@ same whether or not a session is open in the Overview, and no page puts tools in
 
 ## 7a. Moments page (`/moments`)
 
-Full width, in frames like Cost. **Your history**: an SVG timeline from `since` to `now` with a soft activity area
-(prompts per day), one marker per seen moment at its first time (filled: habit; ring: explored; greedy lanes, 14 px
-apart) and month labels. Moments first seen within 7 days of `since` are listed in a fixed 190 px column left of the plot, headed "Already doing
-when your history starts", and behave like markers. Under the axis an event strip has one 3 px row per seen moment
-(oldest first, a staircase), with a 4 px square per active period, opacity by hits: the days are put in buckets of k = max(1, ceil(4 / px per day)) days aligned to the first day (summed hits, the example of the busiest day), so a short history shows one square per day and a long one nearly adjacent pixels. Hovering a marker, a column entry, a
-strip row or a list row lights that moment (row accent, marker, label and stem) with a neutral chip behind its label;
-a click selects (Enter on a focused marker; click again, Esc or the × in the readout unselects). The selection is kept in the URL as `?m=<id>` with `replace` and always keeps its accent; hover raises another moment one step (text-colour label, solid neutral stem, darker neutral row) and the readout follows the selection. Nothing fades: the selected moment has an accent-tinted chip behind its label, a faint accent band behind its strip row and a tinted list row. The readout below has a
-fixed height: idle it summarises the history, hovered it gives title, first date, times in weeks and the first hit's note,
-pinned it adds the `what` sentence and "Open the first time →". The next ~200 px after a dashed "now" line is a tinted "Next for you" zone with up to three dashed hollow
-markers (no stems or ticks); clicking one switches the lower part to "What's next" and scrolls to it, hovering shows its
-reason and try text in the readout. The lower part has a segmented switch, "Your moments" (default) or "What's next"
-(`?view=next`, kept with `replace`): the suggestions with their reason and example link, then the unseen ones. **Your moments**: rows by first time, sharing the hover and pin. **More to try**: the
-unseen moments. Every marker has a stem, a faint dotted line down to the axis (solid and accent while the
-moment is active; labels carry a halo in the page background). While a moment is shown, its strip ticks are interactive
-(8 px minimum hit area, the nearest day winning; height scales with the day's hits): hovering one adds a line to the
-readout, a click opens that day's `example` session at its turn, and while pinned the arrow keys step through the ticks
-and Enter opens the chosen one. The readout shows `what` on hover and, pinned, "How Merlin spots it" (`detects`); a
-row of Your moments has its `what` and a "how" disclosure with `detects`; the unseen ones show `detects` too. The personas, their reactions and the card are not shown.
+Full width, in frames like Cost. **Your history**: an SVG from `since` to `now`. On top a thin intensity strip
+(about 22 px: the prompts per day, smoothed over a week) hints at how busy each stretch was, over the month axis.
+Under it one 20 px row per seen moment, oldest first, so the rows form a staircase down and to the right. A row
+starts with its label in a left column (13 px, body text colour, ellipsised to the room, the width measured from the
+font and kept between 160 and 280 px) with a small state glyph before it; its track runs from there to `now`, with a
+4 px square per active period, opacity by hits. The days are put in buckets of k = max(1, ceil(4 / px per day)) days
+aligned to the first day (summed hits, the example of the busiest day), so a short history shows one square per day
+and a long one nearly adjacent pixels. Faint month lines run through all rows.
 
-`?tl=rows` (replace, like `?m=`) shows the timeline as rows: the area and month axis as before, then one row per moment, a label in a left gutter, a marker at the first hit and the activity squares after it. The moments already there in the first week come first under a quiet subheading, the rest follow by first hit, and "Next for you" closes the list with dashed rings in the zone after now. Selection and hover work as in the default layout; up/down move between rows, Enter selects, Esc clears. Order and grouping are `timelineRows` in `layout.ts`.
+A moment is lit as a whole row, from the label column through the track: hover is the neutral hover surface, a
+selection is the accent tint (`--chip-sel`); the label keeps its normal style and the squares stay as they are (a
+selected row has bigger accent squares). Click or Enter selects; click again, Esc or the x in the readout unselects.
+The selection is kept in the URL as `?m=<id>` with `replace`; hover is secondary and the readout follows the
+selection. Rows are focusable: up and down move between them. Nothing fades.
+
+The readout below has a fixed height: idle it summarises the history, hovered it gives title, first date, times in
+weeks and the first hit's note, selected it adds the `what` sentence and "Open the first time →". While a moment is
+selected its squares are interactive (8 px minimum hit area, the nearest day winning): hovering one adds a line to the
+readout, a click opens that day's `example` session at its turn, and the arrow keys left and right step through the
+squares and Enter opens the chosen one.
+
+The lower part has a segmented switch, "Your moments" (default) or "What's next" (`?view=next`, kept with
+`replace`): the suggestions with their reason and example link, then the unseen ones. **Your moments**: rows by first
+time, sharing the hover and the selection. The readout shows `what` on hover and, selected, "How Merlin spots it"
+(`detects`); a row of Your moments has its `what` and a "how" disclosure with `detects`; the unseen ones show `detects`
+too. The personas, their reactions and the card are not shown.
 
 ## 8. Sessions page (`/sessions`)
 

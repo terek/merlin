@@ -200,15 +200,14 @@ shows a one-row invite with the three reactions that links to `/moments`.
 `/moments` is the guide next to the instruments (Overview, Cost, the session view): your own story,
 and what to try next. Every claim links to the instrument view that shows it. Top to bottom:
 
-- **Timeline.** Linear time from `since` to `now`, with the human prompts per day as a soft
-  background. Each seen moment is one marker at its first hit: filled when it is a habit, a ring
-  when explored. Moments already present in the first week sit in one stack at the left edge.
-  Hovering a moment (a marker, a row below) shows every later occurrence as ticks under the
-  activity; a click pins it.
+- **Timeline.** Linear time from `since` to `now`, with the human prompts per day as a thin
+  intensity strip. One row per seen moment, oldest first: its label, then a square for every
+  stretch of days it came back, so you read when it started and how it kept going. Hovering or
+  selecting a row lights it whole; a selected moment's squares open the session of that day.
 - **Readout.** One line under the timeline, of fixed height: the totals when idle, the moment's
   title, first date, hits and weeks on hover, and for a pinned moment its sentence and a link to
   the first time it happened.
-- **Next.** At most three suggestions: the reason, the try text and, when the symptom has one, a
+- **Next.** Behind the "What's next" switch: at most three suggestions: the reason, the try text and, when the symptom has one, a
   link to the session where it shows most.
 - **Your moments.** The seen moments as compact rows, by first hit, each with its latest example.
 - **More to try.** The unseen moments, collapsed.

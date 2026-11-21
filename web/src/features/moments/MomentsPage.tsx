@@ -82,16 +82,6 @@ function Report({ report }: { report: MomentsReport }) {
       },
       { replace: true },
     )
-  const [scrollTo, setScrollTo] = useState<string | null>(null)
-  useEffect(() => {
-    if (!scrollTo || view !== 'next') return
-    document.getElementById(scrollTo)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    setScrollTo(null)
-  }, [scrollTo, view])
-  const showNext = (id: string | null) => {
-    setView('next')
-    setScrollTo(id ? `next-${id}` : 'moments-lower')
-  }
   const byId = useMemo(() => new Map(report.moments.map((m) => [m.id, m])), [report.moments])
   const [k, setK] = useState(1)
   const pinnedDays = pin && report.since ? bucketDays(byId.get(pin)?.days ?? [], report.since, k) : []
@@ -140,9 +130,7 @@ function Report({ report }: { report: MomentsReport }) {
           onPin={togglePin}
           tickDay={tickDay}
           onTick={setHoverTick}
-          onNext={showNext}
           onK={setK}
-          mode={sp.get('tl') === 'rows' ? 'rows' : 'floating'}
         />
         <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} onClear={() => setPin(null)} />
       </FrameSection>

@@ -4,10 +4,9 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
-- The Moments timeline has an alternative layout, `?tl=rows`, with one row per moment that starts with its label; the floating layout stays the default.
-- The Moments timeline has an event strip with a row per moment, a column for what you were already doing when your history starts, a "Next for you" zone, and a switch between your moments and what's next; labels are easier to read.
-- On the Moments timeline every marker has a line down to the axis, and the days a moment came back can be hovered and opened; each moment says in plain words how Merlin spots it.
-- The Moments page shows a timeline of your history with a marker for each moment's first time, what to try next with a link to where it shows in your sessions, and your moments as a list; hover or click a marker to see every later time.
+- The Moments timeline is one row per moment, with its label at the left and a square for every stretch of days it came back; hover or click lights the whole row. A switch below shows your moments or what's next.
+- On the Moments timeline the days a moment came back can be hovered and opened; each moment says in plain words how Merlin spots it.
+- The Moments page shows a timeline of your history with a row for each moment, what to try next with a link to where it shows in your sessions, and your moments as a list; hover or click a row to see every later time.
 - A small count on the Moments tab shows what is new since you last opened the page.
 - On the session graph, hovering the top of a bracket highlights it; a click zooms to its turns, and a second click zooms back.
 - On the session graph, a click selects one thing — a turn, an agent's work or a background job — and only that is highlighted; hovering a turn marks the one a click would select.
