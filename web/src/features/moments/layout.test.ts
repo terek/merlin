@@ -10,7 +10,9 @@ import {
   GUTTER_MAX,
   GUTTER_MIN,
   layoutRows,
+  MAX_DAYS,
   monthTicks,
+  plotStart,
   ROW_GLYPH_W,
   seenMoments,
   xOf,
@@ -67,6 +69,19 @@ describe('layoutRows', () => {
     const l = layoutRows(ms, SINCE, NOW, 900, () => 150)
     expect(l.left).toBe(Math.ceil(ROW_GLYPH_W + 150 + 16))
     expect(l.right).toBe(900)
+  })
+  test('the axis never covers more than a year', () => {
+    // a history of 70 days is drawn whole; one of 500 days from a year before now
+    expect(plotStart(SINCE, NOW)).toBe(new Date(SINCE).toISOString())
+    const old = '2025-06-01T00:00:00Z'
+    expect(Date.parse(NOW) - Date.parse(plotStart(old, NOW))).toBe(MAX_DAYS * DAY)
+    expect(layoutRows([], old, NOW, 900).from).toBe(Date.parse(NOW) - MAX_DAYS * DAY)
+    expect(layoutRows([], SINCE, NOW, 900).from).toBe(Date.parse(SINCE))
+  })
+  test('days before the plot start are not bucketed', () => {
+    const d = (day: string) => ({ day, hits: 1 })
+    const out = bucketDays([d('2026-08-20'), d('2026-08-25'), d('2026-08-26')], '2026-08-24T09:00:00Z', 1)
+    expect(out.map((b) => b.day)).toEqual(['2026-08-25', '2026-08-26'])
   })
   test('fitText ellipsises to the room', () => {
     const m = (t: string) => t.length * 10

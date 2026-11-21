@@ -212,17 +212,15 @@ shows a one-row invite with the three reactions that links to `/moments`.
 `/moments` is the guide next to the instruments (Overview, Cost, the session view): your own story,
 and what to try next. Every claim links to the instrument view that shows it. Top to bottom:
 
-- **Timeline.** Linear time from `since` to `now`, with the human prompts per day as a thin
-  intensity strip. One row per seen moment, oldest first: its label, then a square for every
-  stretch of days it came back, so you read when it started and how it kept going. Hovering or
-  selecting a row lights it whole; a selected moment's squares open the session of that day.
-- **Readout.** One line under the timeline, of fixed height: the totals when idle, the moment's
-  title, first date, hits and weeks on hover, and for a pinned moment its sentence and a link to
-  the first time it happened.
-- **Next.** Behind the "What's next" switch: at most three suggestions: the reason, the try text and, when the symptom has one, a
-  link to the session where it shows most.
-- **Your moments.** The seen moments as compact rows, by first hit, each with its latest example.
-- **More to try.** The unseen moments, collapsed.
+- **Timeline.** Linear time from `since` to `now` (never more than the last year), with the human
+  prompts per day as a thin intensity strip. One row per seen moment, oldest first: its label, then
+  a square for every stretch of days it came back, so you read when it started and how it kept going.
+  The rows are an accordion: opening one shows, directly under it, its depth, first date, times in
+  weeks, last time, the sentence, how Merlin spots it, and links to the first and the latest time.
+  The open moment's squares open the session of that day.
+- **Next.** After the seen rows, at most three suggestions as rows with a dotted circle; opened:
+  the reason, the try text and, when the symptom has one, a link to the session where it shows most.
+- **More to try.** The unseen moments that are not suggestions, collapsed.
 
 The personas, their reactions and the share card are not shown for now; the code stays.
 

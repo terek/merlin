@@ -5,9 +5,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 ## Unreleased
 
 - The Moments page shows how each moment sits in your work now: part of your routine, quiet lately, tried a few times, or new; a habit you dropped no longer looks current.
-- The Moments timeline is one row per moment, with its label at the left and a square for every stretch of days it came back; hover or click lights the whole row. A switch below shows your moments or what's next.
+- The Moments page is one timeline: a row per moment that opens in place to show when it started, how often it came back and how Merlin spots it, with what to try next as rows at the end; the timeline covers at most the last year.
 - On the Moments timeline the days a moment came back can be hovered and opened; each moment says in plain words how Merlin spots it.
-- The Moments page shows a timeline of your history with a row for each moment, what to try next with a link to where it shows in your sessions, and your moments as a list; hover or click a row to see every later time.
 - A small count on the Moments tab shows what is new since you last opened the page.
 - On the session graph, hovering the top of a bracket highlights it; a click zooms to its turns, and a second click zooms back.
 - On the session graph, a click selects one thing — a turn, an agent's work or a background job — and only that is highlighted; hovering a turn marks the one a click would select.

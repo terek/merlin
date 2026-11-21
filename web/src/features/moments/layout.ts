@@ -31,6 +31,14 @@ export function seenMoments(moments: MomentView[]): MomentView[] {
     .sort((a, b) => Date.parse(a.first ?? '') - Date.parse(b.first ?? '') || a.title.localeCompare(b.title))
 }
 
+/** The axis never covers more than a year: its start is the first session, or a year before `now` if that is later. */
+export const MAX_DAYS = 365
+
+/** The start of the plot as an ISO time: `since`, but no earlier than MAX_DAYS before `now`. */
+export function plotStart(since: string, now: string): string {
+  return new Date(Math.max(Date.parse(since), Date.parse(now) - MAX_DAYS * DAY_MS)).toISOString()
+}
+
 export interface TimelineLayout {
   /** Left end of the time axis, as epoch ms; the right end is `now`. */
   from: number
@@ -157,6 +165,7 @@ export function bucketDays(days: MomentDay[], since: string, k: number): Bucket[
   const by = new Map<number, { hits: number; best: MomentDay }>()
   for (const d of days) {
     const idx = Math.round((dayStart(d.day).getTime() - origin.getTime()) / DAY_MS)
+    if (idx < 0) continue // before the plot starts
     const b = Math.floor(idx / Math.max(1, k))
     const cur = by.get(b)
     if (!cur) by.set(b, { hits: d.hits, best: d })
@@ -231,7 +240,7 @@ export function layoutRows(
   width: number,
   measure: (text: string, weight?: number, size?: number) => number = (t) => labelWidth(t),
 ): TimelineLayout {
-  const from = Date.parse(since)
+  const from = Date.parse(plotStart(since, now))
   const to = Math.max(Date.parse(now), from + DAY_MS)
   const rows = seenMoments(moments)
   let widest = 0

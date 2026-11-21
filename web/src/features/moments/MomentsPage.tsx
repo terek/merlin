@@ -1,20 +1,19 @@
-// The Moments page (docs/moments.md, "The page"): the guide next to the instruments. A timeline of your own story,
-// what to try next (each with the place it shows), your moments as a list and the ones not seen yet. The personas, their
+// The Moments page (docs/moments.md, "The page"): the guide next to the instruments. One timeline of your own story
+// whose rows open in place (your moments, then what to try next), and the ideas not suggested yet. The personas, their
 // reactions and the card to share are not shown for now (MomentCard and PersonaAvatar stay).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMoments } from '../../api/queries'
-import type { MomentHit, MomentsReport, MomentView } from '../../api/types'
+import type { MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
-import { sessionPath } from '../../lib/paths'
 import { markSeen } from '../../shell/momentsBadge'
 import { useShortcut } from '../../shell/useShortcut'
-import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, SegmentedControl, Skeleton } from '../../ui'
-import { bucketDays, seenMoments } from './layout'
-import { dateOf, depthOf, Glyph, Legend, Readout, Timeline, tickPath, timesInWeeks } from './Timeline'
+import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, Skeleton } from '../../ui'
+import { bucketDays } from './layout'
+import { dateOf, Legend, Timeline, tickPath } from './Timeline'
 
 export function MomentsPage() {
   useDocumentTitle('Moments')
@@ -44,11 +43,6 @@ export function MomentsPage() {
   )
 }
 
-/** A hit as a link into the session, at its turn. */
-function hitPath(h: MomentHit): string {
-  return sessionPath(h.session, h.turn !== undefined ? `t${h.turn}` : undefined)
-}
-
 function Report({ report }: { report: MomentsReport }) {
   const [hover, setHover] = useState<string | null>(null)
   // opening the page clears the count on its tab
@@ -59,25 +53,17 @@ function Report({ report }: { report: MomentsReport }) {
   const [sp, setSp] = useSearchParams()
   // the selected moment is view state: `?m=<id>`, replacing the history entry
   const m = sp.get('m')
-  const pin = m && report.moments.some((x) => x.id === m && x.status !== 'unseen') ? m : null
+  const next = report.suggestions.slice(0, 3)
+  const pin =
+    m && report.moments.some((x) => x.id === m && (x.status !== 'unseen' || next.some((s) => s.moment === x.id)))
+      ? m
+      : null
   const setPin = (id: string | null) =>
     setSp(
       (prev) => {
         const n = new URLSearchParams(prev)
         if (id) n.set('m', id)
         else n.delete('m')
-        return n
-      },
-      { replace: true },
-    )
-  const view: 'moments' | 'next' = sp.get('view') === 'next' ? 'next' : 'moments'
-  // the lower part's mode is view state: in the URL, replacing the entry rather than adding one
-  const setView = (v: 'moments' | 'next') =>
-    setSp(
-      (prev) => {
-        const n = new URLSearchParams(prev)
-        if (v === 'next') n.set('view', 'next')
-        else n.delete('view')
         return n
       },
       { replace: true },
@@ -116,14 +102,13 @@ function Report({ report }: { report: MomentsReport }) {
     setPin(pin === id ? null : id)
   }
   const tickDay = hoverTick ?? (selDay ? selDay.day : null)
-  const seen = useMemo(() => seenMoments(report.moments), [report.moments])
-  const unseen = report.moments.filter((m) => m.status === 'unseen')
-  const next = report.suggestions.slice(0, 3)
+  const shown = useMemo(() => ({ ...report, suggestions: next }), [report, next])
+  const more = report.moments.filter((m) => m.status === 'unseen' && !next.some((s) => s.moment === m.id))
   return (
     <div>
-      <FrameSection title="Your history">
+      <FrameSection title="Your history" className="border-b-0">
         <Timeline
-          report={report}
+          report={shown}
           hover={hover}
           pin={pin}
           onHover={setHover}
@@ -133,52 +118,8 @@ function Report({ report }: { report: MomentsReport }) {
           onK={setK}
         />
         <Legend />
-        <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} onClear={() => setPin(null)} />
       </FrameSection>
-
-      <div id="moments-lower">
-        <FrameSection
-          title={view === 'next' ? "What's next" : `Your moments (${seen.length})`}
-          actions={
-            (next.length > 0 || unseen.length > 0) && seen.length > 0 ? (
-              <SegmentedControl
-                label="Lower part"
-                value={view}
-                onChange={setView}
-                options={[
-                  { value: 'moments', label: 'Your moments' },
-                  { value: 'next', label: "What's next" },
-                ]}
-              />
-            ) : undefined
-          }
-          className="border-b-0"
-        >
-          {view === 'moments' || (next.length === 0 && unseen.length === 0) ? (
-            <ul className="-mx-2">
-              {seen.map((m) => (
-                <MomentRow
-                  key={m.id}
-                  moment={m}
-                  now={new Date(report.now)}
-                  active={pin === m.id || hover === m.id}
-                  pinned={pin === m.id}
-                  onHover={setHover}
-                  onPin={togglePin}
-                />
-              ))}
-            </ul>
-          ) : (
-            <ul className="divide-y divide-line">
-              {next.map((s) => {
-                const m = byId.get(s.moment)
-                return m ? <NextRow key={s.moment} moment={m} reason={s.reason} example={s.example} /> : null
-              })}
-            </ul>
-          )}
-        </FrameSection>
-        {view === 'next' && unseen.length > 0 && <MoreToTry moments={unseen} />}
-      </div>
+      {more.length > 0 && <MoreToTry moments={more} />}
 
       <p className="px-4 py-3 text-sec text-faint">
         From {plural(report.sessions - report.scripted, 'session')}
@@ -186,99 +127,6 @@ function Report({ report }: { report: MomentsReport }) {
         {report.since && <> since {dateOf(report.since, new Date(report.now))}</>}.
       </p>
     </div>
-  )
-}
-
-function NextRow({ moment, reason, example }: { moment: MomentView; reason?: string; example?: MomentHit }) {
-  return (
-    <li id={`next-${moment.id}`} className="space-y-0.5 py-2">
-      <div className="text-body font-semibold">{moment.title}</div>
-      {reason && <p className="text-body">{reason}</p>}
-      <p className="text-sec text-muted">{moment.try}</p>
-      {reason && example && (
-        <p className="text-sec">
-          <Link to={hitPath(example)}>See it in your sessions →</Link>
-        </p>
-      )}
-    </li>
-  )
-}
-
-function MomentRow({
-  moment: m,
-  now,
-  active,
-  pinned,
-  onHover,
-  onPin,
-}: {
-  moment: MomentView
-  now: Date
-  active: boolean
-  pinned: boolean
-  onHover: (id: string | null) => void
-  onPin: (id: string) => void
-}) {
-  const latest = m.examples?.[0]
-  const [how, setHow] = useState(false)
-  return (
-    <li
-      className={cn(
-        'rounded-card px-2 py-1 hover:bg-surface-2',
-        active && 'bg-surface-2',
-        pinned && 'bg-[var(--chip-sel)]',
-      )}
-      onMouseEnter={() => onHover(m.id)}
-      onMouseLeave={() => onHover(null)}
-    >
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          aria-pressed={pinned}
-          onClick={() => onPin(m.id)}
-          onFocus={() => onHover(m.id)}
-          onBlur={() => onHover(null)}
-          className="flex h-7 shrink-0 items-center gap-2.5 text-left"
-        >
-          <Glyph depth={depthOf(m)} />
-          <span
-            className={cn('w-56 shrink-0 truncate text-body', pinned ? 'font-semibold text-accent' : 'font-medium')}
-          >
-            {m.title}
-          </span>
-          <span className="w-28 shrink-0 text-sec text-muted">since {dateOf(m.first, now)}</span>
-          <span className="w-44 shrink-0 text-sec text-muted tabular-nums">{timesInWeeks(m)}</span>
-          <span className="w-28 shrink-0 text-sec text-faint">
-            {m.last && (
-              <>
-                last <RelTime time={m.last} />
-              </>
-            )}
-          </span>
-        </button>
-        {latest && (
-          <Link to={hitPath(latest)} className="min-w-0 flex-1 truncate text-sec" title={latest.note}>
-            {latest.note || 'Open the latest'} →
-          </Link>
-        )}
-      </div>
-      <p className="ml-[19px] flex items-baseline gap-2 pb-0.5 text-sec text-muted">
-        <span className="min-w-0 truncate" title={m.what}>
-          {m.what}
-        </span>
-        {m.detects && (
-          <button
-            type="button"
-            aria-expanded={how}
-            onClick={() => setHow(!how)}
-            className="shrink-0 text-faint underline decoration-dotted hover:text-muted"
-          >
-            how
-          </button>
-        )}
-      </p>
-      {how && m.detects && <p className="ml-[19px] pb-0.5 text-sec text-faint">{m.detects}</p>}
-    </li>
   )
 }
 

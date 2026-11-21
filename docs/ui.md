@@ -88,7 +88,7 @@ HOME=<a scratch dir> CLAUDE_CONFIG_DIR=$PWD/testdata/claude MERLIN_HOME=<a scrat
 | `/s/:harness/:id` | Redirects into the Overview with the session open (section 10b, "A session in place") | `#t<index>`, `#a<agentId>`, `#c<index>` are carried over; `from`, `to` become `sfrom`, `sto` |
 | `/cost` | Cost | `range` (`7d`, `30d`, `90d`, `all`), `project`, `by` |
 | `/bead/:id` | Bead (section 10a) | none |
-| `/moments` | Moments (experimental, [moments.md](moments.md)): a timeline of your history, what to try next, your moments; see section 7a | none (the last visit is kept in `localStorage`, `merlin.moments.seen`) |
+| `/moments` | Moments (experimental, [moments.md](moments.md)): one timeline whose rows open in place (your moments, then what to try next); see section 7a | none (the last visit is kept in `localStorage`, `merlin.moments.seen`) |
 | anything else | Not found | |
 
 An id prefix in `/s/claude/1616` is fine: the API resolves it. On `409 ambiguous_id` the page lists
@@ -278,23 +278,26 @@ font and kept between 160 and 280 px) with a small state glyph before it; its tr
 aligned to the first day (summed hits, the example of the busiest day), so a short history shows one square per day
 and a long one nearly adjacent pixels. Faint month lines run through all rows.
 
-A moment is lit as a whole row, from the label column through the track: hover is the neutral hover surface, a
-selection is the accent tint (`--chip-sel`); the label keeps its normal style and the squares stay as they are (a
-selected row has bigger accent squares). Click or Enter selects; click again, Esc or the x in the readout unselects.
-The selection is kept in the URL as `?m=<id>` with `replace`; hover is secondary and the readout follows the
-selection. Rows are focusable: up and down move between them. Nothing fades.
+The time axis never covers more than a year: it starts at `since` or 365 days before `now`, whichever is later
+(`plotStart` in layout.ts); days and squares before it are not drawn, but rows, order and the details still describe
+the whole history (a moment whose hits are all older keeps its row with an empty track).
 
-The readout below has a fixed height: idle it summarises the history, hovered it gives title, first date, times in
-weeks and the first hit's note, selected it adds the `what` sentence and "Open the first time →". While a moment is
-selected its squares are interactive (8 px minimum hit area, the nearest day winning): hovering one adds a line to the
-readout, a click opens that day's `example` session at its turn, and the arrow keys left and right step through the
-squares and Enter opens the chosen one.
+The rows are the whole page: a row is an accordion. A click (or Enter) opens it in place, one at a time; a click on
+the open row, Esc or opening another closes it. The open row is the selection, kept in the URL as `?m=<id>` with
+`replace`, and keeps the accent tint (`--chip-sel`, label accent and semibold, bigger accent squares); hover is the
+neutral surface. Up and down move the focus between rows. The details sit directly under the open row, full width,
+indented to the label text and quiet, and push the next rows down. Line one: depth word, "first <date>", "N times in
+W weeks", "last <relative>"; then `what`; then "How Merlin spots it: <detects>" in faint text; then "Open the
+first time →" and the latest example's link. The squares of the open row stay interactive (8 px minimum hit area, the
+nearest day winning): hovering one adds a line under the details, a click opens that day's `example` session at its
+turn, and the arrow keys left and right step through the squares and Enter opens the chosen one.
 
-The lower part has a segmented switch, "Your moments" (default) or "What's next" (`?view=next`, kept with
-`replace`): the suggestions with their reason and example link, then the unseen ones. **Your moments**: rows by first
-time, sharing the hover and the selection. The readout shows `what` on hover and, selected, "How Merlin spots it"
-(`detects`); a row of Your moments has its `what` and a "how" disclosure with `detects`; the unseen ones show `detects`
-too. The personas, their reactions and the card are not shown.
+After the seen moments come the suggestions (at most three), without a heading: a dotted empty circle, the label and
+an empty track. Opened, one shows the reason (when there is one), the try text, "See it in your sessions →" when the
+symptom has an example, and "How Merlin spots it". The legend line under the rows names every mark, "to try" included.
+The remaining unseen moments are in the "N more to try" disclosure after the rows. The month lines are one overlay
+behind all rows and panels, so they run through the opened details too. The personas, their reactions and the card
+are not shown.
 
 ## 8. Sessions page (`/sessions`)
 
