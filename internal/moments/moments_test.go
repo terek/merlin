@@ -3,6 +3,7 @@ package moments
 import (
 	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -279,9 +280,20 @@ func TestFirstHitDaysAndActivity(t *testing.T) {
 	if m.FirstHit == nil || m.FirstHit.Session.ID != "a" || !m.FirstHit.At.Equal(m.First) || m.FirstHit.Turn == nil || *m.FirstHit.Turn != 0 {
 		t.Errorf("firstHit = %+v, first %v", m.FirstHit, m.First)
 	}
-	want := []Day{{"2026-10-01", 2}, {"2026-10-03", 1}}
-	if !slices.Equal(m.Days, want) {
-		t.Errorf("days = %v, want %v", m.Days, want)
+	// each day's example is its session with the most hits; a and b tie on the first day, the later one wins
+	wantDays := []struct {
+		day     string
+		hits    int
+		session string
+	}{{"2026-10-01", 2, "b"}, {"2026-10-03", 1, "c"}}
+	if len(m.Days) != len(wantDays) {
+		t.Fatalf("days = %+v, want %d", m.Days, len(wantDays))
+	}
+	for i, w := range wantDays {
+		d := m.Days[i]
+		if d.Day != w.day || d.Hits != w.hits || d.Example == nil || d.Example.Session.ID != w.session {
+			t.Errorf("day %d = %+v (example %+v), want %v", i, d, d.Example, w)
+		}
 	}
 	if m := view(r, "swarm"); m.FirstHit != nil || m.Days != nil {
 		t.Errorf("unseen moment has firstHit/days: %+v", m)
@@ -322,6 +334,14 @@ func TestSuggestionExample(t *testing.T) {
 	for _, s := range r.Suggestions {
 		if s.Reason == "" && s.Example != nil {
 			t.Errorf("example without reason: %+v", s)
+		}
+	}
+}
+
+func TestEveryMomentSaysHowItIsSpotted(t *testing.T) {
+	for _, m := range Registry() {
+		if strings.TrimSpace(m.Detects) == "" {
+			t.Errorf("%s has no Detects", m.ID)
 		}
 	}
 }

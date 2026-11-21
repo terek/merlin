@@ -43,6 +43,8 @@ type Moment struct {
 	Title   string // a few words: "Steering mid-turn"
 	What    string // one sentence: what was seen
 	Try     string // one or two sentences: why and how to try it, for someone who has not
+	// Detects says in a plain sentence what counts as one occurrence, in the user's words.
+	Detects string
 	// HabitWeeks overrides DefaultHabitWeeks when non-zero.
 	HabitWeeks int
 	// Detect calls emit once per occurrence. It must be deterministic: the same corpus gives
@@ -91,6 +93,8 @@ func intPtr(i int) *int { return &i }
 type Day struct {
 	Day  string `json:"day"`
 	Hits int    `json:"hits,omitempty"`
+	// Example is the day's session with the most hits (ties: the latest), at the turn of its first hit that day.
+	Example *Hit `json:"example,omitempty"`
 }
 
 // ActivityDay is the number of human prompts typed on one local day.
@@ -146,15 +150,17 @@ type PersonaView struct {
 
 // MomentView is one moment with what was found of it.
 type MomentView struct {
-	ID       string  `json:"id"`
-	Persona  Persona `json:"persona"`
-	Title    string  `json:"title"`
-	What     string  `json:"what"`
-	Try      string  `json:"try"`
-	Status   Status  `json:"status"`
-	Hits     int     `json:"hits"`
-	Sessions int     `json:"sessions"`
-	Weeks    int     `json:"weeks"`
+	ID      string  `json:"id"`
+	Persona Persona `json:"persona"`
+	Title   string  `json:"title"`
+	What    string  `json:"what"`
+	Try     string  `json:"try"`
+	// Detects is what counts as one occurrence, in a plain sentence.
+	Detects  string `json:"detects"`
+	Status   Status `json:"status"`
+	Hits     int    `json:"hits"`
+	Sessions int    `json:"sessions"`
+	Weeks    int    `json:"weeks"`
 	// RecentHits are the hits in the window; New is set when the first hit is in the window.
 	RecentHits int       `json:"recentHits"`
 	New        bool      `json:"new,omitempty"`
@@ -233,7 +239,7 @@ func summarize(m Moment, hits []Hit, windowStart time.Time, loc *time.Location) 
 		return cmp.Or(a.At.Compare(b.At), cmp.Compare(a.Session.String(), b.Session.String()),
 			cmp.Compare(turnOf(a), turnOf(b)))
 	})
-	v := MomentView{ID: m.ID, Persona: m.Persona, Title: m.Title, What: m.What, Try: m.Try,
+	v := MomentView{ID: m.ID, Persona: m.Persona, Title: m.Title, What: m.What, Try: m.Try, Detects: m.Detects,
 		Status: StatusUnseen, Hits: len(hits)}
 	if len(hits) == 0 {
 		return v
@@ -280,15 +286,38 @@ const dayLayout = "2006-01-02"
 // countDays counts hits per local day; hits are sorted by time, so the days come out in order.
 func countDays(hits []Hit, loc *time.Location) []Day {
 	var out []Day
-	for _, h := range hits {
-		d := h.At.In(loc).Format(dayLayout)
-		if n := len(out); n > 0 && out[n-1].Day == d {
-			out[n-1].Hits++
-		} else {
-			out = append(out, Day{Day: d, Hits: 1})
+	for i := 0; i < len(hits); {
+		d := hits[i].At.In(loc).Format(dayLayout)
+		j := i
+		for j < len(hits) && hits[j].At.In(loc).Format(dayLayout) == d {
+			j++
 		}
+		out = append(out, Day{Day: d, Hits: j - i, Example: dayExample(hits[i:j])})
+		i = j
 	}
 	return out
+}
+
+// dayExample picks the session with the most of a day's hits (ties: the one hit last) and returns its first hit.
+func dayExample(hits []Hit) *Hit {
+	count := map[model.SessionKey]int{}
+	first := map[model.SessionKey]int{}
+	last := map[model.SessionKey]int{}
+	for i, h := range hits {
+		if _, ok := first[h.Session]; !ok {
+			first[h.Session] = i
+		}
+		count[h.Session]++
+		last[h.Session] = i
+	}
+	best, ok := model.SessionKey{}, false
+	for s, n := range count {
+		if !ok || n > count[best] || (n == count[best] && last[s] > last[best]) {
+			best, ok = s, true
+		}
+	}
+	h := hits[first[best]]
+	return &h
 }
 
 // activity counts the human prompts of interactive sessions per local day. Copied history is

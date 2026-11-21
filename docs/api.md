@@ -1349,11 +1349,13 @@ request. No parameters.
                  "reaction": "👏", "reason": "Keeping up 8 habits: …",
                  "habits": 8, "explored": 1, "unseen": 0, "new": 0 }],
   "moments": [{ "id": "steer-mid-turn", "persona": "karpathy", "title": "Steering mid-turn",
-                "what": "…", "try": "…", "status": "habit", "hits": 84, "sessions": 49,
+                "what": "…", "try": "…", "detects": "Counted when you …", "status": "habit", "hits": 84, "sessions": 49,
                 "weeks": 18, "recentHits": 10, "new": false, "first": "…", "last": "…",
                 "firstHit": { "at": "…", "session": { "harness": "claude", "id": "…" }, "turn": 3,
                               "note": "sent while the agent was working" },
-                "days": [{ "day": "2026-08-24", "hits": 3 }],
+                "days": [{ "day": "2026-08-24", "hits": 3,
+                          "example": { "at": "…", "session": { "harness": "claude", "id": "…" }, "turn": 3,
+                                       "note": "sent while the agent was working" } }],
                 "examples": [{ "at": "…", "session": { "harness": "claude", "id": "…" },
                                "turn": 3, "note": "sent while the agent was working" }] }],
   "suggestions": [{ "moment": "clean-slate", "reason": "3 sessions went past 40 prompts in one context.",
@@ -1373,7 +1375,9 @@ For the timeline of the page: `activity` is the human prompts typed per local da
 sessions (copied history is not counted again; days with none are left out), by day. A seen
 moment has `firstHit`, the hit that `first` is the time of (its session and turn, so a client can
 link to it), and `days`, every hit counted per local day, by day. Days are in the time zone of the
-daemon. Both are absent for an unseen moment, and `activity` when there are no prompts.
+daemon. Each day has `example`, that day's session with the most hits of the moment (ties: the
+latest) at the turn of its first hit that day, so a client can open any occurrence. Every moment has
+`detects`, one plain sentence on what counts as an occurrence (no field names). Both are absent for an unseen moment, and `activity` when there are no prompts.
 `suggestions[].example` is the session where the symptom shows most (ties: the latest), at a turn
 where that makes sense (the first auto-compaction, the first turn with a big context); it is
 absent when the suggestion has no `reason`.
