@@ -275,7 +275,7 @@ apart) and month labels. Moments first seen within 7 days of `since` are listed 
 when your history starts", and behave like markers. Under the axis an event strip has one 3 px row per seen moment
 (oldest first, a staircase), with a 4 px square per active period, opacity by hits: the days are put in buckets of k = max(1, ceil(4 / px per day)) days aligned to the first day (summed hits, the example of the busiest day), so a short history shows one square per day and a long one nearly adjacent pixels. Hovering a marker, a column entry, a
 strip row or a list row lights that moment (row accent, marker, label and stem) and dims the rest to 0.45;
-a click pins (Enter on a focused marker; click again or Esc unpins; hover shows over the pin). The readout below has a
+a click selects (Enter on a focused marker; click again, Esc or the × in the readout unselects). The selection is kept in the URL as `?m=<id>` with `replace` and always keeps its accent; hover raises another moment one step (text-colour label, solid neutral stem, darker neutral row) and the readout follows the selection. Dimming (to 0.6) happens only while something is selected. The readout below has a
 fixed height: idle it summarises the history, hovered it gives title, first date, times in weeks and the first hit's note,
 pinned it adds the `what` sentence and "Open the first time →". The next ~200 px after a dashed "now" line is a tinted "Next for you" zone with up to three dashed hollow
 markers (no stems or ticks); clicking one switches the lower part to "What's next" and scrolls to it, hovering shows its

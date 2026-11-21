@@ -36,10 +36,10 @@ const R = MARKER_R
 const HALO = { paintOrder: 'stroke', stroke: 'var(--bg)', strokeWidth: 3, strokeLinejoin: 'round' } as const
 
 /** A marker's stem: dotted and faint; solid and in the accent when it is the active one; dimmed with the rest. */
-function stem(on: boolean, dim: boolean) {
-  return on
-    ? { strokeWidth: 1.5, style: { stroke: 'var(--accent)', opacity: 0.75 } }
-    : { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: dim ? 0.3 : 0.6 } }
+function stem(state: 'sel' | 'hov' | 'none', dim: boolean) {
+  if (state === 'sel') return { strokeWidth: 1.5, style: { stroke: 'var(--accent)', opacity: 0.75 } }
+  if (state === 'hov') return { strokeWidth: 1.5, style: { stroke: 'var(--muted)', opacity: 0.8 } }
+  return { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: dim ? 0.4 : 0.6 } }
 }
 const MARKER_TOP = 10
 
@@ -108,7 +108,6 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
   const width = useWidth(wrap)
   const since = report.since
   const layout = since ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0) : null
-  const active = hover ?? pin
   const k = layout ? daysPerBucket(layout) : 1
   useEffect(() => onK(k), [k, onK])
   return (
@@ -118,7 +117,7 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
           report={report}
           since={since}
           layout={layout}
-          active={active}
+          hover={hover}
           pin={pin}
           onHover={onHover}
           onPin={onPin}
@@ -134,23 +133,22 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
 const EDGE_HEAD_H = 22
 const ROW_H = 4
 const ROW_PITCH = 6
-const DIM = 0.45
+const DIM = 0.6
 
 function Chart({
   report,
   since,
   layout: l,
-  active,
+  hover,
   pin,
   onHover,
   onPin,
   tickDay,
   onTick,
   onNext,
-}: Omit<TimelineProps, 'hover' | 'onK'> & {
+}: Omit<TimelineProps, 'onK'> & {
   since: string
   layout: TimelineLayout
-  active: string | null
 }) {
   const navigate = useNavigate()
   const now = new Date(report.now)
@@ -173,7 +171,9 @@ function Chart({
     area.length > 0
       ? `M${area[0].x},${areaBottom} ${area.map((p) => `L${p.x.toFixed(1)},${(areaBottom - p.v * (AREA_H - 6)).toFixed(1)}`).join(' ')} L${area[area.length - 1].x},${areaBottom} Z`
       : ''
-  const dim = active !== null
+  // a selection holds its accent; a hovered moment is raised a step; only a selection dims the rest
+  const dim = pin !== null
+  const st = (id: string): 'sel' | 'hov' | 'none' => (pin === id ? 'sel' : hover === id ? 'hov' : 'none')
   const key = (id: string) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
@@ -187,7 +187,7 @@ function Chart({
     'aria-pressed': pin === m.id,
     'aria-label': `${m.title}, ${m.status}, first ${dateOf(m.first, now)}`,
     className: 'cursor-pointer outline-none [&:focus-visible>circle:first-of-type]:stroke-accent',
-    opacity: dim && active !== m.id ? DIM : 1,
+    opacity: dim && st(m.id) === 'none' ? DIM : 1,
     onMouseEnter: () => onHover(m.id),
     onMouseLeave: () => onHover(null),
     onFocus: () => onHover(m.id),
@@ -199,7 +199,7 @@ function Chart({
     <circle
       cx={x}
       cy={y}
-      r={active === m.id ? R + 1 : R}
+      r={st(m.id) !== 'none' ? R + 1 : R}
       strokeWidth={m.status === 'habit' ? 0 : 1.5}
       style={{ fill: m.status === 'habit' ? 'var(--accent)' : 'var(--surface)', stroke: 'var(--accent)' }}
     />
@@ -210,14 +210,18 @@ function Chart({
       y={y + 4}
       textAnchor={anchor}
       fontSize={LABEL_SIZE}
-      fontWeight={active === m.id ? 600 : 400}
-      style={{ fill: active === m.id ? 'var(--text)' : 'var(--muted)', ...HALO }}
+      fontWeight={st(m.id) === 'sel' ? 600 : 400}
+      style={{ fill: st(m.id) !== 'none' ? 'var(--text)' : 'var(--muted)', ...HALO }}
     >
       {m.title}
     </text>
   )
   const rows = seen.map((m, i) => ({ m, y: stripTop + i * ROW_PITCH }))
-  const ordered = [...rows.filter((r) => r.m.id !== active), ...rows.filter((r) => r.m.id === active)]
+  const ordered = [
+    ...rows.filter((r) => st(r.m.id) === 'none'),
+    ...rows.filter((r) => st(r.m.id) === 'hov'),
+    ...rows.filter((r) => st(r.m.id) === 'sel'),
+  ]
   return (
     <svg width={l.width} height={height} role="img" aria-label="Timeline of your moments" className="block">
       <title>Timeline of your moments</title>
@@ -245,7 +249,7 @@ function Chart({
 
       {/* stems: from each marker down to the axis, behind everything; the active one is solid */}
       {l.markers.map(({ moment: m, x, lane }) => (
-        <line key={m.id} x1={x} x2={x} y1={laneY(lane) + R + 1} y2={areaBottom} {...stem(active === m.id, dim)} />
+        <line key={m.id} x1={x} x2={x} y1={laneY(lane) + R + 1} y2={areaBottom} {...stem(st(m.id), dim)} />
       ))}
 
       {monthTicks(l).map((t) => (
@@ -294,7 +298,8 @@ function Chart({
 
       {/* the event strip: a thin row per moment, a tick for every day it happened, oldest first */}
       {ordered.map(({ m, y }) => {
-        const on = active === m.id
+        const on = st(m.id) === 'sel'
+        const raised = st(m.id) === 'hov'
         const ticks = bucketTicks(m, l, since)
         const href = (t: { example?: MomentHit }) => tickPath(t)
         return (
@@ -312,10 +317,13 @@ function Chart({
                 x2={futureX}
                 y1={y + ROW_H / 2}
                 y2={y + ROW_H / 2}
-                style={{ stroke: on ? 'var(--accent)' : 'var(--muted)', opacity: on ? 0.35 : dim ? 0.06 : 0.12 }}
+                style={{
+                  stroke: on ? 'var(--accent)' : raised ? 'var(--text)' : 'var(--muted)',
+                  opacity: on ? 0.35 : raised ? 0.3 : 0.12,
+                }}
               />
             )}
-            <g opacity={dim && !on ? 0.35 : 1}>
+            <g opacity={dim && !on && !raised ? DIM : 1}>
               {ticks.map((t) => {
                 const sel = on && t.day === tickDay
                 return (
@@ -327,8 +335,8 @@ function Chart({
                     height={on ? ROW_H + 2 : ROW_H}
                     strokeWidth={sel ? 1.5 : 0}
                     style={{
-                      fill: on ? 'var(--accent)' : 'var(--muted)',
-                      opacity: on ? 1 : 0.3 + t.h * 0.4,
+                      fill: on ? 'var(--accent)' : raised ? 'var(--text)' : 'var(--muted)',
+                      opacity: on ? 1 : raised ? 0.55 + t.h * 0.4 : 0.3 + t.h * 0.4,
                       stroke: sel ? 'var(--text)' : 'none',
                     }}
                   />
@@ -376,7 +384,7 @@ function Chart({
           {nexts.map((m, i) => {
             const y = listY(i)
             const id = NEXT_PREFIX + m.id
-            const on = active === id
+            const on = hover === id
             return (
               // biome-ignore lint/a11y/useSemanticElements: an SVG group cannot be a <button>
               <g
@@ -446,12 +454,14 @@ export function Readout({
   pin,
   tickDay,
   k,
+  onClear,
 }: {
   report: MomentsReport
   hover: string | null
   pin: string | null
   tickDay: string | null
   k: number
+  onClear: () => void
 }) {
   const now = new Date(report.now)
   const seen = seenMoments(report.moments)
@@ -460,7 +470,7 @@ export function Readout({
   const nextId = hover?.startsWith(NEXT_PREFIX) ? hover.slice(NEXT_PREFIX.length) : null
   const next = nextId ? report.suggestions.find((x) => x.moment === nextId) : undefined
   const nextMoment = nextId ? report.moments.find((x) => x.id === nextId) : undefined
-  const id = hover && !nextId ? hover : pin
+  const id = pin ?? (nextId ? null : hover)
   const m = id ? report.moments.find((x) => x.id === id) : undefined
   const pinned = m !== undefined && pin === m.id
   const tick =
@@ -477,7 +487,18 @@ export function Readout({
           <p className="mt-1 text-sec text-muted">{nextMoment.try}</p>
         </div>
       ) : m?.firstHit ? (
-        <div>
+        <div className="relative">
+          {pinned && (
+            <button
+              type="button"
+              onClick={onClear}
+              aria-label="Unselect"
+              title="Unselect (Esc)"
+              className="absolute top-0 right-0 flex h-6 w-6 items-center justify-center rounded-card text-muted hover:bg-surface-2 hover:text-fg"
+            >
+              ×
+            </button>
+          )}
           <p className="flex flex-wrap items-center gap-x-2">
             <Glyph status={m.status} />
             <span className="font-medium">{m.title}</span>

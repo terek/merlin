@@ -51,13 +51,25 @@ function hitPath(h: MomentHit): string {
 
 function Report({ report }: { report: MomentsReport }) {
   const [hover, setHover] = useState<string | null>(null)
-  const [pin, setPin] = useState<string | null>(null)
   // opening the page clears the count on its tab
   useEffect(() => markSeen(report), [report])
   const [hoverTick, setHoverTick] = useState<string | null>(null)
   const [selTick, setSelTick] = useState<string | null>(null)
   const navigate = useNavigate()
   const [sp, setSp] = useSearchParams()
+  // the selected moment is view state: `?m=<id>`, replacing the history entry
+  const m = sp.get('m')
+  const pin = m && report.moments.some((x) => x.id === m && x.status !== 'unseen') ? m : null
+  const setPin = (id: string | null) =>
+    setSp(
+      (prev) => {
+        const n = new URLSearchParams(prev)
+        if (id) n.set('m', id)
+        else n.delete('m')
+        return n
+      },
+      { replace: true },
+    )
   const view: 'moments' | 'next' = sp.get('view') === 'next' ? 'next' : 'moments'
   // the lower part's mode is view state: in the URL, replacing the entry rather than adding one
   const setView = (v: 'moments' | 'next') =>
@@ -111,7 +123,7 @@ function Report({ report }: { report: MomentsReport }) {
   }, [selDay, navigate])
   const togglePin = (id: string) => {
     setSelTick(null)
-    setPin((p) => (p === id ? null : id))
+    setPin(pin === id ? null : id)
   }
   const tickDay = hoverTick ?? (selDay ? selDay.day : null)
   const seen = useMemo(() => seenMoments(report.moments), [report.moments])
@@ -131,7 +143,7 @@ function Report({ report }: { report: MomentsReport }) {
           onNext={showNext}
           onK={setK}
         />
-        <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} />
+        <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} onClear={() => setPin(null)} />
       </FrameSection>
 
       <div id="moments-lower">
@@ -159,7 +171,7 @@ function Report({ report }: { report: MomentsReport }) {
                   key={m.id}
                   moment={m}
                   now={new Date(report.now)}
-                  active={(hover ?? pin) === m.id}
+                  active={pin === m.id || hover === m.id}
                   pinned={pin === m.id}
                   onHover={setHover}
                   onPin={togglePin}
