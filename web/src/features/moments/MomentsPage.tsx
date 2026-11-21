@@ -10,10 +10,11 @@ import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
 import { markSeen } from '../../shell/momentsBadge'
+import { PanelTab } from '../../shell/Panel'
 import { useShortcut } from '../../shell/useShortcut'
 import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, Skeleton } from '../../ui'
-import { bucketDays } from './layout'
-import { dateOf, Legend, Timeline, tickPath } from './Timeline'
+import { bucketDays, formatSort, parseSort, type Sort } from './layout'
+import { dateOf, MomentsKey, Timeline, tickPath } from './Timeline'
 
 export function MomentsPage() {
   useDocumentTitle('Moments')
@@ -68,6 +69,18 @@ function Report({ report }: { report: MomentsReport }) {
       },
       { replace: true },
     )
+  const sort = parseSort(sp.get('sort'))
+  const setSort = (s: Sort) =>
+    setSp(
+      (prev) => {
+        const n = new URLSearchParams(prev)
+        const v = formatSort(s)
+        if (v) n.set('sort', v)
+        else n.delete('sort')
+        return n
+      },
+      { replace: true },
+    )
   const byId = useMemo(() => new Map(report.moments.map((m) => [m.id, m])), [report.moments])
   const [k, setK] = useState(1)
   const pinnedDays = pin && report.since ? bucketDays(byId.get(pin)?.days ?? [], report.since, k) : []
@@ -116,8 +129,12 @@ function Report({ report }: { report: MomentsReport }) {
           tickDay={tickDay}
           onTick={setHoverTick}
           onK={setK}
+          sort={sort}
+          onSort={setSort}
         />
-        <Legend />
+        <PanelTab id="moments" title="Moments">
+          <MomentsKey />
+        </PanelTab>
       </FrameSection>
       {more.length > 0 && <MoreToTry moments={more} />}
 

@@ -3,19 +3,20 @@
 // its track holds one square for every stretch of days the moment came back. A click opens the row in place, as an
 // accordion (one at a time): the details sit under it. Hovering raises a row a step. Nothing else moves.
 
+import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { MomentDepth, MomentHit, MomentsReport, MomentView } from '../../api/types'
+import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { dayStart, parseTime, shortDate } from '../../lib/time'
-import { RelTime } from '../../ui'
 import { useWidth } from '../spend/useWidth'
 import {
   activityArea,
   type Bucket,
-  bucketDays,
   bucketTicks,
+  clickSort,
   daysPerBucket,
   fitText,
   GLYPH_R,
@@ -26,7 +27,10 @@ import {
   ROW_GLYPH_W,
   ROW_LABEL_SIZE,
   ROWS_PITCH,
+  type Sort,
+  type SortKey,
   STRIP_PX,
+  sortMoments,
   type TimelineLayout,
 } from './layout'
 import { useLabelMeasure } from './measure'
@@ -102,24 +106,75 @@ export function Glyph({ depth, size = 11 }: { depth: GlyphKind; size?: number })
   )
 }
 
-/** One quiet line that says what the marks before the labels mean. */
-export function Legend() {
-  const items: [GlyphKind, string][] = [
-    ['routine', 'part of your routine'],
-    ['paused', 'quiet lately'],
-    ['tried', 'tried a few times'],
-    ['new', 'new'],
-    ['next', 'to try'],
-  ]
+const KEY_HEAD = 'text-faint text-meta uppercase tracking-wide'
+
+/** What each mark means, with the rule behind it. */
+const DEPTH_RULES: [GlyphKind, string, string][] = [
+  ['routine', 'Part of your routine', 'Seen in at least three different weeks, and again in the last four weeks.'],
+  ['paused', 'Quiet lately', 'A routine once, but not seen in the last four weeks.'],
+  ['tried', 'Tried a few times', 'Seen in fewer than three weeks, the first time more than four weeks ago.'],
+  ['new', 'New', 'Seen in fewer than three weeks, the first time in the last four weeks.'],
+  ['next', 'To try', 'An idea for you, at the end of the list; opened, it says why and how.'],
+]
+
+const CATEGORIES: [string, string][] = [
+  ['prompt', 'how you write and steer your prompts'],
+  ['context', 'how you manage what the agent knows'],
+  ['harness', 'what you build around the agent'],
+  ['parallelism', 'how much runs at once'],
+]
+
+/** The key of the Moments page, for the shell's legend panel. */
+export function MomentsKey() {
   return (
-    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-sec text-faint">
-      {items.map(([d, text]) => (
-        <span key={d} className="inline-flex items-center gap-1.5">
-          <Glyph depth={d} size={10} />
-          {text}
-        </span>
-      ))}
-    </p>
+    <div data-testid="moments-key" className="space-y-3 text-sec">
+      <div className={cn(KEY_HEAD, 'pt-2')}>Rows</div>
+      <ul className="m-0 list-none space-y-2 p-0">
+        {DEPTH_RULES.map(([d, word, rule]) => (
+          <li key={d} className="flex items-start gap-2">
+            <span className="mt-[3px]">
+              <Glyph depth={d} size={10} />
+            </span>
+            <span className="min-w-0">
+              <span className="text-fg">{word}</span>
+              <span className="block text-muted">{rule}</span>
+            </span>
+          </li>
+        ))}
+        <li className="min-w-0">
+          <span className="text-fg">try again</span>
+          <span className="block text-muted">
+            A moment you have seen that is worth another go; opened, it says why.
+          </span>
+        </li>
+      </ul>
+      <div className={cn(KEY_HEAD, 'pt-2')}>Timeline</div>
+      <ul className="m-0 list-none space-y-2 p-0">
+        <li>
+          <span className="text-fg">A square</span>
+          <span className="block text-muted">
+            A day, or a few days together, when it happened; darker means more. On the open row a click opens that
+            session.
+          </span>
+        </li>
+        <li>
+          <span className="text-fg">The grey strip</span>
+          <span className="block text-muted">The prompts you typed per day, smoothed over a week.</span>
+        </li>
+        <li>
+          <span className="text-fg">One year</span>
+          <span className="block text-muted">The axis never covers more than the last year; counts still do.</span>
+        </li>
+      </ul>
+      <div className={cn(KEY_HEAD, 'pt-2')}>Categories</div>
+      <ul className="m-0 list-none space-y-1 p-0">
+        {CATEGORIES.map(([c, text]) => (
+          <li key={c}>
+            <span className="text-fg">{c}</span> <span className="text-muted">{text}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
@@ -158,8 +213,12 @@ export function Timeline({
   tickDay,
   onTick,
   onK,
+  sort,
+  onSort,
 }: {
   report: MomentsReport
+  sort: Sort
+  onSort: (s: Sort) => void
   /** The moment under the pointer or the keyboard focus. */
   hover: string | null
   /** The open moment: a seen one, or a suggestion. */
@@ -176,7 +235,8 @@ export function Timeline({
   const width = useWidth(wrap)
   const since = report.since
   const measure = useLabelMeasure()
-  const l = since ? layoutRows(report.moments, since, report.now, width, measure) : null
+  const tagged = placeSuggestions(report.moments, report.suggestions).again.size > 0
+  const l = since ? layoutRows(report.moments, since, report.now, width, measure, tagged) : null
   const k = l ? daysPerBucket(l) : 1
   useEffect(() => onK(k), [k, onK])
   return (
@@ -192,6 +252,8 @@ export function Timeline({
           onPin={onPin}
           tickDay={tickDay}
           onTick={onTick}
+          sort={sort}
+          onSort={onSort}
         />
       )}
     </div>
@@ -213,8 +275,12 @@ function Chart({
   onPin,
   tickDay,
   onTick,
+  sort,
+  onSort,
 }: {
   report: MomentsReport
+  sort: Sort
+  onSort: (s: Sort) => void
   layout: TimelineLayout
   measure: (text: string, weight?: number, size?: number) => number
   hover: string | null
@@ -279,13 +345,28 @@ function Chart({
     const tag = again.has(m.id) ? 'try again' : ''
     const w = (t: string) => measure(t, 400, ROW_LABEL_SIZE)
     const tagW = tag ? measure(tag, 400, 11) + 8 : 0
-    const text = fitText(m.title, l.left - ROW_GLYPH_W - 8 - tagW, w)
+    const text = fitText(m.title, l.cols.category - ROW_GLYPH_W - 8 - tagW, w)
     return (
       <>
         <text x={ROW_GLYPH_W} y={ROWS_PITCH / 2 + 4} fontSize={ROW_LABEL_SIZE} style={{ fill: 'var(--text)' }}>
           {text}
           {text !== m.title && <title>{m.title}</title>}
         </text>
+        <text x={l.cols.category} y={ROWS_PITCH / 2 + 4} fontSize={12} style={{ fill: 'var(--muted)' }}>
+          {m.category ?? ''}
+        </text>
+        {m.status !== 'unseen' && (
+          <text
+            x={l.cols.countRight}
+            y={ROWS_PITCH / 2 + 4}
+            fontSize={12}
+            textAnchor="end"
+            className="tabular-nums"
+            style={{ fill: 'var(--muted)' }}
+          >
+            {m.hits}
+          </text>
+        )}
         {tag && (
           <text x={ROW_GLYPH_W + w(text) + 8} y={ROWS_PITCH / 2 + 4} fontSize={11} style={{ fill: 'var(--faint)' }}>
             {tag}
@@ -302,25 +383,52 @@ function Chart({
   )
   return (
     <div>
-      <svg width={l.width} height={areaBottom + AXIS_H} role="img" aria-label="Prompts per day" className="block">
-        <title>Prompts per day</title>
-        {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.32 }} />}
-        <line x1={l.left} x2={l.right} y1={areaBottom + 0.5} y2={areaBottom + 0.5} style={{ stroke: 'var(--line)' }} />
-        {months.map((t) => (
-          <g key={t.label}>
-            <line x1={t.x} x2={t.x} y1={areaBottom} y2={areaBottom + 4} style={{ stroke: 'var(--line)' }} />
-            <text
-              x={t.x > l.right - 40 ? t.x - 4 : t.x + 4}
-              textAnchor={t.x > l.right - 40 ? 'end' : 'start'}
-              y={areaBottom + 14}
-              fontSize={11}
-              style={{ fill: 'var(--muted)' }}
-            >
-              {t.label}
-            </text>
-          </g>
-        ))}
-      </svg>
+      <div className="relative" style={{ height: areaBottom + AXIS_H }}>
+        <svg width={l.width} height={areaBottom + AXIS_H} role="img" aria-label="Prompts per day" className="block">
+          <title>Prompts per day</title>
+          {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.32 }} />}
+          <line
+            x1={l.left}
+            x2={l.right}
+            y1={areaBottom + 0.5}
+            y2={areaBottom + 0.5}
+            style={{ stroke: 'var(--line)' }}
+          />
+          {months.map((t) => (
+            <g key={t.label}>
+              <line x1={t.x} x2={t.x} y1={areaBottom} y2={areaBottom + 4} style={{ stroke: 'var(--line)' }} />
+              <text
+                x={t.x > l.right - 40 ? t.x - 4 : t.x + 4}
+                textAnchor={t.x > l.right - 40 ? 'end' : 'start'}
+                y={areaBottom + 14}
+                fontSize={11}
+                style={{ fill: 'var(--muted)' }}
+              >
+                {t.label}
+              </text>
+            </g>
+          ))}
+        </svg>
+        <div className="absolute flex items-center gap-1.5 text-sec" style={{ left: ROW_GLYPH_W, top: 2 }}>
+          <span className="text-faint">Timeline</span>
+          <SortButton label="start" k="start" sort={sort} onSort={onSort} />
+          <span aria-hidden className="text-faint">
+            ·
+          </span>
+          <SortButton label="end" k="end" sort={sort} onSort={onSort} />
+        </div>
+        <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom, height: AXIS_H }}>
+          <span className="absolute" style={{ left: ROW_GLYPH_W }}>
+            <SortButton label="Moment" k="moment" sort={sort} onSort={onSort} />
+          </span>
+          <span className="absolute" style={{ left: l.cols.category }}>
+            <SortButton label="Category" k="category" sort={sort} onSort={onSort} />
+          </span>
+          <span className="absolute -translate-x-full" style={{ left: l.cols.countRight }}>
+            <SortButton label="Count" k="count" sort={sort} onSort={onSort} />
+          </span>
+        </div>
+      </div>
       <div ref={list} className="relative">
         {/* the month lines, one overlay behind every row and panel so that they run through the whole list */}
         <svg width={l.width} className="pointer-events-none absolute top-0 left-0 h-full" aria-hidden focusable="false">
@@ -329,7 +437,7 @@ function Chart({
             <line key={t.label} x1={t.x} x2={t.x} y1={0} y2="100%" style={{ stroke: 'var(--line)', opacity: 0.6 }} />
           ))}
         </svg>
-        {l.rows.map((m) => {
+        {sortMoments(l.rows, sort).map((m) => {
           const on = pin === m.id
           const raised = !on && hover === m.id
           const ticks = bucketTicks(m, l, start)
@@ -356,16 +464,7 @@ function Chart({
                   <Squares ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} />
                 </svg>
               </div>
-              {on && (
-                <Panel
-                  moment={m}
-                  tickDay={tickDay}
-                  start={start}
-                  k={daysPerBucket(l)}
-                  now={now}
-                  again={again.get(m.id)}
-                />
-              )}
+              {on && <Panel moment={m} again={again.get(m.id)} />}
             </div>
           )
         })}
@@ -444,90 +543,55 @@ function Squares({
               navigate(to)
             }}
           >
-            <title>{`${rangeOf(t, now)}: ${plural(t.hits, 'time')}`}</title>
+            <title>{`${rangeOf(t, now)} · ${plural(t.hits, 'time')}${t.example?.note ? ` · ${t.example.note}` : ''}`}</title>
           </rect>
         ))}
     </>
   )
 }
 
-/** The details under an open row: quiet, indented to the label, spanning the whole width. */
-function Panel({
-  moment: m,
-  tickDay,
-  start,
-  k,
-  now,
-  again,
-}: {
-  moment: MomentView
-  tickDay: string | null
-  start: string
-  k: number
-  now: Date
-  again?: { reason?: string; example?: MomentHit }
-}) {
-  const latest = m.examples?.[0]
-  const tick = tickDay ? bucketDays(m.days ?? [], start, k).find((d) => d.day === tickDay) : undefined
+/** A column header that sorts: the active one shows an arrow; the same one again flips the direction. */
+function SortButton({ label, k, sort, onSort }: { label: string; k: SortKey; sort: Sort; onSort: (s: Sort) => void }) {
+  const active = sort.key === k
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(clickSort(sort, k))}
+      title={`Sort by ${label.toLowerCase()}`}
+      className={cn('inline-flex cursor-pointer items-center gap-0.5 hover:text-fg', active ? 'text-fg' : 'text-muted')}
+    >
+      {label}
+      {active && (sort.dir === 'asc' ? <ArrowUp size={11} aria-hidden /> : <ArrowDown size={11} aria-hidden />)}
+    </button>
+  )
+}
+
+/** What a suggestion says: the reason, the try text and, when the symptom has one, where it shows. */
+function Suggestion({ moment: m, reason, example }: { moment: MomentView; reason?: string; example?: MomentHit }) {
+  return (
+    <div className="space-y-0.5 pt-1">
+      {reason && <p>{reason}</p>}
+      <p className="text-muted">{m.try}</p>
+      {example && (
+        <p>
+          <Link to={hitPath(example)}>See it in your sessions →</Link>
+        </p>
+      )}
+    </div>
+  )
+}
+
+/** The details under an open row: what it is and how Merlin spots it, then a suggestion if there is one. */
+function Panel({ moment: m, again }: { moment: MomentView; again?: { reason?: string; example?: MomentHit } }) {
   return (
     <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
-      <p className="flex min-h-5 flex-wrap items-center gap-x-2 text-muted">
-        {tick ? (
-          <>
-            <span className="font-medium text-fg">{rangeOf(tick, now)}</span>
-            <Dot />
-            <span>{plural(tick.hits, 'time')}</span>
-            {tick.example?.note && (
-              <>
-                <Dot />
-                <span>{tick.example.note}</span>
-              </>
-            )}
-            {tick.example && <span className="text-faint">click to open</span>}
-          </>
-        ) : (
-          <>
-            <span className="font-medium text-fg">{DEPTH_WORD[depthOf(m)]}</span>
-            <Dot />
-            <span>first {dateOf(m.first, now)}</span>
-            <Dot />
-            <span>{timesInWeeks(m)}</span>
-            {m.last && (
-              <>
-                <Dot />
-                <span>
-                  last <RelTime time={m.last} />
-                </span>
-              </>
-            )}
-          </>
-        )}
-      </p>
       <p>{m.what}</p>
       {m.detects && (
         <p className="text-faint">
           <span>How Merlin spots it:</span> {m.detects}
         </p>
       )}
-      <p className="flex flex-wrap gap-x-4">
-        {m.firstHit && <Link to={hitPath(m.firstHit)}>Open the first time →</Link>}
-        {latest && (
-          <Link to={hitPath(latest)} title={latest.note}>
-            {latest.note || 'Open the latest'} →
-          </Link>
-        )}
-      </p>
-      {again && (
-        <div className="space-y-0.5 pt-1">
-          {again.reason && <p>{again.reason}</p>}
-          <p className="text-muted">{m.try}</p>
-          {again.example && (
-            <p>
-              <Link to={hitPath(again.example)}>See it in your sessions →</Link>
-            </p>
-          )}
-        </div>
-      )}
+      {again && <Suggestion moment={m} reason={again.reason} example={again.example} />}
     </div>
   )
 }
@@ -536,26 +600,13 @@ function Panel({
 function NextPanel({ moment: m, reason, example }: { moment: MomentView; reason?: string; example?: MomentHit }) {
   return (
     <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
-      {reason && <p>{reason}</p>}
-      <p className="text-muted">{m.try}</p>
-      {example && (
-        <p>
-          <Link to={hitPath(example)}>See it in your sessions →</Link>
-        </p>
-      )}
+      <p>{m.what}</p>
       {m.detects && (
         <p className="text-faint">
           <span>How Merlin spots it:</span> {m.detects}
         </p>
       )}
+      <Suggestion moment={m} reason={reason} example={example} />
     </div>
-  )
-}
-
-function Dot() {
-  return (
-    <span aria-hidden className="text-faint">
-      ·
-    </span>
   )
 }

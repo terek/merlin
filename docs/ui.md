@@ -256,7 +256,7 @@ same whether or not a session is open in the Overview, and no page puts tools in
   "offline, retrying"). While an update is offered (and the connection is not offline) the button's icon turns accent and an accent dot sits on its top-right corner with a ring pulsing behind it (`animate-ping`, `motion-safe` only: reduced motion gets a steady dot), and the tooltip reads "Update available: X". Its popover (closes on an outside click and Escape, 288 px) holds the connection and the running version; when an update is offered, a block under them is the most prominent thing in it: "Update available" with X (a link to that release's page) and a full-width primary button **Install X** (not while the "updated" notice is up, nor when X is the version running). The daemon's `update` event gives the state: `ready` and `available` show the button (the latter downloads first, and may carry the last failure as a quiet line); `downloading` shows it with a quiet "downloading…" hint; `blocked` has no button, only the reason (the `sudo` command, selectable). A click POSTs `/api/upgrade` and the button reads "Installing…", then "Restarting…" after the 200; a failed call shows its message under the button and enables it again. The block ends with the quiet hint "Turn on auto-upgrade: `merlin autoupgrade`". The tab that clicked Install reloads itself as soon as the daemon's hello reports the version it installed (the flag lives in the event store, not in storage); other tabs keep the "Merlin updated to X · Reload" notice.
 - **The legend panel** (added 2026-11-15, `merlin-bj5.1`): a column at the right of main, 300 px, full height under
   the bar, `bg-surface`, a left border, its own scroll. It pushes main (main narrows; the Cost chart follows its
-  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal); the known ids, in order, are `overview` ("Overview"), `graph` ("Graph") and `cost` ("Cost"). Only filled tabs show; the one
+  width); under 1000 px it overlays main instead. A page fills it with `<PanelTab id title>` (a portal); the known ids, in order, are `overview` ("Overview"), `graph` ("Graph"), `cost` ("Cost") and `moments` ("Moments": the rows' marks and rules, the square, the strip, the one-year limit and the four categories). Only filled tabs show; the one
   picked by hand wins while it stays filled, else the one filled last; a single tab shows its title in place of
   a strip. The **Legend button** (`PanelRight`, before the theme button, pressed while open) shows only while the
   page filled a tab (the Overview fills one only when limits touched it); `l` toggles it (not while typing), Escape does not close it. Open or
@@ -269,35 +269,37 @@ same whether or not a session is open in the Overview, and no page puts tools in
 
 ## 7a. Moments page (`/moments`)
 
-Full width, in frames like Cost. **Your history**: an SVG from `since` to `now`. On top a thin intensity strip
-(about 22 px: the prompts per day, smoothed over a week) hints at how busy each stretch was, over the month axis.
-Under it one 20 px row per seen moment, oldest first, so the rows form a staircase down and to the right. A row
-starts with its label in a left column (13 px, body text colour, ellipsised to the room, the width measured from the
-font and kept between 160 and 280 px) with a small state glyph before it; its track runs from there to `now`, with a
-4 px square per active period, opacity by hits. The days are put in buckets of k = max(1, ceil(4 / px per day)) days
-aligned to the first day (summed hits, the example of the busiest day), so a short history shows one square per day
-and a long one nearly adjacent pixels. Faint month lines run through all rows.
+Full width, in a frame like Cost: one table, the whole page. The key is in the shell's legend panel
+(`<PanelTab id="moments">`, `MomentsKey`): the depth marks with their rules, "to try" and the "try again" tag, what a
+square is, the strip, the one-year limit and the four categories. There is no legend line under the table.
+
+**Header.** The month axis over the track, with the thin intensity strip (about 22 px, the prompts per day smoothed
+over a week) above it; at its left the column headers: Moment, Category, Count (right-aligned) and, above them, the
+timeline's "start · end". Every header sorts (`SortButton`, the arrow and `aria-sort` look of `ui/layout.tsx`'s table
+headers): Moment by title, Category (then start), Count (most first), the timeline by `first` (start) or `last` (end);
+the same header again flips the direction; the active one carries a small arrow. The sort is in the URL, `?sort=start`,
+`?sort=-count`, with `replace` and the parameter dropped at the default (start, ascending); the pure rules (`sortMoments`,
+`parseSort`, `formatSort`, `clickSort`) are in layout.ts. Order is always by the real times, never by the clamped x.
+
+**Rows.** One 20 px row per moment: the depth mark, the title (13 px, with a quiet "try again" tag when the moment is
+also suggested), the category (a quiet word), the count (hits, tabular numbers), then the track: a 4 px square per active
+period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. The columns are measured from the font
+(title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows
+after the sorted ones, whatever the sort, with a dotted empty circle, the category and an empty track.
 
 The time axis never covers more than a year: it starts at `since` or 365 days before `now`, whichever is later
-(`plotStart` in layout.ts); days and squares before it are not drawn, but rows, order and the details still describe
-the whole history (a moment whose hits are all older keeps its row with an empty track).
+(`plotStart` in layout.ts); days and squares before it are not drawn, but rows and counts still describe the whole
+history (a moment whose hits are all older keeps its row with an empty track).
 
-The rows are the whole page: a row is an accordion. A click (or Enter) opens it in place, one at a time; a click on
-the open row, Esc or opening another closes it. The open row is the selection, kept in the URL as `?m=<id>` with
-`replace`, and keeps the accent tint (`--chip-sel`; the label stays plain, the squares are bigger and accent); hover is the
-neutral surface. Up and down move the focus between rows. The details sit directly under the open row, full width,
-indented to the label text and quiet, and push the next rows down. Line one: depth word, "first <date>", "N times in
-W weeks", "last <relative>"; then `what`; then "How Merlin spots it: <detects>" in faint text; then "Open the
-first time →" and the latest example's link. The squares of the open row stay interactive (8 px minimum hit area, the
-nearest day winning): hovering one replaces the first line of the details with its date, times and note (same height), a click opens that day's `example` session at its
-turn, and the arrow keys left and right step through the squares and Enter opens the chosen one.
-
-One row per moment: a suggestion for a seen moment adds no row; its row gets a quiet "try again" tag after the label and, opened, the reason, try text and example link below its details. After the seen moments come the suggestions for unseen moments (at most three in all), without a heading: a dotted empty circle, the label and
-an empty track. Opened, one shows the reason (when there is one), the try text, "See it in your sessions →" when the
-symptom has an example, and "How Merlin spots it". The legend line under the rows names every mark, "to try" included.
-The remaining unseen moments are in the "N more to try" disclosure after the rows. The month lines are one overlay
-behind all rows and panels, so they run through the opened details too. The personas, their reactions and the card
-are not shown.
+**Accordion.** A row opens in place (click or Enter), one at a time; the same row again, Esc or another row closes it.
+The open row is the selection, `?m=<id>` with `replace`, and is the whole-row accent tint (`--chip-sel`) with bigger
+accent squares; its label stays plain. Hover is the neutral surface. Up and down move the focus between rows. The
+details sit under the row, indented to the title: the `what` sentence and "How Merlin spots it: <detects>" (faint). A
+suggestion (a to-try row, or a try-again tag) adds its reason, the try text and "See it in your sessions →" when it has
+an example. The open row's squares are interactive (8 px minimum hit area, the nearest day winning): the hover tooltip
+gives date, times and note; a click opens that day's `example` session at its turn; the arrow keys step through the
+squares and Enter opens the chosen one. "N more to try" (the unseen moments that are not suggested) is a disclosure
+after the table. The personas, their reactions and the card are not shown.
 
 ## 8. Sessions page (`/sessions`)
 

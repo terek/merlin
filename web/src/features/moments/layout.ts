@@ -69,9 +69,11 @@ export interface TimelineLayout {
   from: number
   to: number
   width: number
-  /** The plot's left and right edges in px: the label column is left of it. */
+  /** The plot's left and right edges in px: the table's columns are left of it. */
   left: number
   right: number
+  /** The table's columns, in px from the left edge: the title starts at ROW_GLYPH_W. */
+  cols: { category: number; countRight: number }
   /** One row per seen moment. */
   rows: MomentView[]
 }
@@ -239,9 +241,13 @@ export function bucketTicks(m: MomentView, l: TimelineLayout, since: string): Bu
 export const ROW_LABEL_SIZE = 13
 /** The height of a moment's row. */
 export const ROWS_PITCH = 20
-/** The label column never gets narrower or wider than this. */
-export const GUTTER_MIN = 160
-export const GUTTER_MAX = 280
+/** The title column never gets narrower or wider than this. */
+export const TITLE_MIN = 120
+export const TITLE_MAX = 240
+/** The width of the category and count columns, and the room the "try again" tag needs. */
+export const CATEGORY_W = 88
+export const COUNT_W = 40
+export const TAG_W = 62
 
 /** Where a row's label starts, from the left edge. */
 export const ROW_GLYPH_W = PAD_X + 2 * GLYPH_R + LABEL_GAP
@@ -264,12 +270,77 @@ export function layoutRows(
   now: string,
   width: number,
   measure: (text: string, weight?: number, size?: number) => number = (t) => labelWidth(t),
+  /** Whether any row carries the "try again" tag. */
+  tagged = false,
 ): TimelineLayout {
   const from = Date.parse(plotStart(since, now))
   const to = Math.max(Date.parse(now), from + DAY_MS)
   const rows = seenMoments(moments)
   let widest = 0
   for (const m of rows) widest = Math.max(widest, measure(m.title, 400, ROW_LABEL_SIZE))
-  const left = Math.min(GUTTER_MAX, Math.max(GUTTER_MIN, Math.ceil(ROW_GLYPH_W + widest + 16)))
-  return { from, to, width, left, right: width, rows }
+  const title = Math.min(TITLE_MAX, Math.max(TITLE_MIN, Math.ceil(widest + (tagged ? TAG_W : 0) + 8)))
+  const category = ROW_GLYPH_W + title
+  const countRight = category + CATEGORY_W + COUNT_W
+  return { from, to, width, left: countRight + 12, right: width, cols: { category, countRight }, rows }
+}
+
+/** What the table can be sorted by. */
+export type SortKey = 'moment' | 'category' | 'count' | 'start' | 'end'
+export interface Sort {
+  key: SortKey
+  dir: 'asc' | 'desc'
+}
+export const DEFAULT_SORT: Sort = { key: 'start', dir: 'asc' }
+const KEYS: SortKey[] = ['moment', 'category', 'count', 'start', 'end']
+
+/** The direction a column starts with when it is first picked. */
+export function firstDir(key: SortKey): 'asc' | 'desc' {
+  return key === 'count' || key === 'end' ? 'desc' : 'asc'
+}
+
+/** `?sort=` as a Sort: "count", "-count"; anything else is the default. */
+export function parseSort(s: string | null): Sort {
+  if (!s) return DEFAULT_SORT
+  const desc = s.startsWith('-')
+  const key = (desc ? s.slice(1) : s) as SortKey
+  return KEYS.includes(key) ? { key, dir: desc ? 'desc' : 'asc' } : DEFAULT_SORT
+}
+
+/** The `?sort=` value of a Sort; null for the default, so that the parameter is dropped. */
+export function formatSort(s: Sort): string | null {
+  if (s.key === DEFAULT_SORT.key && s.dir === DEFAULT_SORT.dir) return null
+  return (s.dir === 'desc' ? '-' : '') + s.key
+}
+
+/** The sort a click on a header gives: the same column flips, another starts in its natural direction. */
+export function clickSort(cur: Sort, key: SortKey): Sort {
+  if (cur.key === key) return { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+  return { key, dir: firstDir(key) }
+}
+
+const time = (s: string | undefined) => Date.parse(s ?? '') || 0
+
+/** The moments in the order of a Sort; ties fall back to the start, then the title. Does not change its input. */
+export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
+  const by = (m: MomentView): number | string => {
+    switch (sort.key) {
+      case 'moment':
+        return m.title.toLowerCase()
+      case 'category':
+        return m.category ?? ''
+      case 'count':
+        return m.hits
+      case 'end':
+        return time(m.last)
+      default:
+        return time(m.first)
+    }
+  }
+  const sign = sort.dir === 'asc' ? 1 : -1
+  return [...moments].sort((a, b) => {
+    const x = by(a)
+    const y = by(b)
+    const c = x < y ? -1 : x > y ? 1 : 0
+    return sign * c || time(a.first) - time(b.first) || a.title.localeCompare(b.title)
+  })
 }

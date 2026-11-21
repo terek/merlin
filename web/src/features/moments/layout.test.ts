@@ -5,17 +5,22 @@ import {
   activityArea,
   bucketDays,
   bucketTicks,
+  clickSort,
+  DEFAULT_SORT,
   daysPerBucket,
   fitText,
-  GUTTER_MAX,
-  GUTTER_MIN,
+  formatSort,
   layoutRows,
   MAX_DAYS,
   monthTicks,
+  parseSort,
   placeSuggestions,
   plotStart,
   ROW_GLYPH_W,
   seenMoments,
+  sortMoments,
+  TITLE_MAX,
+  TITLE_MIN,
   xOf,
 } from './layout'
 
@@ -63,13 +68,43 @@ describe('layoutRows', () => {
     ).rows
     expect(rows.map((m) => m.id)).toEqual(['edge', 'mid', 'late'])
   })
-  test('the label column follows the longest label, within bounds, and the plot runs to now', () => {
+  test('the title column follows the longest label, within bounds, and the plot runs to now', () => {
     const ms = [moment('a', 1)]
-    expect(layoutRows(ms, SINCE, NOW, 900, () => 10).left).toBe(GUTTER_MIN)
-    expect(layoutRows(ms, SINCE, NOW, 900, () => 1000).left).toBe(GUTTER_MAX)
+    const title = (l: ReturnType<typeof layoutRows>) => l.cols.category - ROW_GLYPH_W
+    expect(title(layoutRows(ms, SINCE, NOW, 900, () => 10))).toBe(TITLE_MIN)
+    expect(title(layoutRows(ms, SINCE, NOW, 900, () => 1000))).toBe(TITLE_MAX)
     const l = layoutRows(ms, SINCE, NOW, 900, () => 150)
-    expect(l.left).toBe(Math.ceil(ROW_GLYPH_W + 150 + 16))
+    expect(title(l)).toBe(158)
+    expect(l.left).toBeGreaterThan(l.cols.countRight)
     expect(l.right).toBe(900)
+  })
+  test('sorting: by column, ties by start then title, the input untouched', () => {
+    const mk = (id: string, hits: number, first: string, last: string, category: string) =>
+      ({ id, title: id, status: 'habit', hits, first, last, category, weeks: 1 }) as unknown as MomentView
+    const ms = [
+      mk('b', 5, '2026-09-02T00:00:00Z', '2026-10-30T00:00:00Z', 'harness'),
+      mk('a', 9, '2026-09-05T00:00:00Z', '2026-10-01T00:00:00Z', 'prompt'),
+      mk('c', 5, '2026-09-01T00:00:00Z', '2026-10-15T00:00:00Z', 'harness'),
+    ]
+    const ids = (s: Parameters<typeof sortMoments>[1]) => sortMoments(ms, s).map((m) => m.id)
+    expect(ids(DEFAULT_SORT)).toEqual(['c', 'b', 'a'])
+    expect(ids({ key: 'moment', dir: 'asc' })).toEqual(['a', 'b', 'c'])
+    expect(ids({ key: 'count', dir: 'desc' })).toEqual(['a', 'c', 'b'])
+    expect(ids({ key: 'category', dir: 'asc' })).toEqual(['c', 'b', 'a'])
+    expect(ids({ key: 'end', dir: 'desc' })).toEqual(['b', 'c', 'a'])
+    expect(ids({ key: 'end', dir: 'asc' })).toEqual(['a', 'c', 'b'])
+    expect(ms.map((m) => m.id)).toEqual(['b', 'a', 'c'])
+  })
+  test('the sort in the URL: parsed, formatted, dropped at the default, flipped by a second click', () => {
+    expect(parseSort(null)).toEqual(DEFAULT_SORT)
+    expect(parseSort('-count')).toEqual({ key: 'count', dir: 'desc' })
+    expect(parseSort('bogus')).toEqual(DEFAULT_SORT)
+    expect(formatSort(DEFAULT_SORT)).toBeNull()
+    expect(formatSort({ key: 'start', dir: 'desc' })).toBe('-start')
+    expect(formatSort({ key: 'count', dir: 'desc' })).toBe('-count')
+    expect(clickSort(DEFAULT_SORT, 'count')).toEqual({ key: 'count', dir: 'desc' })
+    expect(clickSort({ key: 'count', dir: 'desc' }, 'count')).toEqual({ key: 'count', dir: 'asc' })
+    expect(clickSort(DEFAULT_SORT, 'start')).toEqual({ key: 'start', dir: 'desc' })
   })
   test('a suggestion for a seen moment adds no row and marks the seen row', () => {
     const mk = (id: string, status: 'habit' | 'unseen', first?: string) =>
