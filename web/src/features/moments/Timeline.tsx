@@ -38,8 +38,9 @@ import { useLabelMeasure } from './measure'
 
 /** The intensity strip, the month axis, and what is above the first row. */
 const AREA_TOP = 0
-const AREA_H = 22
-const AXIS_H = 20
+const AREA_H = 24
+/** The room an arrow takes beside a header label, shown or not. */
+const ARROW_SLOT = 13
 /** Where a row's detail text starts: under its label. */
 const INDENT = ROW_GLYPH_W
 
@@ -109,8 +110,8 @@ const KEY_HEAD = 'text-faint text-meta uppercase tracking-wide'
 const DEPTH_RULES: [GlyphKind, string, string][] = [
   ['routine', 'Part of your routine', 'Seen in at least three different weeks, and again in the last four weeks.'],
   ['paused', 'Quiet lately', 'A routine once, but not seen in the last four weeks.'],
-  ['tried', 'Tried a few times', 'Seen in fewer than three weeks, the first time more than four weeks ago.'],
   ['new', 'New', 'Seen in fewer than three weeks, the first time in the last four weeks.'],
+  ['tried', 'Tried a few times', 'Seen in fewer than three weeks, the first time more than four weeks ago.'],
   ['next', 'To try', 'An idea for you, at the end of the list; opened, it says why and how.'],
 ]
 
@@ -297,6 +298,8 @@ function Chart({
       ? `M${area[0].x},${areaBottom} ${area.map((p) => `L${p.x.toFixed(1)},${(areaBottom - p.v * (AREA_H - 2)).toFixed(1)}`).join(' ')} L${area[area.length - 1].x},${areaBottom} Z`
       : ''
   const months = monthTicks(l)
+  const startW = measure('Start', 400, 12) + ARROW_SLOT + 8
+  const endW = measure('End', 400, 12) + ARROW_SLOT + 8
   const { again, rows: suggested } = placeSuggestions(report.moments, report.suggestions)
   // up and down move the focus from row to row
   const step = (e: React.KeyboardEvent, el: HTMLElement) => {
@@ -380,35 +383,44 @@ function Chart({
   )
   return (
     <div>
-      <div className="relative" style={{ height: areaBottom + AXIS_H + AXIS_H }}>
-        <svg width={l.width} height={areaBottom + AXIS_H} role="img" aria-label="Prompts per day" className="block">
+      <div className="relative" style={{ height: areaBottom }}>
+        <svg width={l.width} height={areaBottom} role="img" aria-label="Prompts per day" className="block">
           <title>Prompts per day</title>
           {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.32 }} />}
           <line
             x1={l.left}
             x2={l.right}
-            y1={areaBottom + 0.5}
-            y2={areaBottom + 0.5}
+            y1={areaBottom - 0.5}
+            y2={areaBottom - 0.5}
             style={{ stroke: 'var(--line)' }}
           />
-          {months.map((t) => (
-            <g key={t.label}>
-              <line x1={t.x} x2={t.x} y1={areaBottom} y2={areaBottom + 4} style={{ stroke: 'var(--line)' }} />
-              <text
-                x={t.x > l.right - 40 ? t.x - 4 : t.x + 4}
-                textAnchor={t.x > l.right - 40 ? 'end' : 'start'}
-                y={areaBottom + 14}
-                fontSize={11}
-                style={{ fill: 'var(--muted)' }}
-              >
-                {t.label}
-              </text>
-            </g>
-          ))}
+          {months.map((t) => {
+            const end = t.x > l.right - 40
+            const mw = measure(t.label, 400, 11)
+            const x0 = end ? t.x - 4 - mw : t.x + 4
+            const hit = (a: number, b: number) => x0 < b && x0 + mw > a
+            const hidden = hit(l.left - 4, l.left + startW + 4) || hit(l.right - endW - 4, l.right + 4)
+            return (
+              <g key={t.label}>
+                <line x1={t.x} x2={t.x} y1={areaBottom - 5} y2={areaBottom} style={{ stroke: 'var(--line)' }} />
+                {!hidden && (
+                  <text
+                    x={end ? t.x - 4 : t.x + 4}
+                    textAnchor={end ? 'end' : 'start'}
+                    y={areaBottom - 7}
+                    fontSize={11}
+                    style={{ fill: 'var(--muted)' }}
+                  >
+                    {t.label}
+                  </text>
+                )}
+              </g>
+            )
+          })}
         </svg>
-        <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom + AXIS_H, height: AXIS_H }}>
+        <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom - 20, height: 20 }}>
           <span className="absolute -translate-x-1/2" style={{ left: PAD_X + DEPTH_W / 2 }}>
-            <SortButton label="Depth" k="depth" sort={sort} onSort={onSort} />
+            <SortButton label="Depth" k="depth" sort={sort} onSort={onSort} balanced />
           </span>
           <span className="absolute" style={{ left: ROW_GLYPH_W }}>
             <SortButton label="Moment" k="moment" sort={sort} onSort={onSort} />
@@ -417,13 +429,13 @@ function Chart({
             <SortButton label="Category" k="category" sort={sort} onSort={onSort} />
           </span>
           <span className="absolute -translate-x-full" style={{ left: l.cols.countRight }}>
-            <SortButton label="Count" k="count" sort={sort} onSort={onSort} />
+            <SortButton label="Count" k="count" sort={sort} onSort={onSort} arrowFirst />
           </span>
           <span className="absolute" style={{ left: l.left }}>
-            <SortButton label="Start" k="start" sort={sort} onSort={onSort} />
+            <SortButton label="Start" k="start" sort={sort} onSort={onSort} halo />
           </span>
           <span className="absolute -translate-x-full" style={{ left: l.right }}>
-            <SortButton label="End" k="end" sort={sort} onSort={onSort} arrowFirst />
+            <SortButton label="End" k="end" sort={sort} onSort={onSort} arrowFirst halo />
           </span>
         </div>
       </div>
@@ -555,22 +567,40 @@ function SortButton({
   sort,
   onSort,
   arrowFirst,
+  halo,
+  balanced,
 }: {
   label: string
   k: SortKey
   sort: Sort
   onSort: (s: Sort) => void
+  /** The arrow's slot is before the label (right-aligned headers), else after it. */
   arrowFirst?: boolean
+  /** Drawn over the strip: a pill in the page colour keeps it readable. */
+  halo?: boolean
+  /** The label is centred over a mark: an equal empty slot on the other side. */
+  balanced?: boolean
 }) {
   const active = sort.key === k
-  const arrow = active && (sort.dir === 'asc' ? <ArrowUp size={11} aria-hidden /> : <ArrowDown size={11} aria-hidden />)
+  // the slot is always there, and invisible when the column is not the sort
+  const Icon = active && sort.dir === 'desc' ? ArrowDown : ArrowUp
+  const arrow = (
+    <span className={cn('inline-flex shrink-0 justify-center', !active && 'invisible')} style={{ width: ARROW_SLOT }}>
+      <Icon size={11} aria-hidden />
+    </span>
+  )
   return (
     <button
       type="button"
       onClick={() => onSort(clickSort(sort, k))}
       title={`Sort by ${label.toLowerCase()}`}
-      className={cn('inline-flex cursor-pointer items-center gap-0.5 hover:text-fg', active ? 'text-fg' : 'text-muted')}
+      className={cn(
+        'inline-flex h-5 cursor-pointer items-center hover:text-fg',
+        halo && 'rounded bg-bg',
+        active ? 'text-fg' : 'text-muted',
+      )}
     >
+      {balanced && <span style={{ width: ARROW_SLOT }} aria-hidden />}
       {arrowFirst && arrow}
       {label}
       {!arrowFirst && arrow}
