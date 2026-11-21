@@ -25,6 +25,7 @@ import {
   PAD_X,
   seenMoments,
   type TimelineLayout,
+  xOf,
 } from './layout'
 
 const AREA_H = 72
@@ -116,8 +117,8 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
 }
 
 const EDGE_HEAD_H = 22
-const ROW_H = 3
-const ROW_PITCH = 4
+const ROW_H = 4
+const ROW_PITCH = 6
 const DIM = 0.45
 
 function Chart({
@@ -280,6 +281,12 @@ function Chart({
       {ordered.map(({ m, y }) => {
         const on = active === m.id
         const ticks = dayTicks(m, l)
+        // a tick spans its day, so consecutive days merge into one bar
+        const spanOf = (day: string) => {
+          const x0 = xOf(l, dayStart(day).getTime())
+          const x1 = xOf(l, dayStart(day).getTime() + 86_400_000) - 1
+          return { x: x0, w: Math.max(2, x1 - x0) }
+        }
         const href = (t: { example?: MomentHit }) => tickPath(t)
         return (
           <g
@@ -289,20 +296,37 @@ function Chart({
             onClick={() => onPin(m.id)}
             className="cursor-pointer"
           >
-            <rect x={l.left} y={y - 0.5} width={Math.max(1, futureX - l.left)} height={ROW_PITCH} fill="transparent" />
-            {ticks.map((t) => (
-              <rect
-                key={t.day}
-                x={t.x - 1}
-                y={t.day === tickDay && on ? y - 2 : y}
-                width={t.day === tickDay && on ? 3 : 2}
-                height={t.day === tickDay && on ? ROW_H + 4 : ROW_H}
-                style={{
-                  fill: on ? 'var(--accent)' : 'var(--muted)',
-                  opacity: on ? 0.55 + t.h * 0.45 : (0.14 + t.h * 0.3) * (dim ? DIM + 0.2 : 1),
-                }}
+            <rect x={l.left} y={y - 1} width={Math.max(1, futureX - l.left)} height={ROW_PITCH} fill="transparent" />
+            {ticks.length > 0 && (
+              <line
+                x1={Math.min(...ticks.map((t) => spanOf(t.day).x))}
+                x2={futureX}
+                y1={y + ROW_H / 2}
+                y2={y + ROW_H / 2}
+                style={{ stroke: on ? 'var(--accent)' : 'var(--muted)', opacity: on ? 0.35 : dim ? 0.06 : 0.12 }}
               />
-            ))}
+            )}
+            <g opacity={dim && !on ? 0.35 : 1}>
+              {ticks.map((t) => {
+                const sp = spanOf(t.day)
+                const sel = on && t.day === tickDay
+                return (
+                  <rect
+                    key={t.day}
+                    x={sp.x}
+                    y={on ? y - 1 : y}
+                    width={sp.w}
+                    height={on ? ROW_H + 2 : ROW_H}
+                    strokeWidth={sel ? 1.5 : 0}
+                    style={{
+                      fill: on ? 'var(--accent)' : 'var(--muted)',
+                      opacity: on ? 1 : 0.3 + t.h * 0.4,
+                      stroke: sel ? 'var(--text)' : 'none',
+                    }}
+                  />
+                )
+              })}
+            </g>
             {on &&
               ticks.map((t) => (
                 <rect
