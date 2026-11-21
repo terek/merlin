@@ -37,6 +37,14 @@ const AREA_H = 22
 const AXIS_H = 20
 const R = GLYPH_R
 
+/** The words a depth is shown with. */
+export const DEPTH_WORD: Record<MomentDepth, string> = {
+  routine: 'routine',
+  paused: 'quiet lately',
+  tried: 'tried',
+  new: 'new',
+}
+
 /** The depth of a moment; an older API without `depth` is read from the status. */
 export function depthOf(m: Pick<MomentView, 'status' | 'depth'>): MomentDepth {
   return m.depth ?? (m.status === 'habit' ? 'routine' : 'tried')
@@ -71,7 +79,7 @@ function DepthShapes({ depth }: { depth: MomentDepth }) {
 export function Glyph({ depth, size = 11 }: { depth: MomentDepth; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden className="shrink-0">
-      <title>{depth}</title>
+      <title>{DEPTH_WORD[depth]}</title>
       <DepthShapes depth={depth} />
     </svg>
   )
@@ -220,7 +228,13 @@ function Chart({
             y2={rowsTop + l.rows.length * ROWS_PITCH}
             style={{ stroke: 'var(--line)', opacity: 0.6 }}
           />
-          <text x={t.x + 4} y={areaBottom + 14} fontSize={11} style={{ fill: 'var(--muted)' }}>
+          <text
+            x={t.x > l.right - 40 ? t.x - 4 : t.x + 4}
+            textAnchor={t.x > l.right - 40 ? 'end' : 'start'}
+            y={areaBottom + 14}
+            fontSize={11}
+            style={{ fill: 'var(--muted)' }}
+          >
             {t.label}
           </text>
         </g>
@@ -242,7 +256,7 @@ function Chart({
             role="button"
             tabIndex={0}
             aria-pressed={on}
-            aria-label={`${m.title}, ${depthOf(m)}, first ${dateOf(m.first, now)}`}
+            aria-label={`${m.title}, ${DEPTH_WORD[depthOf(m)]}, first ${dateOf(m.first, now)}`}
             className="cursor-pointer outline-none [&:focus-visible>rect:first-of-type]:stroke-accent [&:focus-visible>rect:first-of-type]:stroke-[1.5]"
             onMouseEnter={() => onHover(m.id)}
             onMouseLeave={() => onHover(null)}
@@ -266,7 +280,7 @@ function Chart({
               style={{ fill: on ? 'var(--chip-sel)' : raised ? 'var(--surface-2)' : 'transparent' }}
             />
             <svg x={PAD_X + R - 5} y={cy - 5} width={10} height={10} viewBox="0 0 12 12">
-              <title>{depthOf(m)}</title>
+              <title>{DEPTH_WORD[depthOf(m)]}</title>
               <DepthShapes depth={depthOf(m)} />
             </svg>
             <text x={ROW_GLYPH_W} y={cy + 4} fontSize={ROW_LABEL_SIZE} style={{ fill: 'var(--text)' }}>
@@ -381,7 +395,7 @@ export function Readout({
           <p className="flex flex-wrap items-center gap-x-2">
             <Glyph depth={depthOf(m)} />
             <span className="font-medium">{m.title}</span>
-            <span className="text-muted">{depthOf(m)}</span>
+            <span className="text-muted">{DEPTH_WORD[depthOf(m)]}</span>
             <span className="text-muted">first {dateOf(m.first, now)}</span>
             <span aria-hidden className="text-faint">
               ·
@@ -433,8 +447,8 @@ export function Readout({
         <p className="text-muted">
           From {plural(report.sessions - report.scripted, 'session')}
           {report.since ? ` since ${dateOf(report.since, now)}` : ''}: {count('routine')} routine, {count('paused')}{' '}
-          paused, {count('tried')} tried, {count('new')} new.
-          <span className="text-faint"> Hover a mark to see when it came back; click to pin it.</span>
+          quiet lately, {count('tried')} tried, {count('new')} new.
+          <span className="text-faint"> Hover a row to see it; click to select it.</span>
         </p>
       )}
     </div>
