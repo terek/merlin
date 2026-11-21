@@ -213,7 +213,7 @@ shows a one-row invite with the three reactions that links to `/moments`.
 `/moments` is the guide next to the instruments (Overview, Cost, the session view): your own story,
 and what to try next. Every claim links to the instrument view that shows it. Top to bottom:
 
-- **The table.** One row per seen moment: its depth mark, title, category and count, then a track of
+- **The table.** A moment is one occurrence (a square on the timeline); a row is a practice. One row per seen practice, headed Practice: its depth mark, title, category and count, then a track of
   squares, one per stretch of days it came back (linear time from `since` to `now`, never more than the last
   year, under a thin strip of the prompts per day). Every column header sorts; the timeline sorts by start or
   end. Rows open in place, one at a time: what was seen and how Merlin spots it, and for a suggestion the

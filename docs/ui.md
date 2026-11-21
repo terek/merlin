@@ -278,10 +278,10 @@ category texts; those are in the row's panel. There is no legend line under the 
 **Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed
 over a week) is the track column's background, with the month ticks and their small faint labels in normal case ("Sep 2026") along its bottom (a
 label is hidden when it would collide with Start or End, by the measured widths). On the same baseline, at the band's
-bottom: Depth (a narrow first column, `DEPTH_W` 48 px, right-aligned, with `DEPTH_GAP` 20 px clear before Moment; the mark sits under the arrow slot), Moment, Category, Count
+bottom: Depth (a narrow first column, `DEPTH_W` 48 px, right-aligned, with `DEPTH_GAP` 8 px of air before Practice; the mark sits under the arrow slot), Moment, Category, Count
 (right-aligned) and, over the strip at the track's two ends, Start (left) and End (right), each on a pill in the page
 colour so that it reads over the grey. Every header sorts (`SortButton`): Depth by rank, deepest first (routine, quiet
-lately, new, tried; first click deepest first, ties by start), Moment by title, Category (then start), Count (most first),
+lately, new, tried; first click deepest first, ties by start), Practice by title (the column is headed Practice; its sort key stays `moment`), Category (then start), Count (most first),
 the timeline by `first` (start) or `last` (end); the same header again flips the direction. Every sortable header
 reserves the arrow's slot (`ARROW_SLOT`, 13 px) and shows the arrow only on the active one, so a label never moves when
 the sort changes; the slot is after the label, but before it on End and Count, whose right edge stays put. The sort is in

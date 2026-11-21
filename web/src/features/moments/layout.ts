@@ -254,7 +254,7 @@ export const TAG_W = 62
 export const DEPTH_W = 48
 /** The Depth column's right edge, and the clear space between it and the title. */
 export const DEPTH_RIGHT = PAD_X + DEPTH_W
-export const DEPTH_GAP = 20
+export const DEPTH_GAP = 8
 export const ROW_GLYPH_W = DEPTH_RIGHT + DEPTH_GAP
 
 /** `text` cut with an ellipsis so that it is at most `max` wide by `measure`. */

@@ -408,7 +408,7 @@ function Chart({
             <SortButton label="Depth" k="depth" sort={sort} onSort={onSort} />
           </span>
           <span className="absolute" style={{ left: ROW_GLYPH_W }}>
-            <SortButton label="Moment" k="moment" sort={sort} onSort={onSort} />
+            <SortButton label="Practice" k="moment" sort={sort} onSort={onSort} />
           </span>
           <span className="absolute" style={{ left: l.cols.category }}>
             <SortButton label="Category" k="category" sort={sort} onSort={onSort} />
