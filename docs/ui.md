@@ -272,7 +272,7 @@ same whether or not a session is open in the Overview, and no page puts tools in
 Full width, on the page surface like Overview and Cost (`bg-surface`, the page scrolls inside itself, the title block and
 section borders as on the other pages): one table, the whole page. The key is in the shell's legend panel
 (`<PanelTab id="moments">`, `MomentsKey`), a map key as on the session page (`spend/Key.tsx`): the same section heading
-and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, and to try; Timeline: a square is a day (darker, more), the strip is your activity. No sentences, thresholds or
+and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, and to try; Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
 category texts; those are in the row's panel. There is no legend line under the table.
 
 **Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed

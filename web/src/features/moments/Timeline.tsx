@@ -153,7 +153,7 @@ export function MomentsKey() {
               'Prompts per day',
               <rect x={2} y={4} width={24} height={9} style={{ fill: 'var(--faint)', opacity: 0.32 }} />,
             )}
-            <span>your activity</span>
+            <span>prompts per day</span>
           </li>
         </>,
       )}
