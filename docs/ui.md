@@ -274,13 +274,13 @@ Full width, in a frame like Cost: one table, the whole page. The key is in the s
 square is, the strip, the one-year limit and the four categories. There is no legend line under the table.
 
 **Header.** The month axis over the track, between the strip and the header row, with the thin intensity strip (about 22 px, the prompts per day smoothed
-over a week) above it; under it a header row of Moment, Category, Count (right-aligned), and over the track Start (at its left edge) and End (flush right). Every header sorts (`SortButton`, the arrow and `aria-sort` look of `ui/layout.tsx`'s table
-headers): Moment by title, Category (then start), Count (most first), the timeline by `first` (start) or `last` (end);
+over a week) above it; under it a header row of Depth (a narrow first column, `DEPTH_W` 48 px, the header centred over the mark), Moment, Category, Count (right-aligned), and over the track Start (at its left edge) and End (flush right). Every header sorts (`SortButton`, the arrow and `aria-sort` look of `ui/layout.tsx`'s table
+headers): Depth by rank, deepest first (routine, quiet lately, new, tried; first click deepest first, ties by start), Moment by title, Category (then start), Count (most first), the timeline by `first` (start) or `last` (end);
 the same header again flips the direction; the active one carries a small arrow. The sort is in the URL, `?sort=start`,
-`?sort=-count`, with `replace` and the parameter dropped at the default (start, ascending); the pure rules (`sortMoments`,
+`?sort=-count`, `?sort=depth`, with `replace` and the parameter dropped at the default (start, ascending); the pure rules (`sortMoments`,
 `parseSort`, `formatSort`, `clickSort`) are in layout.ts. Order is always by the real times, never by the clamped x.
 
-**Rows.** One 20 px row per moment: the depth mark, the title (13 px, with a quiet "try again" tag when the moment is
+**Rows.** One 20 px row per moment: the depth mark (centred in the Depth column), the title (13 px, with a quiet "try again" tag when the moment is
 also suggested), the category (a quiet word), the count (hits, tabular numbers), then the track: a 4 px square per active
 period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. The columns are measured from the font
 (title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows

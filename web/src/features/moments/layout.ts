@@ -1,7 +1,7 @@
 // The Moments timeline's arithmetic (docs/moments.md, "The page"): the time axis, one row per moment, the intensity
 // strip, the month labels and the squares of a row's activity. Pure, so it is tested.
 
-import type { MomentActivityDay, MomentDay, MomentHit, MomentView } from '../../api/types'
+import type { MomentActivityDay, MomentDay, MomentDepth, MomentHit, MomentView } from '../../api/types'
 import { dayStart, localDay } from '../../lib/time'
 
 /** The edge of the plot, left and right. */
@@ -250,7 +250,9 @@ export const COUNT_W = 40
 export const TAG_W = 62
 
 /** Where a row's label starts, from the left edge. */
-export const ROW_GLYPH_W = PAD_X + 2 * GLYPH_R + LABEL_GAP
+/** The width of the Depth column, which holds the mark centred under its header. */
+export const DEPTH_W = 48
+export const ROW_GLYPH_W = PAD_X + DEPTH_W + LABEL_GAP
 
 /** `text` cut with an ellipsis so that it is at most `max` wide by `measure`. */
 export function fitText(text: string, max: number, measure: (t: string) => number): string {
@@ -285,13 +287,13 @@ export function layoutRows(
 }
 
 /** What the table can be sorted by. */
-export type SortKey = 'moment' | 'category' | 'count' | 'start' | 'end'
+export type SortKey = 'depth' | 'moment' | 'category' | 'count' | 'start' | 'end'
 export interface Sort {
   key: SortKey
   dir: 'asc' | 'desc'
 }
 export const DEFAULT_SORT: Sort = { key: 'start', dir: 'asc' }
-const KEYS: SortKey[] = ['moment', 'category', 'count', 'start', 'end']
+const KEYS: SortKey[] = ['depth', 'moment', 'category', 'count', 'start', 'end']
 
 /** The direction a column starts with when it is first picked. */
 export function firstDir(key: SortKey): 'asc' | 'desc' {
@@ -318,12 +320,22 @@ export function clickSort(cur: Sort, key: SortKey): Sort {
   return { key, dir: firstDir(key) }
 }
 
+/** The depth of a moment; an older API without `depth` is read from the status. */
+export function depthOf(m: Pick<MomentView, 'status' | 'depth'>): MomentDepth {
+  return m.depth ?? (m.status === 'habit' ? 'routine' : 'tried')
+}
+
+/** Deepest first. */
+const DEPTH_RANK: Record<MomentDepth, number> = { routine: 0, paused: 1, new: 2, tried: 3 }
+
 const time = (s: string | undefined) => Date.parse(s ?? '') || 0
 
 /** The moments in the order of a Sort; ties fall back to the start, then the title. Does not change its input. */
 export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
   const by = (m: MomentView): number | string => {
     switch (sort.key) {
+      case 'depth':
+        return DEPTH_RANK[depthOf(m)]
       case 'moment':
         return m.title.toLowerCase()
       case 'category':

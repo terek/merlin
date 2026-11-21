@@ -8,6 +8,7 @@ import {
   clickSort,
   DEFAULT_SORT,
   daysPerBucket,
+  firstDir,
   fitText,
   formatSort,
   layoutRows,
@@ -99,6 +100,8 @@ describe('layoutRows', () => {
     expect(parseSort(null)).toEqual(DEFAULT_SORT)
     expect(parseSort('-count')).toEqual({ key: 'count', dir: 'desc' })
     expect(parseSort('bogus')).toEqual(DEFAULT_SORT)
+    expect(parseSort('depth')).toEqual({ key: 'depth', dir: 'asc' })
+    expect(formatSort({ key: 'depth', dir: 'desc' })).toBe('-depth')
     expect(formatSort(DEFAULT_SORT)).toBeNull()
     expect(formatSort({ key: 'start', dir: 'desc' })).toBe('-start')
     expect(formatSort({ key: 'count', dir: 'desc' })).toBe('-count')
@@ -113,6 +116,21 @@ describe('layoutRows', () => {
     const out = placeSuggestions(ms, [{ moment: 'a' }, { moment: 'b' }, { moment: 'gone' }])
     expect([...out.again.keys()]).toEqual(['a'])
     expect(out.rows.map((r) => r.m.id)).toEqual(['b'])
+  })
+  test('depth sorts deepest first, ties by start', () => {
+    const mk = (id: string, depth: string, first: string) =>
+      ({ id, title: id, status: 'habit', depth, first, hits: 1, weeks: 1 }) as unknown as MomentView
+    const ms = [
+      mk('t', 'tried', '2026-09-01T00:00:00Z'),
+      mk('n', 'new', '2026-09-02T00:00:00Z'),
+      mk('r2', 'routine', '2026-09-05T00:00:00Z'),
+      mk('p', 'paused', '2026-09-03T00:00:00Z'),
+      mk('r1', 'routine', '2026-09-04T00:00:00Z'),
+    ]
+    const ids = (dir: 'asc' | 'desc') => sortMoments(ms, { key: 'depth', dir }).map((m) => m.id)
+    expect(ids('asc')).toEqual(['r1', 'r2', 'p', 'n', 't'])
+    expect(ids('desc')).toEqual(['t', 'n', 'p', 'r1', 'r2'])
+    expect(firstDir('depth')).toBe('asc')
   })
   test('rows are ordered by the real first hit, not by the clamped x', () => {
     const mk = (id: string, first: string) =>

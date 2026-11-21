@@ -17,9 +17,10 @@ import {
   type Bucket,
   bucketTicks,
   clickSort,
+  DEPTH_W,
   daysPerBucket,
+  depthOf,
   fitText,
-  GLYPH_R,
   layoutRows,
   monthTicks,
   PAD_X,
@@ -36,10 +37,9 @@ import {
 import { useLabelMeasure } from './measure'
 
 /** The intensity strip, the month axis, and what is above the first row. */
-const AREA_TOP = 4
+const AREA_TOP = 0
 const AREA_H = 22
 const AXIS_H = 20
-const R = GLYPH_R
 /** Where a row's detail text starts: under its label. */
 const INDENT = ROW_GLYPH_W
 
@@ -54,10 +54,7 @@ export const DEPTH_WORD: Record<MomentDepth, string> = {
 /** What a row's mark can be: a depth, or the dotted ring of a suggestion. */
 export type GlyphKind = MomentDepth | 'next'
 
-/** The depth of a moment; an older API without `depth` is read from the status. */
-export function depthOf(m: Pick<MomentView, 'status' | 'depth'>): MomentDepth {
-  return m.depth ?? (m.status === 'habit' ? 'routine' : 'tried')
-}
+export { depthOf }
 
 /** What each depth looks like, in a 12 x 12 box: a filled dot, a ring, a half-filled ring, a dot in a ring. */
 function DepthShapes({ depth }: { depth: GlyphKind }) {
@@ -128,7 +125,7 @@ const CATEGORIES: [string, string][] = [
 export function MomentsKey() {
   return (
     <div data-testid="moments-key" className="space-y-3 text-sec">
-      <div className={cn(KEY_HEAD, 'pt-2')}>Rows</div>
+      <div className={cn(KEY_HEAD, 'pt-2')}>Depth</div>
       <ul className="m-0 list-none space-y-2 p-0">
         {DEPTH_RULES.map(([d, word, rule]) => (
           <li key={d} className="flex items-start gap-2">
@@ -376,7 +373,7 @@ function Chart({
     )
   }
   const mark = (kind: GlyphKind) => (
-    <svg x={PAD_X + R - 5} y={ROWS_PITCH / 2 - 5} width={10} height={10} viewBox="0 0 12 12">
+    <svg x={PAD_X + DEPTH_W / 2 - 5} y={ROWS_PITCH / 2 - 5} width={10} height={10} viewBox="0 0 12 12">
       <title>{kind === 'next' ? 'to try' : kind}</title>
       <DepthShapes depth={kind} />
     </svg>
@@ -410,6 +407,9 @@ function Chart({
           ))}
         </svg>
         <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom + AXIS_H, height: AXIS_H }}>
+          <span className="absolute -translate-x-1/2" style={{ left: PAD_X + DEPTH_W / 2 }}>
+            <SortButton label="Depth" k="depth" sort={sort} onSort={onSort} />
+          </span>
           <span className="absolute" style={{ left: ROW_GLYPH_W }}>
             <SortButton label="Moment" k="moment" sort={sort} onSort={onSort} />
           </span>
