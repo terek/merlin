@@ -22,6 +22,7 @@ import {
   layoutRows,
   monthTicks,
   PAD_X,
+  placeSuggestions,
   ROW_GLYPH_W,
   ROW_LABEL_SIZE,
   ROWS_PITCH,
@@ -233,10 +234,7 @@ function Chart({
       ? `M${area[0].x},${areaBottom} ${area.map((p) => `L${p.x.toFixed(1)},${(areaBottom - p.v * (AREA_H - 2)).toFixed(1)}`).join(' ')} L${area[area.length - 1].x},${areaBottom} Z`
       : ''
   const months = monthTicks(l)
-  const byId = new Map(report.moments.map((m) => [m.id, m]))
-  const suggested = report.suggestions
-    .map((s) => ({ s, m: byId.get(s.moment) }))
-    .filter((x): x is { s: (typeof report.suggestions)[number]; m: MomentView } => x.m !== undefined)
+  const { again, rows: suggested } = placeSuggestions(report.moments, report.suggestions)
   // up and down move the focus from row to row
   const step = (e: React.KeyboardEvent, el: HTMLElement) => {
     const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
@@ -278,18 +276,22 @@ function Chart({
     />
   )
   const label = (m: MomentView) => {
-    const text = fitText(m.title, l.left - ROW_GLYPH_W - 8, (t) => measure(t, 400, ROW_LABEL_SIZE))
+    const tag = again.has(m.id) ? 'try again' : ''
+    const w = (t: string) => measure(t, 400, ROW_LABEL_SIZE)
+    const tagW = tag ? measure(tag, 400, 11) + 8 : 0
+    const text = fitText(m.title, l.left - ROW_GLYPH_W - 8 - tagW, w)
     return (
-      <text
-        x={ROW_GLYPH_W}
-        y={ROWS_PITCH / 2 + 4}
-        fontSize={ROW_LABEL_SIZE}
-        fontWeight={pin === m.id ? 600 : 400}
-        style={{ fill: pin === m.id ? 'var(--accent)' : 'var(--text)' }}
-      >
-        {text}
-        {text !== m.title && <title>{m.title}</title>}
-      </text>
+      <>
+        <text x={ROW_GLYPH_W} y={ROWS_PITCH / 2 + 4} fontSize={ROW_LABEL_SIZE} style={{ fill: 'var(--text)' }}>
+          {text}
+          {text !== m.title && <title>{m.title}</title>}
+        </text>
+        {tag && (
+          <text x={ROW_GLYPH_W + w(text) + 8} y={ROWS_PITCH / 2 + 4} fontSize={11} style={{ fill: 'var(--faint)' }}>
+            {tag}
+          </text>
+        )}
+      </>
     )
   }
   const mark = (kind: GlyphKind) => (
@@ -307,7 +309,13 @@ function Chart({
         {months.map((t) => (
           <g key={t.label}>
             <line x1={t.x} x2={t.x} y1={areaBottom} y2={areaBottom + 4} style={{ stroke: 'var(--line)' }} />
-            <text x={t.x + 4} y={areaBottom + 14} fontSize={11} style={{ fill: 'var(--muted)' }}>
+            <text
+              x={t.x > l.right - 40 ? t.x - 4 : t.x + 4}
+              textAnchor={t.x > l.right - 40 ? 'end' : 'start'}
+              y={areaBottom + 14}
+              fontSize={11}
+              style={{ fill: 'var(--muted)' }}
+            >
               {t.label}
             </text>
           </g>
@@ -327,7 +335,7 @@ function Chart({
           const ticks = bucketTicks(m, l, start)
           return (
             <div key={m.id} className="relative">
-              <div {...rowProps(m.id, `${m.title}, ${depthOf(m)}, first ${dateOf(m.first, now)}`)}>
+              <div {...rowProps(m.id, `${m.title}, ${DEPTH_WORD[depthOf(m)]}, first ${dateOf(m.first, now)}`)}>
                 <svg width={l.width} height={ROWS_PITCH} className="block">
                   <title>{m.title}</title>
                   {band(m.id)}
@@ -348,7 +356,16 @@ function Chart({
                   <Squares ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} />
                 </svg>
               </div>
-              {on && <Panel moment={m} tickDay={tickDay} start={start} k={daysPerBucket(l)} now={now} />}
+              {on && (
+                <Panel
+                  moment={m}
+                  tickDay={tickDay}
+                  start={start}
+                  k={daysPerBucket(l)}
+                  now={now}
+                  again={again.get(m.id)}
+                />
+              )}
             </div>
           )
         })}
@@ -441,29 +458,48 @@ function Panel({
   start,
   k,
   now,
+  again,
 }: {
   moment: MomentView
   tickDay: string | null
   start: string
   k: number
   now: Date
+  again?: { reason?: string; example?: MomentHit }
 }) {
   const latest = m.examples?.[0]
   const tick = tickDay ? bucketDays(m.days ?? [], start, k).find((d) => d.day === tickDay) : undefined
   return (
     <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
-      <p className="flex flex-wrap items-center gap-x-2 text-muted">
-        <span className="font-medium text-fg">{depthOf(m)}</span>
-        <Dot />
-        <span>first {dateOf(m.first, now)}</span>
-        <Dot />
-        <span>{timesInWeeks(m)}</span>
-        {m.last && (
+      <p className="flex min-h-5 flex-wrap items-center gap-x-2 text-muted">
+        {tick ? (
           <>
+            <span className="font-medium text-fg">{rangeOf(tick, now)}</span>
             <Dot />
-            <span>
-              last <RelTime time={m.last} />
-            </span>
+            <span>{plural(tick.hits, 'time')}</span>
+            {tick.example?.note && (
+              <>
+                <Dot />
+                <span>{tick.example.note}</span>
+              </>
+            )}
+            {tick.example && <span className="text-faint">click to open</span>}
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-fg">{DEPTH_WORD[depthOf(m)]}</span>
+            <Dot />
+            <span>first {dateOf(m.first, now)}</span>
+            <Dot />
+            <span>{timesInWeeks(m)}</span>
+            {m.last && (
+              <>
+                <Dot />
+                <span>
+                  last <RelTime time={m.last} />
+                </span>
+              </>
+            )}
           </>
         )}
       </p>
@@ -481,15 +517,17 @@ function Panel({
           </Link>
         )}
       </p>
-      <p className="min-h-5 text-muted">
-        {tick && (
-          <>
-            <span className="font-medium text-fg">{rangeOf(tick, now)}</span> · {plural(tick.hits, 'time')}
-            {tick.example?.note ? ` · ${tick.example.note}` : ''}
-            {tick.example && <span className="text-faint"> · click to open</span>}
-          </>
-        )}
-      </p>
+      {again && (
+        <div className="space-y-0.5 pt-1">
+          {again.reason && <p>{again.reason}</p>}
+          <p className="text-muted">{m.try}</p>
+          {again.example && (
+            <p>
+              <Link to={hitPath(again.example)}>See it in your sessions →</Link>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

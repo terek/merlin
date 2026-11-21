@@ -12,6 +12,7 @@ import {
   layoutRows,
   MAX_DAYS,
   monthTicks,
+  placeSuggestions,
   plotStart,
   ROW_GLYPH_W,
   seenMoments,
@@ -69,6 +70,22 @@ describe('layoutRows', () => {
     const l = layoutRows(ms, SINCE, NOW, 900, () => 150)
     expect(l.left).toBe(Math.ceil(ROW_GLYPH_W + 150 + 16))
     expect(l.right).toBe(900)
+  })
+  test('a suggestion for a seen moment adds no row and marks the seen row', () => {
+    const mk = (id: string, status: 'habit' | 'unseen', first?: string) =>
+      ({ id, title: id, status, first, hits: 1, weeks: 1 }) as unknown as MomentView
+    const ms = [mk('a', 'habit', '2026-09-01T00:00:00Z'), mk('b', 'unseen')]
+    const out = placeSuggestions(ms, [{ moment: 'a' }, { moment: 'b' }, { moment: 'gone' }])
+    expect([...out.again.keys()]).toEqual(['a'])
+    expect(out.rows.map((r) => r.m.id)).toEqual(['b'])
+  })
+  test('rows are ordered by the real first hit, not by the clamped x', () => {
+    const mk = (id: string, first: string) =>
+      ({ id, title: id, status: 'habit', first, hits: 1, weeks: 1, days: [] }) as unknown as MomentView
+    // all three began before the plot start (a year before NOW), so their x positions are equal
+    const ms = [mk('c', '2024-03-01T00:00:00Z'), mk('a', '2024-05-01T00:00:00Z'), mk('b', '2024-04-01T00:00:00Z')]
+    const l = layoutRows(ms, '2024-01-01T00:00:00Z', NOW, 900, (t) => t.length * 7)
+    expect(l.rows.map((m) => m.id)).toEqual(['c', 'b', 'a'])
   })
   test('the axis never covers more than a year', () => {
     // a history of 70 days is drawn whole; one of 500 days from a year before now

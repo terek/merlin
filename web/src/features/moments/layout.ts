@@ -31,6 +31,31 @@ export function seenMoments(moments: MomentView[]): MomentView[] {
     .sort((a, b) => Date.parse(a.first ?? '') - Date.parse(b.first ?? '') || a.title.localeCompare(b.title))
 }
 
+/** A suggestion as the page shows it. */
+export interface SuggestionLike {
+  moment: string
+}
+
+/**
+ * One row per moment: a suggestion for a seen moment adds no row (the seen row carries it, as "try again"); only
+ * suggestions for unseen moments become rows after the seen ones.
+ */
+export function placeSuggestions<S extends SuggestionLike>(
+  moments: MomentView[],
+  suggestions: S[],
+): { again: Map<string, S>; rows: { s: S; m: MomentView }[] } {
+  const byId = new Map(moments.map((m) => [m.id, m]))
+  const again = new Map<string, S>()
+  const rows: { s: S; m: MomentView }[] = []
+  for (const s of suggestions) {
+    const m = byId.get(s.moment)
+    if (!m) continue
+    if (isSeen(m)) again.set(m.id, s)
+    else rows.push({ s, m })
+  }
+  return { again, rows }
+}
+
 /** The axis never covers more than a year: its start is the first session, or a year before `now` if that is later. */
 export const MAX_DAYS = 365
 

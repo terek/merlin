@@ -284,15 +284,15 @@ the whole history (a moment whose hits are all older keeps its row with an empty
 
 The rows are the whole page: a row is an accordion. A click (or Enter) opens it in place, one at a time; a click on
 the open row, Esc or opening another closes it. The open row is the selection, kept in the URL as `?m=<id>` with
-`replace`, and keeps the accent tint (`--chip-sel`, label accent and semibold, bigger accent squares); hover is the
+`replace`, and keeps the accent tint (`--chip-sel`; the label stays plain, the squares are bigger and accent); hover is the
 neutral surface. Up and down move the focus between rows. The details sit directly under the open row, full width,
 indented to the label text and quiet, and push the next rows down. Line one: depth word, "first <date>", "N times in
 W weeks", "last <relative>"; then `what`; then "How Merlin spots it: <detects>" in faint text; then "Open the
 first time →" and the latest example's link. The squares of the open row stay interactive (8 px minimum hit area, the
-nearest day winning): hovering one adds a line under the details, a click opens that day's `example` session at its
+nearest day winning): hovering one replaces the first line of the details with its date, times and note (same height), a click opens that day's `example` session at its
 turn, and the arrow keys left and right step through the squares and Enter opens the chosen one.
 
-After the seen moments come the suggestions (at most three), without a heading: a dotted empty circle, the label and
+One row per moment: a suggestion for a seen moment adds no row; its row gets a quiet "try again" tag after the label and, opened, the reason, try text and example link below its details. After the seen moments come the suggestions for unseen moments (at most three in all), without a heading: a dotted empty circle, the label and
 an empty track. Opened, one shows the reason (when there is one), the try text, "See it in your sessions →" when the
 symptom has an example, and "How Merlin spots it". The legend line under the rows names every mark, "to try" included.
 The remaining unseen moments are in the "N more to try" disclosure after the rows. The month lines are one overlay

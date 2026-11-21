@@ -130,6 +130,14 @@ func TestMockReport(t *testing.T) {
 	if !*updateMock {
 		return
 	}
+	// the web mock also shows a suggestion for a moment already seen ("try again"): an explored one
+	for _, m := range r.Moments {
+		if m.Status == StatusExplored && len(m.Examples) > 0 {
+			ex := m.Examples[0]
+			r.Suggestions[2] = Suggestion{Moment: m.ID, Reason: "You tried this once and it has not come back since.", Example: &ex}
+			break
+		}
+	}
 	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		t.Fatal(err)

@@ -5616,7 +5616,17 @@
       }
     },
     {
-      "moment": "workflow-run"
+      "moment": "plans-first",
+      "reason": "You tried this once and it has not come back since.",
+      "example": {
+        "at": "2026-10-20T10:40:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-084"
+        },
+        "turn": 1,
+        "note": "planned before editing"
+      }
     }
   ],
   "overYegge": true
