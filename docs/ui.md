@@ -273,9 +273,8 @@ Full width, in a frame like Cost: one table, the whole page. The key is in the s
 (`<PanelTab id="moments">`, `MomentsKey`): the depth marks with their rules, "to try" and the "try again" tag, what a
 square is, the strip, the one-year limit and the four categories. There is no legend line under the table.
 
-**Header.** The month axis over the track, with the thin intensity strip (about 22 px, the prompts per day smoothed
-over a week) above it; at its left the column headers: Moment, Category, Count (right-aligned) and, above them, the
-timeline's "start · end". Every header sorts (`SortButton`, the arrow and `aria-sort` look of `ui/layout.tsx`'s table
+**Header.** The month axis over the track, between the strip and the header row, with the thin intensity strip (about 22 px, the prompts per day smoothed
+over a week) above it; under it a header row of Moment, Category, Count (right-aligned), and over the track Start (at its left edge) and End (flush right). Every header sorts (`SortButton`, the arrow and `aria-sort` look of `ui/layout.tsx`'s table
 headers): Moment by title, Category (then start), Count (most first), the timeline by `first` (start) or `last` (end);
 the same header again flips the direction; the active one carries a small arrow. The sort is in the URL, `?sort=start`,
 `?sort=-count`, with `replace` and the parameter dropped at the default (start, ascending); the pure rules (`sortMoments`,

@@ -383,7 +383,7 @@ function Chart({
   )
   return (
     <div>
-      <div className="relative" style={{ height: areaBottom + AXIS_H }}>
+      <div className="relative" style={{ height: areaBottom + AXIS_H + AXIS_H }}>
         <svg width={l.width} height={areaBottom + AXIS_H} role="img" aria-label="Prompts per day" className="block">
           <title>Prompts per day</title>
           {areaPath && <path d={areaPath} style={{ fill: 'var(--faint)', opacity: 0.32 }} />}
@@ -409,15 +409,7 @@ function Chart({
             </g>
           ))}
         </svg>
-        <div className="absolute flex items-center gap-1.5 text-sec" style={{ left: ROW_GLYPH_W, top: 2 }}>
-          <span className="text-faint">Timeline</span>
-          <SortButton label="start" k="start" sort={sort} onSort={onSort} />
-          <span aria-hidden className="text-faint">
-            ·
-          </span>
-          <SortButton label="end" k="end" sort={sort} onSort={onSort} />
-        </div>
-        <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom, height: AXIS_H }}>
+        <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom + AXIS_H, height: AXIS_H }}>
           <span className="absolute" style={{ left: ROW_GLYPH_W }}>
             <SortButton label="Moment" k="moment" sort={sort} onSort={onSort} />
           </span>
@@ -426,6 +418,12 @@ function Chart({
           </span>
           <span className="absolute -translate-x-full" style={{ left: l.cols.countRight }}>
             <SortButton label="Count" k="count" sort={sort} onSort={onSort} />
+          </span>
+          <span className="absolute" style={{ left: l.left }}>
+            <SortButton label="Start" k="start" sort={sort} onSort={onSort} />
+          </span>
+          <span className="absolute -translate-x-full" style={{ left: l.right }}>
+            <SortButton label="End" k="end" sort={sort} onSort={onSort} arrowFirst />
           </span>
         </div>
       </div>
@@ -551,8 +549,21 @@ function Squares({
 }
 
 /** A column header that sorts: the active one shows an arrow; the same one again flips the direction. */
-function SortButton({ label, k, sort, onSort }: { label: string; k: SortKey; sort: Sort; onSort: (s: Sort) => void }) {
+function SortButton({
+  label,
+  k,
+  sort,
+  onSort,
+  arrowFirst,
+}: {
+  label: string
+  k: SortKey
+  sort: Sort
+  onSort: (s: Sort) => void
+  arrowFirst?: boolean
+}) {
   const active = sort.key === k
+  const arrow = active && (sort.dir === 'asc' ? <ArrowUp size={11} aria-hidden /> : <ArrowDown size={11} aria-hidden />)
   return (
     <button
       type="button"
@@ -560,8 +571,9 @@ function SortButton({ label, k, sort, onSort }: { label: string; k: SortKey; sor
       title={`Sort by ${label.toLowerCase()}`}
       className={cn('inline-flex cursor-pointer items-center gap-0.5 hover:text-fg', active ? 'text-fg' : 'text-muted')}
     >
+      {arrowFirst && arrow}
       {label}
-      {active && (sort.dir === 'asc' ? <ArrowUp size={11} aria-hidden /> : <ArrowDown size={11} aria-hidden />)}
+      {!arrowFirst && arrow}
     </button>
   )
 }
