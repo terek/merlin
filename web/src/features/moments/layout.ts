@@ -270,3 +270,80 @@ export function bucketTicks(m: MomentView, l: TimelineLayout, since: string): Bu
   })
   return ticks
 }
+
+/** The text size of a row label in the rows layout: the page's body size. */
+export const ROW_LABEL_SIZE = 13
+/** The height of a moment's row, and of a subheading row, in the rows layout. */
+export const ROWS_PITCH = 20
+export const ROWS_HEAD = 24
+/** The gutter of the rows layout never gets narrower or wider than this. */
+export const GUTTER_MIN = 160
+export const GUTTER_MAX = 280
+
+/** One line of the rows layout: a quiet subheading, or a moment (seen: has a track; next: a suggestion). */
+export type RowItem =
+  | { kind: 'head'; text: string }
+  | { kind: 'moment'; moment: MomentView; edge: boolean }
+  | { kind: 'next'; moment: MomentView }
+
+/**
+ * The rows of the rows layout: the moments already there in the first week under their subheading, then the rest
+ * by first hit (a staircase), then the suggested moments under "Next for you". Pure and ordered.
+ */
+export function timelineRows(moments: MomentView[], since: string, nextIds: string[]): RowItem[] {
+  const from = Date.parse(since)
+  const seen = seenMoments(moments)
+  const isEdge = (m: MomentView) => Date.parse(m.first ?? '') - from < EDGE_DAYS * DAY_MS
+  const out: RowItem[] = []
+  const edge = seen.filter(isEdge)
+  if (edge.length > 0) out.push({ kind: 'head', text: 'Already doing when your history starts' })
+  for (const m of edge) out.push({ kind: 'moment', moment: m, edge: true })
+  for (const m of seen.filter((x) => !isEdge(x))) out.push({ kind: 'moment', moment: m, edge: false })
+  const nexts = nextIds.map((id) => moments.find((m) => m.id === id)).filter((m): m is MomentView => m !== undefined)
+  if (nexts.length > 0) out.push({ kind: 'head', text: 'Next for you' })
+  for (const m of nexts) out.push({ kind: 'next', moment: m })
+  return out
+}
+
+/** The y of each row (its top) and the total height, for a list of rows. */
+export function rowsY(rows: RowItem[]): { tops: number[]; height: number } {
+  const tops: number[] = []
+  let y = 0
+  for (const r of rows) {
+    tops.push(y)
+    y += r.kind === 'head' ? ROWS_HEAD : ROWS_PITCH
+  }
+  return { tops, height: y }
+}
+
+/** The room a row label has to the right of its glyph. */
+export const ROW_GLYPH_W = PAD_X + 2 * MARKER_R + LABEL_GAP
+
+/** `text` cut with an ellipsis so that it is at most `max` wide by `measure`. */
+export function fitText(text: string, max: number, measure: (t: string) => number): string {
+  if (measure(text) <= max) return text
+  let n = text.length
+  while (n > 1 && measure(`${text.slice(0, n).trimEnd()}…`) > max) n--
+  return `${text.slice(0, n).trimEnd()}…`
+}
+
+/**
+ * The timeline of the rows layout: the same time axis as the floating one, but the left gutter holds the row
+ * labels, sized to the longest of them, and nothing floats.
+ */
+export function layoutRows(
+  rows: RowItem[],
+  since: string,
+  now: string,
+  width: number,
+  future: boolean,
+  measure: (text: string, weight?: number, size?: number) => number,
+): TimelineLayout & { rows: RowItem[] } {
+  const from = Date.parse(since)
+  const to = Math.max(Date.parse(now), from + DAY_MS)
+  let widest = 0
+  for (const r of rows) if (r.kind !== 'head') widest = Math.max(widest, measure(r.moment.title, 400, ROW_LABEL_SIZE))
+  const left = Math.min(GUTTER_MAX, Math.max(GUTTER_MIN, Math.ceil(ROW_GLYPH_W + widest + 16)))
+  const right = future ? width - FUTURE_W : width
+  return { from, to, width, left, right, markers: [], lanes: 1, edge: [], rows }
+}

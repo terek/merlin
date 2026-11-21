@@ -5,7 +5,7 @@ import { LABEL_SIZE, labelWidth } from './layout'
  * Real text widths from a canvas, with the page's font, cached per string and weight. Re-made once the fonts have
  * loaded, so the widths follow the font that is really drawn. Without a canvas it falls back to the estimate.
  */
-export function useLabelMeasure(): (text: string, weight?: number) => number {
+export function useLabelMeasure(): (text: string, weight?: number, size?: number) => number {
   const [version, setVersion] = useState(0)
   useEffect(() => {
     let live = true
@@ -24,12 +24,12 @@ export function useLabelMeasure(): (text: string, weight?: number) => number {
     }
     const family = typeof document === 'undefined' ? 'sans-serif' : getComputedStyle(document.body).fontFamily
     const cache = new Map<string, number>()
-    return (text: string, weight = 400) => {
+    return (text: string, weight = 400, size = LABEL_SIZE) => {
       if (!ctx) return labelWidth(text)
-      const key = `${weight}|${text}`
+      const key = `${weight}|${size}|${text}`
       let w = cache.get(key)
       if (w === undefined) {
-        ctx.font = `${weight} ${LABEL_SIZE}px ${family}`
+        ctx.font = `${weight} ${size}px ${family}`
         w = Math.ceil(ctx.measureText(text).width)
         cache.set(key, w)
       }

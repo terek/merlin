@@ -19,6 +19,7 @@ import {
   daysPerBucket,
   LABEL_GAP,
   LABEL_SIZE,
+  layoutRows,
   layoutTimeline,
   MARKER_GAP,
   MARKER_R,
@@ -27,8 +28,10 @@ import {
   PAD_X,
   seenMoments,
   type TimelineLayout,
+  timelineRows,
 } from './layout'
 import { useLabelMeasure } from './measure'
+import { RowsChart } from './TimelineRows'
 
 const AREA_H = 72
 const AXIS_H = 20
@@ -86,6 +89,8 @@ interface TimelineProps {
   onNext: (id: string | null) => void
   /** Days per strip bucket, as the measured width makes it. */
   onK: (k: number) => void
+  /** The layout: floating labels (default) or one row per moment (`?tl=rows`). */
+  mode?: 'floating' | 'rows'
 }
 
 /** "13 Oct" for a one-day bucket, "13–15 Oct" for a longer one. */
@@ -104,23 +109,56 @@ export function tickPath(t: Pick<Bucket, 'example'>): string | undefined {
   return h ? sessionPath(h.session, h.turn !== undefined ? `t${h.turn}` : undefined) : undefined
 }
 
-export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, onNext, onK }: TimelineProps) {
+export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, onNext, onK, mode }: TimelineProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const since = report.since
   const measure = useLabelMeasure()
-  const layout = since
-    ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0, measure)
-    : null
+  const rows = mode === 'rows'
+  const floating =
+    since && !rows
+      ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0, measure)
+      : null
+  const rowed =
+    since && rows
+      ? layoutRows(
+          timelineRows(
+            report.moments,
+            since,
+            report.suggestions.slice(0, 3).map((s) => s.moment),
+          ),
+          since,
+          report.now,
+          width,
+          report.suggestions.length > 0,
+          measure,
+        )
+      : null
+  const layout = floating ?? rowed
   const k = layout ? daysPerBucket(layout) : 1
   useEffect(() => onK(k), [k, onK])
   return (
     <div ref={wrap} className="w-full">
-      {since && layout && (
+      {since && rowed && (
+        <RowsChart
+          report={report}
+          since={since}
+          layout={rowed}
+          measure={measure}
+          hover={hover}
+          pin={pin}
+          onHover={onHover}
+          onPin={onPin}
+          tickDay={tickDay}
+          onTick={onTick}
+          onNext={onNext}
+        />
+      )}
+      {since && floating && (
         <Chart
           report={report}
           since={since}
-          layout={layout}
+          layout={floating}
           measure={measure}
           hover={hover}
           pin={pin}
@@ -151,7 +189,7 @@ function Chart({
   tickDay,
   onTick,
   onNext,
-}: Omit<TimelineProps, 'onK'> & {
+}: Omit<TimelineProps, 'onK' | 'mode'> & {
   since: string
   layout: TimelineLayout
   measure: (text: string, weight?: number) => number

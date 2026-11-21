@@ -288,6 +288,8 @@ readout, a click opens that day's `example` session at its turn, and while pinne
 and Enter opens the chosen one. The readout shows `what` on hover and, pinned, "How Merlin spots it" (`detects`); a
 row of Your moments has its `what` and a "how" disclosure with `detects`; the unseen ones show `detects` too. The personas, their reactions and the card are not shown.
 
+`?tl=rows` (replace, like `?m=`) shows the timeline as rows: the area and month axis as before, then one row per moment, a label in a left gutter, a marker at the first hit and the activity squares after it. The moments already there in the first week come first under a quiet subheading, the rest follow by first hit, and "Next for you" closes the list with dashed rings in the zone after now. Selection and hover work as in the default layout; up/down move between rows, Enter selects, Esc clears. Order and grouping are `timelineRows` in `layout.ts`.
+
 ## 8. Sessions page (`/sessions`)
 
 The list of sessions, and the answer to "where was that session". It lists **trees**, as the Session

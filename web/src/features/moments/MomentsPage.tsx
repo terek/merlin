@@ -142,6 +142,7 @@ function Report({ report }: { report: MomentsReport }) {
           onTick={setHoverTick}
           onNext={showNext}
           onK={setK}
+          mode={sp.get('tl') === 'rows' ? 'rows' : 'floating'}
         />
         <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} onClear={() => setPin(null)} />
       </FrameSection>
