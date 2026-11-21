@@ -17,13 +17,12 @@ import {
   type Bucket,
   bucketTicks,
   clickSort,
-  DEPTH_W,
+  DEPTH_RIGHT,
   daysPerBucket,
   depthOf,
   fitText,
   layoutRows,
   monthTicks,
-  PAD_X,
   placeSuggestions,
   ROW_GLYPH_W,
   ROW_LABEL_SIZE,
@@ -362,7 +361,7 @@ function Chart({
     )
   }
   const mark = (kind: GlyphKind) => (
-    <svg x={PAD_X + DEPTH_W / 2 - 5} y={ROWS_PITCH / 2 - 5} width={10} height={10} viewBox="0 0 12 12">
+    <svg x={DEPTH_RIGHT - ARROW_SLOT / 2 - 5} y={ROWS_PITCH / 2 - 5} width={10} height={10} viewBox="0 0 12 12">
       <title>{kind === 'next' ? 'to try' : kind}</title>
       <DepthShapes depth={kind} />
     </svg>
@@ -405,8 +404,8 @@ function Chart({
           })}
         </svg>
         <div className="absolute flex text-sec" style={{ left: 0, top: areaBottom - 20, height: 20 }}>
-          <span className="absolute -translate-x-1/2" style={{ left: PAD_X + DEPTH_W / 2 }}>
-            <SortButton label="Depth" k="depth" sort={sort} onSort={onSort} balanced />
+          <span className="absolute -translate-x-full" style={{ left: DEPTH_RIGHT }}>
+            <SortButton label="Depth" k="depth" sort={sort} onSort={onSort} />
           </span>
           <span className="absolute" style={{ left: ROW_GLYPH_W }}>
             <SortButton label="Moment" k="moment" sort={sort} onSort={onSort} />
@@ -554,7 +553,6 @@ function SortButton({
   onSort,
   arrowFirst,
   halo,
-  balanced,
 }: {
   label: string
   k: SortKey
@@ -564,8 +562,6 @@ function SortButton({
   arrowFirst?: boolean
   /** Drawn over the strip: a pill in the page colour keeps it readable. */
   halo?: boolean
-  /** The label is centred over a mark: an equal empty slot on the other side. */
-  balanced?: boolean
 }) {
   const active = sort.key === k
   // the slot is always there, and invisible when the column is not the sort
@@ -586,7 +582,6 @@ function SortButton({
         active ? 'text-fg' : 'text-faint',
       )}
     >
-      {balanced && <span style={{ width: ARROW_SLOT }} aria-hidden />}
       {arrowFirst && arrow}
       {label}
       {!arrowFirst && arrow}

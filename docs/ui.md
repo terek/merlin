@@ -278,7 +278,7 @@ category texts; those are in the row's panel. There is no legend line under the 
 **Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed
 over a week) is the track column's background, with the month ticks and their small faint labels in normal case ("Sep 2026") along its bottom (a
 label is hidden when it would collide with Start or End, by the measured widths). On the same baseline, at the band's
-bottom: Depth (a narrow first column, `DEPTH_W` 48 px, the header centred over the mark), Moment, Category, Count
+bottom: Depth (a narrow first column, `DEPTH_W` 48 px, right-aligned, with `DEPTH_GAP` 20 px clear before Moment; the mark sits under the arrow slot), Moment, Category, Count
 (right-aligned) and, over the strip at the track's two ends, Start (left) and End (right), each on a pill in the page
 colour so that it reads over the grey. Every header sorts (`SortButton`): Depth by rank, deepest first (routine, quiet
 lately, new, tried; first click deepest first, ties by start), Moment by title, Category (then start), Count (most first),
@@ -289,7 +289,7 @@ the URL, `?sort=start`, `?sort=-count`, `?sort=depth`, with `replace` and the pa
 ascending); the pure rules (`sortMoments`, `parseSort`, `formatSort`, `clickSort`) are in layout.ts. Order is always by
 the real times, never by the clamped x.
 
-**Rows.** One 20 px row per moment: the depth mark (centred in the Depth column), the title (13 px, with a quiet "try again" tag when the moment is
+**Rows.** One 20 px row per moment: the depth mark (right-aligned in the Depth column, under the arrow slot), the title (13 px, with a quiet "try again" tag when the moment is
 also suggested), the category (a quiet word), the count (hits, tabular numbers), then the track: a 4 px square per active
 period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. The columns are measured from the font
 (title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows

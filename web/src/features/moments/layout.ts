@@ -252,7 +252,10 @@ export const TAG_W = 62
 /** Where a row's label starts, from the left edge. */
 /** The width of the Depth column, which holds the mark centred under its header. */
 export const DEPTH_W = 48
-export const ROW_GLYPH_W = PAD_X + DEPTH_W + LABEL_GAP
+/** The Depth column's right edge, and the clear space between it and the title. */
+export const DEPTH_RIGHT = PAD_X + DEPTH_W
+export const DEPTH_GAP = 20
+export const ROW_GLYPH_W = DEPTH_RIGHT + DEPTH_GAP
 
 /** `text` cut with an ellipsis so that it is at most `max` wide by `measure`. */
 export function fitText(text: string, max: number, measure: (t: string) => number): string {
