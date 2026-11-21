@@ -19,6 +19,7 @@ import {
   daysPerBucket,
   LABEL_GAP,
   LABEL_SIZE,
+  labelWidth,
   layoutTimeline,
   MARKER_GAP,
   MARKER_R,
@@ -36,10 +37,10 @@ const R = MARKER_R
 const HALO = { paintOrder: 'stroke', stroke: 'var(--bg)', strokeWidth: 3, strokeLinejoin: 'round' } as const
 
 /** A marker's stem: dotted and faint; solid and in the accent when it is the active one; dimmed with the rest. */
-function stem(state: 'sel' | 'hov' | 'none', dim: boolean) {
+function stem(state: 'sel' | 'hov' | 'none') {
   if (state === 'sel') return { strokeWidth: 1.5, style: { stroke: 'var(--accent)', opacity: 0.75 } }
   if (state === 'hov') return { strokeWidth: 1.5, style: { stroke: 'var(--muted)', opacity: 0.8 } }
-  return { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: dim ? 0.4 : 0.6 } }
+  return { strokeWidth: 1, strokeDasharray: '1.5 3', style: { stroke: 'var(--faint)', opacity: 0.6 } }
 }
 const MARKER_TOP = 10
 
@@ -133,7 +134,6 @@ export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, 
 const EDGE_HEAD_H = 22
 const ROW_H = 4
 const ROW_PITCH = 6
-const DIM = 0.6
 
 function Chart({
   report,
@@ -171,8 +171,7 @@ function Chart({
     area.length > 0
       ? `M${area[0].x},${areaBottom} ${area.map((p) => `L${p.x.toFixed(1)},${(areaBottom - p.v * (AREA_H - 6)).toFixed(1)}`).join(' ')} L${area[area.length - 1].x},${areaBottom} Z`
       : ''
-  // a selection holds its accent; a hovered moment is raised a step; only a selection dims the rest
-  const dim = pin !== null
+  // a selection stands out by colour and a tinted background; a hovered moment is raised a step; nothing fades
   const st = (id: string): 'sel' | 'hov' | 'none' => (pin === id ? 'sel' : hover === id ? 'hov' : 'none')
   const key = (id: string) => (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -187,7 +186,6 @@ function Chart({
     'aria-pressed': pin === m.id,
     'aria-label': `${m.title}, ${m.status}, first ${dateOf(m.first, now)}`,
     className: 'cursor-pointer outline-none [&:focus-visible>circle:first-of-type]:stroke-accent',
-    opacity: dim && st(m.id) === 'none' ? DIM : 1,
     onMouseEnter: () => onHover(m.id),
     onMouseLeave: () => onHover(null),
     onFocus: () => onHover(m.id),
@@ -204,18 +202,34 @@ function Chart({
       style={{ fill: m.status === 'habit' ? 'var(--accent)' : 'var(--surface)', stroke: 'var(--accent)' }}
     />
   )
-  const label = (m: MomentView, x: number, y: number, anchor: 'start' | 'end' = 'start') => (
-    <text
-      x={x}
-      y={y + 4}
-      textAnchor={anchor}
-      fontSize={LABEL_SIZE}
-      fontWeight={st(m.id) === 'sel' ? 600 : 400}
-      style={{ fill: st(m.id) !== 'none' ? 'var(--text)' : 'var(--muted)', ...HALO }}
-    >
-      {m.title}
-    </text>
-  )
+  const label = (m: MomentView, x: number, y: number, anchor: 'start' | 'end' = 'start') => {
+    const state = st(m.id)
+    const w = Math.round(labelWidth(m.title) * 0.93)
+    return (
+      <>
+        {state !== 'none' && (
+          <rect
+            x={(anchor === 'end' ? x - w : x) - 4}
+            y={y - 8}
+            width={w + 8}
+            height={16}
+            rx={4}
+            style={{ fill: state === 'sel' ? 'var(--chip-sel)' : 'var(--surface-2)' }}
+          />
+        )}
+        <text
+          x={x}
+          y={y + 4}
+          textAnchor={anchor}
+          fontSize={LABEL_SIZE}
+          fontWeight={state === 'sel' ? 600 : 400}
+          style={{ fill: state !== 'none' ? 'var(--text)' : 'var(--muted)', ...(state === 'none' ? HALO : {}) }}
+        >
+          {m.title}
+        </text>
+      </>
+    )
+  }
   const rows = seen.map((m, i) => ({ m, y: stripTop + i * ROW_PITCH }))
   const ordered = [
     ...rows.filter((r) => st(r.m.id) === 'none'),
@@ -249,7 +263,7 @@ function Chart({
 
       {/* stems: from each marker down to the axis, behind everything; the active one is solid */}
       {l.markers.map(({ moment: m, x, lane }) => (
-        <line key={m.id} x1={x} x2={x} y1={laneY(lane) + R + 1} y2={areaBottom} {...stem(st(m.id), dim)} />
+        <line key={m.id} x1={x} x2={x} y1={laneY(lane) + R + 1} y2={areaBottom} {...stem(st(m.id))} />
       ))}
 
       {monthTicks(l).map((t) => (
@@ -310,7 +324,13 @@ function Chart({
             onClick={() => onPin(m.id)}
             className="cursor-pointer"
           >
-            <rect x={l.left} y={y - 1} width={Math.max(1, futureX - l.left)} height={ROW_PITCH} fill="transparent" />
+            <rect
+              x={l.left}
+              y={y - 1}
+              width={Math.max(1, futureX - l.left)}
+              height={ROW_PITCH}
+              style={{ fill: on ? 'var(--chip-sel)' : 'transparent' }}
+            />
             {ticks.length > 0 && (
               <line
                 x1={Math.min(...ticks.map((t) => t.x))}
@@ -323,7 +343,7 @@ function Chart({
                 }}
               />
             )}
-            <g opacity={dim && !on && !raised ? DIM : 1}>
+            <g>
               {ticks.map((t) => {
                 const sel = on && t.day === tickDay
                 return (
@@ -393,7 +413,6 @@ function Chart({
                 tabIndex={0}
                 aria-label={`Next for you: ${m.title}`}
                 className="cursor-pointer outline-none"
-                opacity={dim && !on ? DIM : 1}
                 onMouseEnter={() => onHover(id)}
                 onMouseLeave={() => onHover(null)}
                 onFocus={() => onHover(id)}

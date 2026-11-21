@@ -233,7 +233,11 @@ function MomentRow({
   const [how, setHow] = useState(false)
   return (
     <li
-      className={cn('rounded-card px-2 py-1 hover:bg-surface-2', active && 'bg-surface-2')}
+      className={cn(
+        'rounded-card px-2 py-1 hover:bg-surface-2',
+        active && 'bg-surface-2',
+        pinned && 'bg-[var(--chip-sel)]',
+      )}
       onMouseEnter={() => onHover(m.id)}
       onMouseLeave={() => onHover(null)}
     >
