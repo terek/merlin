@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import type { MomentView } from '../../api/types'
+import type { MomentView, SessionKey } from '../../api/types'
+import { dayStart } from '../../lib/time'
 import {
   activityArea,
-  dayTicks,
+  bucketDays,
+  bucketTicks,
+  daysPerBucket,
   EDGE_COL,
   EDGE_DAYS,
   FUTURE_W,
@@ -106,31 +109,60 @@ describe('month labels and ticks', () => {
     const l = layoutTimeline([], SINCE, NOW, 1000)
     expect(monthTicks(l).map((t) => t.label)).toEqual(['Sep 2026', 'Oct', 'Nov'])
   })
-  test('day ticks scale to the busiest day', () => {
-    const l = layoutTimeline([], SINCE, NOW, 1000)
-    const m = {
-      ...moment('a', 0),
-      days: [
-        { day: '2026-09-01', hits: 2 },
-        { day: '2026-09-02', hits: 4 },
-      ],
-    }
-    expect(dayTicks(m, l).map((t) => t.h)).toEqual([0.5, 1])
-  })
   test('seenMoments is ordered by first hit', () => {
     expect(seenMoments([moment('b', 5), moment('a', 1)]).map((m) => m.id)).toEqual(['a', 'b'])
   })
 })
 
-describe('dayTicks hit areas', () => {
-  const l = layoutTimeline([], SINCE, NOW, 200)
-  const m = (days: string[]) => ({ ...moment('a', 20), days: days.map((day) => ({ day, hits: 2 })) })
-  test('a lone tick is at least 8 px wide; close days share the gap, the nearest winning', () => {
-    const lone = dayTicks(m(['2026-09-10']), l)[0]
+describe('event strip buckets', () => {
+  const days = (xs: [string, number][]) =>
+    xs.map(([day, hits]) => ({ day, hits, example: { at: day, session: day as unknown as SessionKey, turn: hits } }))
+  test('days per bucket follows the width: a square is at least 4 px wide', () => {
+    const k = (w: number) => daysPerBucket(layoutTimeline([], SINCE, NOW, w))
+    expect(k(1200)).toBe(1)
+    expect(k(400)).toBe(1)
+    expect(k(200)).toBe(2)
+    expect(k(100)).toBe(4)
+  })
+  test('buckets are aligned to the first day, sum their hits and keep the busiest day example (the latest on a tie)', () => {
+    const d = days([
+      ['2026-08-24', 1],
+      ['2026-08-25', 3],
+      ['2026-08-26', 3],
+      ['2026-08-28', 2],
+      ['2026-09-10', 5],
+    ])
+    const b = bucketDays(d, SINCE, 3)
+    expect(b.map((x) => [x.day, x.end, x.hits])).toEqual([
+      ['2026-08-24', '2026-08-26', 7],
+      ['2026-08-27', '2026-08-29', 2],
+      ['2026-09-08', '2026-09-10', 5],
+    ])
+    expect(b[0].example?.at).toBe('2026-08-26')
+    expect(b[0].h).toBeCloseTo(1)
+    expect(b[1].h).toBeCloseTo(2 / 7)
+  })
+  test('with k = 1 every active day is a bucket, centred in its day when the day is wider than a square', () => {
+    const l = layoutTimeline([], SINCE, NOW, 1000)
+    const m = {
+      ...moment('a', 20),
+      days: days([
+        ['2026-09-10', 2],
+        ['2026-09-11', 2],
+      ]),
+    }
+    const [a, c] = bucketTicks(m, l, SINCE)
+    expect(a.day).toBe('2026-09-10')
+    expect(a.x).toBeGreaterThan(xOf(l, dayStart('2026-09-10').getTime()))
+    expect(c.x - a.x).toBeGreaterThan(4)
+  })
+  test('a lone bucket is at least 8 px wide; neighbours share the gap, the nearest winning', () => {
+    const l = layoutTimeline([], SINCE, NOW, 200)
+    const m = (ds: string[]) => ({ ...moment('a', 20), days: days(ds.map((x) => [x, 2] as [string, number])) })
+    const lone = bucketTicks(m(['2026-09-10']), l, SINCE)[0]
     expect(lone.x1 - lone.x0).toBeGreaterThanOrEqual(8)
-    const [a, b] = dayTicks(m(['2026-09-10', '2026-09-11']), l)
+    const [a, b] = bucketTicks(m(['2026-09-10', '2026-09-11']), l, SINCE)
     expect(a.x1).toBeLessThanOrEqual(b.x0 + 0.001)
-    expect(a.x1).toBeCloseTo((a.x + b.x) / 2, 5)
   })
 
   test('the plot starts right of the edge column and stops before the future zone', () => {

@@ -1,7 +1,7 @@
 // The Moments timeline's arithmetic (docs/moments.md, "The page"): where a marker goes, which lane it
 // takes, what the edge stack holds, the soft activity area, the month labels. Pure, so it is tested.
 
-import type { MomentActivityDay, MomentHit, MomentView } from '../../api/types'
+import type { MomentActivityDay, MomentDay, MomentHit, MomentView } from '../../api/types'
 import { dayStart, localDay } from '../../lib/time'
 
 /** Moments whose first hit is this close to the start of the history are not placed one by one. */
@@ -186,40 +186,86 @@ export function monthTicks(l: TimelineLayout): MonthTick[] {
   return out
 }
 
-export interface DayTick {
+/** A stretch of k days of a moment, drawn as one square on the event strip. */
+export interface Bucket {
+  /** First day of the bucket, YYYY-MM-DD: its key. */
   day: string
-  x: number
-  /** 0..1 of the moment's busiest day. */
-  h: number
+  /** Last day of the bucket. */
+  end: string
   hits: number
+  /** 0..1 of the moment's busiest bucket. */
+  h: number
+  /** The example of the bucket's busiest day (the latest on a tie). */
   example?: MomentHit
-  /** The tick's hit area: where the pointer picks this day (at least 8 px wide, never over a neighbour's). */
+}
+
+export interface BucketTick extends Bucket {
+  /** Left edge of the square, in chart pixels. */
+  x: number
+  /** The bucket's hit area: at least 8 px wide, never over a neighbour's. */
   x0: number
   x1: number
 }
 
-/** The least width of a tick's hit area. */
+/** The side of a square on the event strip, and the height of a row. */
+export const STRIP_PX = 4
+
+/** The least width of a bucket's hit area. */
 export const TICK_HIT = 8
 
-/** Hits per day of a moment as ticks: position, height (0..1 of its busiest day) and hit area. */
-export function dayTicks(m: MomentView, l: TimelineLayout): DayTick[] {
-  const days = m.days ?? []
-  const max = Math.max(...days.map((d) => d.hits), 1)
-  const ticks = days.map((d) => ({
-    day: d.day,
-    x: xOf(l, dayStart(d.day).getTime() + DAY_MS / 2),
-    h: d.hits / max,
-    hits: d.hits,
-    example: d.example,
+/** Days per bucket: enough that a bucket is at least one square wide. */
+export function daysPerBucket(l: Pick<TimelineLayout, 'from' | 'to' | 'left' | 'right'>): number {
+  const days = Math.max(1, (l.to - l.from) / DAY_MS)
+  const dayWidth = Math.max(1, l.right - l.left - 2 * PAD_X) / days
+  return Math.max(1, Math.ceil(STRIP_PX / dayWidth))
+}
+
+/** The days of a moment in buckets of k days, aligned to the first day of the range. Only active buckets are returned. */
+export function bucketDays(days: MomentDay[], since: string, k: number): Bucket[] {
+  const origin = dayStart(localDay(new Date(since)))
+  const by = new Map<number, { hits: number; best: MomentDay }>()
+  for (const d of days) {
+    const idx = Math.round((dayStart(d.day).getTime() - origin.getTime()) / DAY_MS)
+    const b = Math.floor(idx / Math.max(1, k))
+    const cur = by.get(b)
+    if (!cur) by.set(b, { hits: d.hits, best: d })
+    else {
+      cur.hits += d.hits
+      if (d.hits >= cur.best.hits) cur.best = d
+    }
+  }
+  const out = [...by.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([b, v]) => ({
+      day: localDay(new Date(origin.getFullYear(), origin.getMonth(), origin.getDate() + b * k)),
+      end: localDay(new Date(origin.getFullYear(), origin.getMonth(), origin.getDate() + b * k + k - 1)),
+      hits: v.hits,
+      h: 0,
+      example: v.best.example,
+    }))
+  const max = Math.max(...out.map((o) => o.hits), 1)
+  for (const o of out) o.h = o.hits / max
+  return out
+}
+
+/** A moment's buckets placed on the event strip: one square each, at the bucket's start. */
+export function bucketTicks(m: MomentView, l: TimelineLayout, since: string): BucketTick[] {
+  const k = daysPerBucket(l)
+  const dayWidth = Math.max(1, l.right - l.left - 2 * PAD_X) / Math.max(1, (l.to - l.from) / DAY_MS)
+  const ticks: BucketTick[] = bucketDays(m.days ?? [], since, k).map((b) => ({
+    ...b,
+    // a day wider than the square: the square sits in the middle of it
+    x: xOf(l, dayStart(b.day).getTime()) + (k === 1 && dayWidth > STRIP_PX ? (dayWidth - STRIP_PX) / 2 : 0),
     x0: 0,
     x1: 0,
   }))
-  // the nearest day wins: an area reaches half way to a neighbour at most
+  // the nearest bucket wins: an area reaches half way to a neighbour at most
   ticks.forEach((t, i) => {
+    const c = t.x + STRIP_PX / 2
     const prev = ticks[i - 1]
     const next = ticks[i + 1]
-    t.x0 = prev ? Math.max(t.x - TICK_HIT / 2, (prev.x + t.x) / 2) : t.x - TICK_HIT / 2
-    t.x1 = next ? Math.min(t.x + TICK_HIT / 2, (next.x + t.x) / 2) : t.x + TICK_HIT / 2
+    t.x0 = prev ? Math.max(c - TICK_HIT / 2, (prev.x + STRIP_PX / 2 + c) / 2) : c - TICK_HIT / 2
+    t.x1 = next ? Math.min(c + TICK_HIT / 2, (next.x + STRIP_PX / 2 + c) / 2) : c + TICK_HIT / 2
   })
   return ticks
 }

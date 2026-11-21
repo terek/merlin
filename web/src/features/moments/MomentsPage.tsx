@@ -13,7 +13,7 @@ import { sessionPath } from '../../lib/paths'
 import { markSeen } from '../../shell/momentsBadge'
 import { useShortcut } from '../../shell/useShortcut'
 import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, RelTime, SegmentedControl, Skeleton } from '../../ui'
-import { seenMoments } from './layout'
+import { bucketDays, seenMoments } from './layout'
 import { dateOf, Glyph, Readout, Timeline, tickPath, timesInWeeks } from './Timeline'
 
 export function MomentsPage() {
@@ -81,7 +81,8 @@ function Report({ report }: { report: MomentsReport }) {
     setScrollTo(id ? `next-${id}` : 'moments-lower')
   }
   const byId = useMemo(() => new Map(report.moments.map((m) => [m.id, m])), [report.moments])
-  const pinnedDays = pin ? (byId.get(pin)?.days ?? []) : []
+  const [k, setK] = useState(1)
+  const pinnedDays = pin && report.since ? bucketDays(byId.get(pin)?.days ?? [], report.since, k) : []
   useShortcut('Escape', () => setPin(null), { enabled: pin !== null })
   // while a moment is pinned: the arrows step through its days and Enter opens the chosen one
   useShortcut(
@@ -128,8 +129,9 @@ function Report({ report }: { report: MomentsReport }) {
           tickDay={tickDay}
           onTick={setHoverTick}
           onNext={showNext}
+          onK={setK}
         />
-        <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} />
+        <Readout report={report} hover={hover} pin={pin} tickDay={tickDay} k={k} />
       </FrameSection>
 
       <div id="moments-lower">

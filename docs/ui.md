@@ -273,7 +273,7 @@ Full width, in frames like Cost. **Your history**: an SVG timeline from `since` 
 (prompts per day), one marker per seen moment at its first time (filled: habit; ring: explored; greedy lanes, 14 px
 apart) and month labels. Moments first seen within 7 days of `since` are listed in a fixed 190 px column left of the plot, headed "Already doing
 when your history starts", and behave like markers. Under the axis an event strip has one 3 px row per seen moment
-(oldest first, a staircase), with a tick per day of its `days`, opacity by hits. Hovering a marker, a column entry, a
+(oldest first, a staircase), with a 4 px square per active period, opacity by hits: the days are put in buckets of k = max(1, ceil(4 / px per day)) days aligned to the first day (summed hits, the example of the busiest day), so a short history shows one square per day and a long one nearly adjacent pixels. Hovering a marker, a column entry, a
 strip row or a list row lights that moment (row accent, marker, label and stem) and dims the rest to 0.45;
 a click pins (Enter on a focused marker; click again or Esc unpins; hover shows over the pin). The readout below has a
 fixed height: idle it summarises the history, hovered it gives title, first date, times in weeks and the first hit's note,

@@ -3,7 +3,7 @@
 // explored). Moments already there in the first week sit in one stack at the left edge. Hovering a moment shows each
 // later occurrence as a tick under the area, and dims the other markers; a click pins it. Nothing else moves.
 
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { MomentHit, MomentStatus, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
@@ -13,8 +13,10 @@ import { dayStart, parseTime, shortDate } from '../../lib/time'
 import { useWidth } from '../spend/useWidth'
 import {
   activityArea,
-  type DayTick,
-  dayTicks,
+  type Bucket,
+  bucketDays,
+  bucketTicks,
+  daysPerBucket,
   LABEL_GAP,
   LABEL_SIZE,
   layoutTimeline,
@@ -25,7 +27,6 @@ import {
   PAD_X,
   seenMoments,
   type TimelineLayout,
-  xOf,
 } from './layout'
 
 const AREA_H = 72
@@ -82,20 +83,34 @@ interface TimelineProps {
   onTick: (day: string | null) => void
   /** A suggestion (or the header, null) was clicked: show what is next. */
   onNext: (id: string | null) => void
+  /** Days per strip bucket, as the measured width makes it. */
+  onK: (k: number) => void
 }
 
-/** A day of a moment as a link into its example session. */
-export function tickPath(t: Pick<DayTick, 'example'>): string | undefined {
+/** "13 Oct" for a one-day bucket, "13–15 Oct" for a longer one. */
+export function rangeOf(b: Pick<Bucket, 'day' | 'end'>, now: Date): string {
+  const a = shortDate(dayStart(b.day), now)
+  if (b.end === b.day) return a
+  const z = shortDate(dayStart(b.end), now)
+  const [da, ma] = a.split(' ')
+  const [dz, mz] = z.split(' ')
+  return ma === mz ? `${da}–${dz} ${mz}` : `${a} – ${z}`
+}
+
+/** A bucket of a moment as a link into its example session. */
+export function tickPath(t: Pick<Bucket, 'example'>): string | undefined {
   const h = t.example
   return h ? sessionPath(h.session, h.turn !== undefined ? `t${h.turn}` : undefined) : undefined
 }
 
-export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, onNext }: TimelineProps) {
+export function Timeline({ report, hover, pin, onHover, onPin, tickDay, onTick, onNext, onK }: TimelineProps) {
   const wrap = useRef<HTMLDivElement>(null)
   const width = useWidth(wrap)
   const since = report.since
   const layout = since ? layoutTimeline(report.moments, since, report.now, width, report.suggestions.length > 0) : null
   const active = hover ?? pin
+  const k = layout ? daysPerBucket(layout) : 1
+  useEffect(() => onK(k), [k, onK])
   return (
     <div ref={wrap} className="w-full">
       {since && layout && (
@@ -132,7 +147,7 @@ function Chart({
   tickDay,
   onTick,
   onNext,
-}: Omit<TimelineProps, 'hover'> & {
+}: Omit<TimelineProps, 'hover' | 'onK'> & {
   since: string
   layout: TimelineLayout
   active: string | null
@@ -280,13 +295,7 @@ function Chart({
       {/* the event strip: a thin row per moment, a tick for every day it happened, oldest first */}
       {ordered.map(({ m, y }) => {
         const on = active === m.id
-        const ticks = dayTicks(m, l)
-        // a tick spans its day, so consecutive days merge into one bar
-        const spanOf = (day: string) => {
-          const x0 = xOf(l, dayStart(day).getTime())
-          const x1 = xOf(l, dayStart(day).getTime() + 86_400_000) - 1
-          return { x: x0, w: Math.max(2, x1 - x0) }
-        }
+        const ticks = bucketTicks(m, l, since)
         const href = (t: { example?: MomentHit }) => tickPath(t)
         return (
           <g
@@ -299,7 +308,7 @@ function Chart({
             <rect x={l.left} y={y - 1} width={Math.max(1, futureX - l.left)} height={ROW_PITCH} fill="transparent" />
             {ticks.length > 0 && (
               <line
-                x1={Math.min(...ticks.map((t) => spanOf(t.day).x))}
+                x1={Math.min(...ticks.map((t) => t.x))}
                 x2={futureX}
                 y1={y + ROW_H / 2}
                 y2={y + ROW_H / 2}
@@ -308,14 +317,13 @@ function Chart({
             )}
             <g opacity={dim && !on ? 0.35 : 1}>
               {ticks.map((t) => {
-                const sp = spanOf(t.day)
                 const sel = on && t.day === tickDay
                 return (
                   <rect
                     key={t.day}
-                    x={sp.x}
+                    x={on ? t.x - 1 : t.x}
                     y={on ? y - 1 : y}
-                    width={sp.w}
+                    width={on ? ROW_H + 2 : ROW_H}
                     height={on ? ROW_H + 2 : ROW_H}
                     strokeWidth={sel ? 1.5 : 0}
                     style={{
@@ -345,7 +353,7 @@ function Chart({
                     navigate(to)
                   }}
                 >
-                  <title>{`${t.day}: ${plural(t.hits, 'time')}`}</title>
+                  <title>{`${rangeOf(t, now)}: ${plural(t.hits, 'time')}`}</title>
                 </rect>
               ))}
           </g>
@@ -437,11 +445,13 @@ export function Readout({
   hover,
   pin,
   tickDay,
+  k,
 }: {
   report: MomentsReport
   hover: string | null
   pin: string | null
   tickDay: string | null
+  k: number
 }) {
   const now = new Date(report.now)
   const seen = seenMoments(report.moments)
@@ -453,7 +463,8 @@ export function Readout({
   const id = hover && !nextId ? hover : pin
   const m = id ? report.moments.find((x) => x.id === id) : undefined
   const pinned = m !== undefined && pin === m.id
-  const tick = m && tickDay ? m.days?.find((d) => d.day === tickDay) : undefined
+  const tick =
+    m && tickDay && report.since ? bucketDays(m.days ?? [], report.since, k).find((d) => d.day === tickDay) : undefined
   return (
     <div className={cn(READOUT_H, 'overflow-y-auto pt-2 text-body')} aria-live="polite">
       {nextMoment ? (
@@ -507,7 +518,7 @@ export function Readout({
           )}
           {tick && (
             <p className="mt-1 text-sec">
-              <span className="font-medium">{shortDate(dayStart(tick.day), now)}</span>
+              <span className="font-medium">{rangeOf(tick, now)}</span>
               <span className="text-muted">
                 {' '}
                 · {plural(tick.hits, 'time')}
