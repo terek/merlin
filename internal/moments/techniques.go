@@ -449,11 +449,11 @@ func orchFollow(c *Corpus, copied time.Time, _ []Hit) string {
 	head := "Since you copied it on " + day(copied, c.Loc) + ": "
 	n := sessionsSince(c, copied)
 	if before.turns == 0 {
-		return fmt.Sprintf("%spremium turns heavy with edits and shell calls cost $%.2f per session (%d sessions). A comparison, not proof.",
-			head, per(after, n), n)
+		return fmt.Sprintf("%sthe cost of premium-model turns with %d or more edits and shell calls is $%.2f per session (%d sessions). A comparison, not proof.",
+			head, orchCalls, per(after, n), n)
 	}
-	return fmt.Sprintf("%spremium turns heavy with edits and shell calls went from $%.2f to $%.2f per session (%d sessions). A comparison, not proof.",
-		head, per(before, activeSessions(c, b0, b1)), per(after, n), n)
+	return fmt.Sprintf("%sthe cost of premium-model turns with %d or more edits and shell calls went from $%.2f to $%.2f per session (%d sessions). A comparison, not proof.",
+		head, orchCalls, per(before, activeSessions(c, b0, b1)), per(after, n), n)
 }
 
 // Shell output compressor.
