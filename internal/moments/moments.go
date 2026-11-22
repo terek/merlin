@@ -159,6 +159,9 @@ type Report struct {
 	Suggestions []Suggestion  `json:"suggestions"`
 	// OverYegge: lots of frontier work lately, with little steering or many killed agents.
 	OverYegge bool `json:"overYegge,omitempty"`
+	// UsualHarness is the harness most of the interactive sessions of the window ran in (ties: the
+	// first by name): the wording of a fix that suits the person best.
+	UsualHarness string `json:"usualHarness,omitempty"`
 }
 
 // PersonaView is one persona's reaction.
@@ -205,6 +208,9 @@ type MomentView struct {
 	// Technique is a saving the person's history shows for this practice; set on a seen moment as the
 	// tag and the open row's section (an unseen one has it on its Suggestion).
 	Technique *Technique `json:"technique,omitempty"`
+	// Note says where the person stands with this practice today, when the history alone does not
+	// (rtk: on, configured but silent, or not set up).
+	Note string `json:"note,omitempty"`
 }
 
 // Suggestion is an unseen moment worth trying, with why.
@@ -273,6 +279,12 @@ func BuildConfig(catalog []Moment, in []Input, now time.Time, loc *time.Location
 		r.Moments = append(r.Moments, summarize(m, hits, windowStart, loc))
 	}
 	techs := c.techniques(catalog, cfg, allHits)
+	r.UsualHarness = usualHarness(c)
+	for i := range r.Moments {
+		if r.Moments[i].ID == "compressed-shell" {
+			r.Moments[i].Note = c.rtkNote()
+		}
+	}
 	for i := range r.Moments {
 		if r.Moments[i].Status != StatusUnseen {
 			r.Moments[i].Technique = techs[r.Moments[i].ID]
@@ -283,6 +295,26 @@ func BuildConfig(catalog []Moment, in []Input, now time.Time, loc *time.Location
 	r.Personas = react(r.Moments, r.OverYegge)
 	r.Suggestions = suggest(catalog, r.Moments, c, techs, cfg.Engaged, allHits)
 	return r
+}
+
+// usualHarness is the harness of most interactive sessions with a turn in the window.
+func usualHarness(c *Corpus) string {
+	n := map[string]int{}
+	c.Interactive(func(s *Session) {
+		for _, t := range s.Turns {
+			if inRange(t, c.WindowStart, c.Now) {
+				n[s.D.Harness]++
+				return
+			}
+		}
+	})
+	best := ""
+	for h, k := range n {
+		if k > n[best] || (k == n[best] && h < best) {
+			best = h
+		}
+	}
+	return best
 }
 
 func summarize(m Moment, hits []Hit, windowStart time.Time, loc *time.Location) MomentView {

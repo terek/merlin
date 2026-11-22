@@ -22,6 +22,17 @@ type Fix struct {
 	Text string `json:"text"`
 	// Link points at the tool's own page, when the fix installs one.
 	Link string `json:"link,omitempty"`
+	// Variants are the same fix worded for one harness, naming what only that harness knows (its
+	// model tiers, its commands). Text is the universal wording, which every harness can follow.
+	Variants []FixVariant `json:"variants,omitempty"`
+}
+
+// FixVariant is a fix worded for one harness.
+type FixVariant struct {
+	Harness string `json:"harness"`
+	Text    string `json:"text"`
+	// How, when set, is the estimate's how-line for this wording (it may name the harness's models).
+	How string `json:"how,omitempty"`
 }
 
 // Estimate is the saving a technique promises, for 30 days, at API prices.
@@ -58,10 +69,9 @@ type Technique struct {
 // Setup is what the person has set up around their harnesses, read by the harness layer.
 type Setup struct {
 	// ShellCompressor: a hook compresses shell output before the agent reads it (rtk, in Claude
-	// Code's settings). ShellCompressorSince is when that file last changed, the nearest honest
-	// "since".
-	ShellCompressor      bool
-	ShellCompressorSince time.Time
+	// Code's settings). Whether it ran is in the transcripts (Turn.ShellCompressed); this is only
+	// whether it is configured.
+	ShellCompressor bool
 }
 
 // Config is what a report needs besides the sessions.
@@ -92,7 +102,9 @@ type techniqueDef struct {
 	// quiet is the reason shown when the gap is gone but the technique is still being watched.
 	quiet string
 	how   func() string
-	eval  func(c *Corpus, from, to time.Time) gap
+	// variants words the fix for single harnesses; the estimate's how-line may differ with them.
+	variants func() []FixVariant
+	eval     func(c *Corpus, from, to time.Time) gap
 	// follow compares the time after the copy with the time before it; hits are the moment's own.
 	follow func(c *Corpus, copied time.Time, hits []Hit) string
 }
@@ -123,12 +135,22 @@ var techniqueDefs = []techniqueDef{
 	{
 		moment: "model-routing",
 		fix: Fix{Kind: "claudemd", Text: "Act as the orchestrator: plan, decide and review in this conversation, and hand " +
-			"implementation (edits, test runs, searches) to sub-agents on a cheaper model such as Sonnet, each with a precise " +
-			"brief. Check what they return before reporting it as done."},
+			"implementation (edits, test runs, searches) to sub-agents on a mid-tier model, each with a precise brief. " +
+			"Check what they return before reporting it as done."},
 		quiet: "Fewer tool-heavy turns ran on a premium model lately.",
 		how: func() string {
-			return fmt.Sprintf("Those turns' cost, priced again at the Sonnet tier (%s): the difference over the last %d days, "+
-				"scaled to 30 days.", sonnetModel(), WindowDays)
+			return fmt.Sprintf("Those turns' cost, priced again at a mid-tier model: the difference over the last %d days, "+
+				"scaled to 30 days.", WindowDays)
+		},
+		variants: func() []FixVariant {
+			return []FixVariant{{
+				Harness: "claude",
+				Text: "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, " +
+					"test runs, searches) to sub-agents on Sonnet, each with a precise brief. Check what they return before " +
+					"reporting it as done.",
+				How: fmt.Sprintf("Those turns' cost, priced again at Sonnet (%s): the difference over the last %d days, "+
+					"scaled to 30 days.", sonnetModel(), WindowDays),
+			}}
 		},
 		eval:   orchGap,
 		follow: orchFollow,
@@ -161,7 +183,11 @@ func (c *Corpus) techniques(catalog []Moment, cfg Config, hits map[string][]Hit)
 		if !g.fired && !watching {
 			continue
 		}
-		t := &Technique{Reason: g.reason, Fix: def.fix}
+		fix := def.fix
+		if def.variants != nil {
+			fix.Variants = def.variants()
+		}
+		t := &Technique{Reason: g.reason, Fix: fix}
 		if g.fired {
 			t.Estimate = &Estimate{MonthlyUSD: sig2(g.usd * 30 / WindowDays), How: def.how()}
 			t.Days = daysOf(g.hits, c.Loc)
@@ -479,6 +505,49 @@ func cacheReadPrice(m string) float64 {
 
 func shellTokens(t *model.Turn) int64 { return min(t.ShellOutputBytes/4, rtkTurnCap) }
 
+// rtkRewrites counts the shell commands a hook rewrote to run through the compressor in [from, to],
+// and the sessions they ran in.
+func rtkRewrites(c *Corpus, from, to time.Time) (calls int64, sessions int) {
+	c.Interactive(func(s *Session) {
+		if !contains(shellCompressorHarnesses, s.D.Harness) {
+			return
+		}
+		var n int64
+		for _, t := range s.Turns {
+			if inRange(t, from, to) {
+				n += t.ShellCompressed
+			}
+		}
+		calls += n
+		if n > 0 {
+			sessions++
+		}
+	})
+	return calls, sessions
+}
+
+// rtkNote says where the person stands: on, configured but silent, or not set up.
+func (c *Corpus) rtkNote() string {
+	calls, _ := rtkRewrites(c, c.WindowStart, c.Now)
+	switch {
+	case calls > 0:
+		return fmt.Sprintf("rtk is on: it rewrote %s shell command%s in the last %d days.", thousands(calls), plural(int(calls)), WindowDays)
+	case c.Setup.ShellCompressor:
+		return "rtk is configured in your Claude Code settings, but no rewrites were seen lately."
+	}
+	return "rtk is not set up."
+}
+
+// thousands writes 1240 as "1,240".
+func thousands(n int64) string {
+	s := fmt.Sprint(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
+// rtkIn measures the shell output that ran uncompressed.
 func rtkIn(c *Corpus, from, to time.Time) rtkStats {
 	var st rtkStats
 	c.Interactive(func(s *Session) {
@@ -492,7 +561,7 @@ func rtkIn(c *Corpus, from, to time.Time) rtkStats {
 		k := 0
 		var top *model.Turn
 		for i, t := range s.Turns {
-			if !inRange(t, from, to) || t.ShellOutputBytes == 0 {
+			if !inRange(t, from, to) || t.ShellOutputBytes == 0 || t.ShellCompressed > 0 {
 				continue
 			}
 			tok := shellTokens(t)
@@ -510,7 +579,7 @@ func rtkIn(c *Corpus, from, to time.Time) rtkStats {
 			later = min(later, rtkLaterCap)
 			st.tokens += tok
 			st.usd += float64(tok) * float64(later) * price * rtkTrimmed
-			st.hits = append(st.hits, turnHit(s, t, fmt.Sprintf("about %s tokens of shell output", tokensWord(tok))))
+			st.hits = append(st.hits, turnHit(s, t, fmt.Sprintf("about %s tokens of shell output, not compressed", tokensWord(tok))))
 			k++
 			if top == nil || t.ShellOutputBytes > top.ShellOutputBytes {
 				top = t
@@ -523,8 +592,13 @@ func rtkIn(c *Corpus, from, to time.Time) rtkStats {
 	return st
 }
 
+// rtkGap fires when the person does not use a compressor: none configured and no command rewritten in
+// the window.
 func rtkGap(c *Corpus, from, to time.Time) gap {
 	if c.Setup.ShellCompressor {
+		return gap{}
+	}
+	if calls, _ := rtkRewrites(c, from, to); calls > 0 {
 		return gap{}
 	}
 	st := rtkIn(c, from, to)
@@ -536,35 +610,29 @@ func rtkGap(c *Corpus, from, to time.Time) gap {
 	return gap{fired: true, reason: reason, usd: st.usd, hits: st.hits, example: st.best.example()}
 }
 
-func rtkFollow(c *Corpus, copied time.Time, hits []Hit) string {
+func rtkFollow(c *Corpus, copied time.Time, _ []Hit) string {
 	head := "Since you copied it on " + day(copied, c.Loc) + ": "
 	n := sessionsSince(c, copied)
-	if !c.Setup.ShellCompressor {
-		return fmt.Sprintf("%srtk is not configured yet in your Claude Code settings (%d sessions).", head, n)
-	}
-	k := 0
-	for _, h := range hits {
-		if !h.At.Before(copied) {
-			k++
+	calls, sessions := rtkRewrites(c, copied, c.Now)
+	if calls == 0 {
+		if !c.Setup.ShellCompressor {
+			return fmt.Sprintf("%srtk is not set up yet in your Claude Code settings (%d sessions).", head, n)
 		}
+		return fmt.Sprintf("%srtk is configured, but no rewrites were seen (%d sessions).", head, n)
 	}
-	return fmt.Sprintf("%srtk is configured; %d turn%s with shell calls have run through it (%d sessions).", head, k, plural(k), n)
+	return fmt.Sprintf("%srtk rewrote %s shell command%s in %d session%s.", head, thousands(calls), plural(int(calls)), sessions, plural(sessions))
 }
 
-// compressedShell: with a shell compressor configured, every turn with shell calls after the
-// settings file last changed. The file's modification time is the only date there is, so a later
-// unrelated edit of the settings moves the start.
+// compressedShell: every turn in which a hook rewrote a shell command to run through the compressor,
+// as the hook's own record in the transcript says.
 func compressedShell(c *Corpus, emit func(Hit)) {
-	if !c.Setup.ShellCompressor {
-		return
-	}
 	c.Interactive(func(s *Session) {
 		if !contains(shellCompressorHarnesses, s.D.Harness) {
 			return
 		}
 		for _, t := range s.Turns {
-			if n := countTools(t.ToolsByName, shellTools); n > 0 && !t.StartedAt.Before(c.Setup.ShellCompressorSince) {
-				emit(turnHit(s, t, fmt.Sprintf("%d shell call%s through the compressor", n, plural(int(n)))))
+			if t.ShellCompressed > 0 {
+				emit(turnHit(s, t, fmt.Sprintf("%d shell command%s rewritten by rtk", t.ShellCompressed, plural(int(t.ShellCompressed)))))
 			}
 		}
 	})

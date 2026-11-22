@@ -334,6 +334,6 @@ func momentsSetup() moments.Setup {
 	if err != nil {
 		return moments.Setup{}
 	}
-	since, ok := claude.ShellCompressor(dir)
-	return moments.Setup{ShellCompressor: ok, ShellCompressorSince: since}
+	_, ok := claude.ShellCompressor(dir)
+	return moments.Setup{ShellCompressor: ok}
 }

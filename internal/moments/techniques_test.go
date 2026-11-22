@@ -145,16 +145,31 @@ func TestShellCompressorTechnique(t *testing.T) {
 		t.Errorf("estimate %v, want about %v", got, want)
 	}
 
-	// configured: the practice is seen, and there is no technique
-	since := tnow.AddDate(0, 0, -5)
-	r = BuildConfig(Registry(), in, tnow, time.UTC, Config{Setup: Setup{ShellCompressor: true, ShellCompressorSince: since}})
-	if m := view(r, "compressed-shell"); m.Status == StatusUnseen || m.Technique != nil {
-		t.Errorf("configured since 5 days ago and the sessions ran 2 days ago: seen without a technique: %+v", m)
+	if m := view(r, "compressed-shell"); m.Status != StatusUnseen || m.Note != "rtk is not set up." {
+		t.Errorf("no rewrites: unseen, not set up: %v %q", m.Status, m.Note)
 	}
-	r = BuildConfig(Registry(), in, tnow, time.UTC, Config{Setup: Setup{ShellCompressor: true, ShellCompressorSince: tnow.AddDate(0, 0, -1)}})
-	if m := view(r, "compressed-shell"); m.Status != StatusUnseen {
-		t.Errorf("sessions before the setup do not count: %v", m.Status)
+
+	// configured but no hook record in the sessions: no technique, the practice stays unseen, and the note says so
+	r = BuildConfig(Registry(), in, tnow, time.UTC, Config{Setup: Setup{ShellCompressor: true}})
+	if m := view(r, "compressed-shell"); m.Status != StatusUnseen || m.Technique != nil || !strings.Contains(m.Note, "no rewrites") {
+		t.Errorf("configured without rewrites: %+v", m)
 	}
+
+	// the hook's records in the sessions: the practice is seen from them, with the count in its note
+	var on []Input
+	for i := 0; i < 40; i++ {
+		on = append(on, techSession(fmt.Sprintf("c%d", i), 2+i%10, "claude-opus-5-5", withRewrites(sh(400_000), 5), sh(4_000), sh(4_000)))
+	}
+	r = BuildConfig(Registry(), on, tnow, time.UTC, Config{})
+	m := view(r, "compressed-shell")
+	if m.Status == StatusUnseen || m.Hits != 40 || m.Technique != nil || !strings.HasPrefix(m.Note, "rtk is on: it rewrote 200 shell commands") {
+		t.Errorf("rewritten: status %v hits %d technique %v note %q", m.Status, m.Hits, m.Technique, m.Note)
+	}
+}
+
+func withRewrites(t model.Turn, n int64) model.Turn {
+	t.ShellCompressed = n
+	return t
 }
 
 func TestFollowUp(t *testing.T) {

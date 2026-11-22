@@ -130,7 +130,7 @@ func Registry() []Moment {
 		},
 		{
 			ID: "compressed-shell", Category: CategoryHarness, Persona: Boris, Title: "Compressed shell output",
-			Detects: "Counted for each turn with shell calls in a Claude Code session started after a shell-output compressor (an rtk hook) was set up in your settings.",
+			Detects: "Counted for each turn in which a hook rewrote a shell command to run through a compressor such as rtk, as the hook's own record in the session says.",
 			What:    "A hook shrank the output of your shell commands before the agent read it.",
 			Try:     "A hook such as rtk rewrites git status, test runs and listings into a compact form. The agent reads far fewer tokens, and so does every later call that carries them.",
 			Detect:  compressedShell,
