@@ -132,7 +132,42 @@ func modelRouting(c *Corpus, emit func(Hit)) {
 
 // The orchestrator: a session whose main thread ran on a premium model while sub-agents on a cheaper model made the
 // edits, however many turns later they were briefed.
-const orchAgentEdits = 3 // edit calls the cheaper sub-agents made in the session, at least (and more than the main thread)
+const orchAgentEdits = 3 // edit and shell calls the cheaper sub-agents made in the session, at least (and more than the main thread)
+
+// topModel is the model that billed the most in the costs, "" when none.
+func topModel(costs ...model.Cost) string {
+	spend := map[string]float64{}
+	for _, c := range costs {
+		for m, v := range c.ByModel {
+			spend[m] += v.USD
+		}
+	}
+	best := ""
+	for m, v := range spend {
+		if best == "" || v > spend[best] || (v == spend[best] && m < best) {
+			best = m
+		}
+	}
+	return best
+}
+
+// workerModel is the model an agent really ran on: the one its turns were billed on, the alias it was
+// started with ("sonnet") only when it has no billed turns.
+func workerModel(a *model.Agent) string {
+	costs := []model.Cost{a.Cost}
+	for _, t := range a.Turns {
+		costs = append(costs, t.Cost)
+	}
+	if m := topModel(costs...); m != "" {
+		return m
+	}
+	return a.Model
+}
+
+// workCalls counts the edits and shell calls of a tool tally.
+func workCalls(by map[string]int64) int64 {
+	return countTools(by, editTools) + countTools(by, shellTools)
+}
 
 func orchestrator(c *Corpus, emit func(Hit)) {
 	sonnet := sonnetModel()
@@ -142,13 +177,21 @@ func orchestrator(c *Corpus, emit func(Hit)) {
 		return
 	}
 	c.Interactive(func(s *Session) {
-		if main = outputPrice(s.MainModel()); main <= sp {
+		mm := s.MainModel()
+		if mm == "" {
+			var costs []model.Cost
+			for _, t := range s.Turns {
+				costs = append(costs, t.Cost)
+			}
+			mm = topModel(costs...)
+		}
+		if main = outputPrice(mm); main <= sp {
 			return
 		}
 		var own int64
 		for _, t := range s.Turns {
 			if !t.Abandoned {
-				own += countTools(t.ToolsByName, editTools)
+				own += workCalls(t.ToolsByName)
 			}
 		}
 		var edits int64
@@ -158,8 +201,8 @@ func orchestrator(c *Corpus, emit func(Hit)) {
 			if a.Kind != model.AgentSubagent || !s.OwnTurn(a.SpawnTurn) {
 				continue
 			}
-			if p := outputPrice(a.Model); p > 0 && p < main {
-				edits += countTools(a.ToolsByName, editTools)
+			if p := outputPrice(workerModel(a)); p > 0 && p < main {
+				edits += workCalls(a.ToolsByName)
 				workers = append(workers, a)
 			}
 		}
@@ -169,7 +212,7 @@ func orchestrator(c *Corpus, emit func(Hit)) {
 		// the days the workers were active: each of their turns, else their start
 		seen := map[string]bool{}
 		for _, a := range workers {
-			if countTools(a.ToolsByName, editTools) == 0 {
+			if workCalls(a.ToolsByName) == 0 {
 				continue
 			}
 			ats := []time.Time{a.StartedAt}
@@ -183,7 +226,7 @@ func orchestrator(c *Corpus, emit func(Hit)) {
 				}
 				seen[d] = true
 				emit(Hit{At: at, Session: s.Key(), Turn: a.SpawnTurn,
-					Note: fmt.Sprintf("sub-agents on a cheaper model made %d edits, the main thread %d", edits, own)})
+					Note: fmt.Sprintf("sub-agents on a cheaper model made %d edits and shell calls, the main thread %d", edits, own)})
 			}
 		}
 	})

@@ -4345,7 +4345,7 @@
       "title": "Orchestrator and implementors",
       "what": "The main conversation plans and reviews while sub-agents on a mid-tier model do the edits, test runs and searches.",
       "try": "Tell the agent to act as the orchestrator: plan, decide and review in the main conversation, and hand the implementation to sub-agents on a cheaper model, each with a precise brief.",
-      "detects": "Counted for each day of a session whose main thread ran on a premium model while its sub-agents on a cheaper model made the edits: three or more, and more than the main thread did itself.",
+      "detects": "Counted for each day of a session whose main thread ran on a premium model while its sub-agents on a cheaper model did the edits and shell work: three or more edit and shell calls, and more than the main thread made itself.",
       "status": "habit",
       "depth": "routine",
       "hits": 12,
@@ -4360,7 +4360,7 @@
           "id": "synthetic-024"
         },
         "turn": 1,
-        "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+        "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 24"
       },
       "days": [
         {
@@ -4373,7 +4373,7 @@
               "id": "synthetic-024"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 24"
           }
         },
         {
@@ -4386,7 +4386,7 @@
               "id": "synthetic-032"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 26"
           }
         },
         {
@@ -4399,7 +4399,7 @@
               "id": "synthetic-060"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 28"
           }
         },
         {
@@ -4412,7 +4412,7 @@
               "id": "synthetic-068"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 28"
           }
         },
         {
@@ -4425,7 +4425,7 @@
               "id": "synthetic-076"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 28"
           }
         },
         {
@@ -4438,7 +4438,7 @@
               "id": "synthetic-084"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 28"
           }
         },
         {
@@ -4451,7 +4451,7 @@
               "id": "synthetic-090"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 24"
           }
         },
         {
@@ -4464,7 +4464,7 @@
               "id": "synthetic-092"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 30"
           }
         },
         {
@@ -4477,7 +4477,7 @@
               "id": "synthetic-094"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 28"
           }
         },
         {
@@ -4490,7 +4490,7 @@
               "id": "synthetic-096"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 26"
           }
         },
         {
@@ -4503,7 +4503,7 @@
               "id": "synthetic-098"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 24"
           }
         },
         {
@@ -4516,7 +4516,7 @@
               "id": "synthetic-100"
             },
             "turn": 1,
-            "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+            "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 34"
           }
         }
       ],
@@ -4529,7 +4529,7 @@
             "id": "synthetic-100"
           },
           "turn": 1,
-          "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+          "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 34"
         },
         {
           "at": "2026-10-29T10:42:00Z",
@@ -4538,7 +4538,7 @@
             "id": "synthetic-098"
           },
           "turn": 1,
-          "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+          "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 24"
         },
         {
           "at": "2026-10-28T10:42:00Z",
@@ -4547,7 +4547,7 @@
             "id": "synthetic-096"
           },
           "turn": 1,
-          "note": "sub-agents on a cheaper model made 12 edits, the main thread 2"
+          "note": "sub-agents on a cheaper model made 42 edits and shell calls, the main thread 26"
         }
       ],
       "technique": {
@@ -4844,7 +4844,7 @@
           "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 5 or more edits went from $4.30 to $2.79 per session (12 sessions). A comparison, not proof."
         }
       },
-      "note": "You already do this: in 9 sessions in the last 28 days, sub-agents on a cheaper model made the edits. (Model routing: ≈ $32 / mo saved)"
+      "note": "You already do this: in 9 sessions in the last 28 days, sub-agents on a cheaper model did the edits and shell work. (Model routing: ≈ $32 / mo saved)"
     },
     {
       "id": "compressed-shell",

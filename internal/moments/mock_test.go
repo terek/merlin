@@ -129,7 +129,7 @@ func TestMockReport(t *testing.T) {
 			if delegated {
 				d.Agents = append(d.Agents, model.Agent{ID: "o", Kind: model.AgentSubagent, AgentType: "general-purpose", Model: "claude-sonnet-5-5",
 					StartedAt: s.Add(62 * time.Minute), EndedAt: s.Add(90 * time.Minute), SpawnTurn: ip(1), Status: model.StatusCompleted,
-					ToolCalls: 22, ToolsByName: map[string]int64{"Edit": 12, "Bash": 10},
+					ToolCalls: 42, ToolsByName: map[string]int64{"Edit": 4, "Bash": 38},
 					Cost: func() model.Cost {
 						mc, _ := prices().Cost("claude-sonnet-5-5", model.Tokens{Input: 300_000, Output: 100_000, CacheRead: 4_000_000}, false)
 						return model.Cost{USD: mc.USD, ByModel: map[string]model.ModelCost{"claude-sonnet-5-5": mc}}

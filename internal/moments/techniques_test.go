@@ -268,7 +268,7 @@ func TestOrchestratorDetector(t *testing.T) {
 	briefing := func(n int) []model.Turn {
 		ts := []model.Turn{{Spawned: []string{"w"}, ToolsByName: map[string]int64{"Agent": 1}, Cost: premium}}
 		for i := 0; i < n; i++ {
-			ts = append(ts, model.Turn{ToolsByName: map[string]int64{"SendMessage": 2, "Bash": 20}, Cost: premium})
+			ts = append(ts, model.Turn{ToolsByName: map[string]int64{"SendMessage": 2, "Bash": 2}, Cost: premium})
 		}
 		return ts
 	}
@@ -282,9 +282,21 @@ func TestOrchestratorDetector(t *testing.T) {
 		t.Errorf("a worker on the same model is not routing: %d hits", n)
 	}
 	own := briefing(2)
-	own[1].ToolsByName = map[string]int64{"Edit": 9}
+	own[1].ToolsByName = map[string]int64{"Edit": 5, "Bash": 4}
 	if n := hits(worker(sonnet, map[string]int64{"Edit": 9}), own...); n != 0 {
 		t.Errorf("the main thread made as many edits as the worker: %d hits", n)
+	}
+	// workers that change files through the shell: 30 shell calls and no edits, against 10 of the main thread
+	if n := hits(worker(sonnet, map[string]int64{"Bash": 30}), model.Turn{Spawned: []string{"w"}, ToolsByName: map[string]int64{"Bash": 10}, Cost: premium}); n != 1 {
+		t.Errorf("a worker with 30 shell calls: %d hits", n)
+	}
+	// real shape: the agent carries the alias, its turns the full id, the session has no model of its own
+	aliased := worker("sonnet", map[string]int64{"Bash": 30})
+	aliased.Turns = []model.AgentTurn{{Cost: model.Cost{USD: 1, ByModel: map[string]model.ModelCost{sonnet: {USD: 1}}}}}
+	in0 := techSession("n", 2, "", model.Turn{Spawned: []string{"w"}, ToolsByName: map[string]int64{"Bash": 10}, Cost: premium})
+	in0.Digest.Agents = []model.Agent{aliased}
+	if n := view(BuildWith(Registry(), []Input{in0}, tnow, time.UTC), "orchestrator").Hits; n != 1 {
+		t.Errorf("alias on the agent, full ids on its turns, no session model: %d hits", n)
 	}
 	// those main turns are not the gap: edits only, and the briefing turns made none
 	in := techSession("g", 2, opus, briefing(8)...)

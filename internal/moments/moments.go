@@ -460,7 +460,7 @@ func orchestratorNote(m MomentView, hits []Hit, windowStart time.Time, all []Mom
 		}
 	}
 	n := len(recent)
-	text := fmt.Sprintf("You already do this: in %d session%s in the last %d days, sub-agents on a cheaper model made the edits.", n, plural(n), WindowDays)
+	text := fmt.Sprintf("You already do this: in %d session%s in the last %d days, sub-agents on a cheaper model did the edits and shell work.", n, plural(n), WindowDays)
 	if n == 0 {
 		text = fmt.Sprintf("You have done this: in %d session%s sub-agents on a cheaper model made the edits, none in the last %d days.", len(ever), plural(len(ever)), WindowDays)
 	}
