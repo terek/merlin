@@ -313,6 +313,9 @@ type Turn struct {
 	ToolsByName       map[string]int64 `json:"toolsByName,omitempty"`
 	FilesTouched      []string         `json:"filesTouched,omitempty"`
 	ContextTokens     int64            `json:"contextTokens,omitempty"`
+	// ShellOutputBytes is the size of the results of the turn's shell calls (Claude Code's
+	// Bash), in bytes of text. Zero for harnesses that do not report it.
+	ShellOutputBytes int64 `json:"shellOutputBytes,omitempty"`
 
 	Cost           Cost     `json:"cost"`
 	CostWithAgents float64  `json:"costWithAgents"`

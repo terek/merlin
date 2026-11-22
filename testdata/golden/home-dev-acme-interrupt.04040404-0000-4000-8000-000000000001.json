@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "parserVersion": 23,
+  "parserVersion": 24,
   "source": [
     {
       "path": "projects/-home-dev-acme-interrupt/04040404-0000-4000-8000-000000000001.jsonl",
@@ -134,6 +134,7 @@
         "Bash": 1
       },
       "contextTokens": 2700,
+      "shellOutputBytes": 53,
       "cost": {
         "usd": 0.0017,
         "byModel": {

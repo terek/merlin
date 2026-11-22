@@ -260,6 +260,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `toolsByName` | tool calls per tool name |
 | `filesTouched` | files read or changed by the turn's tool calls |
 | `contextTokens` | context size at the end of the turn |
+| `shellOutputBytes` | size in bytes of the results of the turn's shell calls (Claude Code's Bash); absent when 0 or not reported |
 | `cost` | attributed cost of the main agent in this turn |
 | `costWithAgents` | dollars including agents spawned in this turn |
 | `spawned` | ids of agents spawned in this turn |

@@ -95,6 +95,7 @@ type msgState struct {
 	work      []workCall
 	toolIDs   map[string]struct{}
 	synthetic bool
+	shellOut  int64 // bytes of the results of the message's Bash calls
 }
 
 // Builder reduces the records of ONE transcript file into a FileResult. Feed it records
@@ -568,6 +569,7 @@ func (b *Builder) toolResult(r *transcript.Record, ts time.Time) {
 		}
 		if call, ok := b.bash[blk.ToolUseID]; ok {
 			delete(b.bash, blk.ToolUseID)
+			b.msgs[call.msg].shellOut += int64(len(blk.ResultText()))
 			b.bashResult(blk.ToolUseID, call, &beads.Result{Output: blk.ResultText(), Failed: blk.IsError}, ts)
 		}
 		b.jobResult(blk, ts)
