@@ -282,7 +282,8 @@ func apiOptions(d *daemon.Daemon, pricer *pricing.Table, au *autoUpgrader) serve
 				return server.ScanProgress{}
 			}
 			s := e.Stats()
-			return server.ScanProgress{Pending: e.Pending(), Seen: s.Seen, Processed: s.Processed,
+			pr := e.Progress()
+			return server.ScanProgress{Pending: e.Pending(), Queued: pr.Queued, Done: pr.Done, Seen: s.Seen, Processed: s.Processed,
 				Unchanged: s.Unchanged, Failed: s.Failed, Missing: s.Missing}
 		},
 	}

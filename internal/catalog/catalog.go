@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/terek/merlin/internal/model"
@@ -35,6 +36,23 @@ type Catalog struct {
 
 	buildMu sync.Mutex // one build at a time; never held together with mu while building
 	pin     *pinned    // set on a Snapshot: every read answers from it
+}
+
+var viewIDs atomic.Uint64
+
+// Stamp identifies the state a Snapshot is frozen at: equal stamps (from any catalogs) mean
+// equal answers, so work derived from one can be shared.
+type Stamp struct {
+	View   uint64
+	Places int
+}
+
+// Stamp returns the stamp of a Snapshot; the zero Stamp for a catalog that is not one.
+func (c *Catalog) Stamp() Stamp {
+	if c.pin == nil {
+		return Stamp{}
+	}
+	return Stamp{c.pin.v.id, c.pin.gen}
 }
 
 // pinned is the frozen state of a Snapshot.
@@ -253,7 +271,7 @@ func (c *Catalog) current(withFacets bool) (*view, *facets) {
 	vAt := time.Now()
 	if src != nil {
 		v = build(src, zone)
-		v.src = src
+		v.src, v.id = src, viewIDs.Add(1)
 		vGen = gen
 	}
 	if withFacets && (fv == nil || fv.v != v || fv.gen != pgen) {

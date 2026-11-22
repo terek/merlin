@@ -432,9 +432,13 @@ type UpgradeResponse struct {
 
 // ScanProgress is the data of a scan-progress event: how far indexing is. Pending is the
 // number of sessions queued or being built; the other counters are those of the current
-// scan.
+// accounting period, which lasts until the queue has drained (rescans while a backlog is built
+// extend it, so no counter moves backwards). Queued is how many sessions the period has put in
+// the queue and Done how many of them are finished: Done/Queued is the progress bar.
 type ScanProgress struct {
 	Pending   int `json:"pending"`
+	Queued    int `json:"queued"`
+	Done      int `json:"done"`
 	Seen      int `json:"seen"`
 	Processed int `json:"processed"`
 	Unchanged int `json:"unchanged"`

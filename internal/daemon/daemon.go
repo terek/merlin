@@ -273,6 +273,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("loading catalog: %w", err)
 	}
+	cat.SetFreshness(catalogFreshness)
 	d.cat.Store(cat)
 	d.logf("catalog loaded: %d sessions", cat.Len())
 	d.links = links.Open(home)
@@ -499,6 +500,10 @@ func newest(fp []model.SourceFile) int64 {
 	return m
 }
 
+// catalogFreshness bounds how stale the catalog's derived views get while sessions are being
+// written (a backlog being built): a read rebuilds at most this often.
+const catalogFreshness = time.Second
+
 func (d *Daemon) rescanLoop(ctx context.Context) {
 	d.rescan(ctx)
 	t := time.NewTicker(d.opts.RescanInterval)
@@ -516,7 +521,7 @@ func (d *Daemon) rescanLoop(ctx context.Context) {
 // rescan is the correctness backstop: it needs nothing but the filesystem and the store.
 func (d *Daemon) rescan(ctx context.Context) {
 	eng := d.eng.Load()
-	eng.ResetCounters()
+	eng.BeginRescan()
 	err := eng.Reconcile(ctx)
 	if err != nil && ctx.Err() == nil {
 		d.logf("rescan: %v", err)

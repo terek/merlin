@@ -17,8 +17,8 @@ import { useShortcut } from './useShortcut'
 function ScanBar() {
   const p = useScanProgress()
   if (!p || p.pending <= 0) return null
-  const seen = Math.max(p.seen, p.pending)
-  const done = seen - p.pending
+  const seen = p.queued !== undefined ? Math.max(p.queued, p.pending) : Math.max(p.seen, p.pending)
+  const done = p.done !== undefined ? p.done : seen - p.pending
   return (
     <span
       className="absolute bottom-[-1px] left-0 h-0.5 bg-accent transition-[width] duration-300"

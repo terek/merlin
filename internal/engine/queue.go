@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/terek/merlin/internal/harness"
 )
@@ -35,6 +36,10 @@ type queue struct {
 	norm    []string
 	pending int // items queued or running
 	closed  bool
+
+	// added counts the work put in: a session newly queued, or marked to be built again while a
+	// worker holds it. A push that finds the session already waiting adds nothing.
+	added atomic.Int64
 }
 
 func newQueue() *queue {
@@ -54,6 +59,7 @@ func (q *queue) push(j job, live bool) {
 	case it == nil:
 		q.items[k] = &item{job: j, live: live, queued: true}
 		q.pending++
+		q.added.Add(1)
 		q.lane(k, live)
 		q.cond.Broadcast()
 	case it.running:
@@ -61,6 +67,9 @@ func (q *queue) push(j job, live bool) {
 		// request would have written.
 		if !live && slices.Equal(it.job.s.Fingerprint, j.s.Fingerprint) {
 			return
+		}
+		if !it.rerun {
+			q.added.Add(1)
 		}
 		it.job, it.rerun, it.live = j, true, it.live || live
 	default: // queued: keep the newest description

@@ -1074,6 +1074,10 @@ export interface SessionStateEvent {
 
 export interface ScanProgress {
   pending: number
+  /** Sessions the current period (until the queue drains) has queued; absent from older daemons. */
+  queued?: number
+  /** Of those, finished. */
+  done?: number
   seen: number
   processed: number
   unchanged: number

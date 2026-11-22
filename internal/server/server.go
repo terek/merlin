@@ -72,6 +72,8 @@ type Options struct {
 type API struct {
 	o   Options
 	mux *http.ServeMux
+
+	momentsCache momentsCache
 }
 
 // New returns the API. Mount it on the daemon with d.Handle("/api/", api.Handler()).

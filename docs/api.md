@@ -1420,7 +1420,7 @@ is waiting, then a `scan-progress` event with the current state.
 | `session-updated` | a session's digest was written (new, or changed) | `{"key": {...}, "session": <session summary>}`: the same shape as a row of `/api/sessions` |
 | `session-missing` | a session's files are gone (the digest is kept, `sourceMissing` is set) | `{"key": {...}}` |
 | `session-state` | a listed session changed between `busy`, `idle`, `recent` and `ended` | `{"key": {...}, "state": "idle", "previous": "busy"}` |
-| `scan-progress` | while indexing is under way, when the counters change, and once more when it ends | `{"pending": 20, "seen": 35, "processed": 15, "unchanged": 0, "failed": 0, "missing": 0}` |
+| `scan-progress` | while indexing is under way, when the counters change, and once more when it ends | `{"pending": 20, "queued": 35, "done": 15, "seen": 35, "processed": 15, "unchanged": 0, "failed": 0, "missing": 0}`. The counters belong to a period that lasts until the queue has drained; periodic rescans while a backlog is built extend it, so no counter moves backwards. `queued` is what the period has put in the queue (a session already waiting is not counted again), `done` how many of those are finished: `done / queued` is the progress. `seen`, `unchanged` and `missing` are what the latest rescan found |
 
 ```
 retry: 3000
@@ -1430,7 +1430,7 @@ event: hello
 data: {"version":"0.4.2"}
 
 event: scan-progress
-data: {"pending":0,"seen":35,"processed":0,"unchanged":35,"failed":0,"missing":0}
+data: {"pending":0,"queued":0,"done":0,"seen":35,"processed":0,"unchanged":35,"failed":0,"missing":0}
 
 event: session-updated
 data: {"key":{"harness":"claude","id":"16161616-0000-4000-8000-000000000001"},"session":{...}}

@@ -566,3 +566,65 @@ func (s *slowHarness) Build(sess harness.Session) (*model.SessionDigest, error) 
 	return &model.SessionDigest{SchemaVersion: model.SchemaVersion, ParserVersion: 1,
 		Source: sess.Fingerprint, Harness: "slow", ID: sess.Key.ID, ProjectKey: sess.ProjectKey}, nil
 }
+
+// Rescans while a backlog is being built extend the accounting period: Queued and Done only
+// grow, nothing queued is counted twice, and the period restarts only after the queue drained.
+func TestProgressMonotonicAcrossRescans(t *testing.T) {
+	r := newRig(t)
+	r.scan()
+	r.h.parser = r.h.Harness.ParserVersion() + 1 // everything is stale again
+	r.h.buildFn = func(harness.Session) error { time.Sleep(15 * time.Millisecond); return nil }
+
+	var mu sync.Mutex
+	var seen []engine.Progress
+	e, err := engine.New(engine.Options{
+		Store: r.st, Harnesses: []harness.Harness{r.h}, Workers: 2, PricesVersion: r.pv,
+		OnProgress: func(p engine.Progress) { mu.Lock(); seen = append(seen, p); mu.Unlock() },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go e.Run(ctx)
+
+	var polled []engine.Progress
+	for i := 0; i < 6; i++ { // each rescan comes while the backlog (35 x 15ms / 2 workers) is under way
+		e.BeginRescan()
+		if err := e.Reconcile(ctx); err != nil {
+			t.Fatal(err)
+		}
+		polled = append(polled, e.Progress())
+		time.Sleep(20 * time.Millisecond)
+	}
+	for e.Pending() > 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != fixtureN {
+		t.Fatalf("%d progress callbacks, want %d", len(seen), fixtureN)
+	}
+	var prev engine.Progress
+	for i, p := range seen {
+		if p.Queued < prev.Queued || p.Done < prev.Done || p.Done > p.Queued {
+			t.Fatalf("progress %d went backwards or ahead: %+v after %+v", i, p, prev)
+		}
+		prev = p
+	}
+	if last := seen[len(seen)-1]; last.Queued != fixtureN || last.Done != fixtureN {
+		t.Fatalf("last progress %+v, want %d of %d", last, fixtureN, fixtureN)
+	}
+	for i := 1; i < len(polled); i++ {
+		if polled[i].Queued < polled[i-1].Queued {
+			t.Fatalf("polled Queued went backwards: %+v", polled)
+		}
+	}
+	if s := e.Stats(); s.Seen != fixtureN {
+		t.Fatalf("seen %d after repeated rescans, want %d", s.Seen, fixtureN)
+	}
+	e.BeginRescan() // drained: a new period
+	if p := e.Progress(); p.Queued != 0 || p.Done != 0 {
+		t.Fatalf("period not reset after the queue drained: %+v", p)
+	}
+}

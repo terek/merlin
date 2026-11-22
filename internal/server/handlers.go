@@ -181,6 +181,7 @@ func (a *API) handleSessions(w http.ResponseWriter, r *http.Request) {
 	if cat == nil {
 		return
 	}
+	cat = cat.Snapshot() // one view for List, Trees and every summary
 	q := r.URL.Query()
 	f, err := a.filter(q)
 	if err == nil {
@@ -309,6 +310,7 @@ func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
 		a.badParam(w, "messages=%q: use 1 or 0", v)
 		return
 	}
+	cat = cat.Snapshot()
 	key, ok := a.resolve(w, cat, r.PathValue("harness"), r.PathValue("id"))
 	if !ok {
 		return

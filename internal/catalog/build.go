@@ -64,6 +64,7 @@ type view struct {
 
 	diag Diagnostics
 
+	id  uint64                                    // unique across catalogs, in build order
 	src map[model.SessionKey]*model.SessionDigest // the digests it was built from (a private copy)
 }
 

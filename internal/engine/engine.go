@@ -115,11 +115,20 @@ type Engine struct {
 }
 
 type counters struct {
-	start                          time.Time
-	seen, unchanged                int
-	queued, done, failed           int
-	processed, missing, newMissing int
-	bytes                          int64
+	start                 time.Time
+	done, failed          int
+	processed, newMissing int
+	bytes                 int64
+	// What the latest reconcile of each harness found: a rescan replaces its harness's entry,
+	// so the totals never count a session twice nor drop back while a backlog is built.
+	seenBy, unchangedBy, missingBy map[string]int
+}
+
+func sum(m map[string]int) (n int) {
+	for _, v := range m {
+		n += v
+	}
+	return n
 }
 
 // New returns an Engine. It does no work until Reconcile, Scan or Run.
@@ -155,7 +164,18 @@ func (e *Engine) logf(format string, args ...any) {
 func (e *Engine) ResetCounters() {
 	e.cbMu.Lock()
 	e.c = counters{start: time.Now()}
+	e.q.added.Store(0)
 	e.cbMu.Unlock()
+}
+
+// BeginRescan prepares the counters for a periodic rescan. When the queue is empty the previous
+// period is over and a new one starts. While a backlog is still being built the period goes on:
+// Queued, Done and the byte counts keep accumulating, so progress only moves forward, and the
+// rescan adds only the sessions not already queued.
+func (e *Engine) BeginRescan() {
+	if e.q.depth() == 0 {
+		e.ResetCounters()
+	}
 }
 
 // Stats returns the counters since the last reset (Scan resets them).
@@ -165,10 +185,18 @@ func (e *Engine) Stats() Summary {
 	return e.summaryLocked()
 }
 
+// Progress returns the current Progress counters.
+func (e *Engine) Progress() Progress {
+	e.cbMu.Lock()
+	defer e.cbMu.Unlock()
+	return Progress{Queued: int(e.q.added.Load()), Done: e.c.done, Failed: e.c.failed, Bytes: e.c.bytes,
+		Elapsed: time.Since(e.c.start)}
+}
+
 func (e *Engine) summaryLocked() Summary {
 	c := e.c
-	return Summary{Seen: c.seen, Processed: c.processed, Unchanged: c.unchanged,
-		Failed: c.failed, Missing: c.missing, NewMissing: c.newMissing, Elapsed: time.Since(c.start)}
+	return Summary{Seen: sum(c.seenBy), Processed: c.processed, Unchanged: sum(c.unchangedBy),
+		Failed: c.failed, Missing: sum(c.missingBy), NewMissing: c.newMissing, Elapsed: time.Since(c.start)}
 }
 
 // Enqueue puts one session in the queue, whatever its stored digest says. live puts it in
@@ -246,7 +274,7 @@ func (e *Engine) reconcileOne(ctx context.Context, h harness.Harness) error {
 	}
 
 	live := map[store.Ref]bool{}
-	var queued, unchanged int
+	var unchanged int
 	for _, s := range disc.Sessions {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -267,7 +295,6 @@ func (e *Engine) reconcileOne(ctx context.Context, h harness.Harness) error {
 		}
 		if Stale(h, s, hdr, e.opts.PricesVersion) {
 			e.Enqueue(h, s, false)
-			queued++
 		} else {
 			unchanged++
 		}
@@ -304,10 +331,10 @@ func (e *Engine) reconcileOne(ctx context.Context, h harness.Harness) error {
 	}
 
 	e.cbMu.Lock()
-	e.c.seen += len(live)
-	e.c.unchanged += unchanged
-	e.c.queued += queued
-	e.c.missing += missing
+	if e.c.seenBy == nil {
+		e.c.seenBy, e.c.unchangedBy, e.c.missingBy = map[string]int{}, map[string]int{}, map[string]int{}
+	}
+	e.c.seenBy[name], e.c.unchangedBy[name], e.c.missingBy[name] = len(live), unchanged, missing
 	e.c.newMissing += newMissing
 	e.cbMu.Unlock()
 	return nil
@@ -425,7 +452,7 @@ func (e *Engine) finish(j job, ev Event) {
 	})
 	e.callLocked(func() {
 		if e.opts.OnProgress != nil {
-			e.opts.OnProgress(Progress{Queued: e.c.queued, Done: e.c.done, Failed: e.c.failed,
+			e.opts.OnProgress(Progress{Queued: int(e.q.added.Load()), Done: e.c.done, Failed: e.c.failed,
 				Bytes: e.c.bytes, Elapsed: time.Since(e.c.start)})
 		}
 	})
