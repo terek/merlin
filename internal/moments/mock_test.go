@@ -78,6 +78,10 @@ func TestMockReport(t *testing.T) {
 			t0.ToolsByName["Bash"] = 2
 			t1.ContextTokens, t1.AssistantMessages, t1.ShellOutputBytes, t1.Cost = ctx1, 30, 90_000, price(ctx1)
 			t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 8, 5
+			if day <= 9 && k%3 != 0 {
+				// since the orchestrator block was copied (day 10), most of the editing is delegated
+				t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 2, 3
+			}
 			turns := []model.Turn{t0, t1, t2}
 			if day == 47 || day == 33 {
 				m := mk(3, 125, "")

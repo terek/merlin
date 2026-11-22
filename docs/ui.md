@@ -290,15 +290,14 @@ ascending); the pure rules (`sortMoments`, `parseSort`, `formatSort`, `clickSort
 the real times, never by the clamped x.
 
 **Rows.** One 20 px row per moment: the depth mark (right-aligned in the Depth column, under the arrow slot), the title (13 px, with a quiet "try again" tag when the moment is
-also suggested), the category (a quiet word), the count (hits, tabular numbers), then the track: a 4 px square per active
+also suggested), the category (a quiet word), the count (hits, tabular numbers), the SAVES cell (a technique's estimate, "≈ $120 / mo", `--bad` from $20, else muted; empty for most rows; sortable, high to low first), then the track: a 4 px square per active
 period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. The columns are measured from the font
 (title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows
 after the sorted ones, whatever the sort, with a dotted empty circle, the category and an empty track.
 
 **Techniques.** A technique (a saving, [moments.md](moments.md)) adds marks. On a suggestion row, an estimate of $20 a
 month or more replaces the dotted circle with a filled circle in `--bad` ("saves money"); below that the dotted circle
-stays. On a seen row the depth mark stays and the tag "≈ $120 / mo" follows the title, small, in `--bad`, beside "try
-again". While the fix is watched (28 days after the copy) a clock (a ring with two hands, the accent, the size of the
+stays. On a seen row the depth mark stays and the estimate is in the SAVES column. A suggestion row's squares are the days of the technique's gap (`technique.days`). While the fix is watched (28 days after the copy) a clock (a ring with two hands, the accent, the size of the
 other marks) replaces the mark on either kind of row. Sorting by depth puts watching rows after tried, with the
 suggestions; suggestion rows stay at the end. The title column is measured with the tags, so a title is not cut by one.
 
@@ -317,9 +316,13 @@ squares and Enter opens the chosen one. "N more to try" (the unseen moments that
 after the table. The personas, their reactions and the card are not shown.
 
 A technique's open row reads, in order: the reason (heavy context leads with its count of 500k turns); the estimate
-("≈ $120 / month estimated saving", `--bad`) with one faint line on how it is worked out; the fix in a mono block (a
-header says where it goes: CLAUDE.md or a terminal) with a Copy button, and the tool's link when the fix installs one;
-while watched, the `followUp` or "Copied 12 Nov · watching your next sessions" in the accent; "See it in your sessions
+("≈ $120 / month estimated saving", `--bad`) with one faint line on how it is worked out; the fix in a mono block, about 72ch wide with the text wrapped (a
+header says where it goes: "Add to AGENTS.md" or a terminal) with a Copy button, and the tool's link when the fix installs one;
+when the fix has `variants` the header also has radios: Universal and one logo per harness with its own wording, the
+usual harness (`usualHarness`) first, the choice kept in localStorage (try/catch); the estimate's how-line follows the
+wording. The reason and estimate lines are at most 80ch wide. A practice's `note` (rtk: on, configured, not set up) leads
+the panel. While watched, the `followUp` or "Copied 12 Nov · watching your next sessions" in plain text (not the
+accent: a worse number must not look like good news); "See it in your sessions
 →"; then `what` and "How Merlin spots it". Opening a suggestion's or technique's row posts `open` to
 `/api/moments/engage`, pressing Copy posts `copy`.
 

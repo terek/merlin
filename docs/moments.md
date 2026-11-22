@@ -84,15 +84,15 @@ Boris before Yegge. A technique (below) on an unseen moment comes before all of 
 **Techniques.** A technique is a gap the history shows on one practice, with an estimate of the saving,
 a fix to copy and, once copied, a follow-up. It belongs to the moment it is attached to: when that
 moment is unseen the technique is a suggestion (a row at the end of the table); when it is seen the
-technique is the saving tag and the open row's section on the moment's own row
+technique is the SAVES cell and the open row's section on the moment's own row
 (`MomentView.technique`). Estimates use the last 28 days at the API prices of the pricing tables, are
 scaled by 30/28 and rounded to two figures. Each has `days` (when the gap showed) and an `example`.
 
 | Technique | Attached to | Fires when | Estimate (28 days, then x 30/28) |
 |---|---|---|---|
-| Heavy context | `clean-slate` | 3+ interactive main-thread turns and at least 20% of them (or of their cost) ran above 250k tokens of context; or any turn at 500k+ (the reason then leads with that count) | each turn above 250k: `cost x (context - 150k) / context`, the part of its price paid for context beyond a lean 150k. Fix: a CLAUDE.md paragraph (hand-off note, fresh session, exploration to sub-agents) |
-| Orchestrator | `model-routing` | 3+ turns on a model whose output price is above the latest Sonnet's, each with 10+ edit and shell calls and at most one sub-agent started | those turns' cost per model, minus the same tokens priced at the latest Sonnet in the table. Fix: a CLAUDE.md paragraph ("Act as the orchestrator ..."), nothing else |
-| Shell compressor | `compressed-shell` | no rtk hook in Claude Code's user `settings.json`, and the estimate is at least $1 a month | per turn with shell output: tokens = bytes / 4 (Claude digests, `Turn.shellOutputBytes`), capped at 20k tokens a turn; times the later calls that read it again (the rest of the turn, then later turns of the same compaction epoch), capped at 100; times the main model's cache-read price; times 0.7 (rtk claims 60 to 90%). Fix: `brew install rtk` and `rtk init -g`, with a link to its README |
+| Heavy context | `clean-slate` | 3+ interactive main-thread turns and at least 20% of them (or of their cost) ran above 250k tokens of context; or any turn at 500k+ (the reason then leads with that count) | each turn above 250k: `cost x (context - 150k) / context`, the part of its price paid for context beyond a lean 150k. Fix: an AGENTS.md paragraph (hand-off note, fresh session, exploration to sub-agents), the same for every harness |
+| Orchestrator | `model-routing` | 3+ turns on a model whose output price is above the latest Sonnet's, each with 10+ edit and shell calls and at most one sub-agent started | those turns' cost per model, minus the same tokens priced at the latest Sonnet in the table. Fix: an AGENTS.md paragraph ("Act as the orchestrator ..."), nothing else; its universal wording says "a mid-tier model", and `fix.variants` has the Claude Code wording (Sonnet) with its own how-line |
+| Shell compressor | `compressed-shell` | no rtk hook in Claude Code's user `settings.json` and no shell call rewritten to rtk in the window (see the practice below), and the estimate is at least $1 a month | per turn with shell output that no hook rewrote: tokens = bytes / 4 (Claude digests, `Turn.shellOutputBytes`), capped at 20k tokens a turn; times the later calls that read it again (the rest of the turn, then later turns of the same compaction epoch), capped at 100; times the main model's cache-read price; times 0.7 (rtk claims 60 to 90%). Fix: `brew install rtk` and `rtk init -g`, with a link to its README |
 
 `unroutedAgents` stays the symptom of `model-routing`: it counts sub-agents that ran on the main
 model, which the orchestrator technique does not look at. The old `context-isolation` symptom (150k
@@ -168,7 +168,7 @@ starting like "no", "wrong", "still", "doesn't work", "revert", ….
 | `builds-harness` | Builds the harness | harness | a turn with edits touched CLAUDE.md, AGENTS.md, `.claude/skills`, commands, agents, hooks or settings | digest |
 | `context-isolation` | Context isolation | context | a fresh-context subagent of type Explore, or one with 5+ read-only calls and no edits | digest |
 | `model-routing` | Model routing | harness | a subagent on a model with a lower output price than the session's main model | digest |
-| `compressed-shell` | Compressed shell output | harness | a turn with shell calls in a Claude Code session after a shell-output compressor (an rtk hook in the user `settings.json`) was set up; "after" is that file's modification time, so a later unrelated edit of the settings moves it | setup + digest |
+| `compressed-shell` | Compressed shell output | harness | a turn in which a PreToolUse hook rewrote a shell call to run through a compressor such as rtk: the hook's own `hook_success` record in the transcript (`Turn.shellCompressed`, transcript-format §4c). The settings only say whether it is configured, for the row's note: "rtk is on: it rewrote 1,240 shell commands in the last 28 days.", "configured, but no rewrites seen lately" or "not set up" (`MomentView.note`) | digest (+ setup for the note) |
 | `parallel-sessions` | Parallel sessions | parallelism | 2+ sessions working at once (turns less than 5 min apart form one stretch); one hit per day | digest |
 | `worktrees` | Worktrees | parallelism | `EnterWorktree`, or a working directory under `worktrees/` | digest |
 | `background-agents` | Background agents | parallelism | a background subagent | digest |
@@ -249,8 +249,8 @@ and what to try next. Every claim links to the instrument view that shows it. To
 - **Next.** Suggested unseen moments are rows at the end, with a dotted circle; a suggested seen moment keeps
   its row, tagged "try again". At most three suggestions in all.
 - **Techniques.** A technique with an estimate of $20 a month or more has a red filled circle instead of
-  the dotted one (below that, the dotted circle stays and the estimate tag still shows). On a seen row the
-  depth glyph stays and the tag "~ $120 / mo" follows the title. While the person is watching a copied fix
+  the dotted one (below that, the dotted circle stays and the SAVES cell still shows). On a seen row the
+  depth glyph stays and the estimate is in the SAVES column ("≈ $120 / mo", sortable, empty for most rows). While the person is watching a copied fix
   (28 days) a clock circle replaces the red or dotted circle, and on a seen row the depth glyph. Watching
   and red rank with the suggestions in the depth sort.
 - **More to try.** The unseen moments that are not suggestions, collapsed.

@@ -1152,6 +1152,8 @@ export interface MomentView {
   examples?: MomentHit[]
   /** A saving the history shows for this practice; on a seen moment it is the tag and the open row's section. */
   technique?: MomentTechnique
+  /** Where the person stands with this practice today (rtk: on, configured but silent, not set up). */
+  note?: string
 }
 
 /** What to copy: a paragraph for CLAUDE.md or AGENTS.md, or commands for a terminal. */
@@ -1160,6 +1162,15 @@ export interface MomentFix {
   text: string
   /** The tool's own page, when the fix installs one. */
   link?: string
+  /** The same fix worded for one harness (it may name that harness's models); `text` is the universal wording. */
+  variants?: MomentFixVariant[]
+}
+
+export interface MomentFixVariant {
+  harness: string
+  text: string
+  /** The estimate's how-line for this wording. */
+  how?: string
 }
 
 /** An estimate of the saving per 30 days, at API prices. */
@@ -1241,6 +1252,8 @@ export interface MomentsReport {
   moments: MomentView[]
   suggestions: MomentSuggestion[]
   overYegge?: boolean
+  /** The harness most of the window's interactive sessions ran in. */
+  usualHarness?: string
 }
 
 // ---- request parameters ---------------------------------------------------------------

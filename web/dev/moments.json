@@ -1429,10 +1429,10 @@
       "detects": "Counted when a short prompt (2 to 25 words, not a plain approval) leads to three or more edits with no correction after it.",
       "status": "habit",
       "depth": "routine",
-      "hits": 120,
-      "sessions": 100,
+      "hits": 114,
+      "sessions": 94,
       "weeks": 10,
-      "recentHits": 40,
+      "recentHits": 34,
       "first": "2026-08-24T09:00:00Z",
       "firstHit": {
         "at": "2026-08-24T09:00:00Z",
@@ -2018,12 +2018,12 @@
         },
         {
           "day": "2026-10-23",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-23T10:40:00Z",
+            "at": "2026-10-23T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-090"
+              "id": "synthetic-089"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -2031,12 +2031,12 @@
         },
         {
           "day": "2026-10-26",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-26T10:40:00Z",
+            "at": "2026-10-26T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-092"
+              "id": "synthetic-091"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -2044,12 +2044,12 @@
         },
         {
           "day": "2026-10-27",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-27T10:40:00Z",
+            "at": "2026-10-27T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-094"
+              "id": "synthetic-093"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -2057,12 +2057,12 @@
         },
         {
           "day": "2026-10-28",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-28T10:40:00Z",
+            "at": "2026-10-28T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-096"
+              "id": "synthetic-095"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -2070,12 +2070,12 @@
         },
         {
           "day": "2026-10-29",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-29T10:40:00Z",
+            "at": "2026-10-29T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-098"
+              "id": "synthetic-097"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -2083,29 +2083,20 @@
         },
         {
           "day": "2026-10-30",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-30T10:40:00Z",
+            "at": "2026-10-30T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-100"
+              "id": "synthetic-099"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
           }
         }
       ],
-      "last": "2026-10-30T10:40:00Z",
+      "last": "2026-10-30T10:00:00Z",
       "examples": [
-        {
-          "at": "2026-10-30T10:40:00Z",
-          "session": {
-            "harness": "claude",
-            "id": "synthetic-100"
-          },
-          "turn": 1,
-          "note": "5 words, 8 edits, no correction"
-        },
         {
           "at": "2026-10-30T10:00:00Z",
           "session": {
@@ -2116,10 +2107,19 @@
           "note": "5 words, 8 edits, no correction"
         },
         {
-          "at": "2026-10-29T10:40:00Z",
+          "at": "2026-10-29T10:00:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-098"
+            "id": "synthetic-097"
+          },
+          "turn": 1,
+          "note": "5 words, 8 edits, no correction"
+        },
+        {
+          "at": "2026-10-28T10:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-095"
           },
           "turn": 1,
           "note": "5 words, 8 edits, no correction"
@@ -4204,14 +4204,21 @@
         }
       ],
       "technique": {
-        "reason": "40 turns on claude-opus-5-5 ran 10 or more edits and shell calls themselves (520 calls in all), with at most one sub-agent. Work like that does not need the priciest model.",
+        "reason": "34 turns on claude-opus-5-5 ran 10 or more edits and shell calls themselves (442 calls in all), with at most one sub-agent. Work like that does not need the priciest model.",
         "estimate": {
-          "monthlyUSD": 71,
-          "how": "Those turns' cost, priced again at the Sonnet tier (claude-sonnet-5-5): the difference over the last 28 days, scaled to 30 days."
+          "monthlyUSD": 59,
+          "how": "Those turns' cost, priced again at a mid-tier model: the difference over the last 28 days, scaled to 30 days."
         },
         "fix": {
           "kind": "claudemd",
-          "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on a cheaper model such as Sonnet, each with a precise brief. Check what they return before reporting it as done."
+          "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on a mid-tier model, each with a precise brief. Check what they return before reporting it as done.",
+          "variants": [
+            {
+              "harness": "claude",
+              "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on Sonnet, each with a precise brief. Check what they return before reporting it as done.",
+              "how": "Those turns' cost, priced again at Sonnet (claude-sonnet-5-5): the difference over the last 28 days, scaled to 30 days."
+            }
+          ]
         },
         "days": [
           {
@@ -4398,12 +4405,12 @@
           },
           {
             "day": "2026-10-23",
-            "hits": 2,
+            "hits": 1,
             "example": {
-              "at": "2026-10-23T10:40:00Z",
+              "at": "2026-10-23T10:00:00Z",
               "session": {
                 "harness": "claude",
-                "id": "synthetic-090"
+                "id": "synthetic-089"
               },
               "turn": 1,
               "note": "13 edits and shell calls on a premium model"
@@ -4411,12 +4418,12 @@
           },
           {
             "day": "2026-10-26",
-            "hits": 2,
+            "hits": 1,
             "example": {
-              "at": "2026-10-26T10:40:00Z",
+              "at": "2026-10-26T10:00:00Z",
               "session": {
                 "harness": "claude",
-                "id": "synthetic-092"
+                "id": "synthetic-091"
               },
               "turn": 1,
               "note": "13 edits and shell calls on a premium model"
@@ -4424,12 +4431,12 @@
           },
           {
             "day": "2026-10-27",
-            "hits": 2,
+            "hits": 1,
             "example": {
-              "at": "2026-10-27T10:40:00Z",
+              "at": "2026-10-27T10:00:00Z",
               "session": {
                 "harness": "claude",
-                "id": "synthetic-094"
+                "id": "synthetic-093"
               },
               "turn": 1,
               "note": "13 edits and shell calls on a premium model"
@@ -4437,12 +4444,12 @@
           },
           {
             "day": "2026-10-28",
-            "hits": 2,
+            "hits": 1,
             "example": {
-              "at": "2026-10-28T10:40:00Z",
+              "at": "2026-10-28T10:00:00Z",
               "session": {
                 "harness": "claude",
-                "id": "synthetic-096"
+                "id": "synthetic-095"
               },
               "turn": 1,
               "note": "13 edits and shell calls on a premium model"
@@ -4450,12 +4457,12 @@
           },
           {
             "day": "2026-10-29",
-            "hits": 2,
+            "hits": 1,
             "example": {
-              "at": "2026-10-29T10:40:00Z",
+              "at": "2026-10-29T10:00:00Z",
               "session": {
                 "harness": "claude",
-                "id": "synthetic-098"
+                "id": "synthetic-097"
               },
               "turn": 1,
               "note": "13 edits and shell calls on a premium model"
@@ -4463,12 +4470,12 @@
           },
           {
             "day": "2026-10-30",
-            "hits": 2,
+            "hits": 1,
             "example": {
-              "at": "2026-10-30T10:40:00Z",
+              "at": "2026-10-30T10:00:00Z",
               "session": {
                 "harness": "claude",
-                "id": "synthetic-100"
+                "id": "synthetic-099"
               },
               "turn": 1,
               "note": "13 edits and shell calls on a premium model"
@@ -4476,10 +4483,10 @@
           }
         ],
         "example": {
-          "at": "2026-10-30T10:40:00Z",
+          "at": "2026-10-30T10:00:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-100"
+            "id": "synthetic-099"
           },
           "turn": 1
         },
@@ -4487,7 +4494,7 @@
           "openedAt": "2026-10-22T16:00:00Z",
           "copiedAt": "2026-10-22T18:00:00Z",
           "watching": true,
-          "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 10 or more edits and shell calls went from $2.84 to $3.60 per session (12 sessions). A comparison, not proof."
+          "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 10 or more edits and shell calls went from $2.84 to $1.80 per session (12 sessions). A comparison, not proof."
         }
       }
     },
@@ -4498,12 +4505,13 @@
       "title": "Compressed shell output",
       "what": "A hook shrank the output of your shell commands before the agent read it.",
       "try": "A hook such as rtk rewrites git status, test runs and listings into a compact form. The agent reads far fewer tokens, and so does every later call that carries them.",
-      "detects": "Counted for each turn with shell calls in a Claude Code session started after a shell-output compressor (an rtk hook) was set up in your settings.",
+      "detects": "Counted for each turn in which a hook rewrote a shell command to run through a compressor such as rtk, as the hook's own record in the session says.",
       "status": "unseen",
       "hits": 0,
       "sessions": 0,
       "weeks": 0,
-      "recentHits": 0
+      "recentHits": 0,
+      "note": "rtk is not set up."
     },
     {
       "id": "parallel-sessions",
@@ -6286,7 +6294,7 @@
                 "id": "synthetic-061"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6299,7 +6307,7 @@
                 "id": "synthetic-064"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6312,7 +6320,7 @@
                 "id": "synthetic-066"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6325,7 +6333,7 @@
                 "id": "synthetic-068"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6338,7 +6346,7 @@
                 "id": "synthetic-069"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6351,7 +6359,7 @@
                 "id": "synthetic-072"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6364,7 +6372,7 @@
                 "id": "synthetic-074"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6377,7 +6385,7 @@
                 "id": "synthetic-076"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6390,7 +6398,7 @@
                 "id": "synthetic-077"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6403,7 +6411,7 @@
                 "id": "synthetic-079"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6416,7 +6424,7 @@
                 "id": "synthetic-082"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6429,7 +6437,7 @@
                 "id": "synthetic-084"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6442,7 +6450,7 @@
                 "id": "synthetic-085"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6455,7 +6463,7 @@
                 "id": "synthetic-087"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6468,7 +6476,7 @@
                 "id": "synthetic-089"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6481,7 +6489,7 @@
                 "id": "synthetic-092"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6494,7 +6502,7 @@
                 "id": "synthetic-093"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6507,7 +6515,7 @@
                 "id": "synthetic-095"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6520,7 +6528,7 @@
                 "id": "synthetic-097"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           },
           {
@@ -6533,7 +6541,7 @@
                 "id": "synthetic-100"
               },
               "turn": 0,
-              "note": "about 20k tokens of shell output"
+              "note": "about 20k tokens of shell output, not compressed"
             }
           }
         ],
@@ -6561,5 +6569,6 @@
       }
     }
   ],
-  "overYegge": true
+  "overYegge": true,
+  "usualHarness": "claude"
 }

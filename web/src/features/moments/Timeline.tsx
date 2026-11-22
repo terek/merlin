@@ -11,7 +11,6 @@ import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { dayStart, parseTime, shortDate } from '../../lib/time'
-import { CopyButton } from '../../ui/controls'
 import { useWidth } from '../spend/useWidth'
 import {
   activityArea,
@@ -38,6 +37,7 @@ import {
   type TimelineLayout,
 } from './layout'
 import { useLabelMeasure } from './measure'
+import { TechniqueSection } from './Technique'
 
 /** The intensity strip, the month axis, and what is above the first row. */
 const AREA_TOP = 0
@@ -252,10 +252,7 @@ export function Timeline({
   const since = report.since
   const measure = useLabelMeasure()
   const again = placeSuggestions(report.moments, report.suggestions).again
-  const tagWidth = (m: MomentView) => {
-    const sug = report.suggestions.find((x) => x.moment === m.id)
-    return tagsWidth(sug ? suggestionTags(savingTag(sug.technique), false) : rowTags(m, again.has(m.id)), measure)
-  }
+  const tagWidth = (m: MomentView) => tagsWidth(rowTags(again.has(m.id)), measure)
   const l = since
     ? layoutRows(report.moments, since, report.now, width, measure, tagWidth, suggestedMoments(report))
     : null
@@ -292,20 +289,11 @@ function suggestedMoments(report: MomentsReport): MomentView[] {
 /** A small word after a row's title. */
 interface RowTag {
   text: string
-  /** The saving tag is red, "try again" faint. */
-  red?: boolean
 }
 
-/** The tags after a seen row's title: the saving of its technique, then "try again". */
-function rowTags(m: MomentView, again: boolean): RowTag[] {
-  return suggestionTags(savingTag(m.technique), again)
-}
-
-function suggestionTags(saving: string, again: boolean): RowTag[] {
-  const out: RowTag[] = []
-  if (saving) out.push({ text: saving, red: true })
-  if (again) out.push({ text: 'try again' })
-  return out
+/** The tags after a seen row's title: "try again" (the saving has its own column). */
+function rowTags(again: boolean): RowTag[] {
+  return again ? [{ text: 'try again' }] : []
 }
 
 const TAG_SIZE = 11
@@ -410,7 +398,7 @@ function Chart({
       style={{ fill: pin === id ? 'var(--chip-sel)' : hover === id ? 'var(--surface-2)' : 'transparent' }}
     />
   )
-  const label = (m: MomentView, tags: RowTag[]) => {
+  const label = (m: MomentView, tags: RowTag[], t?: MomentTechnique) => {
     const w = (t: string) => measure(t, 400, ROW_LABEL_SIZE)
     const text = fitText(m.title, l.cols.category - ROW_GLYPH_W - 8 - tagsWidth(tags, measure), w)
     let tagX = ROW_GLYPH_W + w(text) + TAG_GAP
@@ -435,17 +423,23 @@ function Chart({
             {m.hits}
           </text>
         )}
+        {savingTag(t) && (
+          <text
+            x={l.cols.savesRight}
+            y={ROWS_PITCH / 2 + 4}
+            fontSize={12}
+            textAnchor="end"
+            className="tabular-nums"
+            style={{ fill: saves(t) ? 'var(--bad)' : 'var(--muted)' }}
+          >
+            {savingTag(t)}
+          </text>
+        )}
         {tags.map((t) => {
           const x = tagX
           tagX += measure(t.text, 400, TAG_SIZE) + TAG_GAP
           return (
-            <text
-              key={t.text}
-              x={x}
-              y={ROWS_PITCH / 2 + 4}
-              fontSize={TAG_SIZE}
-              style={{ fill: t.red ? 'var(--bad)' : 'var(--faint)' }}
-            >
+            <text key={t.text} x={x} y={ROWS_PITCH / 2 + 4} fontSize={TAG_SIZE} style={{ fill: 'var(--faint)' }}>
               {t.text}
             </text>
           )
@@ -509,6 +503,9 @@ function Chart({
           <span className="absolute -translate-x-full" style={{ left: l.cols.countRight }}>
             <SortButton label="Count" k="count" sort={sort} onSort={onSort} arrowFirst />
           </span>
+          <span className="absolute -translate-x-full" style={{ left: l.cols.savesRight }}>
+            <SortButton label="Saves" k="saves" sort={sort} onSort={onSort} arrowFirst />
+          </span>
           <span className="absolute" style={{ left: l.left }}>
             <SortButton label="Start" k="start" sort={sort} onSort={onSort} halo />
           </span>
@@ -536,41 +533,78 @@ function Chart({
                   <title>{m.title}</title>
                   {band(m.id)}
                   {mark(seenMark(m))}
-                  {label(m, rowTags(m, again.has(m.id)))}
-                  {ticks.length > 0 && (
-                    <line
-                      x1={Math.min(...ticks.map((t) => t.x))}
-                      x2={l.right}
-                      y1={ROWS_PITCH / 2}
-                      y2={ROWS_PITCH / 2}
-                      style={{
-                        stroke: on ? 'var(--accent)' : raised ? 'var(--text)' : 'var(--muted)',
-                        opacity: on ? 0.3 : raised ? 0.2 : 0.1,
-                      }}
-                    />
-                  )}
-                  <Squares ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} />
+                  {label(m, rowTags(again.has(m.id)), m.technique)}
+                  <Track ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} l={l} />
                 </svg>
               </div>
-              {on && <Panel moment={m} again={again.get(m.id)} onCopy={onCopy} />}
+              {on && <Panel moment={m} again={again.get(m.id)} usual={report.usualHarness} onCopy={onCopy} />}
             </div>
           )
         })}
-        {suggested.map(({ s, m }) => (
-          <div key={m.id} className="relative">
-            <div {...rowProps(m.id, `${kindWord(nextMark(s.technique))}: ${m.title}`)}>
-              <svg width={l.width} height={ROWS_PITCH} className="block">
-                <title>{m.title}</title>
-                {band(m.id)}
-                {mark(nextMark(s.technique))}
-                {label(m, suggestionTags(savingTag(s.technique), false))}
-              </svg>
+        {suggested.map(({ s, m }) => {
+          const sugTicks = bucketTicks({ days: s.technique?.days }, l, start)
+          return (
+            <div key={m.id} className="relative">
+              <div {...rowProps(m.id, `${kindWord(nextMark(s.technique))}: ${m.title}`)}>
+                <svg width={l.width} height={ROWS_PITCH} className="block">
+                  <title>{m.title}</title>
+                  {band(m.id)}
+                  {mark(nextMark(s.technique))}
+                  {label(m, [], s.technique)}
+                  <Track
+                    ticks={sugTicks}
+                    on={pin === m.id}
+                    raised={hover === m.id && pin !== m.id}
+                    tickDay={tickDay}
+                    onTick={onTick}
+                    now={now}
+                    l={l}
+                  />
+                </svg>
+              </div>
+              {pin === m.id && <NextPanel moment={m} s={s} now={now} usual={report.usualHarness} onCopy={onCopy} />}
             </div>
-            {pin === m.id && <NextPanel moment={m} s={s} now={now} onCopy={onCopy} />}
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
+  )
+}
+
+/** A row's track: the line from its first square to the end, and the squares. */
+function Track({
+  ticks,
+  on,
+  raised,
+  tickDay,
+  onTick,
+  now,
+  l,
+}: {
+  ticks: ReturnType<typeof bucketTicks>
+  on: boolean
+  raised: boolean
+  tickDay: string | null
+  onTick: (day: string | null) => void
+  now: Date
+  l: TimelineLayout
+}) {
+  return (
+    <>
+      {ticks.length > 0 && (
+        <line
+          x1={Math.min(...ticks.map((t) => t.x))}
+          x2={l.right}
+          y1={ROWS_PITCH / 2}
+          y2={ROWS_PITCH / 2}
+          style={{
+            stroke: on ? 'var(--accent)' : raised ? 'var(--text)' : 'var(--muted)',
+            opacity: on ? 0.3 : raised ? 0.2 : 0.1,
+          }}
+        />
+      )}
+      <Squares ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} />
+    </>
   )
 }
 
@@ -697,64 +731,6 @@ function Suggestion({ moment: m, reason, example }: { moment: MomentView; reason
   )
 }
 
-/** "≈ $1,200 / month". */
-function monthly(usd: number): string {
-  return `≈ $${Math.round(usd).toLocaleString('en-US')} / month`
-}
-
-/**
- * A technique under an open row: the reason, the estimate and how it is worked out, the fix to copy, and what came of
- * it once the person copied it.
- */
-function TechniqueSection({ t, now, onCopy }: { t: MomentTechnique; now: Date; onCopy?: () => void }) {
-  const e = t.engaged
-  const copied = parseTime(e?.copiedAt)
-  return (
-    <div className="space-y-1.5 pt-1" data-testid="technique">
-      <p>{t.reason}</p>
-      {t.estimate && (
-        <div>
-          <p>
-            <span className="font-medium text-bad tabular-nums">{monthly(t.estimate.monthlyUSD)}</span>{' '}
-            <span className="text-faint">estimated saving</span>
-          </p>
-          <p className="text-faint">{t.estimate.how}</p>
-        </div>
-      )}
-      <div className="max-w-2xl rounded border border-line bg-surface-2">
-        <div className="flex items-center justify-between gap-2 border-line border-b py-0.5 pr-1 pl-2.5">
-          <span className="text-faint text-meta">
-            {t.fix.kind === 'shell' ? 'Run in a terminal' : 'Add to CLAUDE.md or AGENTS.md'}
-          </span>
-          <CopyButton text={t.fix.text} onCopy={onCopy}>
-            Copy
-          </CopyButton>
-        </div>
-        <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-meta text-fg">
-          {t.fix.text}
-        </pre>
-      </div>
-      {t.fix.link && (
-        <p>
-          <a href={t.fix.link} target="_blank" rel="noreferrer">
-            {t.fix.link.replace(/^https:\/\//, '')} ↗
-          </a>
-        </p>
-      )}
-      {e?.watching && (
-        <p className="text-accent">
-          {e.followUp ?? `Copied ${copied ? shortDate(copied, now) : ''} · watching your next sessions`}
-        </p>
-      )}
-      {t.example && (
-        <p>
-          <Link to={hitPath(t.example)}>See it in your sessions →</Link>
-        </p>
-      )}
-    </div>
-  )
-}
-
 /** What Merlin says a practice is, and how it spots it. */
 function About({ moment: m }: { moment: MomentView }) {
   return (
@@ -773,15 +749,18 @@ function About({ moment: m }: { moment: MomentView }) {
 function Panel({
   moment: m,
   again,
+  usual,
   onCopy,
 }: {
+  usual?: string
   moment: MomentView
   again?: { reason?: string; example?: MomentHit }
   onCopy?: (id: string) => void
 }) {
   return (
     <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
-      {m.technique && <TechniqueSection t={m.technique} now={new Date()} onCopy={() => onCopy?.(m.id)} />}
+      {m.note && <p className="pt-1">{m.note}</p>}
+      {m.technique && <TechniqueSection t={m.technique} now={new Date()} usual={usual} onCopy={() => onCopy?.(m.id)} />}
       <About moment={m} />
       {!m.technique && again && <Suggestion moment={m} reason={again.reason} example={again.example} />}
     </div>
@@ -793,8 +772,10 @@ function NextPanel({
   moment: m,
   s,
   now,
+  usual,
   onCopy,
 }: {
+  usual?: string
   moment: MomentView
   s: MomentsReport['suggestions'][number]
   now: Date
@@ -804,7 +785,8 @@ function NextPanel({
     <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
       {s.technique ? (
         <>
-          <TechniqueSection t={s.technique} now={now} onCopy={() => onCopy?.(m.id)} />
+          {m.note && <p className="pt-1">{m.note}</p>}
+          <TechniqueSection t={s.technique} now={now} usual={usual} onCopy={() => onCopy?.(m.id)} />
           <About moment={m} />
         </>
       ) : (

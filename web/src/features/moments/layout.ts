@@ -1,7 +1,15 @@
 // The Moments timeline's arithmetic (docs/moments.md, "The page"): the time axis, one row per moment, the intensity
 // strip, the month labels and the squares of a row's activity. Pure, so it is tested.
 
-import type { MomentActivityDay, MomentDay, MomentDepth, MomentHit, MomentTechnique, MomentView } from '../../api/types'
+import type {
+  MomentActivityDay,
+  MomentDay,
+  MomentDepth,
+  MomentFix,
+  MomentHit,
+  MomentTechnique,
+  MomentView,
+} from '../../api/types'
 import { dayStart, localDay } from '../../lib/time'
 
 /** The edge of the plot, left and right. */
@@ -40,7 +48,7 @@ export interface SuggestionLike {
 /** The estimate, in USD a month, from which a technique is marked red ("saves money"). */
 export const SAVES_MIN = 20
 
-/** The estimate of a technique as the tag says it: "≈ $120 / mo". Empty when there is none. */
+/** The estimate of a technique as the SAVES column says it: "≈ $120 / mo". Empty when there is none. */
 export function savingTag(t: MomentTechnique | undefined): string {
   const usd = t?.estimate?.monthlyUSD
   return usd ? `≈ $${Math.round(usd).toLocaleString('en-US')} / mo` : ''
@@ -54,6 +62,28 @@ export function isWatching(t: MomentTechnique | undefined): boolean {
 /** Whether the technique is worth a red mark. */
 export function saves(t: MomentTechnique | undefined): boolean {
   return (t?.estimate?.monthlyUSD ?? 0) >= SAVES_MIN
+}
+
+/** The wording choice that every harness can follow. */
+export const UNIVERSAL = 'universal'
+
+/** The choices of a fix's toggle: Universal and each harness with its own wording; none when there is only one. */
+export function fixChoices(fix: MomentFix): string[] {
+  const v = (fix.variants ?? []).map((x) => x.harness)
+  return v.length > 0 ? [UNIVERSAL, ...v] : []
+}
+
+/** The choice to show: the remembered one if it still exists, else the person's usual harness, else Universal. */
+export function defaultChoice(fix: MomentFix, usual: string | undefined, saved: string | null): string {
+  const all = fixChoices(fix)
+  if (saved && all.includes(saved)) return saved
+  return usual && all.includes(usual) ? usual : UNIVERSAL
+}
+
+/** The text of a fix under a choice, and the estimate's how-line when that wording has its own. */
+export function fixWording(fix: MomentFix, choice: string): { text: string; how?: string } {
+  const v = fix.variants?.find((x) => x.harness === choice)
+  return v ? { text: v.text, how: v.how } : { text: fix.text }
 }
 
 /**
@@ -93,7 +123,7 @@ export interface TimelineLayout {
   left: number
   right: number
   /** The table's columns, in px from the left edge: the title starts at ROW_GLYPH_W. */
-  cols: { category: number; countRight: number }
+  cols: { category: number; countRight: number; savesRight: number }
   /** One row per seen moment. */
   rows: MomentView[]
 }
@@ -236,7 +266,7 @@ export function bucketDays(days: MomentDay[], since: string, k: number): Bucket[
 }
 
 /** A moment's buckets placed on the event strip: one square each, at the bucket's start. */
-export function bucketTicks(m: MomentView, l: TimelineLayout, since: string): BucketTick[] {
+export function bucketTicks(m: Pick<MomentView, 'days'>, l: TimelineLayout, since: string): BucketTick[] {
   const k = daysPerBucket(l)
   const dayWidth = Math.max(1, l.right - l.left - 2 * PAD_X) / Math.max(1, (l.to - l.from) / DAY_MS)
   const ticks: BucketTick[] = bucketDays(m.days ?? [], since, k).map((b) => ({
@@ -267,6 +297,8 @@ export const TITLE_MAX = 300
 /** The width of the category and count columns. */
 export const CATEGORY_W = 88
 export const COUNT_W = 40
+/** The width of the SAVES column ("≈ $1,200 / mo" in the row text size). */
+export const SAVES_W = 92
 
 /** Where a row's label starts, from the left edge. */
 /** The width of the Depth column, which holds the mark centred under its header. */
@@ -294,7 +326,7 @@ export function layoutRows(
   now: string,
   width: number,
   measure: (text: string, weight?: number, size?: number) => number = (t) => labelWidth(t),
-  /** The width the tags after a row's title take, in px (the "try again" and saving tags). */
+  /** The width the tag after a row's title takes, in px ("try again"). */
   tagWidth: (m: MomentView) => number = () => 0,
   /** Rows that come after the table's own, such as the suggestions: their titles need room too. */
   extra: MomentView[] = [],
@@ -307,21 +339,22 @@ export function layoutRows(
   const title = Math.min(TITLE_MAX, Math.max(TITLE_MIN, Math.ceil(widest + 8)))
   const category = ROW_GLYPH_W + title
   const countRight = category + CATEGORY_W + COUNT_W
-  return { from, to, width, left: countRight + 12, right: width, cols: { category, countRight }, rows }
+  const savesRight = countRight + SAVES_W
+  return { from, to, width, left: savesRight + 12, right: width, cols: { category, countRight, savesRight }, rows }
 }
 
 /** What the table can be sorted by. */
-export type SortKey = 'depth' | 'moment' | 'category' | 'count' | 'start' | 'end'
+export type SortKey = 'depth' | 'moment' | 'category' | 'count' | 'saves' | 'start' | 'end'
 export interface Sort {
   key: SortKey
   dir: 'asc' | 'desc'
 }
 export const DEFAULT_SORT: Sort = { key: 'start', dir: 'asc' }
-const KEYS: SortKey[] = ['depth', 'moment', 'category', 'count', 'start', 'end']
+const KEYS: SortKey[] = ['depth', 'moment', 'category', 'count', 'saves', 'start', 'end']
 
 /** The direction a column starts with when it is first picked. */
 export function firstDir(key: SortKey): 'asc' | 'desc' {
-  return key === 'count' || key === 'end' ? 'desc' : 'asc'
+  return key === 'count' || key === 'saves' || key === 'end' ? 'desc' : 'asc'
 }
 
 /** `?sort=` as a Sort: "count", "-count"; anything else is the default. */
@@ -367,6 +400,8 @@ export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
         return m.category ?? ''
       case 'count':
         return m.hits
+      case 'saves':
+        return m.technique?.estimate?.monthlyUSD ?? 0
       case 'end':
         return time(m.last)
       default:

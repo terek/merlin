@@ -1393,7 +1393,11 @@ absent when the suggestion has no `reason`.
 moment (`moments[].technique`, the row keeps its place). `estimate.monthlyUSD` is the saving per
 30 days at API prices from the last `windowDays`; it is absent when the gap is gone and the technique
 is only here because its fix is being watched. `fix.kind` is `claudemd` (a paragraph to add to
-CLAUDE.md or AGENTS.md) or `shell` (commands for a terminal); `fix.link` is the tool's own page.
+AGENTS.md) or `shell` (commands for a terminal); `fix.link` is the tool's own page. `fix.text` is the universal
+wording (no model names); `fix.variants` (`harness`, `text`, optional `how`) is the same fix worded for one harness, and
+`how` replaces `estimate.how` for it. `moments[].note` says where the person stands with a practice today (rtk: on with
+the number of rewrites, configured but silent, or not set up). `usualHarness` is the harness most interactive sessions of
+the window ran in.
 `engaged` (on a suggestion, a technique or a seen moment with one) says what the person did:
 `openedAt` the first time the row was opened, `copiedAt` the latest copy; `watching` is true for
 `windowDays` after the copy; `followUp` is an association between the copy and the metric, set only

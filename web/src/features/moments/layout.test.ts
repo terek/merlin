@@ -8,8 +8,11 @@ import {
   clickSort,
   DEFAULT_SORT,
   daysPerBucket,
+  defaultChoice,
   firstDir,
   fitText,
+  fixChoices,
+  fixWording,
   formatSort,
   isWatching,
   layoutRows,
@@ -25,6 +28,7 @@ import {
   sortMoments,
   TITLE_MAX,
   TITLE_MIN,
+  UNIVERSAL,
   xOf,
 } from './layout'
 
@@ -283,5 +287,38 @@ describe('technique marks', () => {
         () => w,
       ).cols.category - ROW_GLYPH_W
     expect(title(60)).toBe(title(0) + 60)
+  })
+})
+
+describe('saves column and fix wording', () => {
+  const t = (usd: number) => ({
+    reason: 'r',
+    estimate: { monthlyUSD: usd, how: 'h' },
+    fix: { kind: 'claudemd' as const, text: 't' },
+  })
+
+  test('the SAVES column sits between the count and the timeline, and sorts high to low first', () => {
+    const l = layoutRows([moment('a', 1)], SINCE, NOW, 900)
+    expect(l.cols.savesRight).toBeGreaterThan(l.cols.countRight)
+    expect(l.left).toBeGreaterThan(l.cols.savesRight)
+    expect(firstDir('saves')).toBe('desc')
+    expect(parseSort('-saves')).toEqual({ key: 'saves', dir: 'desc' })
+    const a = { ...moment('a', 1), technique: t(30) }
+    const b = { ...moment('b', 2), technique: t(90) }
+    const c = moment('c', 3)
+    expect(sortMoments([a, c, b], { key: 'saves', dir: 'desc' }).map((m) => m.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  test('a fix without variants has no toggle; with variants the usual harness opens first', () => {
+    const plainFix = { kind: 'claudemd' as const, text: 'u' }
+    expect(fixChoices(plainFix)).toEqual([])
+    const fix = { ...plainFix, variants: [{ harness: 'claude', text: 'c', how: 'Sonnet' }] }
+    expect(fixChoices(fix)).toEqual([UNIVERSAL, 'claude'])
+    expect(defaultChoice(fix, 'claude', null)).toBe('claude')
+    expect(defaultChoice(fix, 'codex', null)).toBe(UNIVERSAL)
+    expect(defaultChoice(fix, 'claude', UNIVERSAL)).toBe(UNIVERSAL)
+    expect(defaultChoice(fix, undefined, 'gone')).toBe(UNIVERSAL)
+    expect(fixWording(fix, UNIVERSAL)).toEqual({ text: 'u' })
+    expect(fixWording(fix, 'claude')).toEqual({ text: 'c', how: 'Sonnet' })
   })
 })
