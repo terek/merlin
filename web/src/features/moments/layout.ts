@@ -60,15 +60,20 @@ export function dollars(usd: number): string {
 }
 
 /**
- * What the SAVES cell shows for a row: the realized saving (green) first, then what could still be saved (red from
- * SAVES_MIN, muted below it). Empty strings for what is absent.
+ * What the SAVES cell shows for a row: exactly one amount, red or green. The amount that could still be saved wins
+ * (red from SAVES_MIN, muted below it); else the amount already saved (green). Empty text when there is none.
  */
 export function savesCell(m: Pick<MomentView, 'saved'>, t: MomentTechnique | undefined) {
-  const green = m.saved?.monthlyUSD ?? 0
   const red = t?.estimate?.monthlyUSD ?? 0
-  const g = green >= 1 ? dollars(green) : ''
-  const r = red > 0 ? dollars(red) : ''
-  return { green: g, red: r, hot: red >= SAVES_MIN, both: !!g && !!r }
+  const green = m.saved?.monthlyUSD ?? 0
+  if (red > 0)
+    return {
+      text: `≈ ${dollars(red)} / mo`,
+      color: red >= SAVES_MIN ? 'var(--bad)' : 'var(--muted)',
+      kind: 'red' as const,
+    }
+  if (green >= 1) return { text: `≈ ${dollars(green)} / mo`, color: 'var(--ok)', kind: 'green' as const }
+  return { text: '', color: 'var(--muted)', kind: 'none' as const }
 }
 
 /** Whether the technique's fix was copied lately and Merlin is watching what comes of it. */
@@ -406,6 +411,13 @@ const WATCHING_RANK = 4
 const time = (s: string | undefined) => Date.parse(s ?? '') || 0
 
 /** The moments in the order of a Sort; ties fall back to the start, then the title. Does not change its input. */
+/** The SAVES sort key: red amounts above every green one. */
+function savesRank(m: MomentView): number {
+  const c = savesCell(m, m.technique)
+  const usd = c.kind === 'red' ? (m.technique?.estimate?.monthlyUSD ?? 0) : (m.saved?.monthlyUSD ?? 0)
+  return c.kind === 'red' ? 1e7 + usd : c.kind === 'green' ? usd : 0
+}
+
 export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
   const by = (m: MomentView): number | string => {
     switch (sort.key) {
@@ -418,8 +430,8 @@ export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
       case 'count':
         return m.hits
       case 'saves':
-        // the red amount first, then the green one
-        return (m.technique?.estimate?.monthlyUSD ?? 0) * 1e7 + (m.saved?.monthlyUSD ?? 0)
+        // red rows by amount, then green rows by amount
+        return savesRank(m)
       case 'end':
         return time(m.last)
       default:

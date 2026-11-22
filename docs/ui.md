@@ -272,7 +272,7 @@ same whether or not a session is open in the Overview, and no page puts tools in
 Full width, on the page surface like Overview and Cost (`bg-surface`, the page scrolls inside itself, the title block and
 section borders as on the other pages): one table, the whole page. The key is in the shell's legend panel
 (`<PanelTab id="moments">`, `MomentsKey`), a map key as on the session page (`spend/Key.tsx`): the same section heading
-and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, to try, could save and watching; Saves: could save (red) and saving (green); Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
+and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, to try, could save and watching; Saves: could save (red) and saving (green), one colour per row; Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
 category texts; those are in the row's panel. There is no legend line under the table.
 
 **Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed
@@ -290,7 +290,7 @@ ascending); the pure rules (`sortMoments`, `parseSort`, `formatSort`, `clickSort
 the real times, never by the clamped x.
 
 **Rows.** One 20 px row per moment: the depth mark (right-aligned in the Depth column, under the arrow slot), the title (13 px, with a quiet "try again" tag when the moment is
-also suggested), the category (a quiet word), the count (hits, tabular numbers), the SAVES cell (what could be saved, a technique's estimate, "≈ $120 / mo", `--bad` from $20, else muted; and what is already saved, `MomentView.saved`, in `--ok`; a row with both shows green then red, "$12 $59 / mo"; empty for most rows; sortable, high to low first, by the red amount, then the green one). An open row with a saving starts with a green line "≈ $12 / month saved" and a faint line on how it was worked out, then the track: a 4 px square per active
+also suggested), the category (a quiet word), the count (hits, tabular numbers), the SAVES cell (exactly one amount, in its colour, "≈ $120 / mo": what could be saved, a technique's estimate, `--bad` from $20 else muted, or what is already saved, `MomentView.saved`, `--ok`; one colour per row, red wins if both exist; empty for most rows; sortable, high to low first: red rows by amount, then green rows by amount; a second click reverses). An open row with a saving starts with a green line "≈ $12 / month saved" and a faint line on how it was worked out; then the track: a 4 px square per active
 period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. The columns are measured from the font
 (title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows
 after the sorted ones, whatever the sort, with a dotted empty circle, the category and an empty track.

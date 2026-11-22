@@ -260,7 +260,7 @@ func TestReactionsAndSuggestions(t *testing.T) {
 func TestRegistry(t *testing.T) {
 	seen := map[string]bool{}
 	for _, m := range Registry() {
-		if m.ID == "" || m.Title == "" || m.What == "" || m.Try == "" || m.Detect == nil {
+		if m.ID == "" || m.Title == "" || m.What == "" || m.Try == "" || (m.Detect == nil && m.ID != "orchestrator") {
 			t.Errorf("incomplete moment %+v", m.ID)
 		}
 		if seen[m.ID] {

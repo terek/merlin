@@ -152,7 +152,7 @@ func TestMockReport(t *testing.T) {
 	// the person copied the orchestrator block 10 days ago, and opened the heavy-context one
 	copied := now.AddDate(0, 0, -10)
 	cfg := Config{Engaged: []Engagement{
-		{Moment: "model-routing", OpenedAt: copied.Add(-2 * time.Hour), CopiedAt: copied},
+		{Moment: "orchestrator", OpenedAt: copied.Add(-2 * time.Hour), CopiedAt: copied},
 		{Moment: "clean-slate", OpenedAt: now.AddDate(0, 0, -1)},
 	}}
 	r := BuildConfig(Registry(), in, now, time.UTC, cfg)
@@ -175,7 +175,7 @@ func TestMockReport(t *testing.T) {
 		}
 		return view(r, id).Technique
 	}
-	heavy, orch, rtk := tech("clean-slate"), tech("model-routing"), tech("compressed-shell")
+	heavy, orch, rtk := tech("clean-slate"), tech("orchestrator"), tech("compressed-shell")
 	if heavy == nil || !strings.Contains(heavy.Reason, "more than 500k") || heavy.Estimate == nil || heavy.Estimate.MonthlyUSD < 20 {
 		t.Fatalf("heavy context should be red: %+v", heavy)
 	}
@@ -188,8 +188,8 @@ func TestMockReport(t *testing.T) {
 	if sv := view(r, "model-routing").Saved; sv == nil || sv.MonthlyUSD < 1 {
 		t.Fatalf("model routing should show a saving: %+v", sv)
 	}
-	if orch == nil || orch.Engaged == nil || !orch.Engaged.Watching || orch.Engaged.FollowUp == "" || view(r, "model-routing").Status == StatusUnseen {
-		t.Fatalf("the orchestrator should be a watched tag on a seen row, with a follow-up: %+v", orch)
+	if orch == nil || orch.Engaged == nil || !orch.Engaged.Watching || orch.Engaged.FollowUp == "" || view(r, "orchestrator").Status != StatusUnseen {
+		t.Fatalf("the orchestrator should be a watched suggestion row, with a follow-up: %+v", orch)
 	}
 	t.Logf("heavy $%.0f, orchestrator $%.0f, rtk saved $%.0f a month; %s", heavy.Estimate.MonthlyUSD, orch.Estimate.MonthlyUSD, view(r, "compressed-shell").Saved.MonthlyUSD, orch.Engaged.FollowUp)
 	if !*updateMock {

@@ -133,7 +133,7 @@ var techniqueDefs = []techniqueDef{
 		follow: heavyFollow,
 	},
 	{
-		moment: "model-routing",
+		moment: "orchestrator",
 		fix: Fix{Kind: "claudemd", Text: "Act as the orchestrator: plan, decide and review in this conversation, and hand " +
 			"implementation (edits, test runs, searches) to sub-agents on a mid-tier model, each with a precise brief. " +
 			"Check what they return before reporting it as done."},

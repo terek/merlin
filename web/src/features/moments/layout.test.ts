@@ -310,14 +310,16 @@ describe('saves column and fix wording', () => {
     expect(sortMoments([a, c, b], { key: 'saves', dir: 'desc' }).map((m) => m.id)).toEqual(['b', 'a', 'c'])
   })
 
-  test('the SAVES cell shows green first, and the sort goes by the red amount, then the green one', () => {
-    const a = { ...moment('a', 1), saved: { monthlyUSD: 40, how: 'h' } }
+  test('the SAVES cell shows one amount, red winning, and the sort puts red rows before green ones', () => {
+    const a = { ...moment('a', 1), saved: { monthlyUSD: 400, how: 'h' } }
     const b = { ...moment('b', 2), technique: t(30), saved: { monthlyUSD: 12, how: 'h' } }
-    const c = { ...moment('c', 3), technique: t(30), saved: { monthlyUSD: 90, how: 'h' } }
+    const c = { ...moment('c', 3), saved: { monthlyUSD: 90, how: 'h' } }
     const d = { ...moment('d', 4), technique: t(500) }
-    expect(savesCell(b, b.technique)).toEqual({ green: '$12', red: '$30', hot: true, both: true })
-    expect(savesCell(a, undefined)).toEqual({ green: '$40', red: '', hot: false, both: false })
-    expect(sortMoments([a, b, c, d], { key: 'saves', dir: 'desc' }).map((m) => m.id)).toEqual(['d', 'c', 'b', 'a'])
+    expect(savesCell(b, b.technique)).toEqual({ text: '≈ $30 / mo', color: 'var(--bad)', kind: 'red' })
+    expect(savesCell(a, undefined)).toEqual({ text: '≈ $400 / mo', color: 'var(--ok)', kind: 'green' })
+    expect(savesCell(moment('e', 5), undefined).text).toBe('')
+    expect(sortMoments([a, b, c, d], { key: 'saves', dir: 'desc' }).map((m) => m.id)).toEqual(['d', 'b', 'a', 'c'])
+    expect(sortMoments([a, b, c, d], { key: 'saves', dir: 'asc' }).map((m) => m.id)).toEqual(['c', 'a', 'b', 'd'])
   })
 
   test('a fix without variants has no toggle; with variants the usual harness opens first', () => {

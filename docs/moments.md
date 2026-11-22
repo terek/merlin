@@ -91,11 +91,11 @@ scaled by 30/28 and rounded to two figures. Each has `days` (when the gap showed
 | Technique | Attached to | Fires when | Estimate (28 days, then x 30/28) |
 |---|---|---|---|
 | Heavy context | `clean-slate` | 3+ interactive main-thread turns and at least 20% of them (or of their cost) ran above 250k tokens of context; or any turn at 500k+ (the reason then leads with that count) | each turn above 250k: `cost x (context - 150k) / context`, the part of its price paid for context beyond a lean 150k. Fix: an AGENTS.md paragraph (hand-off note, fresh session, exploration to sub-agents), the same for every harness |
-| Orchestrator | `model-routing` | 3+ turns on a model whose output price is above the latest Sonnet's, each with 10+ edit and shell calls and at most one sub-agent started | those turns' cost per model, minus the same tokens priced at the latest Sonnet in the table. Fix: an AGENTS.md paragraph ("Act as the orchestrator ..."), nothing else; its universal wording says "a mid-tier model", and `fix.variants` has the Claude Code wording (Sonnet) with its own how-line |
+| Orchestrator | `orchestrator` | 3+ turns on a model whose output price is above the latest Sonnet's, each with 10+ edit and shell calls and at most one sub-agent started | those turns' cost per model, minus the same tokens priced at the latest Sonnet in the table. Fix: an AGENTS.md paragraph ("Act as the orchestrator ..."), nothing else; its universal wording says "a mid-tier model", and `fix.variants` has the Claude Code wording (Sonnet) with its own how-line |
 | Shell compressor | `compressed-shell` | no rtk hook in Claude Code's user `settings.json` and no shell call rewritten to rtk in the window (see the practice below), and the estimate is at least $1 a month | per turn with shell output that no hook rewrote: tokens = bytes / 4 (Claude digests, `Turn.shellOutputBytes`), capped at 20k tokens a turn; times the later calls that read it again (the rest of the turn, then later turns of the same compaction epoch), capped at 100; times the main model's cache-read price; times 0.7 (rtk claims 60 to 90%). Fix: `brew install rtk` and `rtk init -g`, with a link to its README |
 
 `unroutedAgents` stays the symptom of `model-routing`: it counts sub-agents that ran on the main
-model, which the orchestrator technique does not look at. The old `context-isolation` symptom (150k
+model, which the orchestrator technique does not look at. The orchestrator is its own practice (`orchestrator`, "Orchestrator and implementors"), with no detector and so no seen state: it shows only as a technique row. Engagement records of `model-routing` in `moments.json` (from the time the copy box lived there) are read as `orchestrator`, and merged with its own (first open, latest copy). The old `context-isolation` symptom (150k
 context, 3 turns) is retired; Heavy context replaces it.
 
 **The loop.** Opening a suggestion's or technique's row is `open`, pressing Copy is `copy`
@@ -168,6 +168,7 @@ starting like "no", "wrong", "still", "doesn't work", "revert", ….
 | `builds-harness` | Builds the harness | harness | a turn with edits touched CLAUDE.md, AGENTS.md, `.claude/skills`, commands, agents, hooks or settings | digest |
 | `context-isolation` | Context isolation | context | a fresh-context subagent of type Explore, or one with 5+ read-only calls and no edits | digest |
 | `model-routing` | Model routing | harness | a subagent on a model with a lower output price than the session's main model | digest |
+| `orchestrator` | Orchestrator and implementors | harness | not detected: it exists as a technique row (see Techniques) | none |
 | `compressed-shell` | Compressed shell output (rtk) | harness | a turn in which a PreToolUse hook rewrote a shell call to run through a compressor such as rtk: the hook's own `hook_success` record in the transcript (`Turn.shellCompressed`, transcript-format §4c). The settings only say whether it is configured, for the row's note: "rtk is on: it rewrote 1,240 shell commands in the last 28 days.", "configured, but no rewrites seen lately" or "not set up" (`MomentView.note`) | digest (+ setup for the note) |
 | `parallel-sessions` | Parallel sessions | parallelism | 2+ sessions working at once (turns less than 5 min apart form one stretch); one hit per day | digest |
 | `worktrees` | Worktrees | parallelism | `EnterWorktree`, or a working directory under `worktrees/` | digest |
@@ -250,7 +251,7 @@ and what to try next. Every claim links to the instrument view that shows it. To
   its row, tagged "try again". At most three suggestions in all.
 - **Techniques.** A technique with an estimate of $20 a month or more has a red filled circle instead of
   the dotted one (below that, the dotted circle stays and the SAVES cell still shows). On a seen row the
-  depth glyph stays and the estimate is in the SAVES column, after the green amount already saved (`MomentView.saved`: model routing and rtk only, see api.md) ("≈ $120 / mo", sortable, empty for most rows). While the person is watching a copied fix
+  depth glyph stays and the estimate is in the SAVES column, ("≈ $120 / mo", sortable, empty for most rows). One colour per row: a row shows either the red amount it could still save or the green amount it already saves (`MomentView.saved`: model routing and rtk only, see api.md), never both; red wins if a row had both. While the person is watching a copied fix
   (28 days) a clock circle replaces the red or dotted circle, and on a seen row the depth glyph. Watching
   and red rank with the suggestions in the depth sort.
 - **More to try.** The unseen moments that are not suggestions, collapsed.

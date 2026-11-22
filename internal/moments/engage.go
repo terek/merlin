@@ -50,7 +50,34 @@ func loadEngaged(home string) []Engagement {
 	if json.Unmarshal(b, &f) != nil {
 		return nil
 	}
-	return f.Engaged
+	return renamed(f.Engaged)
+}
+
+// renamed reads the entries recorded for model-routing as orchestrator: before the orchestrator had its own
+// row, its copy box lived on model-routing. Entries of both are merged: the first open, the latest copy.
+func renamed(list []Engagement) []Engagement {
+	if !slices.ContainsFunc(list, func(e Engagement) bool { return e.Moment == "model-routing" }) {
+		return list
+	}
+	var out []Engagement
+	for _, e := range list {
+		if e.Moment == "model-routing" {
+			e.Moment = "orchestrator"
+		}
+		i := slices.IndexFunc(out, func(o Engagement) bool { return o.Moment == e.Moment })
+		if i < 0 {
+			out = append(out, e)
+			continue
+		}
+		o := &out[i]
+		if o.OpenedAt.IsZero() || (!e.OpenedAt.IsZero() && e.OpenedAt.Before(o.OpenedAt)) {
+			o.OpenedAt = e.OpenedAt
+		}
+		if e.CopiedAt.After(o.CopiedAt) {
+			o.CopiedAt = e.CopiedAt
+		}
+	}
+	return out
 }
 
 // RecordEngagement notes an action on a moment at the given time and writes the file

@@ -80,13 +80,13 @@ func TestOrchestrator(t *testing.T) {
 	}
 	in := []Input{techSession("a", 2, "claude-opus-5-5", heavy(10), heavy(10), heavy(10), heavy(10))}
 	r := BuildConfig(Registry(), in, tnow, time.UTC, Config{})
-	m := view(r, "model-routing")
+	m := view(r, "orchestrator")
 	if m.Status != StatusUnseen {
-		t.Fatalf("no subagent ran: model-routing is unseen: %v", m.Status)
+		t.Fatalf("the orchestrator has no seen state: %v", m.Status)
 	}
 	var tech *Technique
 	for _, s := range r.Suggestions {
-		if s.Moment == "model-routing" {
+		if s.Moment == "orchestrator" {
 			tech = s.Technique
 		}
 	}
@@ -109,7 +109,7 @@ func TestOrchestrator(t *testing.T) {
 	d.Spawned = []string{"a", "b"}
 	in = []Input{techSession("b", 2, "claude-opus-5-5", d, d, d, d)}
 	for _, s := range BuildConfig(Registry(), in, tnow, time.UTC, Config{}).Suggestions {
-		if s.Moment == "model-routing" && s.Technique != nil {
+		if s.Moment == "orchestrator" && s.Technique != nil {
 			t.Errorf("delegating turns are not a gap: %+v", s.Technique)
 		}
 	}

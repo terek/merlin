@@ -447,28 +447,19 @@ function Chart({
             {m.hits}
           </text>
         )}
-        {(cell.green || cell.red) && (
+        {cell.text && (
           <text
             x={l.cols.savesRight}
             y={ROWS_PITCH / 2 + 4}
             fontSize={12}
             textAnchor="end"
             className="tabular-nums"
-            style={{ fill: 'var(--muted)' }}
+            style={{ fill: cell.color }}
           >
             <title>
-              {[cell.green && `saving about ${cell.green} a month`, cell.red && `could save about ${cell.red} a month`]
-                .filter(Boolean)
-                .join(', ')}
+              {cell.kind === 'green' ? 'already saving about this much a month' : 'could save about this much a month'}
             </title>
-            {cell.green && <tspan style={{ fill: 'var(--ok)' }}>{cell.both ? cell.green : `≈ ${cell.green}`}</tspan>}
-            {cell.both && ' '}
-            {cell.red && (
-              <tspan style={{ fill: cell.hot ? 'var(--bad)' : 'var(--muted)' }}>
-                {cell.both ? cell.red : `≈ ${cell.red}`}
-              </tspan>
-            )}
-            {' / mo'}
+            {cell.text}
           </text>
         )}
         {tags.map((t) => {
