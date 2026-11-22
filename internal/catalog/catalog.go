@@ -22,16 +22,64 @@ type Catalog struct {
 	digests map[model.SessionKey]*model.SessionDigest
 	loc     *time.Location // nil: time.Local at rebuild time
 	v       *view
-	dirty   bool
+	vGen    uint64    // gen of the digests v was built from
+	vAt     time.Time // when v was built
+
+	gen       uint64    // bumped by every write
+	lastWrite time.Time // of the latest write
+	fresh     time.Duration
 
 	places    Places
 	placesGen int
 	fv        *facets // the groupings of v under places (places.go)
+
+	buildMu sync.Mutex // one build at a time; never held together with mu while building
+	pin     *pinned    // set on a Snapshot: every read answers from it
+}
+
+// pinned is the frozen state of a Snapshot.
+type pinned struct {
+	v      *view
+	src    map[model.SessionKey]*model.SessionDigest
+	places Places
+	gen    int
+	once   sync.Once
+	fv     *facets
+}
+
+// SetFreshness bounds how old a derived view may be while writes keep coming: a reader
+// rebuilds at most once per d and gets the previous view in between. Once writes have paused
+// (a tenth of d), the next read is fully fresh. Zero (the default) rebuilds on every read
+// that follows a write.
+func (c *Catalog) SetFreshness(d time.Duration) {
+	c.mu.Lock()
+	c.fresh = d
+	c.mu.Unlock()
+}
+
+// Snapshot returns a read-only catalog frozen at the current derived state: every query on
+// it answers from one consistent view, whatever is written meanwhile and without any rebuild.
+// Writing to it is a mistake.
+func (c *Catalog) Snapshot() *Catalog {
+	if c.pin != nil {
+		return c
+	}
+	v, fv := c.current(false)
+	c.mu.RLock()
+	p := &pinned{v: v, src: v.src, places: c.places, gen: c.placesGen}
+	if fv != nil && fv.v == v {
+		p.fv, p.places, p.gen = fv, fv.places, fv.gen
+	}
+	c.mu.RUnlock()
+	if p.fv != nil {
+		p.once.Do(func() {})
+	}
+	return &Catalog{pin: p, places: p.places}
 }
 
 // New returns an empty catalog.
 func New() *Catalog {
-	return &Catalog{digests: make(map[model.SessionKey]*model.SessionDigest), dirty: true}
+	return &Catalog{digests: make(map[model.SessionKey]*model.SessionDigest)}
 }
 
 // Load builds a catalog from every digest in the store for harness ("" = all harnesses).
@@ -59,7 +107,7 @@ func Load(st *store.Store, harness string) (*Catalog, error) {
 func (c *Catalog) SetLocation(loc *time.Location) {
 	c.mu.Lock()
 	c.loc = loc
-	c.dirty = true
+	c.touch()
 	c.mu.Unlock()
 }
 
@@ -74,7 +122,13 @@ func (c *Catalog) Upsert(d *model.SessionDigest) {
 		return
 	}
 	c.digests[d.Key()] = d
-	c.dirty = true
+	c.touch()
+}
+
+// touch records a write; callers hold mu.
+func (c *Catalog) touch() {
+	c.gen++
+	c.lastWrite = time.Now()
 }
 
 // preferred reports whether a beats b, two digests of one session under different project keys.
@@ -102,7 +156,7 @@ func (c *Catalog) MarkMissing(key model.SessionKey, projectKey string) bool {
 		cp := *d
 		cp.SourceMissing = true
 		c.digests[key] = &cp
-		c.dirty = true
+		c.touch()
 	}
 	return true
 }
@@ -114,13 +168,16 @@ func (c *Catalog) Remove(key model.SessionKey) bool {
 	_, ok := c.digests[key]
 	if ok {
 		delete(c.digests, key)
-		c.dirty = true
+		c.touch()
 	}
 	return ok
 }
 
 // Len returns the number of digests held, error stubs included.
 func (c *Catalog) Len() int {
+	if c.pin != nil {
+		return len(c.pin.src)
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.digests)
@@ -128,6 +185,10 @@ func (c *Catalog) Len() int {
 
 // Digest returns the stored digest of a session.
 func (c *Catalog) Digest(key model.SessionKey) (*model.SessionDigest, bool) {
+	if c.pin != nil {
+		d, ok := c.pin.src[key]
+		return d, ok
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	d, ok := c.digests[key]
@@ -137,6 +198,12 @@ func (c *Catalog) Digest(key model.SessionKey) (*model.SessionDigest, bool) {
 // Each calls f with every stored digest, in no particular order, under the read lock: f must
 // not call back into the catalog or modify the digest.
 func (c *Catalog) Each(f func(*model.SessionDigest)) {
+	if c.pin != nil {
+		for _, d := range c.pin.src {
+			f(d)
+		}
+		return
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for _, d := range c.digests {
@@ -144,23 +211,88 @@ func (c *Catalog) Each(f func(*model.SessionDigest)) {
 	}
 }
 
-// view returns the derived state, rebuilding it first when a write or a change of
-// time.Local made it stale. The returned view is immutable.
+// view returns the derived state. The returned view is immutable. See current.
 func (c *Catalog) view() *view {
-	c.mu.RLock()
-	if v := c.v; v != nil && !c.dirty && c.v.loc == c.zone() {
-		c.mu.RUnlock()
-		return v
+	v, _ := c.current(false)
+	return v
+}
+
+// current returns the derived state (and, when withFacets, the groupings), rebuilding what a
+// write, a change of time.Local or SetPlaces made stale. Writers never wait for a build: it
+// runs on a copy of the digest map, outside mu, one at a time (readers that need one wait for
+// the build in flight and then reuse it). While writes keep coming, a view younger than the
+// freshness bound is good enough (SetFreshness).
+func (c *Catalog) current(withFacets bool) (*view, *facets) {
+	if p := c.pin; p != nil {
+		if withFacets {
+			p.once.Do(func() { p.fv = buildFacets(p.v, p.places, p.gen) })
+		}
+		return p.v, p.fv
 	}
+	if v, fv, ok := c.cached(withFacets); ok {
+		return v, fv
+	}
+	c.buildMu.Lock()
+	defer c.buildMu.Unlock()
+	if v, fv, ok := c.cached(withFacets); ok {
+		return v, fv
+	}
+	c.mu.RLock()
+	zone, gen, pgen, places := c.zone(), c.gen, c.placesGen, c.places
+	v, vGen := c.v, c.vGen
+	var src map[model.SessionKey]*model.SessionDigest
+	if v == nil || v.loc != zone || vGen != gen {
+		src = make(map[model.SessionKey]*model.SessionDigest, len(c.digests))
+		for k, d := range c.digests {
+			src[k] = d
+		}
+	}
+	fv := c.fv
 	c.mu.RUnlock()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.v == nil || c.dirty || c.v.loc != c.zone() {
-		c.v = build(c.digests, c.zone())
-		c.dirty = false
+	vAt := time.Now()
+	if src != nil {
+		v = build(src, zone)
+		v.src = src
+		vGen = gen
 	}
-	return c.v
+	if withFacets && (fv == nil || fv.v != v || fv.gen != pgen) {
+		fv = buildFacets(v, places, pgen)
+	} else if fv != nil && fv.v != v {
+		fv = nil
+	}
+	c.mu.Lock()
+	if src != nil {
+		c.v, c.vGen, c.vAt = v, vGen, vAt
+	}
+	if fv != nil {
+		c.fv = fv
+	}
+	c.mu.Unlock()
+	return v, fv
+}
+
+// cached answers from what is held when that is fresh enough.
+func (c *Catalog) cached(withFacets bool) (*view, *facets, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v := c.v
+	if v == nil || v.loc != c.zone() {
+		return nil, nil, false
+	}
+	if c.vGen != c.gen {
+		busy := time.Since(c.lastWrite) < c.fresh/10
+		if c.fresh <= 0 || !busy || time.Since(c.vAt) >= c.fresh {
+			return nil, nil, false
+		}
+	}
+	if !withFacets {
+		return v, c.fv, true
+	}
+	if fv := c.fv; fv != nil && fv.v == v && fv.gen == c.placesGen {
+		return v, fv, true
+	}
+	return nil, nil, false
 }
 
 // zone is the effective location; callers hold mu.

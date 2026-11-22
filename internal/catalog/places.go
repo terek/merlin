@@ -146,21 +146,7 @@ type sessFacets struct {
 
 // views returns the current view and its groupings, rebuilding the groupings when the view
 // or Places changed.
-func (c *Catalog) views() (*view, *facets) {
-	v := c.view()
-	c.mu.RLock()
-	fv, gen := c.fv, c.placesGen
-	c.mu.RUnlock()
-	if fv != nil && fv.v == v && fv.gen == gen {
-		return v, fv
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.fv == nil || c.fv.v != v || c.fv.gen != c.placesGen {
-		c.fv = buildFacets(v, c.places, c.placesGen)
-	}
-	return v, c.fv
-}
+func (c *Catalog) views() (*view, *facets) { return c.current(true) }
 
 // prepare returns the view and f with its grouping filters resolved; the groupings too when
 // need is set or the filter uses them (nil otherwise).
@@ -999,6 +985,9 @@ func idLess(a, b string) bool {
 
 // BeadDatabases is how many bead databases the catalog knows.
 func (c *Catalog) BeadDatabases() int {
+	if c.pin != nil {
+		return len(c.pin.places.Beads)
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.places.Beads)

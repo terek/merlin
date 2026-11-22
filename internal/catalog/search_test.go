@@ -363,7 +363,7 @@ func BenchmarkRebuild(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.mu.Lock()
-		c.dirty = true
+		c.touch()
 		c.mu.Unlock()
 		c.Total(Filter{})
 	}

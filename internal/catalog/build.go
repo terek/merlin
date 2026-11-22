@@ -63,6 +63,8 @@ type view struct {
 	spawnTurn map[int]int // child session index -> the parent's turn of the call that spawned it (-1: none)
 
 	diag Diagnostics
+
+	src map[model.SessionKey]*model.SessionDigest // the digests it was built from (a private copy)
 }
 
 // older orders sessions for ownership: earliest startedAt, then earliest lastActivityAt,
