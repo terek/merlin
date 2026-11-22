@@ -86,7 +86,7 @@ const (
 	leanContext       = 150_000 // the context a turn would do with
 	heavyShare        = 0.2     // of the turns or of their cost
 	heavyMinTurns     = 3
-	orchCalls         = 10 // edits and shell calls that make a turn tool-heavy
+	orchCalls         = 5 // edit calls that make a turn implementation work
 	orchMinTurns      = 3
 	rtkTrimmed        = 0.7    // the share of a shell output rtk is taken to remove (it claims 60 to 90%)
 	rtkTurnCap        = 20_000 // tokens of shell output one turn counts for
@@ -408,7 +408,7 @@ func orchIn(c *Corpus, from, to time.Time) orchStats {
 			if !inRange(t, from, to) {
 				continue
 			}
-			calls := countTools(t.ToolsByName, editTools) + countTools(t.ToolsByName, shellTools)
+			calls := countTools(t.ToolsByName, editTools)
 			if calls < orchCalls || len(t.Spawned) > 1 || countTools(t.ToolsByName, delegateTools) > 1 {
 				continue
 			}
@@ -438,7 +438,7 @@ func orchIn(c *Corpus, from, to time.Time) orchStats {
 			st.calls += calls
 			st.usd += save
 			st.cost += cost
-			st.hits = append(st.hits, turnHit(s, t, fmt.Sprintf("%d edits and shell calls on a premium model", calls)))
+			st.hits = append(st.hits, turnHit(s, t, fmt.Sprintf("%d edits on a premium model", calls)))
 			k++
 			if top == nil || calls > topCalls {
 				top, topCalls = t, calls
@@ -462,7 +462,7 @@ func orchGap(c *Corpus, from, to time.Time) gap {
 			top, topUSD = name, usd
 		}
 	}
-	reason := fmt.Sprintf("%d turn%s on %s ran %d or more edits and shell calls themselves (%d calls in all), with at most one sub-agent. "+
+	reason := fmt.Sprintf("%d turn%s on %s ran %d or more edits themselves (%d edits in all), with at most one sub-agent. "+
 		"Work like that does not need the priciest model.", st.turns, plural(st.turns), top, orchCalls, st.calls)
 	return gap{fired: true, reason: reason, usd: st.usd, hits: st.hits, example: st.best.example()}
 }
@@ -475,10 +475,10 @@ func orchFollow(c *Corpus, copied time.Time, _ []Hit) string {
 	head := "Since you copied it on " + day(copied, c.Loc) + ": "
 	n := sessionsSince(c, copied)
 	if before.turns == 0 {
-		return fmt.Sprintf("%sthe cost of premium-model turns with %d or more edits and shell calls is $%.2f per session (%d sessions). A comparison, not proof.",
+		return fmt.Sprintf("%sthe cost of premium-model turns with %d or more edits is $%.2f per session (%d sessions). A comparison, not proof.",
 			head, orchCalls, per(after, n), n)
 	}
-	return fmt.Sprintf("%sthe cost of premium-model turns with %d or more edits and shell calls went from $%.2f to $%.2f per session (%d sessions). A comparison, not proof.",
+	return fmt.Sprintf("%sthe cost of premium-model turns with %d or more edits went from $%.2f to $%.2f per session (%d sessions). A comparison, not proof.",
 		head, orchCalls, per(before, activeSessions(c, b0, b1)), per(after, n), n)
 }
 

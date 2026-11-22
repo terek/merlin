@@ -253,30 +253,67 @@ func TestEngagementStore(t *testing.T) {
 
 func TestOrchestratorDetector(t *testing.T) {
 	opus := "claude-opus-5-5"
-	turn := func(main map[string]int64) model.Turn {
-		return model.Turn{ToolsByName: main, Spawned: []string{"a"},
-			Cost: model.Cost{USD: 1, ByModel: map[string]model.ModelCost{opus: {USD: 1}}}}
-	}
-	agent := func(mdl string, calls map[string]int64) model.Agent {
-		return model.Agent{ID: "a", Kind: model.AgentSubagent, Model: mdl, SpawnTurn: new(int), ToolsByName: calls,
+	sonnet := "claude-sonnet-5-5"
+	premium := model.Cost{USD: 1, ByModel: map[string]model.ModelCost{opus: {USD: 1}}}
+	worker := func(mdl string, calls map[string]int64) model.Agent {
+		return model.Agent{ID: "w", Kind: model.AgentSubagent, Model: mdl, SpawnTurn: new(int), ToolsByName: calls,
 			StartedAt: tnow.AddDate(0, 0, -2)}
 	}
-	hits := func(tr model.Turn, a model.Agent) int {
-		in := techSession("o", 2, opus, tr)
+	hits := func(a model.Agent, turns ...model.Turn) int {
+		in := techSession("o", 2, opus, turns...)
 		in.Digest.Agents = []model.Agent{a}
 		return view(BuildWith(Registry(), []Input{in}, tnow, time.UTC), "orchestrator").Hits
 	}
-	work := map[string]int64{"Edit": 2, "Bash": 1}
-	if n := hits(turn(map[string]int64{"Agent": 1}), agent("claude-sonnet-5-5", work)); n != 1 {
-		t.Errorf("a premium turn that delegated three calls to Sonnet: %d hits", n)
+	// one worker spawned once, then many main turns that brief it and verify with the shell
+	briefing := func(n int) []model.Turn {
+		ts := []model.Turn{{Spawned: []string{"w"}, ToolsByName: map[string]int64{"Agent": 1}, Cost: premium}}
+		for i := 0; i < n; i++ {
+			ts = append(ts, model.Turn{ToolsByName: map[string]int64{"SendMessage": 2, "Bash": 20}, Cost: premium})
+		}
+		return ts
 	}
-	if n := hits(turn(map[string]int64{"Agent": 1}), agent("claude-sonnet-5-5", map[string]int64{"Edit": 2})); n != 0 {
-		t.Errorf("two calls are too few: %d hits", n)
+	if n := hits(worker(sonnet, map[string]int64{"Edit": 9, "Bash": 4}), briefing(6)...); n != 1 {
+		t.Errorf("a Sonnet worker made the edits, briefed over many turns: %d hits", n)
 	}
-	if n := hits(turn(map[string]int64{"Edit": 2, "Bash": 1}), agent("claude-sonnet-5-5", work)); n != 0 {
-		t.Errorf("the main thread did the work itself: %d hits", n)
+	if n := hits(worker(sonnet, map[string]int64{"Edit": 2}), briefing(6)...); n != 0 {
+		t.Errorf("two edits are too few: %d hits", n)
 	}
-	if n := hits(turn(map[string]int64{"Agent": 1}), agent(opus, work)); n != 0 {
-		t.Errorf("a sub-agent on the same model is not routing: %d hits", n)
+	if n := hits(worker(opus, map[string]int64{"Edit": 9}), briefing(6)...); n != 0 {
+		t.Errorf("a worker on the same model is not routing: %d hits", n)
+	}
+	own := briefing(2)
+	own[1].ToolsByName = map[string]int64{"Edit": 9}
+	if n := hits(worker(sonnet, map[string]int64{"Edit": 9}), own...); n != 0 {
+		t.Errorf("the main thread made as many edits as the worker: %d hits", n)
+	}
+	// those main turns are not the gap: edits only, and the briefing turns made none
+	in := techSession("g", 2, opus, briefing(8)...)
+	in.Digest.Agents = []model.Agent{worker(sonnet, map[string]int64{"Edit": 9})}
+	for _, s := range BuildConfig(Registry(), []Input{in}, tnow, time.UTC, Config{}).Suggestions {
+		if s.Moment == "orchestrator" && s.Technique != nil {
+			t.Errorf("shell-heavy briefing turns are not a gap: %+v", s.Technique)
+		}
+	}
+}
+
+func TestOrchestratorGapCountsEdits(t *testing.T) {
+	turn := func(tools map[string]int64) model.Turn {
+		return model.Turn{ToolsByName: tools, Cost: model.Cost{USD: 10, ByModel: map[string]model.ModelCost{
+			"claude-opus-5-5": {Tokens: model.Tokens{Input: 1_000_000, Output: 100_000}, USD: 10}}}}
+	}
+	gap := func(tools map[string]int64) bool {
+		in := []Input{techSession("a", 2, "claude-opus-5-5", turn(tools), turn(tools), turn(tools), turn(tools))}
+		for _, s := range BuildConfig(Registry(), in, tnow, time.UTC, Config{}).Suggestions {
+			if s.Moment == "orchestrator" && s.Technique != nil {
+				return true
+			}
+		}
+		return false
+	}
+	if !gap(map[string]int64{"Edit": 6}) {
+		t.Error("turns with 6 edits are the gap")
+	}
+	if gap(map[string]int64{"Bash": 20}) {
+		t.Error("20 shell calls and no edits are not the gap")
 	}
 }

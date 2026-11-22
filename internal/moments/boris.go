@@ -130,44 +130,60 @@ func modelRouting(c *Corpus, emit func(Hit)) {
 	})
 }
 
-// The orchestrator: a turn on a premium model that hands the implementation to sub-agents on a cheaper model.
-const (
-	orchAgentCalls = 3 // edits and shell calls the cheaper sub-agents of the turn made, at least
-	orchMainCalls  = 2 // edits and shell calls the main thread made in the turn itself, at most
-)
+// The orchestrator: a session whose main thread ran on a premium model while sub-agents on a cheaper model made the
+// edits, however many turns later they were briefed.
+const orchAgentEdits = 3 // edit calls the cheaper sub-agents made in the session, at least (and more than the main thread)
 
 func orchestrator(c *Corpus, emit func(Hit)) {
 	sonnet := sonnetModel()
 	sp := outputPrice(sonnet)
+	main := 0.0
 	if sonnet == "" || sp == 0 {
 		return
 	}
 	c.Interactive(func(s *Session) {
+		if main = outputPrice(s.MainModel()); main <= sp {
+			return
+		}
+		var own int64
 		for _, t := range s.Turns {
-			if t.Abandoned || t.StartedAt.IsZero() || len(t.Spawned) == 0 {
+			if !t.Abandoned {
+				own += countTools(t.ToolsByName, editTools)
+			}
+		}
+		var edits int64
+		var workers []*model.Agent
+		for i := range s.Agents {
+			a := s.Agents[i]
+			if a.Kind != model.AgentSubagent || !s.OwnTurn(a.SpawnTurn) {
 				continue
 			}
-			var premium float64
-			for name := range t.Cost.ByModel {
-				if p := outputPrice(name); p > sp && p > premium {
-					premium = p
-				}
+			if p := outputPrice(a.Model); p > 0 && p < main {
+				edits += countTools(a.ToolsByName, editTools)
+				workers = append(workers, a)
 			}
-			if premium == 0 || countTools(t.ToolsByName, editTools)+countTools(t.ToolsByName, shellTools) > orchMainCalls {
+		}
+		if edits < orchAgentEdits || edits <= own {
+			return
+		}
+		// the days the workers were active: each of their turns, else their start
+		seen := map[string]bool{}
+		for _, a := range workers {
+			if countTools(a.ToolsByName, editTools) == 0 {
 				continue
 			}
-			var calls, n int64
-			for _, a := range s.Agents {
-				if a.Kind != model.AgentSubagent || a.SpawnTurn == nil || *a.SpawnTurn != t.Index {
+			ats := []time.Time{a.StartedAt}
+			for _, t := range a.Turns {
+				ats = append(ats, t.StartedAt)
+			}
+			for _, at := range ats {
+				d := at.In(c.Loc).Format(time.DateOnly)
+				if at.IsZero() || seen[d] {
 					continue
 				}
-				if p := outputPrice(a.Model); p > 0 && p < premium {
-					calls += countTools(a.ToolsByName, editTools) + countTools(a.ToolsByName, shellTools)
-					n++
-				}
-			}
-			if calls >= orchAgentCalls {
-				emit(turnHit(s, t, fmt.Sprintf("%d sub-agent%s on a cheaper model made %d edits and shell calls", n, plural(int(n)), calls)))
+				seen[d] = true
+				emit(Hit{At: at, Session: s.Key(), Turn: a.SpawnTurn,
+					Note: fmt.Sprintf("sub-agents on a cheaper model made %d edits, the main thread %d", edits, own)})
 			}
 		}
 	})

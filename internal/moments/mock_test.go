@@ -81,7 +81,9 @@ func TestMockReport(t *testing.T) {
 			// now and then, and since the orchestrator block was copied (day 10) mostly, the editing is delegated
 			delegated := (day <= 9 && k%3 != 0) || (day <= 56 && day%6 == 0 && k == 1)
 			if delegated {
-				t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 1, 1
+				// the main thread briefs the workers and verifies with the shell; the workers make the edits
+				t0.ToolsByName["Edit"] = 1
+				t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 1, 12
 				t1.Spawned = []string{"o"}
 			}
 			if day <= 30 && k == 0 {
@@ -127,7 +129,7 @@ func TestMockReport(t *testing.T) {
 			if delegated {
 				d.Agents = append(d.Agents, model.Agent{ID: "o", Kind: model.AgentSubagent, AgentType: "general-purpose", Model: "claude-sonnet-5-5",
 					StartedAt: s.Add(62 * time.Minute), EndedAt: s.Add(90 * time.Minute), SpawnTurn: ip(1), Status: model.StatusCompleted,
-					ToolCalls: 10, ToolsByName: map[string]int64{"Edit": 6, "Bash": 4},
+					ToolCalls: 22, ToolsByName: map[string]int64{"Edit": 12, "Bash": 10},
 					Cost: func() model.Cost {
 						mc, _ := prices().Cost("claude-sonnet-5-5", model.Tokens{Input: 300_000, Output: 100_000, CacheRead: 4_000_000}, false)
 						return model.Cost{USD: mc.USD, ByModel: map[string]model.ModelCost{"claude-sonnet-5-5": mc}}

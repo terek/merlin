@@ -452,15 +452,17 @@ func orchestratorNote(m MomentView, hits []Hit, windowStart time.Time, all []Mom
 	if len(hits) == 0 {
 		return ""
 	}
-	n := 0
+	recent, ever := map[string]bool{}, map[string]bool{}
 	for _, h := range hits {
+		ever[h.Session.String()] = true
 		if !h.At.Before(windowStart) {
-			n++
+			recent[h.Session.String()] = true
 		}
 	}
-	text := fmt.Sprintf("You already do this: %d turn%s in the last %d days handed the edits to sub-agents on a cheaper model.", n, plural(n), WindowDays)
+	n := len(recent)
+	text := fmt.Sprintf("You already do this: in %d session%s in the last %d days, sub-agents on a cheaper model made the edits.", n, plural(n), WindowDays)
 	if n == 0 {
-		text = fmt.Sprintf("You have done this: %d turn%s handed the edits to sub-agents on a cheaper model, none in the last %d days.", len(hits), plural(len(hits)), WindowDays)
+		text = fmt.Sprintf("You have done this: in %d session%s sub-agents on a cheaper model made the edits, none in the last %d days.", len(ever), plural(len(ever)), WindowDays)
 	}
 	for _, o := range all {
 		if o.ID == "model-routing" && o.Saved != nil {

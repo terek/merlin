@@ -130,7 +130,7 @@ func Registry() []Moment {
 		},
 		{
 			ID: "orchestrator", Category: CategoryHarness, Persona: Boris, Title: "Orchestrator and implementors",
-			Detects: "Counted for each turn on a premium model in which you handed the work to sub-agents on a cheaper model: they made three or more edits and shell calls, the main thread at most two.",
+			Detects: "Counted for each day of a session whose main thread ran on a premium model while its sub-agents on a cheaper model made the edits: three or more, and more than the main thread did itself.",
 			What:    "The main conversation plans and reviews while sub-agents on a mid-tier model do the edits, test runs and searches.",
 			Try:     "Tell the agent to act as the orchestrator: plan, decide and review in the main conversation, and hand the implementation to sub-agents on a cheaper model, each with a precise brief.",
 			Detect:  orchestrator,
