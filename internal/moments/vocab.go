@@ -9,6 +9,17 @@ import "strings"
 // editTools change files. Pi's built-ins are lower case (edit, write).
 var editTools = []string{"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch", "edit", "write"}
 
+// shellTools run a shell command: Claude Code's Bash, Pi's bash, Codex's shell calls.
+var shellTools = []string{"Bash", "bash", "shell", "exec_command"}
+
+// delegateTools hand work to another agent.
+var delegateTools = []string{"Agent", "Task"}
+
+// shellCompressorHarnesses are the harnesses whose shell output a compressor hook can shrink
+// (Claude Code's hooks rewrite a command before it runs). Their digests carry
+// Turn.ShellOutputBytes.
+var shellCompressorHarnesses = []string{"claude"}
+
 // planTools are the harness's plan mode.
 var planTools = []string{"EnterPlanMode", "ExitPlanMode"}
 

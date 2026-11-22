@@ -418,6 +418,18 @@ type UpdateEvent struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
+// EngageRequest is the body of POST /api/moments/engage.
+type EngageRequest struct {
+	Moment string `json:"moment"`
+	Action string `json:"action"` // "open" or "copy"
+}
+
+// EngageResponse echoes what was recorded.
+type EngageResponse struct {
+	Moment string `json:"moment"`
+	Action string `json:"action"`
+}
+
 // UpgradeRequest is the body of POST /api/upgrade.
 type UpgradeRequest struct {
 	Version string `json:"version"`

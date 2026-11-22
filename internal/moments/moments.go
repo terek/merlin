@@ -202,6 +202,9 @@ type MomentView struct {
 	Last time.Time `json:"last,omitzero"`
 	// Examples are the latest hits, newest first, at most maxExamples.
 	Examples []Hit `json:"examples,omitempty"`
+	// Technique is a saving the person's history shows for this practice; set on a seen moment as the
+	// tag and the open row's section (an unseen one has it on its Suggestion).
+	Technique *Technique `json:"technique,omitempty"`
 }
 
 // Suggestion is an unseen moment worth trying, with why.
@@ -210,6 +213,10 @@ type Suggestion struct {
 	Reason string `json:"reason,omitempty"` // from the moment's Symptom; empty when none fired
 	// Example is where the symptom shows most: a session, at a turn where that makes sense.
 	Example *Hit `json:"example,omitempty"`
+	// Technique is set when the suggestion is a money-saving technique.
+	Technique *Technique `json:"technique,omitempty"`
+	// Engaged is what the person did with it so far; absent until they opened it.
+	Engaged *Engaged `json:"engaged,omitempty"`
 }
 
 const (
@@ -219,16 +226,22 @@ const (
 
 // Build computes the report over the given sessions with the registry.
 func Build(in []Input, now time.Time, loc *time.Location) Report {
-	return BuildWith(Registry(), in, now, loc)
+	return BuildConfig(Registry(), in, now, loc, Config{})
 }
 
 // BuildWith computes the report with the given catalog of moments (tests pass their own).
 func BuildWith(catalog []Moment, in []Input, now time.Time, loc *time.Location) Report {
+	return BuildConfig(catalog, in, now, loc, Config{})
+}
+
+// BuildConfig is BuildWith with the person's setup and their engagement with earlier suggestions.
+func BuildConfig(catalog []Moment, in []Input, now time.Time, loc *time.Location, cfg Config) Report {
 	if loc == nil {
 		loc = time.Local
 	}
 	c := newCorpus(in, loc)
 	windowStart := now.AddDate(0, 0, -WindowDays)
+	c.Now, c.WindowStart, c.Setup = now, windowStart, cfg.Setup
 	r := Report{Now: now, WindowDays: WindowDays, Personas: []PersonaView{}, Moments: []MomentView{},
 		Suggestions: []Suggestion{}}
 	projects := map[string]bool{}
@@ -246,6 +259,7 @@ func BuildWith(catalog []Moment, in []Input, now time.Time, loc *time.Location) 
 	r.Projects = len(projects)
 	r.Activity = activity(c, loc)
 
+	allHits := map[string][]Hit{}
 	for _, m := range catalog {
 		var hits []Hit
 		if m.Detect != nil {
@@ -255,12 +269,19 @@ func BuildWith(catalog []Moment, in []Input, now time.Time, loc *time.Location) 
 				}
 			})
 		}
+		allHits[m.ID] = hits
 		r.Moments = append(r.Moments, summarize(m, hits, windowStart, loc))
+	}
+	techs := c.techniques(catalog, cfg, allHits)
+	for i := range r.Moments {
+		if r.Moments[i].Status != StatusUnseen {
+			r.Moments[i].Technique = techs[r.Moments[i].ID]
+		}
 	}
 
 	r.OverYegge = overYegge(c, r.Moments, windowStart)
 	r.Personas = react(r.Moments, r.OverYegge)
-	r.Suggestions = suggest(catalog, r.Moments, c)
+	r.Suggestions = suggest(catalog, r.Moments, c, techs, cfg.Engaged, allHits)
 	return r
 }
 

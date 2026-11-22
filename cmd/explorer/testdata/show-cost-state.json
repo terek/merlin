@@ -93,7 +93,7 @@
   "resume": "cd /home/dev/acme/coststate && claude --resume 16161616-0000-4000-8000-000000000001",
   "digest": {
     "schemaVersion": 2,
-    "parserVersion": 23,
+    "parserVersion": 24,
     "pricesVersion": "<prices>",
     "source": [
       {

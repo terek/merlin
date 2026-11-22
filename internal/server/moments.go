@@ -2,7 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -42,6 +45,7 @@ const momentsMaxAge = 30 * time.Second
 // it runs or while its result is still good. It is abandoned when its last waiter leaves.
 type momentsCall struct {
 	stamp   catalog.Stamp
+	cfgKey  string // the setup facts and what the person engaged with: they change the report too
 	at      time.Time
 	done    chan struct{}
 	res     moments.Report
@@ -61,14 +65,16 @@ type momentsCache struct {
 func (a *API) report(ctx context.Context, cat *catalog.Catalog) (moments.Report, error) {
 	snap := cat.Snapshot()
 	stamp := snap.Stamp()
+	cfg := a.momentsConfig()
+	cfgKey := fmt.Sprintf("%+v", cfg)
 	now := a.o.Now()
 	c := &a.momentsCache
 	for {
 		c.mu.Lock()
 		call := c.call
-		if call == nil || call.stamp != stamp || now.Sub(call.at) > momentsMaxAge || (call.isDone() && !call.ok) {
+		if call == nil || call.stamp != stamp || call.cfgKey != cfgKey || now.Sub(call.at) > momentsMaxAge || (call.isDone() && !call.ok) {
 			cctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-			call = &momentsCall{stamp: stamp, at: now, done: make(chan struct{}), cancel: cancel}
+			call = &momentsCall{stamp: stamp, cfgKey: cfgKey, at: now, done: make(chan struct{}), cancel: cancel}
 			c.call = call
 			go func() {
 				defer close(call.done)
@@ -77,7 +83,7 @@ func (a *API) report(ctx context.Context, cat *catalog.Catalog) (moments.Report,
 				if in == nil || cctx.Err() != nil {
 					return
 				}
-				call.res, call.ok = moments.Build(in, now, a.loc()), true
+				call.res, call.ok = moments.BuildConfig(moments.Registry(), in, now, a.loc(), cfg), true
 			}()
 		}
 		call.waiters++
@@ -103,6 +109,19 @@ func (a *API) report(ctx context.Context, cat *catalog.Catalog) (moments.Report,
 	}
 }
 
+// momentsConfig is what the report needs besides the digests: the setup facts and the
+// engagement the person recorded.
+func (a *API) momentsConfig() moments.Config {
+	var cfg moments.Config
+	if a.o.MomentsSetup != nil {
+		cfg.Setup = a.o.MomentsSetup()
+	}
+	if a.o.MomentsHome != "" {
+		cfg.Engaged = moments.LoadEngaged(a.o.MomentsHome)
+	}
+	return cfg
+}
+
 func (c *momentsCall) isDone() bool {
 	select {
 	case <-c.done:
@@ -122,4 +141,27 @@ func (a *API) handleMoments(w http.ResponseWriter, r *http.Request) {
 		return // the client went away
 	}
 	a.json(w, http.StatusOK, rep)
+}
+
+// handleEngage is POST /api/moments/engage: the page tells the daemon that the person opened a
+// suggestion's row or copied its fix.
+func (a *API) handleEngage(w http.ResponseWriter, r *http.Request) {
+	var req EngageRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10)).Decode(&req); err != nil {
+		a.badParam(w, "the body must be JSON like {\"moment\":\"clean-slate\",\"action\":\"open\"}")
+		return
+	}
+	if !slices.ContainsFunc(moments.Registry(), func(m moments.Moment) bool { return m.ID == req.Moment }) {
+		a.badParam(w, "unknown moment %q", req.Moment)
+		return
+	}
+	if req.Action != moments.ActionOpen && req.Action != moments.ActionCopy {
+		a.badParam(w, "action must be %q or %q", moments.ActionOpen, moments.ActionCopy)
+		return
+	}
+	if err := moments.RecordEngagement(a.o.MomentsHome, req.Moment, req.Action, a.o.Now()); err != nil {
+		a.fail(w, http.StatusInternalServerError, CodeInternal, err.Error())
+		return
+	}
+	a.json(w, http.StatusOK, EngageResponse{Moment: req.Moment, Action: req.Action})
 }

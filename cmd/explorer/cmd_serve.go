@@ -15,10 +15,12 @@ import (
 	"time"
 
 	"github.com/terek/merlin/internal/catalog"
+	"github.com/terek/merlin/internal/claude"
 	"github.com/terek/merlin/internal/claude/hooks"
 	"github.com/terek/merlin/internal/daemon"
 	"github.com/terek/merlin/internal/engine"
 	"github.com/terek/merlin/internal/hookfile"
+	"github.com/terek/merlin/internal/moments"
 	"github.com/terek/merlin/internal/paths"
 	"github.com/terek/merlin/internal/pricing"
 	"github.com/terek/merlin/internal/server"
@@ -256,9 +258,11 @@ func refreshHooks(t hookTarget) (string, error) {
 // counters of its engine and the registry of running sessions.
 func apiOptions(d *daemon.Daemon, pricer *pricing.Table, au *autoUpgrader) server.Options {
 	return server.Options{
-		Prices:  pricer,
-		Version: version,
-		Update:  au.update,
+		MomentsHome:  homeOrEmpty(),
+		MomentsSetup: momentsSetup,
+		Prices:       pricer,
+		Version:      version,
+		Update:       au.update,
 		Install: func(ctx context.Context, v string) error {
 			if err := au.installNow(ctx, v); err != nil {
 				return err
@@ -315,4 +319,21 @@ func daemonPort(home string) int {
 		return p
 	}
 	return hooks.Port(home)
+}
+
+// homeOrEmpty is MERLIN_HOME, empty when it cannot be found (then the daemon keeps no engagement).
+func homeOrEmpty() string {
+	h, _ := paths.Home()
+	return h
+}
+
+// momentsSetup reads what the techniques of the Moments page need to know about the person's
+// harness setup: today, whether Claude Code runs a shell-output compressor.
+func momentsSetup() moments.Setup {
+	dir, err := paths.ClaudeConfigDir()
+	if err != nil {
+		return moments.Setup{}
+	}
+	since, ok := claude.ShellCompressor(dir)
+	return moments.Setup{ShellCompressor: ok, ShellCompressorSince: since}
 }

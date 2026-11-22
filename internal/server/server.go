@@ -15,6 +15,7 @@ import (
 	"github.com/terek/merlin/internal/catalog"
 	"github.com/terek/merlin/internal/engine"
 	"github.com/terek/merlin/internal/harness"
+	"github.com/terek/merlin/internal/moments"
 	"github.com/terek/merlin/internal/pricing"
 )
 
@@ -56,6 +57,13 @@ type Options struct {
 	// once the new binary is in place; the caller then restarts the daemon. An error that
 	// satisfies errors.Is(err, ErrConflict) answers 409, any other 500. Nil: no such route.
 	Install func(ctx context.Context, version string) error
+	// MomentsHome is the directory that holds moments.json, what the person did with the Moments
+	// page's suggestions (MERLIN_HOME). Empty: POST /api/moments/engage is not served and the
+	// report carries no engagement.
+	MomentsHome string
+	// MomentsSetup returns what the person has set up around their harnesses, for the techniques of
+	// GET /api/moments; nil means nothing is set up.
+	MomentsSetup func() moments.Setup
 	// Now is the clock for liveness; nil means time.Now. Handlers read no other clock.
 	Now func() time.Time
 	// Location buckets days and parses date-only parameters; nil means time.Local.
@@ -109,6 +117,9 @@ func New(o Options) *API {
 	a.route("/api/events", a.handleEvents)
 	if a.o.Install != nil {
 		a.routeWrite("/api/upgrade", a.handleUpgrade)
+	}
+	if a.o.MomentsHome != "" {
+		a.routeWrite("/api/moments/engage", a.handleEngage)
 	}
 	a.route("/api/", func(w http.ResponseWriter, r *http.Request) {
 		a.fail(w, http.StatusNotFound, CodeNotFound, "no such endpoint: "+r.URL.Path)

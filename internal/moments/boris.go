@@ -311,33 +311,6 @@ func autoCompactions(c *Corpus) Evidence {
 	}
 }
 
-const bigContext = 150_000
-
-func bigContexts(c *Corpus) Evidence {
-	n := 0
-	var best pick
-	c.Interactive(func(s *Session) {
-		k := 0
-		var first *model.Turn
-		for _, t := range s.Turns {
-			if t.ContextTokens >= bigContext {
-				k++
-				if first == nil {
-					first = t
-				}
-			}
-		}
-		n += k
-		if first != nil {
-			best.offer(k, turnHit(s, first, ""))
-		}
-	})
-	if n < 3 {
-		return Evidence{}
-	}
-	return Evidence{Reason: fmt.Sprintf("%d turn%s ran with more than 150k tokens of context.", n, plural(n)), Example: best.example()}
-}
-
 func unroutedAgents(c *Corpus) Evidence {
 	n := 0
 	var best pick

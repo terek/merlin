@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -58,5 +60,88 @@ func TestMomentsReportShared(t *testing.T) {
 	cancel()
 	if _, err := a.report(ctx, r.cat); err == nil {
 		t.Fatal("a cancelled request got a report")
+	}
+}
+
+func TestMomentsEngage(t *testing.T) {
+	home := t.TempDir()
+	r := newRig(t, func(o *Options) { o.MomentsHome = home })
+	post := func(origin, body string) int {
+		req, err := http.NewRequest("POST", r.srv.URL+"/api/moments/engage", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if origin == "auto" {
+			origin = "http://" + req.URL.Host
+		}
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	for _, c := range []struct {
+		origin, body string
+		want         int
+	}{
+		{"http://evil.example", `{"moment":"clean-slate","action":"open"}`, 403},
+		{"auto", `{"moment":"nope","action":"open"}`, 400},
+		{"auto", `{"moment":"clean-slate","action":"bogus"}`, 400},
+		{"auto", `not json`, 400},
+		{"auto", `{"moment":"clean-slate","action":"open"}`, 200},
+		{"auto", `{"moment":"clean-slate","action":"copy"}`, 200},
+	} {
+		if got := post(c.origin, c.body); got != c.want {
+			t.Errorf("%s: %d, want %d", c.body, got, c.want)
+		}
+	}
+	got := moments.LoadEngaged(home)
+	if len(got) != 1 || got[0].Moment != "clean-slate" || !got[0].OpenedAt.Equal(testNow) || !got[0].CopiedAt.Equal(testNow) {
+		t.Errorf("recorded: %+v", got)
+	}
+	// without a home the route is absent
+	r2 := newRig(t)
+	resp, err := http.Post(r2.srv.URL+"/api/moments/engage", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 404 && resp.StatusCode != 405 {
+		t.Errorf("no home: %d", resp.StatusCode)
+	}
+}
+
+// A copy changes the report, so the cached one is not served: the clock shows at once.
+func TestMomentsReportSeesEngagement(t *testing.T) {
+	home := t.TempDir()
+	r := newRig(t, func(o *Options) { o.MomentsHome = home })
+	before, err := r.api.report(context.Background(), r.cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before.Suggestions) == 0 {
+		t.Fatal("the fixtures suggest nothing")
+	}
+	id := before.Suggestions[0].Moment
+	if err := moments.RecordEngagement(home, id, moments.ActionOpen, testNow); err != nil {
+		t.Fatal(err)
+	}
+	after, err := r.api.report(context.Background(), r.cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engaged := func(rep moments.Report) bool {
+		for _, s := range rep.Suggestions {
+			if s.Moment == id && s.Engaged != nil {
+				return true
+			}
+		}
+		return false
+	}
+	if engaged(before) || !engaged(after) {
+		t.Errorf("engaged before %v, after %v", engaged(before), engaged(after))
 	}
 }

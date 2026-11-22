@@ -119,7 +119,6 @@ func Registry() []Moment {
 			What:    "A subagent did the reading in a context of its own and came back with a summary.",
 			Try:     "Send exploration to a subagent: it reads twenty files in its own context and returns a page, so the main context stays small and cheap.",
 			Detect:  contextIsolation,
-			Symptom: bigContexts,
 		},
 		{
 			ID: "model-routing", Category: CategoryHarness, Persona: Boris, Title: "Model routing",
@@ -128,6 +127,13 @@ func Registry() []Moment {
 			Try:     "Subagents that search or summarise rarely need the largest model. Give them a smaller one and pay a fraction.",
 			Detect:  modelRouting,
 			Symptom: unroutedAgents,
+		},
+		{
+			ID: "compressed-shell", Category: CategoryHarness, Persona: Boris, Title: "Compressed shell output",
+			Detects: "Counted for each turn with shell calls in a Claude Code session started after a shell-output compressor (an rtk hook) was set up in your settings.",
+			What:    "A hook shrank the output of your shell commands before the agent read it.",
+			Try:     "A hook such as rtk rewrites git status, test runs and listings into a compact form. The agent reads far fewer tokens, and so does every later call that carries them.",
+			Detect:  compressedShell,
 		},
 		{
 			ID: "parallel-sessions", Category: CategoryParallelism, Persona: Boris, Title: "Parallel sessions",

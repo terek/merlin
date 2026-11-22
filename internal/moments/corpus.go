@@ -25,6 +25,10 @@ type Input struct {
 type Corpus struct {
 	Sessions []*Session
 	Loc      *time.Location
+	// Now is the report's time; WindowStart is WindowDays before it.
+	Now, WindowStart time.Time
+	// Setup is what the person has set up around their harnesses (see Config).
+	Setup Setup
 }
 
 // Session is one session as detectors see it.

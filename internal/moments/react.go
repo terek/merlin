@@ -135,7 +135,7 @@ func reaction(p Persona, over bool, fresh, active, recent []string) (string, str
 
 // suggest picks moments to try, among those not yet a habit: unseen ones before explored ones;
 // within each, those whose symptom fired first, then at most one per persona, Yegge last.
-func suggest(catalog []Moment, ms []MomentView, c *Corpus) []Suggestion {
+func suggest(catalog []Moment, ms []MomentView, c *Corpus, techs map[string]*Technique, eng []Engagement, hits map[string][]Hit) []Suggestion {
 	status := map[string]Status{}
 	for _, m := range ms {
 		status[m.ID] = m.Status
@@ -144,12 +144,41 @@ func suggest(catalog []Moment, ms []MomentView, c *Corpus) []Suggestion {
 	picked := map[string]bool{}
 	byPersona := map[Persona]int{}
 	add := func(m Moment, ev Evidence) {
-		out = append(out, Suggestion{Moment: m.ID, Reason: ev.Reason, Example: ev.Example})
+		s := Suggestion{Moment: m.ID, Reason: ev.Reason, Example: ev.Example, Technique: techs[m.ID]}
+		if s.Technique != nil {
+			s.Reason, s.Example = s.Technique.Reason, s.Technique.Example
+			s.Engaged = s.Technique.Engaged
+		} else if e, ok := engagementOf(eng, m.ID); ok {
+			s.Engaged = &Engaged{OpenedAt: e.OpenedAt, CopiedAt: e.CopiedAt}
+			if !e.CopiedAt.IsZero() && sessionsSince(c, e.CopiedAt) >= minFollowSessions {
+				k := 0
+				for _, h := range hits[m.ID] {
+					if !h.At.Before(e.CopiedAt) {
+						k++
+					}
+				}
+				s.Engaged.FollowUp = fmt.Sprintf("Since you copied it on %s: %d time%s in %d sessions.", day(e.CopiedAt, c.Loc), k, plural(k),
+					sessionsSince(c, e.CopiedAt))
+			}
+		}
+		out = append(out, s)
 		picked[m.ID] = true
 		byPersona[m.Persona]++
 	}
+	// techniques on an unseen moment come first: they are the ones with money on them
+	for _, m := range catalog {
+		if len(out) == maxSuggestions {
+			return out
+		}
+		if status[m.ID] == StatusUnseen && techs[m.ID] != nil {
+			add(m, Evidence{})
+		}
+	}
 	for _, want := range []Status{StatusUnseen, StatusExplored} {
 		for _, m := range catalog {
+			if picked[m.ID] {
+				continue
+			}
 			if len(out) == maxSuggestions {
 				return out
 			}
