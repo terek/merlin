@@ -172,6 +172,7 @@ func (b *Builder) buildTurns(res *FileResult, billed []*billedMsg) {
 				t.Cost.AddUnpriced()
 			}
 			t.ShellOutputBytes += bm.st.shellOut
+			t.ShellCompressed += bm.st.rewritten
 			for _, tu := range bm.st.tools {
 				t.ToolCalls++
 				if t.ToolsByName == nil {

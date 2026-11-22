@@ -96,6 +96,7 @@ type msgState struct {
 	toolIDs   map[string]struct{}
 	synthetic bool
 	shellOut  int64 // bytes of the results of the message's Bash calls
+	rewritten int64 // Bash calls a hook rewrote to run through a shell-output compressor
 }
 
 // Builder reduces the records of ONE transcript file into a FileResult. Feed it records
@@ -270,6 +271,7 @@ func (b *Builder) Apply(r *transcript.Record) {
 		away = b.system(r, ts, pos)
 	case transcript.TypeAttachment:
 		b.queued(r, ts)
+		b.hookRewrite(r)
 	case transcript.TypeAITitle:
 		if t := r.AITitle(); t != "" {
 			b.aiTitle = t
@@ -462,6 +464,33 @@ func (b *Builder) queued(r *transcript.Record, ts time.Time) {
 		}
 	}
 	b.turns[b.cur].queued = append(b.turns[b.cur].queued, qp)
+}
+
+// hookRewrite counts a Bash call that a PreToolUse hook rewrote to run through a shell-output
+// compressor (rtk): the transcript keeps the original command in the tool_use, and only this
+// record shows the rewrite.
+func (b *Builder) hookRewrite(r *transcript.Record) {
+	id, cmd, ok := r.HookRewrite()
+	if !ok || !compressedCommand(cmd) {
+		return
+	}
+	if call, ok := b.bash[id]; ok {
+		b.msgs[call.msg].rewritten++
+	}
+}
+
+// compressedCommand reports whether a command runs through rtk: it starts with it, or has it
+// after && ; | or a newline.
+func compressedCommand(cmd string) bool {
+	for _, sep := range []string{"&&", ";", "|", "\n"} {
+		cmd = strings.ReplaceAll(cmd, sep, "\x00")
+	}
+	for _, part := range strings.Split(cmd, "\x00") {
+		if f := strings.Fields(part); len(f) > 0 && f[0] == "rtk" {
+			return true
+		}
+	}
+	return false
 }
 
 // user handles user records: summaries, tool results and prompts.

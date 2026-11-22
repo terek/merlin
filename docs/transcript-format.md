@@ -264,6 +264,21 @@ Code writes an `attachment` record instead and shows the text to the model insid
 - The digest keeps them on the running turn (`Turn.queued`); a task notification among
   them counts for the status of the agent or run it reports on.
 
+### 4c. Hook runs
+
+Each PreToolUse hook run is an `attachment` record too:
+
+```
+{"type":"attachment","attachment":{"type":"hook_success","hookName":"PreToolUse:Bash",
+ "hookEvent":"PreToolUse","toolUseID":"…","command":"<hook command>",
+ "stdout":"{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"updatedInput\":{\"command\":\"rtk git status\"}}}"}}
+```
+
+- `stdout` is JSON text. When the hook rewrote the call, `hookSpecificOutput.updatedInput.command` is the
+  command that ran; the `tool_use` block still shows the original.
+- A rewrite to a command that starts with `rtk` (also after `&&`, `;` or `|`) is a compressed shell call.
+  The digest counts them per turn (`Turn.shellCompressed`) by matching `toolUseID` to the Bash call.
+
 ## 5. Subagents
 
 Spawned by an `Agent` tool_use block in the parent (main or another subagent). Input keys:

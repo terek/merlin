@@ -261,6 +261,7 @@ A stretch of a text, as UTF-8 byte offsets.
 | `filesTouched` | files read or changed by the turn's tool calls |
 | `contextTokens` | context size at the end of the turn |
 | `shellOutputBytes` | size in bytes of the results of the turn's shell calls (Claude Code's Bash); absent when 0 or not reported |
+| `shellCompressed` | number of the turn's shell calls that a PreToolUse hook rewrote to run through a compressor such as rtk (the hook's `hook_success` attachment, transcript-format §4b); absent when 0 |
 | `cost` | attributed cost of the main agent in this turn |
 | `costWithAgents` | dollars including agents spawned in this turn |
 | `spawned` | ids of agents spawned in this turn |

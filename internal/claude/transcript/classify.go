@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"bytes"
+	"encoding/json"
 	"regexp"
 	"strings"
 
@@ -220,4 +221,38 @@ func (q QueuedCommand) PromptOrigin() model.TurnOrigin {
 		return model.OriginPeer
 	}
 	return PromptOriginFromText(q.Prompt.Text())
+}
+
+var markHookSuccess = []byte(`"hook_success"`)
+
+// HookRewrite decodes an attachment record of type hook_success from a PreToolUse hook that
+// rewrote a Bash call (format notes §4b): the tool call it belongs to and the command it
+// rewrote it to. ok is false for every other record, and for hooks that left the command alone.
+func (r *Record) HookRewrite() (toolUseID, command string, ok bool) {
+	if r.Type != TypeAttachment || !bytes.Contains(r.Raw, markHookSuccess) {
+		return "", "", false
+	}
+	var v struct {
+		Attachment struct {
+			Type      string `json:"type"`
+			HookName  string `json:"hookName"`
+			ToolUseID string `json:"toolUseID"`
+			Stdout    string `json:"stdout"`
+		} `json:"attachment"`
+	}
+	if unmarshalTolerant(r.Raw, &v) != nil || v.Attachment.Type != "hook_success" ||
+		v.Attachment.HookName != "PreToolUse:Bash" || v.Attachment.ToolUseID == "" {
+		return "", "", false
+	}
+	var out struct {
+		Specific struct {
+			Updated struct {
+				Command string `json:"command"`
+			} `json:"updatedInput"`
+		} `json:"hookSpecificOutput"`
+	}
+	if json.Unmarshal([]byte(v.Attachment.Stdout), &out) != nil || out.Specific.Updated.Command == "" {
+		return "", "", false
+	}
+	return v.Attachment.ToolUseID, out.Specific.Updated.Command, true
 }

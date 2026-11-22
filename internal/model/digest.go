@@ -316,6 +316,9 @@ type Turn struct {
 	// ShellOutputBytes is the size of the results of the turn's shell calls (Claude Code's
 	// Bash), in bytes of text. Zero for harnesses that do not report it.
 	ShellOutputBytes int64 `json:"shellOutputBytes,omitempty"`
+	// ShellCompressed counts the shell calls of the turn that a PreToolUse hook rewrote to run
+	// through a shell-output compressor (rtk), as the hook's own record in the transcript says.
+	ShellCompressed int64 `json:"shellCompressed,omitempty"`
 
 	Cost           Cost     `json:"cost"`
 	CostWithAgents float64  `json:"costWithAgents"`
