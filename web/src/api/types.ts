@@ -1154,6 +1154,14 @@ export interface MomentView {
   technique?: MomentTechnique
   /** Where the person stands with this practice today (rtk: on, configured but silent, not set up). */
   note?: string
+  /** What the person already saves with this practice: an estimate for 30 days at API prices. */
+  saved?: MomentSaved
+}
+
+/** A realized saving: USD for 30 days, and how it was worked out. */
+export interface MomentSaved {
+  monthlyUSD: number
+  how: string
 }
 
 /** What to copy: a paragraph for CLAUDE.md or AGENTS.md, or commands for a terminal. */

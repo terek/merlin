@@ -32,12 +32,12 @@ import {
   type SortKey,
   STRIP_PX,
   saves,
-  savingTag,
+  savesCell,
   sortMoments,
   type TimelineLayout,
 } from './layout'
 import { useLabelMeasure } from './measure'
-import { TechniqueSection } from './Technique'
+import { SavedLine, TechniqueSection } from './Technique'
 
 /** The intensity strip, the month axis, and what is above the first row. */
 const AREA_TOP = 0
@@ -63,7 +63,7 @@ export type GlyphKind = MomentDepth | 'next' | 'save' | 'watching'
 
 /** The words a mark is shown with in a tooltip. */
 function kindWord(k: GlyphKind): string {
-  return k === 'next' ? 'to try' : k === 'save' ? 'saves money' : k === 'watching' ? 'watching' : DEPTH_WORD[k]
+  return k === 'next' ? 'to try' : k === 'save' ? 'could save' : k === 'watching' ? 'watching' : DEPTH_WORD[k]
 }
 
 export { depthOf }
@@ -138,7 +138,7 @@ const DEPTH_KEY: [GlyphKind, string][] = [
   ['new', 'new'],
   ['tried', 'tried'],
   ['next', 'to try'],
-  ['save', 'saves money'],
+  ['save', 'could save'],
   ['watching', 'watching'],
 ]
 
@@ -169,6 +169,29 @@ export function MomentsKey() {
               <span>{word}</span>
             </li>
           ))}
+        </>,
+      )}
+      {group(
+        'Saves',
+        <>
+          <li className="contents">
+            {sample(
+              'Could save',
+              <text x={14} y={12} fontSize={11} textAnchor="middle" style={{ fill: 'var(--bad)' }}>
+                ≈ $
+              </text>,
+            )}
+            <span>could save</span>
+          </li>
+          <li className="contents">
+            {sample(
+              'Saving',
+              <text x={14} y={12} fontSize={11} textAnchor="middle" style={{ fill: 'var(--ok)' }}>
+                ≈ $
+              </text>,
+            )}
+            <span>saving</span>
+          </li>
         </>,
       )}
       {group(
@@ -400,6 +423,7 @@ function Chart({
   )
   const label = (m: MomentView, tags: RowTag[], t?: MomentTechnique) => {
     const w = (t: string) => measure(t, 400, ROW_LABEL_SIZE)
+    const cell = savesCell(m, t)
     const text = fitText(m.title, l.cols.category - ROW_GLYPH_W - 8 - tagsWidth(tags, measure), w)
     let tagX = ROW_GLYPH_W + w(text) + TAG_GAP
     return (
@@ -423,16 +447,28 @@ function Chart({
             {m.hits}
           </text>
         )}
-        {savingTag(t) && (
+        {(cell.green || cell.red) && (
           <text
             x={l.cols.savesRight}
             y={ROWS_PITCH / 2 + 4}
             fontSize={12}
             textAnchor="end"
             className="tabular-nums"
-            style={{ fill: saves(t) ? 'var(--bad)' : 'var(--muted)' }}
+            style={{ fill: 'var(--muted)' }}
           >
-            {savingTag(t)}
+            <title>
+              {[cell.green && `saving about ${cell.green} a month`, cell.red && `could save about ${cell.red} a month`]
+                .filter(Boolean)
+                .join(', ')}
+            </title>
+            {cell.green && <tspan style={{ fill: 'var(--ok)' }}>{cell.both ? cell.green : `≈ ${cell.green}`}</tspan>}
+            {cell.both && ' '}
+            {cell.red && (
+              <tspan style={{ fill: cell.hot ? 'var(--bad)' : 'var(--muted)' }}>
+                {cell.both ? cell.red : `≈ ${cell.red}`}
+              </tspan>
+            )}
+            {' / mo'}
           </text>
         )}
         {tags.map((t) => {
@@ -760,6 +796,7 @@ function Panel({
   return (
     <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
       {m.note && <p className="pt-1">{m.note}</p>}
+      {m.saved && <SavedLine saved={m.saved} />}
       {m.technique && <TechniqueSection t={m.technique} now={new Date()} usual={usual} onCopy={() => onCopy?.(m.id)} />}
       <About moment={m} />
       {!m.technique && again && <Suggestion moment={m} reason={again.reason} example={again.example} />}

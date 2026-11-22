@@ -54,6 +54,23 @@ export function savingTag(t: MomentTechnique | undefined): string {
   return usd ? `≈ $${Math.round(usd).toLocaleString('en-US')} / mo` : ''
 }
 
+/** A dollar amount as the SAVES column says it: "$1,234". */
+export function dollars(usd: number): string {
+  return `$${Math.round(usd).toLocaleString('en-US')}`
+}
+
+/**
+ * What the SAVES cell shows for a row: the realized saving (green) first, then what could still be saved (red from
+ * SAVES_MIN, muted below it). Empty strings for what is absent.
+ */
+export function savesCell(m: Pick<MomentView, 'saved'>, t: MomentTechnique | undefined) {
+  const green = m.saved?.monthlyUSD ?? 0
+  const red = t?.estimate?.monthlyUSD ?? 0
+  const g = green >= 1 ? dollars(green) : ''
+  const r = red > 0 ? dollars(red) : ''
+  return { green: g, red: r, hot: red >= SAVES_MIN, both: !!g && !!r }
+}
+
 /** Whether the technique's fix was copied lately and Merlin is watching what comes of it. */
 export function isWatching(t: MomentTechnique | undefined): boolean {
   return !!t?.engaged?.watching
@@ -401,7 +418,8 @@ export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
       case 'count':
         return m.hits
       case 'saves':
-        return m.technique?.estimate?.monthlyUSD ?? 0
+        // the red amount first, then the green one
+        return (m.technique?.estimate?.monthlyUSD ?? 0) * 1e7 + (m.saved?.monthlyUSD ?? 0)
       case 'end':
         return time(m.last)
       default:

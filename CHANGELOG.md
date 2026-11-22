@@ -4,6 +4,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- The Moments SAVES column also shows, in green, what model routing and rtk already save you each month, next to the red amount you could still save; rtk's practice is named "Compressed shell output (rtk)".
 - Indexing stays fast while the Moments or Sessions page is open, and its progress counter no longer jumps back.
 - `merlin scan` refuses to run while `merlin serve` is using the same home, and a restarted `merlin serve` cleans up temp files left by a killed one.
 - Moments finds where your sessions cost more than they need to (huge contexts, a premium model doing the tool work itself, shell output an rtk hook would shrink), with a monthly estimate, a copy-ready fix (worded for Claude Code or for any harness), and a note on what changed after you copied it; the savings have their own sortable column, and rtk is recognised from the commands your hooks rewrote.

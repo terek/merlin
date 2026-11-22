@@ -250,7 +250,7 @@ and what to try next. Every claim links to the instrument view that shows it. To
   its row, tagged "try again". At most three suggestions in all.
 - **Techniques.** A technique with an estimate of $20 a month or more has a red filled circle instead of
   the dotted one (below that, the dotted circle stays and the SAVES cell still shows). On a seen row the
-  depth glyph stays and the estimate is in the SAVES column ("≈ $120 / mo", sortable, empty for most rows). While the person is watching a copied fix
+  depth glyph stays and the estimate is in the SAVES column, after the green amount already saved (`MomentView.saved`: model routing and rtk only, see api.md) ("≈ $120 / mo", sortable, empty for most rows). While the person is watching a copied fix
   (28 days) a clock circle replaces the red or dotted circle, and on a seen row the depth glyph. Watching
   and red rank with the suggestions in the depth sort.
 - **More to try.** The unseen moments that are not suggestions, collapsed.

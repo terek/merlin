@@ -23,6 +23,7 @@ import {
   plotStart,
   ROW_GLYPH_W,
   saves,
+  savesCell,
   savingTag,
   seenMoments,
   sortMoments,
@@ -307,6 +308,16 @@ describe('saves column and fix wording', () => {
     const b = { ...moment('b', 2), technique: t(90) }
     const c = moment('c', 3)
     expect(sortMoments([a, c, b], { key: 'saves', dir: 'desc' }).map((m) => m.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  test('the SAVES cell shows green first, and the sort goes by the red amount, then the green one', () => {
+    const a = { ...moment('a', 1), saved: { monthlyUSD: 40, how: 'h' } }
+    const b = { ...moment('b', 2), technique: t(30), saved: { monthlyUSD: 12, how: 'h' } }
+    const c = { ...moment('c', 3), technique: t(30), saved: { monthlyUSD: 90, how: 'h' } }
+    const d = { ...moment('d', 4), technique: t(500) }
+    expect(savesCell(b, b.technique)).toEqual({ green: '$12', red: '$30', hot: true, both: true })
+    expect(savesCell(a, undefined)).toEqual({ green: '$40', red: '', hot: false, both: false })
+    expect(sortMoments([a, b, c, d], { key: 'saves', dir: 'desc' }).map((m) => m.id)).toEqual(['d', 'c', 'b', 'a'])
   })
 
   test('a fix without variants has no toggle; with variants the usual harness opens first', () => {

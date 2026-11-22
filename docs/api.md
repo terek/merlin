@@ -1395,7 +1395,7 @@ moment (`moments[].technique`, the row keeps its place). `estimate.monthlyUSD` i
 is only here because its fix is being watched. `fix.kind` is `claudemd` (a paragraph to add to
 AGENTS.md) or `shell` (commands for a terminal); `fix.link` is the tool's own page. `fix.text` is the universal
 wording (no model names); `fix.variants` (`harness`, `text`, optional `how`) is the same fix worded for one harness, and
-`how` replaces `estimate.how` for it. `moments[].note` says where the person stands with a practice today (rtk: on with
+`how` replaces `estimate.how` for it. `moments[].saved` (`{ monthlyUSD, how }`, absent when none) is what the person already saves: an estimate for 30 days from the last 28, at API prices, two significant figures, shown in green. Model routing: the sub-agent turns that ran on a cheaper model than the session's main one, priced again at the main model, minus their cost. Compressed shell (rtk): for turns whose shell calls a hook rewrote, raw output taken as the compressed one over 0.3 (a 70% cut), the difference read again by the later calls at the cache-read price, with the red estimate's caps. `moments[].note` says where the person stands with a practice today (rtk: on with
 the number of rewrites, configured but silent, or not set up). `usualHarness` is the harness most interactive sessions of
 the window ran in.
 `engaged` (on a suggestion, a technique or a seen moment with one) says what the person did:

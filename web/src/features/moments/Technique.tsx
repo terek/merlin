@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { MomentHit, MomentTechnique } from '../../api/types'
+import type { MomentHit, MomentSaved, MomentTechnique } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { sessionPath } from '../../lib/paths'
 import { parseTime, shortDate } from '../../lib/time'
@@ -31,6 +31,21 @@ function writeChoice(c: string) {
 /** "≈ $1,200 / month". */
 function monthly(usd: number): string {
   return `≈ $${Math.round(usd).toLocaleString('en-US')} / month`
+}
+
+/** What the person already saves with a practice: a green line and how it was worked out. */
+export function SavedLine({ saved }: { saved: MomentSaved }) {
+  return (
+    <div className="max-w-[80ch] pt-1" data-testid="saved">
+      <p>
+        <span className="font-medium text-ok tabular-nums">
+          {monthly(saved.monthlyUSD).replace('/ month', '/ month saved')}
+        </span>{' '}
+        <span className="text-faint">estimated, already</span>
+      </p>
+      <p className="text-faint">{saved.how}</p>
+    </div>
+  )
 }
 
 function hitPath(h: MomentHit): string {
