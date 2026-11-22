@@ -225,9 +225,9 @@
       "focus": "Harness",
       "reaction": "🫠",
       "reason": "Lots of agents lately, and many of them did not finish.",
-      "habits": 7,
+      "habits": 8,
       "explored": 3,
-      "unseen": 5,
+      "unseen": 4,
       "new": 3
     },
     {
@@ -1429,10 +1429,10 @@
       "detects": "Counted when a short prompt (2 to 25 words, not a plain approval) leads to three or more edits with no correction after it.",
       "status": "habit",
       "depth": "routine",
-      "hits": 114,
-      "sessions": 94,
+      "hits": 108,
+      "sessions": 88,
       "weeks": 10,
-      "recentHits": 34,
+      "recentHits": 31,
       "first": "2026-08-24T09:00:00Z",
       "firstHit": {
         "at": "2026-08-24T09:00:00Z",
@@ -1589,12 +1589,12 @@
         },
         {
           "day": "2026-09-08",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-09-08T10:40:00Z",
+            "at": "2026-09-08T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-024"
+              "id": "synthetic-023"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -1641,12 +1641,12 @@
         },
         {
           "day": "2026-09-14",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-09-14T10:40:00Z",
+            "at": "2026-09-14T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-032"
+              "id": "synthetic-031"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -1823,12 +1823,12 @@
         },
         {
           "day": "2026-10-02",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-02T10:40:00Z",
+            "at": "2026-10-02T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-060"
+              "id": "synthetic-059"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -1875,12 +1875,12 @@
         },
         {
           "day": "2026-10-08",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-08T10:40:00Z",
+            "at": "2026-10-08T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-068"
+              "id": "synthetic-067"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -1927,12 +1927,12 @@
         },
         {
           "day": "2026-10-14",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-14T10:40:00Z",
+            "at": "2026-10-14T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-076"
+              "id": "synthetic-075"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -1979,12 +1979,12 @@
         },
         {
           "day": "2026-10-20",
-          "hits": 2,
+          "hits": 1,
           "example": {
-            "at": "2026-10-20T10:40:00Z",
+            "at": "2026-10-20T10:00:00Z",
             "session": {
               "harness": "claude",
-              "id": "synthetic-084"
+              "id": "synthetic-083"
             },
             "turn": 1,
             "note": "5 words, 8 edits, no correction"
@@ -4105,21 +4105,47 @@
       "detects": "Counted when a subagent runs on a cheaper model than the main session's.",
       "status": "habit",
       "depth": "routine",
-      "hits": 8,
-      "sessions": 8,
-      "weeks": 4,
-      "recentHits": 4,
-      "first": "2026-09-22T10:10:00Z",
+      "hits": 20,
+      "sessions": 18,
+      "weeks": 8,
+      "recentHits": 13,
+      "first": "2026-09-08T10:42:00Z",
       "firstHit": {
-        "at": "2026-09-22T10:10:00Z",
+        "at": "2026-09-08T10:42:00Z",
         "session": {
           "harness": "claude",
-          "id": "synthetic-043"
+          "id": "synthetic-024"
         },
         "turn": 1,
         "note": "a subagent ran at 50% of the main model's price"
       },
       "days": [
+        {
+          "day": "2026-09-08",
+          "hits": 1,
+          "example": {
+            "at": "2026-09-08T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-024"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 1,
+          "example": {
+            "at": "2026-09-14T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-032"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
         {
           "day": "2026-09-22",
           "hits": 2,
@@ -4147,10 +4173,62 @@
           }
         },
         {
-          "day": "2026-10-23",
-          "hits": 2,
+          "day": "2026-10-02",
+          "hits": 1,
           "example": {
-            "at": "2026-10-23T10:50:00Z",
+            "at": "2026-10-02T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-060"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-08T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-068"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-14T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-076"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-20T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-084"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 3,
+          "example": {
+            "at": "2026-10-23T10:42:00Z",
             "session": {
               "harness": "claude",
               "id": "synthetic-090"
@@ -4160,10 +4238,49 @@
           }
         },
         {
-          "day": "2026-10-29",
-          "hits": 2,
+          "day": "2026-10-26",
+          "hits": 1,
           "example": {
-            "at": "2026-10-29T10:50:00Z",
+            "at": "2026-10-26T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-092"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-27T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-094"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-28T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-096"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 3,
+          "example": {
+            "at": "2026-10-29T10:42:00Z",
             "session": {
               "harness": "claude",
               "id": "synthetic-098"
@@ -4171,10 +4288,32 @@
             "turn": 1,
             "note": "a subagent ran at 50% of the main model's price"
           }
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-30T10:42:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-100"
+            },
+            "turn": 1,
+            "note": "a subagent ran at 50% of the main model's price"
+          }
         }
       ],
-      "last": "2026-10-29T10:50:00Z",
+      "last": "2026-10-30T10:42:00Z",
       "examples": [
+        {
+          "at": "2026-10-30T10:42:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 1,
+          "note": "a subagent ran at 50% of the main model's price"
+        },
         {
           "at": "2026-10-29T10:50:00Z",
           "session": {
@@ -4185,26 +4324,17 @@
           "note": "a subagent ran at 50% of the main model's price"
         },
         {
-          "at": "2026-10-29T10:10:00Z",
+          "at": "2026-10-29T10:42:00Z",
           "session": {
             "harness": "claude",
-            "id": "synthetic-097"
-          },
-          "turn": 1,
-          "note": "a subagent ran at 50% of the main model's price"
-        },
-        {
-          "at": "2026-10-23T10:50:00Z",
-          "session": {
-            "harness": "claude",
-            "id": "synthetic-090"
+            "id": "synthetic-098"
           },
           "turn": 1,
           "note": "a subagent ran at 50% of the main model's price"
         }
       ],
       "saved": {
-        "monthlyUSD": 12,
+        "monthlyUSD": 32,
         "how": "The sub-agents that ran on a cheaper model than the session's main one, priced again at the main model, minus what they cost: the last 28 days, scaled to 30 days."
       }
     },
@@ -4215,12 +4345,506 @@
       "title": "Orchestrator and implementors",
       "what": "The main conversation plans and reviews while sub-agents on a mid-tier model do the edits, test runs and searches.",
       "try": "Tell the agent to act as the orchestrator: plan, decide and review in the main conversation, and hand the implementation to sub-agents on a cheaper model, each with a precise brief.",
-      "detects": "Not counted as a habit: Merlin offers it as a technique when turns with ten or more edits and shell calls ran on the priciest model with at most one sub-agent.",
-      "status": "unseen",
-      "hits": 0,
-      "sessions": 0,
-      "weeks": 0,
-      "recentHits": 0
+      "detects": "Counted for each turn on a premium model in which you handed the work to sub-agents on a cheaper model: they made three or more edits and shell calls, the main thread at most two.",
+      "status": "habit",
+      "depth": "routine",
+      "hits": 12,
+      "sessions": 12,
+      "weeks": 7,
+      "recentHits": 9,
+      "first": "2026-09-08T10:40:00Z",
+      "firstHit": {
+        "at": "2026-09-08T10:40:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-024"
+        },
+        "turn": 1,
+        "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+      },
+      "days": [
+        {
+          "day": "2026-09-08",
+          "hits": 1,
+          "example": {
+            "at": "2026-09-08T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-024"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-09-14",
+          "hits": 1,
+          "example": {
+            "at": "2026-09-14T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-032"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-02",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-02T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-060"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-08T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-068"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-14T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-076"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-20T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-084"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-23T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-090"
+            },
+            "turn": 1,
+            "note": "2 sub-agents on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-26T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-092"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-27T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-094"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-28T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-096"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-29T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-098"
+            },
+            "turn": 1,
+            "note": "2 sub-agents on a cheaper model made 10 edits and shell calls"
+          }
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 1,
+          "example": {
+            "at": "2026-10-30T10:40:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-100"
+            },
+            "turn": 1,
+            "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+          }
+        }
+      ],
+      "last": "2026-10-30T10:40:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-100"
+          },
+          "turn": 1,
+          "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+        },
+        {
+          "at": "2026-10-29T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-098"
+          },
+          "turn": 1,
+          "note": "2 sub-agents on a cheaper model made 10 edits and shell calls"
+        },
+        {
+          "at": "2026-10-28T10:40:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-096"
+          },
+          "turn": 1,
+          "note": "1 sub-agent on a cheaper model made 10 edits and shell calls"
+        }
+      ],
+      "technique": {
+        "reason": "31 turns on claude-opus-5-5 ran 10 or more edits and shell calls themselves (403 calls in all), with at most one sub-agent. Work like that does not need the priciest model.",
+        "estimate": {
+          "monthlyUSD": 54,
+          "how": "Those turns' cost, priced again at a mid-tier model: the difference over the last 28 days, scaled to 30 days."
+        },
+        "fix": {
+          "kind": "claudemd",
+          "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on a mid-tier model, each with a precise brief. Check what they return before reporting it as done.",
+          "variants": [
+            {
+              "harness": "claude",
+              "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on Sonnet, each with a precise brief. Check what they return before reporting it as done.",
+              "how": "Those turns' cost, priced again at Sonnet (claude-sonnet-5-5): the difference over the last 28 days, scaled to 30 days."
+            }
+          ]
+        },
+        "days": [
+          {
+            "day": "2026-10-05",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-05T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-062"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-06",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-06T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-064"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-07",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-07T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-066"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-08",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-08T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-067"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-09",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-09T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-070"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-12",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-12T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-072"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-13",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-13T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-074"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-14",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-14T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-075"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-15",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-15T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-078"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-16",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-16T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-080"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-19",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-19T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-082"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-20",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-20T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-083"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-21",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-21T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-086"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-22",
+            "hits": 2,
+            "example": {
+              "at": "2026-10-22T10:40:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-088"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-23",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-23T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-089"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-26",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-26T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-091"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-27",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-27T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-093"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-28",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-28T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-095"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-29",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-29T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-097"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          },
+          {
+            "day": "2026-10-30",
+            "hits": 1,
+            "example": {
+              "at": "2026-10-30T10:00:00Z",
+              "session": {
+                "harness": "claude",
+                "id": "synthetic-099"
+              },
+              "turn": 1,
+              "note": "13 edits and shell calls on a premium model"
+            }
+          }
+        ],
+        "example": {
+          "at": "2026-10-30T10:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 1
+        },
+        "engaged": {
+          "openedAt": "2026-10-22T16:00:00Z",
+          "copiedAt": "2026-10-22T18:00:00Z",
+          "watching": true,
+          "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 10 or more edits and shell calls went from $2.56 to $1.80 per session (12 sessions). A comparison, not proof."
+        }
+      },
+      "note": "You already do this: 9 turns in the last 28 days handed the edits to sub-agents on a cheaper model. (Model routing: ≈ $32 / mo saved)"
     },
     {
       "id": "compressed-shell",
@@ -5778,7 +6402,7 @@
               "id": "synthetic-090"
             },
             "turn": 1,
-            "note": "7 agents at once"
+            "note": "8 agents at once"
           }
         },
         {
@@ -5791,7 +6415,7 @@
               "id": "synthetic-094"
             },
             "turn": 1,
-            "note": "6 agents at once"
+            "note": "7 agents at once"
           }
         },
         {
@@ -5804,7 +6428,7 @@
               "id": "synthetic-098"
             },
             "turn": 1,
-            "note": "7 agents at once"
+            "note": "8 agents at once"
           }
         }
       ],
@@ -5817,7 +6441,7 @@
             "id": "synthetic-098"
           },
           "turn": 1,
-          "note": "7 agents at once"
+          "note": "8 agents at once"
         },
         {
           "at": "2026-10-29T10:10:00Z",
@@ -5835,7 +6459,7 @@
             "id": "synthetic-094"
           },
           "turn": 1,
-          "note": "6 agents at once"
+          "note": "7 agents at once"
         }
       ]
     },
@@ -6306,316 +6930,7 @@
       }
     },
     {
-      "moment": "orchestrator",
-      "reason": "34 turns on claude-opus-5-5 ran 10 or more edits and shell calls themselves (442 calls in all), with at most one sub-agent. Work like that does not need the priciest model.",
-      "example": {
-        "at": "2026-10-30T10:00:00Z",
-        "session": {
-          "harness": "claude",
-          "id": "synthetic-099"
-        },
-        "turn": 1
-      },
-      "technique": {
-        "reason": "34 turns on claude-opus-5-5 ran 10 or more edits and shell calls themselves (442 calls in all), with at most one sub-agent. Work like that does not need the priciest model.",
-        "estimate": {
-          "monthlyUSD": 59,
-          "how": "Those turns' cost, priced again at a mid-tier model: the difference over the last 28 days, scaled to 30 days."
-        },
-        "fix": {
-          "kind": "claudemd",
-          "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on a mid-tier model, each with a precise brief. Check what they return before reporting it as done.",
-          "variants": [
-            {
-              "harness": "claude",
-              "text": "Act as the orchestrator: plan, decide and review in this conversation, and hand implementation (edits, test runs, searches) to sub-agents on Sonnet, each with a precise brief. Check what they return before reporting it as done.",
-              "how": "Those turns' cost, priced again at Sonnet (claude-sonnet-5-5): the difference over the last 28 days, scaled to 30 days."
-            }
-          ]
-        },
-        "days": [
-          {
-            "day": "2026-10-05",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-05T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-062"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-06",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-06T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-064"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-07",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-07T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-066"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-08",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-08T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-068"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-09",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-09T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-070"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-12",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-12T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-072"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-13",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-13T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-074"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-14",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-14T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-076"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-15",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-15T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-078"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-16",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-16T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-080"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-19",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-19T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-082"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-20",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-20T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-084"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-21",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-21T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-086"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-22",
-            "hits": 2,
-            "example": {
-              "at": "2026-10-22T10:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-088"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-23",
-            "hits": 1,
-            "example": {
-              "at": "2026-10-23T10:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-089"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-26",
-            "hits": 1,
-            "example": {
-              "at": "2026-10-26T10:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-091"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-27",
-            "hits": 1,
-            "example": {
-              "at": "2026-10-27T10:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-093"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-28",
-            "hits": 1,
-            "example": {
-              "at": "2026-10-28T10:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-095"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-29",
-            "hits": 1,
-            "example": {
-              "at": "2026-10-29T10:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-097"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          },
-          {
-            "day": "2026-10-30",
-            "hits": 1,
-            "example": {
-              "at": "2026-10-30T10:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-099"
-              },
-              "turn": 1,
-              "note": "13 edits and shell calls on a premium model"
-            }
-          }
-        ],
-        "example": {
-          "at": "2026-10-30T10:00:00Z",
-          "session": {
-            "harness": "claude",
-            "id": "synthetic-099"
-          },
-          "turn": 1
-        },
-        "engaged": {
-          "openedAt": "2026-10-22T16:00:00Z",
-          "copiedAt": "2026-10-22T18:00:00Z",
-          "watching": true,
-          "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 10 or more edits and shell calls went from $2.84 to $1.80 per session (12 sessions). A comparison, not proof."
-        }
-      },
-      "engaged": {
-        "openedAt": "2026-10-22T16:00:00Z",
-        "copiedAt": "2026-10-22T18:00:00Z",
-        "watching": true,
-        "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 10 or more edits and shell calls went from $2.84 to $1.80 per session (12 sessions). A comparison, not proof."
-      }
+      "moment": "builds-harness"
     },
     {
       "moment": "plans-first",

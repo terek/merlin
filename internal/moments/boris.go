@@ -130,6 +130,49 @@ func modelRouting(c *Corpus, emit func(Hit)) {
 	})
 }
 
+// The orchestrator: a turn on a premium model that hands the implementation to sub-agents on a cheaper model.
+const (
+	orchAgentCalls = 3 // edits and shell calls the cheaper sub-agents of the turn made, at least
+	orchMainCalls  = 2 // edits and shell calls the main thread made in the turn itself, at most
+)
+
+func orchestrator(c *Corpus, emit func(Hit)) {
+	sonnet := sonnetModel()
+	sp := outputPrice(sonnet)
+	if sonnet == "" || sp == 0 {
+		return
+	}
+	c.Interactive(func(s *Session) {
+		for _, t := range s.Turns {
+			if t.Abandoned || t.StartedAt.IsZero() || len(t.Spawned) == 0 {
+				continue
+			}
+			var premium float64
+			for name := range t.Cost.ByModel {
+				if p := outputPrice(name); p > sp && p > premium {
+					premium = p
+				}
+			}
+			if premium == 0 || countTools(t.ToolsByName, editTools)+countTools(t.ToolsByName, shellTools) > orchMainCalls {
+				continue
+			}
+			var calls, n int64
+			for _, a := range s.Agents {
+				if a.Kind != model.AgentSubagent || a.SpawnTurn == nil || *a.SpawnTurn != t.Index {
+					continue
+				}
+				if p := outputPrice(a.Model); p > 0 && p < premium {
+					calls += countTools(a.ToolsByName, editTools) + countTools(a.ToolsByName, shellTools)
+					n++
+				}
+			}
+			if calls >= orchAgentCalls {
+				emit(turnHit(s, t, fmt.Sprintf("%d sub-agent%s on a cheaper model made %d edits and shell calls", n, plural(int(n)), calls)))
+			}
+		}
+	})
+}
+
 // attendedGap: turns of one session less than this apart count as one stretch of work.
 const attendedGap = 5 * time.Minute
 

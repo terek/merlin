@@ -2,7 +2,10 @@ package moments
 
 import (
 	"cmp"
+	"fmt"
+	"math"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/terek/merlin/internal/model"
@@ -289,6 +292,11 @@ func BuildConfig(catalog []Moment, in []Input, now time.Time, loc *time.Location
 		r.Moments[i].Saved = c.savedOf(r.Moments[i].ID)
 	}
 	for i := range r.Moments {
+		if r.Moments[i].ID == "orchestrator" {
+			r.Moments[i].Note = orchestratorNote(r.Moments[i], allHits[r.Moments[i].ID], windowStart, r.Moments)
+		}
+	}
+	for i := range r.Moments {
 		if r.Moments[i].Status != StatusUnseen {
 			r.Moments[i].Technique = techs[r.Moments[i].ID]
 		}
@@ -437,4 +445,35 @@ func activity(c *Corpus, loc *time.Location) []ActivityDay {
 		out = append(out, ActivityDay{Day: d, Prompts: n[d]})
 	}
 	return out
+}
+
+// orchestratorNote opens the row: what the person already does, and what model routing saves them.
+func orchestratorNote(m MomentView, hits []Hit, windowStart time.Time, all []MomentView) string {
+	if len(hits) == 0 {
+		return ""
+	}
+	n := 0
+	for _, h := range hits {
+		if !h.At.Before(windowStart) {
+			n++
+		}
+	}
+	text := fmt.Sprintf("You already do this: %d turn%s in the last %d days handed the edits to sub-agents on a cheaper model.", n, plural(n), WindowDays)
+	if n == 0 {
+		text = fmt.Sprintf("You have done this: %d turn%s handed the edits to sub-agents on a cheaper model, none in the last %d days.", len(hits), plural(len(hits)), WindowDays)
+	}
+	for _, o := range all {
+		if o.ID == "model-routing" && o.Saved != nil {
+			text += fmt.Sprintf(" (Model routing: ≈ $%s / mo saved)", commas(o.Saved.MonthlyUSD))
+		}
+	}
+	return text
+}
+
+func commas(usd float64) string {
+	s := strconv.FormatInt(int64(math.Round(usd)), 10)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
 }

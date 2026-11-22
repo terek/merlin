@@ -250,3 +250,33 @@ func TestEngagementStore(t *testing.T) {
 		t.Errorf("and rewritten: %v", err)
 	}
 }
+
+func TestOrchestratorDetector(t *testing.T) {
+	opus := "claude-opus-5-5"
+	turn := func(main map[string]int64) model.Turn {
+		return model.Turn{ToolsByName: main, Spawned: []string{"a"},
+			Cost: model.Cost{USD: 1, ByModel: map[string]model.ModelCost{opus: {USD: 1}}}}
+	}
+	agent := func(mdl string, calls map[string]int64) model.Agent {
+		return model.Agent{ID: "a", Kind: model.AgentSubagent, Model: mdl, SpawnTurn: new(int), ToolsByName: calls,
+			StartedAt: tnow.AddDate(0, 0, -2)}
+	}
+	hits := func(tr model.Turn, a model.Agent) int {
+		in := techSession("o", 2, opus, tr)
+		in.Digest.Agents = []model.Agent{a}
+		return view(BuildWith(Registry(), []Input{in}, tnow, time.UTC), "orchestrator").Hits
+	}
+	work := map[string]int64{"Edit": 2, "Bash": 1}
+	if n := hits(turn(map[string]int64{"Agent": 1}), agent("claude-sonnet-5-5", work)); n != 1 {
+		t.Errorf("a premium turn that delegated three calls to Sonnet: %d hits", n)
+	}
+	if n := hits(turn(map[string]int64{"Agent": 1}), agent("claude-sonnet-5-5", map[string]int64{"Edit": 2})); n != 0 {
+		t.Errorf("two calls are too few: %d hits", n)
+	}
+	if n := hits(turn(map[string]int64{"Edit": 2, "Bash": 1}), agent("claude-sonnet-5-5", work)); n != 0 {
+		t.Errorf("the main thread did the work itself: %d hits", n)
+	}
+	if n := hits(turn(map[string]int64{"Agent": 1}), agent(opus, work)); n != 0 {
+		t.Errorf("a sub-agent on the same model is not routing: %d hits", n)
+	}
+}

@@ -78,9 +78,11 @@ func TestMockReport(t *testing.T) {
 			t0.ToolsByName["Bash"] = 2
 			t1.ContextTokens, t1.AssistantMessages, t1.ShellOutputBytes, t1.Cost = ctx1, 30, 90_000, price(ctx1)
 			t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 8, 5
-			if day <= 9 && k%3 != 0 {
-				// since the orchestrator block was copied (day 10), most of the editing is delegated
-				t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 2, 3
+			// now and then, and since the orchestrator block was copied (day 10) mostly, the editing is delegated
+			delegated := (day <= 9 && k%3 != 0) || (day <= 56 && day%6 == 0 && k == 1)
+			if delegated {
+				t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 1, 1
+				t1.Spawned = []string{"o"}
 			}
 			if day <= 30 && k == 0 {
 				// rtk is on since day 30: the hook rewrites the shell calls of the first session of the day
@@ -119,6 +121,15 @@ func TestMockReport(t *testing.T) {
 					StartedAt: s.Add(70 * time.Minute), EndedAt: s.Add(80 * time.Minute), SpawnTurn: ip(1), Status: model.StatusCompleted,
 					Cost: func() model.Cost {
 						mc, _ := prices().Cost("claude-sonnet-5-5", model.Tokens{Input: 400_000, Output: 150_000, CacheRead: 6_000_000}, false)
+						return model.Cost{USD: mc.USD, ByModel: map[string]model.ModelCost{"claude-sonnet-5-5": mc}}
+					}()})
+			}
+			if delegated {
+				d.Agents = append(d.Agents, model.Agent{ID: "o", Kind: model.AgentSubagent, AgentType: "general-purpose", Model: "claude-sonnet-5-5",
+					StartedAt: s.Add(62 * time.Minute), EndedAt: s.Add(90 * time.Minute), SpawnTurn: ip(1), Status: model.StatusCompleted,
+					ToolCalls: 10, ToolsByName: map[string]int64{"Edit": 6, "Bash": 4},
+					Cost: func() model.Cost {
+						mc, _ := prices().Cost("claude-sonnet-5-5", model.Tokens{Input: 300_000, Output: 100_000, CacheRead: 4_000_000}, false)
 						return model.Cost{USD: mc.USD, ByModel: map[string]model.ModelCost{"claude-sonnet-5-5": mc}}
 					}()})
 			}
@@ -188,7 +199,7 @@ func TestMockReport(t *testing.T) {
 	if sv := view(r, "model-routing").Saved; sv == nil || sv.MonthlyUSD < 1 {
 		t.Fatalf("model routing should show a saving: %+v", sv)
 	}
-	if orch == nil || orch.Engaged == nil || !orch.Engaged.Watching || orch.Engaged.FollowUp == "" || view(r, "orchestrator").Status != StatusUnseen {
+	if orch == nil || orch.Engaged == nil || !orch.Engaged.Watching || orch.Engaged.FollowUp == "" || view(r, "orchestrator").Status == StatusUnseen || view(r, "orchestrator").Note == "" {
 		t.Fatalf("the orchestrator should be a watched suggestion row, with a follow-up: %+v", orch)
 	}
 	t.Logf("heavy $%.0f, orchestrator $%.0f, rtk saved $%.0f a month; %s", heavy.Estimate.MonthlyUSD, orch.Estimate.MonthlyUSD, view(r, "compressed-shell").Saved.MonthlyUSD, orch.Engaged.FollowUp)

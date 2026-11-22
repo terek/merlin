@@ -130,9 +130,10 @@ func Registry() []Moment {
 		},
 		{
 			ID: "orchestrator", Category: CategoryHarness, Persona: Boris, Title: "Orchestrator and implementors",
-			Detects: "Not counted as a habit: Merlin offers it as a technique when turns with ten or more edits and shell calls ran on the priciest model with at most one sub-agent.",
+			Detects: "Counted for each turn on a premium model in which you handed the work to sub-agents on a cheaper model: they made three or more edits and shell calls, the main thread at most two.",
 			What:    "The main conversation plans and reviews while sub-agents on a mid-tier model do the edits, test runs and searches.",
 			Try:     "Tell the agent to act as the orchestrator: plan, decide and review in the main conversation, and hand the implementation to sub-agents on a cheaper model, each with a precise brief.",
+			Detect:  orchestrator,
 		},
 		{
 			ID: "compressed-shell", Category: CategoryHarness, Persona: Boris, Title: "Compressed shell output (rtk)",
