@@ -1748,11 +1748,29 @@ function route(req: Request): Response {
   return fail(404, 'not_found', `no such endpoint: ${u.pathname}`)
 }
 
+// POST /api/moments/engage: kept in memory only; the report does not change.
+const engaged = new Map<string, { moment: string; openedAt?: string; copiedAt?: string }>()
+async function engage(req: Request): Promise<Response> {
+  const b = (await req.json().catch(() => null)) as { moment?: string; action?: string } | null
+  if (!b?.moment || (b.action !== 'open' && b.action !== 'copy')) return fail(400, 'invalid_parameter', 'bad body')
+  const e = engaged.get(b.moment) ?? { moment: b.moment }
+  const at = new Date().toISOString()
+  if (b.action === 'open') e.openedAt ??= at
+  else e.copiedAt = at
+  engaged.set(b.moment, e)
+  return json(200, { moment: b.moment, action: b.action })
+}
+
 Bun.serve({
   hostname: '127.0.0.1',
   port,
   idleTimeout: 0,
-  fetch: (req) => (req.method === 'POST' && new URL(req.url).pathname === '/api/upgrade' ? upgrade(req) : route(req)),
+  fetch: (req) => {
+    const path = new URL(req.url).pathname
+    if (req.method === 'POST' && path === '/api/upgrade') return upgrade(req)
+    if (req.method === 'POST' && path === '/api/moments/engage') return engage(req)
+    return route(req)
+  },
 })
 console.log(
   `mock API on http://127.0.0.1:${port}: ${ds.sessions.length} sessions, ${ds.scripted.reduce((a, l) => a + l.count, 0)} scripted runs, big session ${ds.bigId}`,

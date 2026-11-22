@@ -102,6 +102,7 @@ examples below come from the synthetic fixtures (`testdata/`), trimmed.
 | `GET /api/limits` | `Limits` |
 | `GET /api/overview` | `Overview` (experimental) |
 | `GET /api/moments` | `moments.Report` (experimental) |
+| `POST /api/moments/engage` | `{moment, action}`: `{moment, action}` (experimental) |
 | `GET /api/events` | `text/event-stream` |
 | `POST /api/upgrade` | `UpgradeResponse` |
 
@@ -1359,7 +1360,13 @@ request. No parameters.
                 "examples": [{ "at": "…", "session": { "harness": "claude", "id": "…" },
                                "turn": 3, "note": "sent while the agent was working" }] }],
   "suggestions": [{ "moment": "clean-slate", "reason": "3 sessions went past 40 prompts in one context.",
-                   "example": { "at": "…", "session": { "harness": "claude", "id": "…" } } }],
+                   "example": { "at": "…", "session": { "harness": "claude", "id": "…" } },
+                   "technique": { "reason": "…", "estimate": { "monthlyUSD": 68, "how": "…" },
+                                  "fix": { "kind": "claudemd", "text": "…", "link": "…" },
+                                  "days": [{ "day": "2026-10-02", "hits": 4 }], "example": { "at": "…" },
+                                  "engaged": { "openedAt": "…", "copiedAt": "…", "watching": true,
+                                               "followUp": "Since you copied it on 22 Oct: …" } },
+                   "engaged": { "openedAt": "…" } }],
   "overYegge": false
 }
 ```
@@ -1381,6 +1388,26 @@ latest) at the turn of its first hit that day, so a client can open any occurren
 `suggestions[].example` is the session where the symptom shows most (ties: the latest), at a turn
 where that makes sense (the first auto-compaction, the first turn with a big context); it is
 absent when the suggestion has no `reason`.
+
+`technique` is a saving the history shows, on a suggestion (the practice is unseen) or on a seen
+moment (`moments[].technique`, the row keeps its place). `estimate.monthlyUSD` is the saving per
+30 days at API prices from the last `windowDays`; it is absent when the gap is gone and the technique
+is only here because its fix is being watched. `fix.kind` is `claudemd` (a paragraph to add to
+CLAUDE.md or AGENTS.md) or `shell` (commands for a terminal); `fix.link` is the tool's own page.
+`engaged` (on a suggestion, a technique or a seen moment with one) says what the person did:
+`openedAt` the first time the row was opened, `copiedAt` the latest copy; `watching` is true for
+`windowDays` after the copy; `followUp` is an association between the copy and the metric, set only
+when 3 or more interactive sessions came after it.
+
+## POST /api/moments/engage
+
+Records that the person opened a suggestion's or technique's row (`open`) or copied its fix
+(`copy`). Body: `{"moment": "clean-slate", "action": "open"}`. The daemon keeps the first open and
+the latest copy per moment in `$MERLIN_HOME/moments.json`
+(`{"engaged": [{"moment", "openedAt", "copiedAt"}]}`, written atomically). Response:
+`{"moment": "clean-slate", "action": "open"}`. Same guards as `POST /api/upgrade` (POST only, an
+`Origin` equal to `http://<Host>`, JSON content type); a missing `moment` or an `action` other than
+`open` and `copy` is `400 invalid_parameter`.
 
 ## POST /api/upgrade
 

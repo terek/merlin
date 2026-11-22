@@ -2,9 +2,11 @@
 // whose rows open in place (your moments, then what to try next), and the ideas not suggested yet. The personas, their
 // reactions and the card to share are not shown for now (MomentCard and PersonaAvatar stay).
 
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useMoments } from '../../api/queries'
+import { engageMoment } from '../../api/client'
+import { queryKeys, useMoments } from '../../api/queries'
 import type { MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
@@ -110,8 +112,16 @@ function Report({ report }: { report: MomentsReport }) {
     window.addEventListener('keydown', open, true)
     return () => window.removeEventListener('keydown', open, true)
   }, [selDay, navigate])
+  const qc = useQueryClient()
+  // opening a suggestion's or technique's row, and copying its fix, are what the follow-up is measured from
+  const engage = (id: string, action: 'open' | 'copy') => {
+    engageMoment(id, action)
+      .then(() => qc.invalidateQueries({ queryKey: queryKeys.moments() }))
+      .catch(() => {})
+  }
   const togglePin = (id: string) => {
     setSelTick(null)
+    if (pin !== id && (next.some((s) => s.moment === id) || byId.get(id)?.technique)) engage(id, 'open')
     setPin(pin === id ? null : id)
   }
   const tickDay = hoverTick ?? (selDay ? selDay.day : null)
@@ -131,6 +141,7 @@ function Report({ report }: { report: MomentsReport }) {
           onK={setK}
           sort={sort}
           onSort={setSort}
+          onCopy={(id) => engage(id, 'copy')}
         />
         <PanelTab id="moments" title="Moments">
           <MomentsKey />

@@ -6,11 +6,12 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { MomentDepth, MomentHit, MomentsReport, MomentView } from '../../api/types'
+import type { MomentDepth, MomentHit, MomentsReport, MomentTechnique, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
 import { dayStart, parseTime, shortDate } from '../../lib/time'
+import { CopyButton } from '../../ui/controls'
 import { useWidth } from '../spend/useWidth'
 import {
   activityArea,
@@ -21,6 +22,7 @@ import {
   daysPerBucket,
   depthOf,
   fitText,
+  isWatching,
   layoutRows,
   monthTicks,
   placeSuggestions,
@@ -30,6 +32,8 @@ import {
   type Sort,
   type SortKey,
   STRIP_PX,
+  saves,
+  savingTag,
   sortMoments,
   type TimelineLayout,
 } from './layout'
@@ -51,8 +55,16 @@ export const DEPTH_WORD: Record<MomentDepth, string> = {
   new: 'new',
 }
 
-/** What a row's mark can be: a depth, or the dotted ring of a suggestion. */
-export type GlyphKind = MomentDepth | 'next'
+/**
+ * What a row's mark can be: a depth, the dotted ring of a suggestion, the red disc of a technique that saves money, or
+ * the clock of a fix being watched.
+ */
+export type GlyphKind = MomentDepth | 'next' | 'save' | 'watching'
+
+/** The words a mark is shown with in a tooltip. */
+function kindWord(k: GlyphKind): string {
+  return k === 'next' ? 'to try' : k === 'save' ? 'saves money' : k === 'watching' ? 'watching' : DEPTH_WORD[k]
+}
 
 export { depthOf }
 
@@ -71,6 +83,22 @@ function DepthShapes({ depth }: { depth: GlyphKind }) {
           strokeDasharray="1.6 1.4"
           style={{ stroke: 'var(--accent)' }}
         />
+      )
+    case 'save':
+      return <circle cx="6" cy="6" r="5" style={{ fill: 'var(--bad)' }} />
+    case 'watching':
+      return (
+        <>
+          <circle cx="6" cy="6" r="4.75" strokeWidth="1.25" style={ring} />
+          <path
+            d="M6 3 V6 L8.2 7.2"
+            fill="none"
+            strokeWidth="1.15"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ stroke: 'var(--accent)' }}
+          />
+        </>
       )
     case 'routine':
       return <circle cx="6" cy="6" r="5" style={{ fill: 'var(--accent)' }} />
@@ -97,7 +125,7 @@ function DepthShapes({ depth }: { depth: GlyphKind }) {
 export function Glyph({ depth, size = 11 }: { depth: GlyphKind; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" aria-hidden className="shrink-0">
-      <title>{depth === 'next' ? 'to try' : DEPTH_WORD[depth]}</title>
+      <title>{kindWord(depth)}</title>
       <DepthShapes depth={depth} />
     </svg>
   )
@@ -110,6 +138,8 @@ const DEPTH_KEY: [GlyphKind, string][] = [
   ['new', 'new'],
   ['tried', 'tried'],
   ['next', 'to try'],
+  ['save', 'saves money'],
+  ['watching', 'watching'],
 ]
 
 /** The key of the Moments page, for the shell's legend panel: symbols and a few words, as on the session page. */
@@ -198,10 +228,13 @@ export function Timeline({
   onK,
   sort,
   onSort,
+  onCopy,
 }: {
   report: MomentsReport
   sort: Sort
   onSort: (s: Sort) => void
+  /** The person copied a technique's fix. */
+  onCopy?: (id: string) => void
   /** The moment under the pointer or the keyboard focus. */
   hover: string | null
   /** The open moment: a seen one, or a suggestion. */
@@ -218,8 +251,14 @@ export function Timeline({
   const width = useWidth(wrap)
   const since = report.since
   const measure = useLabelMeasure()
-  const tagged = placeSuggestions(report.moments, report.suggestions).again.size > 0
-  const l = since ? layoutRows(report.moments, since, report.now, width, measure, tagged) : null
+  const again = placeSuggestions(report.moments, report.suggestions).again
+  const tagWidth = (m: MomentView) => {
+    const sug = report.suggestions.find((x) => x.moment === m.id)
+    return tagsWidth(sug ? suggestionTags(savingTag(sug.technique), false) : rowTags(m, again.has(m.id)), measure)
+  }
+  const l = since
+    ? layoutRows(report.moments, since, report.now, width, measure, tagWidth, suggestedMoments(report))
+    : null
   const k = l ? daysPerBucket(l) : 1
   useEffect(() => onK(k), [k, onK])
   return (
@@ -237,10 +276,53 @@ export function Timeline({
           onTick={onTick}
           sort={sort}
           onSort={onSort}
+          onCopy={onCopy}
         />
       )}
     </div>
   )
+}
+
+/** The moments of the suggestions, in order. */
+function suggestedMoments(report: MomentsReport): MomentView[] {
+  const byId = new Map(report.moments.map((m) => [m.id, m]))
+  return report.suggestions.flatMap((s) => byId.get(s.moment) ?? [])
+}
+
+/** A small word after a row's title. */
+interface RowTag {
+  text: string
+  /** The saving tag is red, "try again" faint. */
+  red?: boolean
+}
+
+/** The tags after a seen row's title: the saving of its technique, then "try again". */
+function rowTags(m: MomentView, again: boolean): RowTag[] {
+  return suggestionTags(savingTag(m.technique), again)
+}
+
+function suggestionTags(saving: string, again: boolean): RowTag[] {
+  const out: RowTag[] = []
+  if (saving) out.push({ text: saving, red: true })
+  if (again) out.push({ text: 'try again' })
+  return out
+}
+
+const TAG_SIZE = 11
+const TAG_GAP = 8
+
+function tagsWidth(tags: RowTag[], measure: (text: string, weight?: number, size?: number) => number): number {
+  return tags.reduce((n, t) => n + measure(t.text, 400, TAG_SIZE) + TAG_GAP, 0)
+}
+
+/** The mark of a seen row: the clock while its fix is watched, else its depth. */
+function seenMark(m: MomentView): GlyphKind {
+  return isWatching(m.technique) ? 'watching' : depthOf(m)
+}
+
+/** The mark of a suggestion's row: the clock while watched, the red disc for a saving of $20 a month or more. */
+function nextMark(t: MomentTechnique | undefined): GlyphKind {
+  return isWatching(t) ? 'watching' : saves(t) ? 'save' : 'next'
 }
 
 /** A hit as a link into the session, at its turn. */
@@ -260,10 +342,12 @@ function Chart({
   onTick,
   sort,
   onSort,
+  onCopy,
 }: {
   report: MomentsReport
   sort: Sort
   onSort: (s: Sort) => void
+  onCopy?: (id: string) => void
   layout: TimelineLayout
   measure: (text: string, weight?: number, size?: number) => number
   hover: string | null
@@ -326,11 +410,10 @@ function Chart({
       style={{ fill: pin === id ? 'var(--chip-sel)' : hover === id ? 'var(--surface-2)' : 'transparent' }}
     />
   )
-  const label = (m: MomentView) => {
-    const tag = again.has(m.id) ? 'try again' : ''
+  const label = (m: MomentView, tags: RowTag[]) => {
     const w = (t: string) => measure(t, 400, ROW_LABEL_SIZE)
-    const tagW = tag ? measure(tag, 400, 11) + 8 : 0
-    const text = fitText(m.title, l.cols.category - ROW_GLYPH_W - 8 - tagW, w)
+    const text = fitText(m.title, l.cols.category - ROW_GLYPH_W - 8 - tagsWidth(tags, measure), w)
+    let tagX = ROW_GLYPH_W + w(text) + TAG_GAP
     return (
       <>
         <text x={ROW_GLYPH_W} y={ROWS_PITCH / 2 + 4} fontSize={ROW_LABEL_SIZE} style={{ fill: 'var(--text)' }}>
@@ -352,17 +435,27 @@ function Chart({
             {m.hits}
           </text>
         )}
-        {tag && (
-          <text x={ROW_GLYPH_W + w(text) + 8} y={ROWS_PITCH / 2 + 4} fontSize={11} style={{ fill: 'var(--faint)' }}>
-            {tag}
-          </text>
-        )}
+        {tags.map((t) => {
+          const x = tagX
+          tagX += measure(t.text, 400, TAG_SIZE) + TAG_GAP
+          return (
+            <text
+              key={t.text}
+              x={x}
+              y={ROWS_PITCH / 2 + 4}
+              fontSize={TAG_SIZE}
+              style={{ fill: t.red ? 'var(--bad)' : 'var(--faint)' }}
+            >
+              {t.text}
+            </text>
+          )
+        })}
       </>
     )
   }
   const mark = (kind: GlyphKind) => (
     <svg x={DEPTH_RIGHT - ARROW_SLOT / 2 - 5} y={ROWS_PITCH / 2 - 5} width={10} height={10} viewBox="0 0 12 12">
-      <title>{kind === 'next' ? 'to try' : kind}</title>
+      <title>{kindWord(kind)}</title>
       <DepthShapes depth={kind} />
     </svg>
   )
@@ -438,12 +531,12 @@ function Chart({
           const ticks = bucketTicks(m, l, start)
           return (
             <div key={m.id} className="relative">
-              <div {...rowProps(m.id, `${m.title}, ${DEPTH_WORD[depthOf(m)]}, first ${dateOf(m.first, now)}`)}>
+              <div {...rowProps(m.id, `${m.title}, ${kindWord(seenMark(m))}, first ${dateOf(m.first, now)}`)}>
                 <svg width={l.width} height={ROWS_PITCH} className="block">
                   <title>{m.title}</title>
                   {band(m.id)}
-                  {mark(depthOf(m))}
-                  {label(m)}
+                  {mark(seenMark(m))}
+                  {label(m, rowTags(m, again.has(m.id)))}
                   {ticks.length > 0 && (
                     <line
                       x1={Math.min(...ticks.map((t) => t.x))}
@@ -459,21 +552,21 @@ function Chart({
                   <Squares ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} />
                 </svg>
               </div>
-              {on && <Panel moment={m} again={again.get(m.id)} />}
+              {on && <Panel moment={m} again={again.get(m.id)} onCopy={onCopy} />}
             </div>
           )
         })}
         {suggested.map(({ s, m }) => (
           <div key={m.id} className="relative">
-            <div {...rowProps(m.id, `To try: ${m.title}`)}>
+            <div {...rowProps(m.id, `${kindWord(nextMark(s.technique))}: ${m.title}`)}>
               <svg width={l.width} height={ROWS_PITCH} className="block">
                 <title>{m.title}</title>
                 {band(m.id)}
-                {mark('next')}
-                {label(m)}
+                {mark(nextMark(s.technique))}
+                {label(m, suggestionTags(savingTag(s.technique), false))}
               </svg>
             </div>
-            {pin === m.id && <NextPanel moment={m} reason={s.reason} example={s.example} />}
+            {pin === m.id && <NextPanel moment={m} s={s} now={now} onCopy={onCopy} />}
           </div>
         ))}
       </div>
@@ -604,32 +697,122 @@ function Suggestion({ moment: m, reason, example }: { moment: MomentView; reason
   )
 }
 
-/** The details under an open row: what it is and how Merlin spots it, then a suggestion if there is one. */
-function Panel({ moment: m, again }: { moment: MomentView; again?: { reason?: string; example?: MomentHit } }) {
+/** "≈ $1,200 / month". */
+function monthly(usd: number): string {
+  return `≈ $${Math.round(usd).toLocaleString('en-US')} / month`
+}
+
+/**
+ * A technique under an open row: the reason, the estimate and how it is worked out, the fix to copy, and what came of
+ * it once the person copied it.
+ */
+function TechniqueSection({ t, now, onCopy }: { t: MomentTechnique; now: Date; onCopy?: () => void }) {
+  const e = t.engaged
+  const copied = parseTime(e?.copiedAt)
   return (
-    <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
-      <p>{m.what}</p>
-      {m.detects && (
-        <p className="text-faint">
-          <span>How Merlin spots it:</span> {m.detects}
+    <div className="space-y-1.5 pt-1" data-testid="technique">
+      <p>{t.reason}</p>
+      {t.estimate && (
+        <div>
+          <p>
+            <span className="font-medium text-bad tabular-nums">{monthly(t.estimate.monthlyUSD)}</span>{' '}
+            <span className="text-faint">estimated saving</span>
+          </p>
+          <p className="text-faint">{t.estimate.how}</p>
+        </div>
+      )}
+      <div className="max-w-2xl rounded border border-line bg-surface-2">
+        <div className="flex items-center justify-between gap-2 border-line border-b py-0.5 pr-1 pl-2.5">
+          <span className="text-faint text-meta">
+            {t.fix.kind === 'shell' ? 'Run in a terminal' : 'Add to CLAUDE.md or AGENTS.md'}
+          </span>
+          <CopyButton text={t.fix.text} onCopy={onCopy}>
+            Copy
+          </CopyButton>
+        </div>
+        <pre className="m-0 overflow-x-auto whitespace-pre-wrap px-2.5 py-2 font-mono text-meta text-fg">
+          {t.fix.text}
+        </pre>
+      </div>
+      {t.fix.link && (
+        <p>
+          <a href={t.fix.link} target="_blank" rel="noreferrer">
+            {t.fix.link.replace(/^https:\/\//, '')} ↗
+          </a>
         </p>
       )}
-      {again && <Suggestion moment={m} reason={again.reason} example={again.example} />}
+      {e?.watching && (
+        <p className="text-accent">
+          {e.followUp ?? `Copied ${copied ? shortDate(copied, now) : ''} · watching your next sessions`}
+        </p>
+      )}
+      {t.example && (
+        <p>
+          <Link to={hitPath(t.example)}>See it in your sessions →</Link>
+        </p>
+      )}
     </div>
   )
 }
 
-/** The details under an open suggestion. */
-function NextPanel({ moment: m, reason, example }: { moment: MomentView; reason?: string; example?: MomentHit }) {
+/** What Merlin says a practice is, and how it spots it. */
+function About({ moment: m }: { moment: MomentView }) {
   return (
-    <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
+    <>
       <p>{m.what}</p>
       {m.detects && (
         <p className="text-faint">
           <span>How Merlin spots it:</span> {m.detects}
         </p>
       )}
-      <Suggestion moment={m} reason={reason} example={example} />
+    </>
+  )
+}
+
+/** The details under an open row: what it is and how Merlin spots it, then a suggestion if there is one. */
+function Panel({
+  moment: m,
+  again,
+  onCopy,
+}: {
+  moment: MomentView
+  again?: { reason?: string; example?: MomentHit }
+  onCopy?: (id: string) => void
+}) {
+  return (
+    <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
+      {m.technique && <TechniqueSection t={m.technique} now={new Date()} onCopy={() => onCopy?.(m.id)} />}
+      <About moment={m} />
+      {!m.technique && again && <Suggestion moment={m} reason={again.reason} example={again.example} />}
+    </div>
+  )
+}
+
+/** The details under an open suggestion: a technique when it is one, else the reason and the try text. */
+function NextPanel({
+  moment: m,
+  s,
+  now,
+  onCopy,
+}: {
+  moment: MomentView
+  s: MomentsReport['suggestions'][number]
+  now: Date
+  onCopy?: (id: string) => void
+}) {
+  return (
+    <div className="space-y-0.5 pr-4 pb-2 text-sec" style={{ paddingLeft: INDENT }}>
+      {s.technique ? (
+        <>
+          <TechniqueSection t={s.technique} now={now} onCopy={() => onCopy?.(m.id)} />
+          <About moment={m} />
+        </>
+      ) : (
+        <>
+          <About moment={m} />
+          <Suggestion moment={m} reason={s.reason} example={s.example} />
+        </>
+      )}
     </div>
   )
 }

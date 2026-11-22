@@ -99,17 +99,21 @@ export function CopyButton({
   label = 'Copy',
   children,
   className,
+  onCopy,
 }: {
   text: string
   label?: string
   children?: ReactNode
   className?: string
+  /** Called after the text was copied. */
+  onCopy?: () => void
 }) {
   const [done, setDone] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => () => clearTimeout(timer.current), [])
   const copy = async () => {
     await copyText(text)
+    onCopy?.()
     setDone(true)
     clearTimeout(timer.current)
     timer.current = setTimeout(() => setDone(false), 1000)

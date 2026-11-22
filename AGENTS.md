@@ -13,7 +13,7 @@ agents, as well as what it tells them about cost.
 **Names.** The project is Merlin Explorer; the command it builds is `merlin` (it replaced the
 old Bun/TS Merlin binary in releases). Its state is under `~/.merlin`
 (`MERLIN_HOME`; `EXPLORER_HOME` still works), in `claude/`, `codex/`, `beads/`, `repos.json`,
-`merlin.lock`, `merlin.log`, `config.json` (the user's file; only `merlin autoupgrade` writes it, one
+`merlin.lock`, `merlin.log`, `moments.json` (what you opened and copied on the Moments page), `config.json` (the user's file; only `merlin autoupgrade` writes it, one
 key) and `upgrade.json` (versions that failed to start after an auto-upgrade) only. The old program kept its own files in the
 same directory: never read, change or remove anything else there.
 

@@ -272,7 +272,7 @@ same whether or not a session is open in the Overview, and no page puts tools in
 Full width, on the page surface like Overview and Cost (`bg-surface`, the page scrolls inside itself, the title block and
 section borders as on the other pages): one table, the whole page. The key is in the shell's legend panel
 (`<PanelTab id="moments">`, `MomentsKey`), a map key as on the session page (`spend/Key.tsx`): the same section heading
-and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, and to try; Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
+and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, to try, saves money and watching; Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
 category texts; those are in the row's panel. There is no legend line under the table.
 
 **Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed
@@ -295,6 +295,13 @@ period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. Th
 (title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows
 after the sorted ones, whatever the sort, with a dotted empty circle, the category and an empty track.
 
+**Techniques.** A technique (a saving, [moments.md](moments.md)) adds marks. On a suggestion row, an estimate of $20 a
+month or more replaces the dotted circle with a filled circle in `--bad` ("saves money"); below that the dotted circle
+stays. On a seen row the depth mark stays and the tag "≈ $120 / mo" follows the title, small, in `--bad`, beside "try
+again". While the fix is watched (28 days after the copy) a clock (a ring with two hands, the accent, the size of the
+other marks) replaces the mark on either kind of row. Sorting by depth puts watching rows after tried, with the
+suggestions; suggestion rows stay at the end. The title column is measured with the tags, so a title is not cut by one.
+
 The time axis never covers more than a year: it starts at `since` or 365 days before `now`, whichever is later
 (`plotStart` in layout.ts); days and squares before it are not drawn, but rows and counts still describe the whole
 history (a moment whose hits are all older keeps its row with an empty track).
@@ -308,6 +315,13 @@ an example. The open row's squares are interactive (8 px minimum hit area, the n
 gives date, times and note; a click opens that day's `example` session at its turn; the arrow keys step through the
 squares and Enter opens the chosen one. "N more to try" (the unseen moments that are not suggested) is a disclosure
 after the table. The personas, their reactions and the card are not shown.
+
+A technique's open row reads, in order: the reason (heavy context leads with its count of 500k turns); the estimate
+("≈ $120 / month estimated saving", `--bad`) with one faint line on how it is worked out; the fix in a mono block (a
+header says where it goes: CLAUDE.md or a terminal) with a Copy button, and the tool's link when the fix installs one;
+while watched, the `followUp` or "Copied 12 Nov · watching your next sessions" in the accent; "See it in your sessions
+→"; then `what` and "How Merlin spots it". Opening a suggestion's or technique's row posts `open` to
+`/api/moments/engage`, pressing Copy posts `copy`.
 
 ## 8. Sessions page (`/sessions`)
 

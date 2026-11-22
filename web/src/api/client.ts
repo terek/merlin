@@ -83,3 +83,18 @@ export async function upgrade(version: string): Promise<void> {
   }
   if (!res.ok) throw await errorOf(res)
 }
+
+/** POST /api/moments/engage: the person opened a suggestion's row, or copied its fix. */
+export async function engageMoment(moment: string, action: 'open' | 'copy'): Promise<void> {
+  let res: Response
+  try {
+    res = await fetch('/api/moments/engage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ moment, action }),
+    })
+  } catch {
+    throw new ApiError(0, 'network', 'Cannot reach the Merlin daemon.')
+  }
+  if (!res.ok) throw await errorOf(res)
+}

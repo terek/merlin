@@ -1,7 +1,7 @@
 // The Moments timeline's arithmetic (docs/moments.md, "The page"): the time axis, one row per moment, the intensity
 // strip, the month labels and the squares of a row's activity. Pure, so it is tested.
 
-import type { MomentActivityDay, MomentDay, MomentDepth, MomentHit, MomentView } from '../../api/types'
+import type { MomentActivityDay, MomentDay, MomentDepth, MomentHit, MomentTechnique, MomentView } from '../../api/types'
 import { dayStart, localDay } from '../../lib/time'
 
 /** The edge of the plot, left and right. */
@@ -34,6 +34,26 @@ export function seenMoments(moments: MomentView[]): MomentView[] {
 /** A suggestion as the page shows it. */
 export interface SuggestionLike {
   moment: string
+  technique?: MomentTechnique
+}
+
+/** The estimate, in USD a month, from which a technique is marked red ("saves money"). */
+export const SAVES_MIN = 20
+
+/** The estimate of a technique as the tag says it: "≈ $120 / mo". Empty when there is none. */
+export function savingTag(t: MomentTechnique | undefined): string {
+  const usd = t?.estimate?.monthlyUSD
+  return usd ? `≈ $${Math.round(usd).toLocaleString('en-US')} / mo` : ''
+}
+
+/** Whether the technique's fix was copied lately and Merlin is watching what comes of it. */
+export function isWatching(t: MomentTechnique | undefined): boolean {
+  return !!t?.engaged?.watching
+}
+
+/** Whether the technique is worth a red mark. */
+export function saves(t: MomentTechnique | undefined): boolean {
+  return (t?.estimate?.monthlyUSD ?? 0) >= SAVES_MIN
 }
 
 /**
@@ -243,11 +263,10 @@ export const ROW_LABEL_SIZE = 13
 export const ROWS_PITCH = 20
 /** The title column never gets narrower or wider than this. */
 export const TITLE_MIN = 120
-export const TITLE_MAX = 240
-/** The width of the category and count columns, and the room the "try again" tag needs. */
+export const TITLE_MAX = 300
+/** The width of the category and count columns. */
 export const CATEGORY_W = 88
 export const COUNT_W = 40
-export const TAG_W = 62
 
 /** Where a row's label starts, from the left edge. */
 /** The width of the Depth column, which holds the mark centred under its header. */
@@ -275,15 +294,17 @@ export function layoutRows(
   now: string,
   width: number,
   measure: (text: string, weight?: number, size?: number) => number = (t) => labelWidth(t),
-  /** Whether any row carries the "try again" tag. */
-  tagged = false,
+  /** The width the tags after a row's title take, in px (the "try again" and saving tags). */
+  tagWidth: (m: MomentView) => number = () => 0,
+  /** Rows that come after the table's own, such as the suggestions: their titles need room too. */
+  extra: MomentView[] = [],
 ): TimelineLayout {
   const from = Date.parse(plotStart(since, now))
   const to = Math.max(Date.parse(now), from + DAY_MS)
   const rows = seenMoments(moments)
   let widest = 0
-  for (const m of rows) widest = Math.max(widest, measure(m.title, 400, ROW_LABEL_SIZE))
-  const title = Math.min(TITLE_MAX, Math.max(TITLE_MIN, Math.ceil(widest + (tagged ? TAG_W : 0) + 8)))
+  for (const m of [...rows, ...extra]) widest = Math.max(widest, measure(m.title, 400, ROW_LABEL_SIZE) + tagWidth(m))
+  const title = Math.min(TITLE_MAX, Math.max(TITLE_MIN, Math.ceil(widest + 8)))
   const category = ROW_GLYPH_W + title
   const countRight = category + CATEGORY_W + COUNT_W
   return { from, to, width, left: countRight + 12, right: width, cols: { category, countRight }, rows }
@@ -328,8 +349,9 @@ export function depthOf(m: Pick<MomentView, 'status' | 'depth'>): MomentDepth {
   return m.depth ?? (m.status === 'habit' ? 'routine' : 'tried')
 }
 
-/** Deepest first. */
+/** Deepest first; a watched technique ranks with the suggestions, after tried. */
 const DEPTH_RANK: Record<MomentDepth, number> = { routine: 0, paused: 1, new: 2, tried: 3 }
+const WATCHING_RANK = 4
 
 const time = (s: string | undefined) => Date.parse(s ?? '') || 0
 
@@ -338,7 +360,7 @@ export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
   const by = (m: MomentView): number | string => {
     switch (sort.key) {
       case 'depth':
-        return DEPTH_RANK[depthOf(m)]
+        return isWatching(m.technique) ? WATCHING_RANK : DEPTH_RANK[depthOf(m)]
       case 'moment':
         return m.title.toLowerCase()
       case 'category':

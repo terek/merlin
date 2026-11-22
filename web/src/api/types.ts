@@ -1150,6 +1150,44 @@ export interface MomentView {
   /** Every hit counted per local day, by day. */
   days?: MomentDay[]
   examples?: MomentHit[]
+  /** A saving the history shows for this practice; on a seen moment it is the tag and the open row's section. */
+  technique?: MomentTechnique
+}
+
+/** What to copy: a paragraph for CLAUDE.md or AGENTS.md, or commands for a terminal. */
+export interface MomentFix {
+  kind: 'claudemd' | 'shell'
+  text: string
+  /** The tool's own page, when the fix installs one. */
+  link?: string
+}
+
+/** An estimate of the saving per 30 days, at API prices. */
+export interface MomentEstimate {
+  monthlyUSD: number
+  /** One plain sentence on how the number is worked out. */
+  how: string
+}
+
+/** What the person did with a suggestion or technique, and what came of it. */
+export interface MomentEngaged {
+  openedAt?: string
+  copiedAt?: string
+  /** The fix was copied in the last window: Merlin looks at the next sessions. */
+  watching?: boolean
+  /** The metric after the copy against the window before it, as an association; set after 3+ sessions. */
+  followUp?: string
+}
+
+/** A gap in the history that costs money, with an estimate and a fix. */
+export interface MomentTechnique {
+  reason: string
+  /** Absent when the gap is gone and the technique is only still here because it is watched. */
+  estimate?: MomentEstimate
+  fix: MomentFix
+  days?: MomentDay[]
+  example?: MomentHit
+  engaged?: MomentEngaged
 }
 
 export interface MomentDay {
@@ -1183,6 +1221,9 @@ export interface MomentSuggestion {
   reason?: string
   /** Where the symptom shows most: a session, at a turn where that makes sense. */
   example?: MomentHit
+  /** Set when the suggestion is a money-saving technique. */
+  technique?: MomentTechnique
+  engaged?: MomentEngaged
 }
 
 /** GET /api/moments */

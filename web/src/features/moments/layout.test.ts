@@ -11,6 +11,7 @@ import {
   firstDir,
   fitText,
   formatSort,
+  isWatching,
   layoutRows,
   MAX_DAYS,
   monthTicks,
@@ -18,6 +19,8 @@ import {
   placeSuggestions,
   plotStart,
   ROW_GLYPH_W,
+  saves,
+  savingTag,
   seenMoments,
   sortMoments,
   TITLE_MAX,
@@ -238,5 +241,47 @@ describe('event strip buckets', () => {
     expect(lone.x1 - lone.x0).toBeGreaterThanOrEqual(8)
     const [a, b] = bucketTicks(m(['2026-09-10', '2026-09-11']), l, SINCE)
     expect(a.x1).toBeLessThanOrEqual(b.x0 + 0.001)
+  })
+})
+
+describe('technique marks', () => {
+  const tech = (usd: number | undefined, watching = false) => ({
+    reason: 'r',
+    estimate: usd === undefined ? undefined : { monthlyUSD: usd, how: 'h' },
+    fix: { kind: 'claudemd' as const, text: 't' },
+    engaged: watching ? { watching: true } : undefined,
+  })
+
+  test('the saving tag rounds and groups', () => {
+    expect(savingTag(tech(1234.4))).toBe('≈ $1,234 / mo')
+    expect(savingTag(tech(undefined))).toBe('')
+    expect(savingTag(undefined)).toBe('')
+  })
+
+  test('red from 20 dollars a month', () => {
+    expect(saves(tech(19.9))).toBe(false)
+    expect(saves(tech(20))).toBe(true)
+    expect(saves(tech(undefined))).toBe(false)
+  })
+
+  test('watching ranks after tried in the depth sort', () => {
+    const a = { ...moment('a', 1), depth: 'tried' as const }
+    const b = { ...moment('b', 2), depth: 'routine' as const, technique: tech(50, true) }
+    expect(isWatching(b.technique)).toBe(true)
+    expect(sortMoments([b, a], { key: 'depth', dir: 'asc' }).map((m) => m.id)).toEqual(['a', 'b'])
+  })
+
+  test('the tags widen the title column', () => {
+    const ms = [moment('a', 1)]
+    const title = (w: number) =>
+      layoutRows(
+        ms,
+        SINCE,
+        NOW,
+        900,
+        () => 150,
+        () => w,
+      ).cols.category - ROW_GLYPH_W
+    expect(title(60)).toBe(title(0) + 60)
   })
 })
