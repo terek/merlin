@@ -122,15 +122,30 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 	var order []model.SessionKey
 	// states is the liveness last told to the client, by session-updated or session-state.
 	states := map[model.SessionKey]catalog.State{}
+	retry := false // a flush found the snapshot older than a write it has to report
 	flush := func() error {
-		cat := a.o.Catalog()
+		live := a.o.Catalog()
 		keys := order
 		order = nil
+		var cat *catalog.Catalog
+		if live != nil {
+			cat = live.Snapshot() // one view for the whole flush
+		}
 		for _, k := range keys {
 			p := queued[k]
 			delete(queued, k)
 			if cat == nil {
 				continue
+			}
+			// While writes keep coming the catalog serves a view up to a second old: a session it
+			// does not show yet, or shows older than the write being reported, waits for the next flush.
+			if d, ok := live.Digest(k); ok {
+				if sd, _ := cat.Digest(k); sd != d {
+					queued[k] = p
+					order = append(order, k)
+					retry = true
+					continue
+				}
 			}
 			in, ok := cat.Session(k)
 			if !ok || in.Kind == model.KindSDK {
@@ -214,8 +229,13 @@ func (a *API) handleEvents(w http.ResponseWriter, r *http.Request) {
 			enqueue(ev)
 		case <-coalesce.C:
 			armed = false
+			retry = false
 			if flush() != nil {
 				return
+			}
+			if retry {
+				coalesce.Reset(a.o.Coalesce)
+				armed = true
 			}
 		case <-progress.C:
 			if sendProgress(false) != nil {

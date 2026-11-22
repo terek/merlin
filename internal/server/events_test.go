@@ -444,3 +444,23 @@ func TestEventsNoHelloWithoutVersion(t *testing.T) {
 	c := r.events()
 	c.nextEvent(t, EventScanProgress)
 }
+
+// While the catalog serves a view up to a second old (a backlog is being built), the update of a
+// session still reaches the client with the new content, a flush later.
+func TestEventsSessionUpdatedUnderThrottle(t *testing.T) {
+	r := newRig(t)
+	r.cat.SetFreshness(400 * time.Millisecond)
+	r.cat.Snapshot() // a view built now is the one the throttle serves
+	c := r.events()
+	c.nextEvent(t, EventScanProgress)
+	waitFor(t, "subscription", func() bool { return r.bus.Subscribers() == 1 })
+
+	d := r.digest(costStateID)
+	d.Title = "renamed under the throttle"
+	r.write(d)
+	var ev SessionUpdatedEvent
+	json.Unmarshal([]byte(c.nextEvent(t, EventSessionUpdated).data), &ev)
+	if ev.Session.Title != "renamed under the throttle" {
+		t.Fatalf("event carries a stale session: %q", ev.Session.Title)
+	}
+}
