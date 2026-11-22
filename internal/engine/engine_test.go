@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -605,6 +606,13 @@ func TestProgressMonotonicAcrossRescans(t *testing.T) {
 	if len(seen) != fixtureN {
 		t.Fatalf("%d progress callbacks, want %d", len(seen), fixtureN)
 	}
+	var line []string
+	for i, p := range seen {
+		if i%5 == 0 {
+			line = append(line, fmt.Sprintf("%d/%d", p.Done, max(p.Queued, p.Done)))
+		}
+	}
+	t.Logf("terminal bar over %d rescans: %v", len(polled), line)
 	var prev engine.Progress
 	for i, p := range seen {
 		if p.Queued < prev.Queued || p.Done < prev.Done || p.Done > p.Queued {
