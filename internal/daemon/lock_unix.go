@@ -26,6 +26,16 @@ func (e *LockedError) Error() string {
 	return fmt.Sprintf("%s: lock %s is held", who, e.Path)
 }
 
+// LockHome takes the instance lock of a Merlin home (<home>/merlin.lock), the one merlin serve
+// holds for as long as it runs, so that only one process writes the index at a time. It returns
+// a *LockedError when another process holds it. Close the file to release the lock.
+func LockHome(home string) (*os.File, error) {
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		return nil, err
+	}
+	return acquireLock(filepath.Join(home, "merlin.lock"))
+}
+
 // acquireLock takes an exclusive flock on path. The OS drops it when the process dies, so
 // a crashed daemon never blocks the next one. The returned file must stay open for as
 // long as the lock is wanted.

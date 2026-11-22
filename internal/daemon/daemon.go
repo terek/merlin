@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -219,6 +220,28 @@ func (d *Daemon) logf(format string, args ...any) {
 // Run serves until ctx is done, then shuts down cleanly and returns nil. A startup failure
 // (another instance holds the lock, the port cannot be bound, ...) is returned at once.
 //
+// sweepTemp removes the temp files a killed process left behind. Under the lock nobody else
+// writes the stores (merlin scan takes the lock too), so a temp file there is always stale,
+// however young; elsewhere in the home a minute's grace protects other short-lived commands.
+func (d *Daemon) sweepTemp(home string) {
+	now, total := time.Now(), 0
+	for _, dir := range []string{"claude", "codex", "pi"} {
+		if n, err := SweepTemp(filepath.Join(home, dir), 0, now); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			d.logf("sweeping temp files: %v", err)
+		} else {
+			total += n
+		}
+	}
+	if n, err := SweepTemp(home, tmpMaxAge, now); err != nil {
+		d.logf("sweeping temp files: %v", err)
+	} else {
+		total += n
+	}
+	if total > 0 {
+		d.logf("removed %d stale temp files", total)
+	}
+}
+
 // Startup order: lock, sweep stale temp files, install hooks, load the catalog, listen,
 // first reconcile. The listener is up before the first reconcile finishes so that hooks
 // arriving meanwhile are not lost.
@@ -249,11 +272,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return ErrRestart
 	}
 
-	if n, err := SweepTemp(home, tmpMaxAge, time.Now()); err != nil {
-		d.logf("sweeping temp files: %v", err)
-	} else if n > 0 {
-		d.logf("removed %d stale temp files", n)
-	}
+	d.sweepTemp(home)
 
 	if d.opts.InstallHooks != nil {
 		if msg, err := d.opts.InstallHooks(); err != nil {

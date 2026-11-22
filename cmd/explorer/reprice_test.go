@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+
+	"github.com/terek/merlin/internal/daemon"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -103,5 +105,22 @@ func TestScanWithoutClaudeDir(t *testing.T) {
 	}
 	if !strings.Contains(out, "seen 0") {
 		t.Errorf("no summary line in %q", out)
+	}
+}
+
+// merlin scan refuses a home that another process (merlin serve) holds, and works once it lets go.
+func TestScanRefusesLockedHome(t *testing.T) {
+	e := newReadEnv(t)
+	l, err := daemon.LockHome(e.home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, errs, code := e.run(nil, "scan", "--quiet")
+	if code == 0 || !strings.Contains(errs, "merlin serve is running on this home") {
+		t.Fatalf("scan on a locked home: code %d, stderr %q", code, errs)
+	}
+	l.Close()
+	if code := func() int { _, _, c := e.run(nil, "scan", "--quiet"); return c }(); code != 0 {
+		t.Fatalf("scan after release: code %d", code)
 	}
 }

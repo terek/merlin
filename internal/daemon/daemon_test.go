@@ -484,10 +484,10 @@ func TestShutdownLeavesNoTempFiles(t *testing.T) {
 	if _, err := os.Stat(stale); !errors.Is(err, fs.ErrNotExist) {
 		t.Error("stale temp file survived startup")
 	}
-	if _, err := os.Stat(fresh); err != nil {
-		t.Error("a fresh temp file (maybe another process's) was removed")
+	// Under the lock nobody else writes the stores, so a young temp file there is a leftover too.
+	if _, err := os.Stat(fresh); !errors.Is(err, fs.ErrNotExist) {
+		t.Error("a young temp file in a store survived startup")
 	}
-	os.Remove(fresh)
 
 	// Stop in the middle of the initial index, with writes in flight.
 	if err := r.stop(); err != nil {
@@ -708,4 +708,47 @@ func (r *rig) fullMatches() bool {
 	a, _ := json.Marshal(stored)
 	b, _ := json.Marshal(full)
 	return bytes.Equal(a, b)
+}
+
+// A temp file a killed process left in a store is removed at startup, however young, and the
+// count is logged; the lock makes sure nobody else is writing there.
+func TestStartupRemovesYoungStoreTempFiles(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, "claude", "projects", "p", "sessions")
+	os.MkdirAll(dir, 0o755)
+	young := filepath.Join(dir, ".abc.json.123.tmp")
+	keep := filepath.Join(dir, "abc.json")
+	os.WriteFile(young, []byte("{"), 0o644)
+	os.WriteFile(keep, []byte("{}"), 0o644)
+	r := newRig(t, home, "", nil)
+	r.start()
+	if _, err := os.Stat(young); err == nil {
+		t.Error("the leftover temp file is still there")
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("a digest was removed: %v", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(home, "merlin.log"))
+	if !strings.Contains(string(b), "removed 1 stale temp files") {
+		t.Errorf("log does not report the removal:\n%s", b)
+	}
+}
+
+func TestLockHomeIsExclusive(t *testing.T) {
+	home := t.TempDir()
+	l, err := daemon.LockHome(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = daemon.LockHome(home)
+	var le *daemon.LockedError
+	if !errors.As(err, &le) {
+		t.Fatalf("second lock: %v", err)
+	}
+	l.Close()
+	l2, err := daemon.LockHome(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l2.Close()
 }

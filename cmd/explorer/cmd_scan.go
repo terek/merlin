@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/terek/merlin/internal/catalog"
+	"github.com/terek/merlin/internal/daemon"
 	"github.com/terek/merlin/internal/engine"
 	"github.com/terek/merlin/internal/links"
 	"github.com/terek/merlin/internal/model"
@@ -54,6 +56,15 @@ func runScan(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	// One writer of the index at a time: a running merlin serve keeps it up to date itself.
+	lock, err := daemon.LockHome(home)
+	if err != nil {
+		if isLocked(err) {
+			return fail(errors.New("merlin serve is running on this home; it keeps the index up to date"))
+		}
+		return fail(err)
+	}
+	defer lock.Close()
 	_, pricer := loadConfig(home, "merlin scan")
 	harnesses, err := buildHarnesses(pricer)
 	if err != nil {
