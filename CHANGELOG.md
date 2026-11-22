@@ -5,6 +5,7 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 ## Unreleased
 
 - Indexing stays fast while the Moments or Sessions page is open, and its progress counter no longer jumps back.
+- `merlin scan` refuses to run while `merlin serve` is using the same home, and a restarted `merlin serve` cleans up temp files left by a killed one.
 
 - The Moments page shows how each moment sits in your work now: part of your routine, quiet lately, tried a few times, or new; a habit you dropped no longer looks current.
 - The Moments page is one table: a row per moment with its category and count and a timeline of when it came back, sortable by any column, depth included; a row opens in place to say what it is and how Merlin spots it, with what to try next as rows at the end. The key is in the legend panel.
