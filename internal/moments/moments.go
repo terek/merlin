@@ -211,6 +211,8 @@ type MomentView struct {
 	// Note says where the person stands with this practice today, when the history alone does not
 	// (rtk: on, configured but silent, or not set up).
 	Note string `json:"note,omitempty"`
+	// Saved is what the person already saves with this practice, an estimate for 30 days at API prices.
+	Saved *Saved `json:"saved,omitempty"`
 }
 
 // Suggestion is an unseen moment worth trying, with why.
@@ -284,6 +286,7 @@ func BuildConfig(catalog []Moment, in []Input, now time.Time, loc *time.Location
 		if r.Moments[i].ID == "compressed-shell" {
 			r.Moments[i].Note = c.rtkNote()
 		}
+		r.Moments[i].Saved = c.savedOf(r.Moments[i].ID)
 	}
 	for i := range r.Moments {
 		if r.Moments[i].Status != StatusUnseen {

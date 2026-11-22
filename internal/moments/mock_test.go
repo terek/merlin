@@ -82,6 +82,10 @@ func TestMockReport(t *testing.T) {
 				// since the orchestrator block was copied (day 10), most of the editing is delegated
 				t1.ToolsByName["Edit"], t1.ToolsByName["Bash"] = 2, 3
 			}
+			if day <= 30 && k == 0 {
+				// rtk is on since day 30: the hook rewrites the shell calls of the first session of the day
+				t0.ShellCompressed, t1.ShellCompressed = 2, 3
+			}
 			turns := []model.Turn{t0, t1, t2}
 			if day == 47 || day == 33 {
 				m := mk(3, 125, "")
@@ -112,7 +116,11 @@ func TestMockReport(t *testing.T) {
 			if day == 40 || day == 31 || day == 9 || day == 3 {
 				// a sub-agent on a cheaper model: model routing is seen, not a habit
 				d.Agents = append(d.Agents, model.Agent{ID: "r", Kind: model.AgentSubagent, AgentType: "general-purpose", Model: "claude-sonnet-5-5",
-					StartedAt: s.Add(70 * time.Minute), EndedAt: s.Add(80 * time.Minute), SpawnTurn: ip(1), Status: model.StatusCompleted})
+					StartedAt: s.Add(70 * time.Minute), EndedAt: s.Add(80 * time.Minute), SpawnTurn: ip(1), Status: model.StatusCompleted,
+					Cost: func() model.Cost {
+						mc, _ := prices().Cost("claude-sonnet-5-5", model.Tokens{Input: 400_000, Output: 150_000, CacheRead: 6_000_000}, false)
+						return model.Cost{USD: mc.USD, ByModel: map[string]model.ModelCost{"claude-sonnet-5-5": mc}}
+					}()})
 			}
 			if day < 20 && day%2 == 1 {
 				for i := 0; i < 6; i++ {
@@ -171,13 +179,19 @@ func TestMockReport(t *testing.T) {
 	if heavy == nil || !strings.Contains(heavy.Reason, "more than 500k") || heavy.Estimate == nil || heavy.Estimate.MonthlyUSD < 20 {
 		t.Fatalf("heavy context should be red: %+v", heavy)
 	}
-	if rtk == nil || rtk.Estimate == nil || rtk.Estimate.MonthlyUSD < 20 || view(r, "compressed-shell").Status != StatusUnseen {
-		t.Fatalf("an unseen rtk should be red: %+v", rtk)
+	if rtk != nil || view(r, "compressed-shell").Status == StatusUnseen {
+		t.Fatalf("rtk should be seen, and no longer a red gap: %+v", rtk)
+	}
+	if sv := view(r, "compressed-shell").Saved; sv == nil || sv.MonthlyUSD < 1 || !strings.Contains(view(r, "compressed-shell").Note, "rtk is on") {
+		t.Fatalf("rtk should show a saving and the note: %+v %q", sv, view(r, "compressed-shell").Note)
+	}
+	if sv := view(r, "model-routing").Saved; sv == nil || sv.MonthlyUSD < 1 {
+		t.Fatalf("model routing should show a saving: %+v", sv)
 	}
 	if orch == nil || orch.Engaged == nil || !orch.Engaged.Watching || orch.Engaged.FollowUp == "" || view(r, "model-routing").Status == StatusUnseen {
 		t.Fatalf("the orchestrator should be a watched tag on a seen row, with a follow-up: %+v", orch)
 	}
-	t.Logf("heavy $%.0f, orchestrator $%.0f, rtk $%.0f a month; %s", heavy.Estimate.MonthlyUSD, orch.Estimate.MonthlyUSD, rtk.Estimate.MonthlyUSD, orch.Engaged.FollowUp)
+	t.Logf("heavy $%.0f, orchestrator $%.0f, rtk saved $%.0f a month; %s", heavy.Estimate.MonthlyUSD, orch.Estimate.MonthlyUSD, view(r, "compressed-shell").Saved.MonthlyUSD, orch.Engaged.FollowUp)
 	if !*updateMock {
 		return
 	}

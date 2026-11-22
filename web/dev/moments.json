@@ -225,9 +225,9 @@
       "focus": "Harness",
       "reaction": "🫠",
       "reason": "Lots of agents lately, and many of them did not finish.",
-      "habits": 6,
+      "habits": 7,
       "explored": 3,
-      "unseen": 5,
+      "unseen": 4,
       "new": 3
     },
     {
@@ -4496,22 +4496,346 @@
           "watching": true,
           "followUp": "Since you copied it on 22 Oct: the cost of premium-model turns with 10 or more edits and shell calls went from $2.84 to $1.80 per session (12 sessions). A comparison, not proof."
         }
+      },
+      "saved": {
+        "monthlyUSD": 12,
+        "how": "The sub-agents that ran on a cheaper model than the session's main one, priced again at the main model, minus what they cost: the last 28 days, scaled to 30 days."
       }
     },
     {
       "id": "compressed-shell",
       "persona": "boris",
       "category": "harness",
-      "title": "Compressed shell output",
+      "title": "Compressed shell output (rtk)",
       "what": "A hook shrank the output of your shell commands before the agent read it.",
       "try": "A hook such as rtk rewrites git status, test runs and listings into a compact form. The agent reads far fewer tokens, and so does every later call that carries them.",
       "detects": "Counted for each turn in which a hook rewrote a shell command to run through a compressor such as rtk, as the hook's own record in the session says.",
-      "status": "unseen",
-      "hits": 0,
-      "sessions": 0,
-      "weeks": 0,
-      "recentHits": 0,
-      "note": "rtk is not set up."
+      "status": "habit",
+      "depth": "routine",
+      "hits": 42,
+      "sessions": 21,
+      "weeks": 5,
+      "recentHits": 40,
+      "first": "2026-10-02T09:00:00Z",
+      "firstHit": {
+        "at": "2026-10-02T09:00:00Z",
+        "session": {
+          "harness": "claude",
+          "id": "synthetic-059"
+        },
+        "turn": 0,
+        "note": "2 shell commands rewritten by rtk"
+      },
+      "days": [
+        {
+          "day": "2026-10-02",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-02T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-059"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-05",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-05T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-061"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-06",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-06T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-063"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-07",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-07T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-065"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-08",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-08T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-067"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-09",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-09T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-069"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-12",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-12T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-071"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-13",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-13T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-073"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-14",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-14T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-075"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-15",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-15T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-077"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-16",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-16T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-079"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-19",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-19T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-081"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-20",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-20T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-083"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-21",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-21T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-085"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-22",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-22T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-087"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-23",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-23T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-089"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-26",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-26T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-091"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-27",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-27T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-093"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-28",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-28T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-095"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-29",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-29T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-097"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        },
+        {
+          "day": "2026-10-30",
+          "hits": 2,
+          "example": {
+            "at": "2026-10-30T09:00:00Z",
+            "session": {
+              "harness": "claude",
+              "id": "synthetic-099"
+            },
+            "turn": 0,
+            "note": "2 shell commands rewritten by rtk"
+          }
+        }
+      ],
+      "last": "2026-10-30T10:00:00Z",
+      "examples": [
+        {
+          "at": "2026-10-30T10:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 1,
+          "note": "3 shell commands rewritten by rtk"
+        },
+        {
+          "at": "2026-10-30T09:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-099"
+          },
+          "turn": 0,
+          "note": "2 shell commands rewritten by rtk"
+        },
+        {
+          "at": "2026-10-29T10:00:00Z",
+          "session": {
+            "harness": "claude",
+            "id": "synthetic-097"
+          },
+          "turn": 1,
+          "note": "3 shell commands rewritten by rtk"
+        }
+      ],
+      "note": "rtk is on: it rewrote 100 shell commands in the last 28 days.",
+      "saved": {
+        "monthlyUSD": 12,
+        "how": "Shell output a hook sent through rtk, assuming rtk's usual 70% cut (the raw output is the compressed one over 0.3), read again by the later calls at the cache-read price: the last 28 days, scaled to 30 days."
+      }
     },
     {
       "id": "parallel-sessions",
@@ -6262,298 +6586,7 @@
       }
     },
     {
-      "moment": "compressed-shell",
-      "reason": "Shell commands returned about 6.3M tokens of output in the last 28 days, and the agent read each result again on every later call.",
-      "example": {
-        "at": "2026-10-30T11:40:00Z",
-        "session": {
-          "harness": "claude",
-          "id": "synthetic-100"
-        },
-        "turn": 2
-      },
-      "technique": {
-        "reason": "Shell commands returned about 6.3M tokens of output in the last 28 days, and the agent read each result again on every later call.",
-        "estimate": {
-          "monthlyUSD": 74,
-          "how": "The tokens of shell output (a turn counts for at most 20k), times the later calls that read them again (at most 100), at your main model's cache-read price, times 0.7, the share rtk usually trims; over the last 28 days, scaled to 30 days."
-        },
-        "fix": {
-          "kind": "shell",
-          "text": "brew install rtk\nrtk init -g",
-          "link": "https://github.com/rtk-ai/rtk"
-        },
-        "days": [
-          {
-            "day": "2026-10-05",
-            "hits": 13,
-            "example": {
-              "at": "2026-10-05T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-061"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-06",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-06T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-064"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-07",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-07T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-066"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-08",
-            "hits": 13,
-            "example": {
-              "at": "2026-10-08T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-068"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-09",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-09T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-069"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-12",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-12T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-072"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-13",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-13T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-074"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-14",
-            "hits": 13,
-            "example": {
-              "at": "2026-10-14T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-076"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-15",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-15T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-077"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-16",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-16T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-079"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-19",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-19T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-082"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-20",
-            "hits": 13,
-            "example": {
-              "at": "2026-10-20T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-084"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-21",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-21T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-085"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-22",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-22T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-087"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-23",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-23T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-089"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-26",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-26T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-092"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-27",
-            "hits": 19,
-            "example": {
-              "at": "2026-10-27T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-093"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-28",
-            "hits": 17,
-            "example": {
-              "at": "2026-10-28T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-095"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-29",
-            "hits": 15,
-            "example": {
-              "at": "2026-10-29T09:00:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-097"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          },
-          {
-            "day": "2026-10-30",
-            "hits": 19,
-            "example": {
-              "at": "2026-10-30T09:40:00Z",
-              "session": {
-                "harness": "claude",
-                "id": "synthetic-100"
-              },
-              "turn": 0,
-              "note": "about 20k tokens of shell output, not compressed"
-            }
-          }
-        ],
-        "example": {
-          "at": "2026-10-30T11:40:00Z",
-          "session": {
-            "harness": "claude",
-            "id": "synthetic-100"
-          },
-          "turn": 2
-        }
-      }
+      "moment": "builds-harness"
     },
     {
       "moment": "plans-first",

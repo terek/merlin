@@ -503,6 +503,25 @@ func cacheReadPrice(m string) float64 {
 	return p.CacheRead / 1e6
 }
 
+// laterReads counts the calls that read turn i's output again: the rest of its own turn, then the later
+// turns until the context is compacted or cleared, at most rtkLaterCap.
+func laterReads(s *Session, i int) int64 {
+	t := s.Turns[i]
+	later := (t.AssistantMessages - 1) / 2
+	for _, u := range s.Turns[i+1:] {
+		if u.Epoch != t.Epoch || later >= rtkLaterCap {
+			break
+		}
+		if !u.Abandoned {
+			later += u.AssistantMessages
+		}
+	}
+	return min(later, rtkLaterCap)
+}
+
+// rtkCut is the share of shell output rtk typically removes; a compressed output is 1 - rtkCut of the raw one.
+const rtkCut = 0.7
+
 func shellTokens(t *model.Turn) int64 { return min(t.ShellOutputBytes/4, rtkTurnCap) }
 
 // rtkRewrites counts the shell commands a hook rewrote to run through the compressor in [from, to],
@@ -565,18 +584,7 @@ func rtkIn(c *Corpus, from, to time.Time) rtkStats {
 				continue
 			}
 			tok := shellTokens(t)
-			// the calls that read this output again: the rest of its own turn, then the later turns until the
-			// context is compacted or cleared
-			later := (t.AssistantMessages - 1) / 2
-			for _, u := range s.Turns[i+1:] {
-				if u.Epoch != t.Epoch || later >= rtkLaterCap {
-					break
-				}
-				if !u.Abandoned {
-					later += u.AssistantMessages
-				}
-			}
-			later = min(later, rtkLaterCap)
+			later := laterReads(s, i)
 			st.tokens += tok
 			st.usd += float64(tok) * float64(later) * price * rtkTrimmed
 			st.hits = append(st.hits, turnHit(s, t, fmt.Sprintf("about %s tokens of shell output, not compressed", tokensWord(tok))))
@@ -636,4 +644,97 @@ func compressedShell(c *Corpus, emit func(Hit)) {
 			}
 		}
 	})
+}
+
+// Savings already made: what the person does well, in dollars. Same window, prices and rounding as the
+// techniques, so the two kinds of number can stand side by side.
+
+// savedDefs are the practices with a realized estimate.
+var savedDefs = map[string]struct {
+	how  string
+	eval func(c *Corpus, from, to time.Time) float64
+}{
+	"model-routing": {
+		how: "The sub-agents that ran on a cheaper model than the session's main one, priced again at the main model, " +
+			"minus what they cost: the last %d days, scaled to 30 days.",
+		eval: routedSaving,
+	},
+	"compressed-shell": {
+		how: "Shell output a hook sent through rtk, assuming rtk's usual 70%% cut (the raw output is the compressed one " +
+			"over 0.3), read again by the later calls at the cache-read price: the last %d days, scaled to 30 days.",
+		eval: rtkSaving,
+	},
+}
+
+// Saved is what a practice already saves, for 30 days, at API prices.
+type Saved struct {
+	MonthlyUSD float64 `json:"monthlyUSD"`
+	How        string  `json:"how"`
+}
+
+// savedOf is the realized saving of a moment, nil when there is none worth showing.
+func (c *Corpus) savedOf(id string) *Saved {
+	def, ok := savedDefs[id]
+	if !ok {
+		return nil
+	}
+	usd := sig2(def.eval(c, c.WindowStart, c.Now) * 30 / WindowDays)
+	if usd < 1 {
+		return nil
+	}
+	return &Saved{MonthlyUSD: usd, How: fmt.Sprintf(def.how, WindowDays)}
+}
+
+// routedSaving: the tokens of sub-agents on a model cheaper than the session's main one, priced at the main
+// model, minus what they cost.
+func routedSaving(c *Corpus, from, to time.Time) float64 {
+	var usd float64
+	c.Interactive(func(s *Session) {
+		main := s.MainModel()
+		mp := outputPrice(main)
+		if mp == 0 {
+			return
+		}
+		for _, a := range s.Agents {
+			if a.Kind != model.AgentSubagent || a.StartedAt.Before(from) || a.StartedAt.After(to) {
+				continue
+			}
+			names := make([]string, 0, len(a.Cost.ByModel))
+			for name := range a.Cost.ByModel {
+				names = append(names, name)
+			}
+			slices.Sort(names)
+			for _, name := range names {
+				mc := a.Cost.ByModel[name]
+				if p := outputPrice(name); p == 0 || p >= mp {
+					continue
+				}
+				if full, ok := prices().Cost(main, mc.Tokens, false); ok && full.USD > mc.USD {
+					usd += full.USD - mc.USD
+				}
+			}
+		}
+	})
+	return usd
+}
+
+// rtkSaving: for turns whose shell calls a hook rewrote, the output the agent read was the compressed one;
+// the raw one would have been that over (1 - rtkCut), read again by every later call.
+func rtkSaving(c *Corpus, from, to time.Time) float64 {
+	var usd float64
+	c.Interactive(func(s *Session) {
+		if !contains(shellCompressorHarnesses, s.D.Harness) {
+			return
+		}
+		price := cacheReadPrice(s.MainModel())
+		for i, t := range s.Turns {
+			if price == 0 || !inRange(t, from, to) || t.ShellCompressed == 0 || t.ShellOutputBytes == 0 {
+				continue
+			}
+			read := float64(t.ShellOutputBytes) / 4
+			raw := min(read/(1-rtkCut), rtkTurnCap)
+			usd += raw * rtkCut * float64(laterReads(s, i)) * price
+		}
+	})
+	return usd
 }
