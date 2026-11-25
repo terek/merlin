@@ -14,10 +14,14 @@ import {
   fixChoices,
   fixWording,
   formatSort,
+  groupDefaultOpen,
+  groupMoments,
+  isActionable,
   isWatching,
   layoutRows,
   MAX_DAYS,
   monthTicks,
+  parseGroupChoices,
   parseSort,
   placeSuggestions,
   plotStart,
@@ -79,7 +83,7 @@ describe('layoutRows', () => {
   })
   test('the title column follows the longest label, within bounds, and the plot runs to now', () => {
     const ms = [moment('a', 1)]
-    const title = (l: ReturnType<typeof layoutRows>) => l.cols.category - ROW_GLYPH_W
+    const title = (l: ReturnType<typeof layoutRows>) => l.cols.title - ROW_GLYPH_W
     expect(title(layoutRows(ms, SINCE, NOW, 900, () => 10))).toBe(TITLE_MIN)
     expect(title(layoutRows(ms, SINCE, NOW, 900, () => 1000))).toBe(TITLE_MAX)
     const l = layoutRows(ms, SINCE, NOW, 900, () => 150)
@@ -99,7 +103,6 @@ describe('layoutRows', () => {
     expect(ids(DEFAULT_SORT)).toEqual(['c', 'b', 'a'])
     expect(ids({ key: 'moment', dir: 'asc' })).toEqual(['a', 'b', 'c'])
     expect(ids({ key: 'count', dir: 'desc' })).toEqual(['a', 'c', 'b'])
-    expect(ids({ key: 'category', dir: 'asc' })).toEqual(['c', 'b', 'a'])
     expect(ids({ key: 'end', dir: 'desc' })).toEqual(['b', 'c', 'a'])
     expect(ids({ key: 'end', dir: 'asc' })).toEqual(['a', 'c', 'b'])
     expect(ms.map((m) => m.id)).toEqual(['b', 'a', 'c'])
@@ -108,6 +111,8 @@ describe('layoutRows', () => {
     expect(parseSort(null)).toEqual(DEFAULT_SORT)
     expect(parseSort('-count')).toEqual({ key: 'count', dir: 'desc' })
     expect(parseSort('bogus')).toEqual(DEFAULT_SORT)
+    expect(parseSort('category')).toEqual(DEFAULT_SORT)
+    expect(parseSort('-category')).toEqual(DEFAULT_SORT)
     expect(parseSort('depth')).toEqual({ key: 'depth', dir: 'asc' })
     expect(formatSort({ key: 'depth', dir: 'desc' })).toBe('-depth')
     expect(formatSort(DEFAULT_SORT)).toBeNull()
@@ -286,7 +291,7 @@ describe('technique marks', () => {
         900,
         () => 150,
         () => w,
-      ).cols.category - ROW_GLYPH_W
+      ).cols.title - ROW_GLYPH_W
     expect(title(60)).toBe(title(0) + 60)
   })
 })
@@ -333,5 +338,84 @@ describe('saves column and fix wording', () => {
     expect(defaultChoice(fix, undefined, 'gone')).toBe(UNIVERSAL)
     expect(fixWording(fix, UNIVERSAL)).toEqual({ text: 'u' })
     expect(fixWording(fix, 'claude')).toEqual({ text: 'c', how: 'Sonnet' })
+  })
+})
+
+describe('groups', () => {
+  const mk = (id: string, persona: MomentView['persona'], extra: Partial<MomentView> = {}, day = 1) =>
+    ({ ...moment(id, day), persona, days: [{ day: '2026-09-02', hits: 2 }], ...extra }) as MomentView
+  const unseen = (id: string, persona: MomentView['persona']) =>
+    ({ ...moment(id, 0, 'unseen'), persona, first: undefined }) as MomentView
+  const red = { estimate: { monthlyUSD: 50, how: '' } } as MomentView['technique']
+  const watched = { engaged: { watching: true } } as MomentView['technique']
+  const none = new Set<string>()
+  const all = [
+    mk('k1', 'karpathy'),
+    unseen('k2', 'karpathy'),
+    mk('b1', 'boris', { technique: red, hits: 7 }, 3),
+    mk('b2', 'boris', { saved: { monthlyUSD: 30, how: '' }, hits: 5 }, 2),
+    mk('b3', 'boris', { technique: watched }, 4),
+    mk('b4', 'boris', { depth: 'new', status: 'explored' }, 5),
+    unseen('b5', 'boris'),
+    unseen('y1', 'yegge'),
+  ]
+  const rows = seenMoments(all)
+  const run = (
+    again: Set<string> = none,
+    choices: Parameters<typeof groupMoments>[4] = {},
+    pin: string | null = null,
+  ) => groupMoments(all, rows, DEFAULT_SORT, again, choices, pin)
+
+  test('three groups in a fixed order, an empty one still there', () => {
+    const g = run()
+    expect(g.map((x) => [x.persona, x.name, x.seen.length, x.total])).toEqual([
+      ['karpathy', 'Steering & context', 1, 2],
+      ['boris', 'Harness & automation', 4, 5],
+      ['yegge', 'Frontier', 0, 1],
+    ])
+  })
+  test('open by default below half practised, closed from exactly half', () => {
+    expect(groupDefaultOpen(1, 2)).toBe(false)
+    expect(groupDefaultOpen(4, 9)).toBe(true)
+    expect(groupDefaultOpen(5, 9)).toBe(false)
+    expect(groupDefaultOpen(0, 0)).toBe(false)
+    expect(run().map((g) => g.open)).toEqual([false, false, true])
+  })
+  test('a closed group keeps its red, watched and try-again rows', () => {
+    expect(isActionable(all[2], none)).toBe(true)
+    expect(isActionable(all[3], none)).toBe(false)
+    expect(isActionable(all[4], none)).toBe(true)
+    expect(isActionable(all[3], new Set(['b2']))).toBe(true)
+    const b = run(new Set(['b4']))[1]
+    expect(b.rows.map((m) => m.id).sort()).toEqual(['b1', 'b3', 'b4'])
+    expect(run()[0].rows.map((m) => m.id)).toEqual([])
+  })
+  test('a remembered choice beats the default', () => {
+    const g = run(none, { boris: true, yegge: false })
+    expect([g[1].open, g[2].open]).toEqual([true, false])
+    expect(g[1].rows).toHaveLength(4)
+  })
+  test('a pinned settled row opens its closed group; an actionable one does not need to', () => {
+    const g = run(none, {}, 'b2')
+    expect(g[1].open).toBe(true)
+    expect(g[1].forced).toBe(true)
+    expect(run(none, {}, 'b1')[1].forced).toBe(false)
+    expect(run(none, { boris: true }, 'b2')[1].forced).toBe(false)
+  })
+  test('header sums: counts, green savings, routine share, union of days', () => {
+    const b = run()[1]
+    expect(b.hits).toBe(7 + 5 + 1 + 1)
+    expect(b.savedUSD).toBe(30)
+    expect(b.routine).toBe(3)
+    expect(b.days).toEqual([{ day: '2026-09-02', hits: 8 }])
+  })
+  test('rows inside a group follow the sort', () => {
+    const g = groupMoments(all, rows, { key: 'count', dir: 'desc' }, none, { boris: true })
+    expect(g[1].rows.map((m) => m.id)).toEqual(['b1', 'b2', 'b3', 'b4'])
+  })
+  test('stored choices: only booleans of known groups', () => {
+    expect(parseGroupChoices('{"boris":true,"yegge":"x","zed":false}')).toEqual({ boris: true })
+    expect(parseGroupChoices('nope')).toEqual({})
+    expect(parseGroupChoices(null)).toEqual({})
   })
 })

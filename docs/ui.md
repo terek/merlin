@@ -272,28 +272,45 @@ same whether or not a session is open in the Overview, and no page puts tools in
 Full width, on the page surface like Overview and Cost (`bg-surface`, the page scrolls inside itself, the title block and
 section borders as on the other pages): one table, the whole page. The key is in the shell's legend panel
 (`<PanelTab id="moments">`, `MomentsKey`), a map key as on the session page (`spend/Key.tsx`): the same section heading
-and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, to try, could save and watching; Saves: could save (red) and saving (green), one colour per row; Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
+and 28 px sample column, one mark and one to three words per line. Depth: routine, quiet lately, new, tried, to try, could save and watching; Saves: could save (red) and saving (green), one colour per row; Groups: the bar (practised); Timeline: a square is a day (darker, more), the strip is prompts per day. No sentences, thresholds or
 category texts; those are in the row's panel. There is no legend line under the table.
 
 **Header.** One band, about 24 px, in the table-header style of Cost's tables (`text-faint text-meta uppercase tracking-wide`; the active sort is `text-fg`), with a rule across the page under it, directly under the section heading: the thin intensity strip (the prompts per day smoothed
 over a week) is the track column's background, with the month ticks and their small faint labels in normal case ("Sep 2026") along its bottom (a
 label is hidden when it would collide with Start or End, by the measured widths). On the same baseline, at the band's
-bottom: Depth (a narrow first column, `DEPTH_W` 48 px, right-aligned, with `DEPTH_GAP` 8 px of air before Practice; the mark sits under the arrow slot), Moment, Category, Count
+bottom: Depth (a narrow first column, `DEPTH_W` 48 px, right-aligned, with `DEPTH_GAP` 8 px of air before Practice; the mark sits under the arrow slot), Practice, Count
 (right-aligned) and, over the strip at the track's two ends, Start (left) and End (right), each on a pill in the page
 colour so that it reads over the grey. Every header sorts (`SortButton`): Depth by rank, deepest first (routine, quiet
-lately, new, tried; first click deepest first, ties by start), Practice by title (the column is headed Practice; its sort key stays `moment`), Category (then start), Count (most first),
+lately, new, tried; first click deepest first, ties by start), Practice by title (the column is headed Practice; its sort key stays `moment`), Count (most first),
 the timeline by `first` (start) or `last` (end); the same header again flips the direction. Every sortable header
 reserves the arrow's slot (`ARROW_SLOT`, 13 px) and shows the arrow only on the active one, so a label never moves when
 the sort changes; the slot is after the label, but before it on End and Count, whose right edge stays put. The sort is in
 the URL, `?sort=start`, `?sort=-count`, `?sort=depth`, with `replace` and the parameter dropped at the default (start,
 ascending); the pure rules (`sortMoments`, `parseSort`, `formatSort`, `clickSort`) are in layout.ts. Order is always by
-the real times, never by the clamped x.
+the real times, never by the clamped x. An old `?sort=category` reads as the default. The sort applies inside each group.
+
+**Groups.** The seen rows sit under three header rows, always shown, in a fixed order: Steering & context, Harness &
+automation, Frontier (the API's `persona` of a moment: `karpathy`, `boris`, `yegge`; no persona, avatar or person is
+named; the names are `GROUP_NAMES`). A header is a 20 px row in the rows' column grid: a chevron in the Depth column
+(muted, down open, right closed), the name (font-medium, `--text`), under the title column's end "7 / 9" (seen / all
+moments of the family, tabular) and a 40 x 4 px rounded bar (the track `--line`, the seen share `--accent` at 45%, the
+routine share, depth routine, full `--accent`), the sum of its seen rows' counts, the sum of their green savings (`--ok`,
+"≈ $44 / mo"; never red, red stays on its own row) and a quiet track: the union of the group's days (hits added per day) as
+the rows' squares in the same buckets, at low opacity, not interactive. Hover is the neutral surface; click, Enter or
+Space toggles; the header is a button with `aria-expanded` and takes part in Up/Down with the rows. A group starts
+closed when seen / all is 0.5 or more, open below it (`groupDefaultOpen`); a click is the person's choice, kept per group
+in `localStorage` (`merlin.moments.groups`, a JSON object persona to open, try/catch) and wins over the default.
+A closed group still shows its actionable rows: a red SAVES cell (a technique gap of $20 a month or more), a watched
+technique, or a "try again" tag (`isActionable`); closing hides only the settled ones. `?m=<id>` of a settled row in a
+closed group shows that group open while the row is pinned (not stored); a click on that header unpins the row and
+closes the group. A group with no seen row keeps its header ("0 / 9") and no rows. The pure rules (`groupMoments`,
+`groupDefaultOpen`, `isActionable`, `parseGroupChoices`) are in layout.ts.
 
 **Rows.** One 20 px row per moment: the depth mark (right-aligned in the Depth column, under the arrow slot), the title (13 px, with a quiet "try again" tag when the moment is
-also suggested), the category (a quiet word), the count (hits, tabular numbers), the SAVES cell (exactly one amount, in its colour, "≈ $120 / mo": what could be saved, a technique's estimate, `--bad` from $20 else muted, or what is already saved, `MomentView.saved`, `--ok`; one colour per row, red wins if both exist; empty for most rows; sortable, high to low first: red rows by amount, then green rows by amount; a second click reverses). On the orchestrator row (a seen practice with a red gap) the open row starts with the row note ("You already do this: ..."), then the gap reason, the red estimate and its how-line, the copy box, the follow-up and the link. An open row with a saving starts with a green line "≈ $12 / month saved" and a faint line on how it was worked out; then the track: a 4 px square per active
+also suggested), the count (hits, tabular numbers), the SAVES cell (exactly one amount, in its colour, "≈ $120 / mo": what could be saved, a technique's estimate, `--bad` from $20 else muted, or what is already saved, `MomentView.saved`, `--ok`; one colour per row, red wins if both exist; empty for most rows; sortable, high to low first: red rows by amount, then green rows by amount; a second click reverses). On the orchestrator row (a seen practice with a red gap) the open row starts with the row note ("You already do this: ..."), then the gap reason, the red estimate and its how-line, the copy box, the follow-up and the link. An open row with a saving starts with a green line "≈ $12 / month saved" and a faint line on how it was worked out; then the track: a 4 px square per active
 period, opacity by hits, in buckets of k = max(1, ceil(4 / px per day)) days. The columns are measured from the font
-(title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are rows
-after the sorted ones, whatever the sort, with a dotted empty circle, the category and an empty track.
+(title 120 to 240 px). Faint month lines run behind all rows and panels. The suggestions for unseen moments are flat rows
+after the three groups, whatever the sort, under a quiet "To try" divider (header-band style, only when there are any), with a dotted empty circle and an empty track. The column after the title is empty on rows (it holds the group header's fraction and bar); the category is not a column any more: it ends the faint "How Merlin spots it" line of an open row ("... · harness").
 
 **Techniques.** A technique (a saving, [moments.md](moments.md)) adds marks. On a suggestion row, an estimate of $20 a
 month or more replaces the dotted circle with a filled circle in `--bad` ("could save"); below that the dotted circle

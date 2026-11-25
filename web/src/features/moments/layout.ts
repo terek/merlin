@@ -7,6 +7,7 @@ import type {
   MomentDepth,
   MomentFix,
   MomentHit,
+  MomentPersona,
   MomentTechnique,
   MomentView,
 } from '../../api/types'
@@ -145,7 +146,7 @@ export interface TimelineLayout {
   left: number
   right: number
   /** The table's columns, in px from the left edge: the title starts at ROW_GLYPH_W. */
-  cols: { category: number; countRight: number; savesRight: number }
+  cols: { title: number; countRight: number; savesRight: number }
   /** One row per seen moment. */
   rows: MomentView[]
 }
@@ -316,8 +317,8 @@ export const ROWS_PITCH = 20
 /** The title column never gets narrower or wider than this. */
 export const TITLE_MIN = 120
 export const TITLE_MAX = 300
-/** The width of the category and count columns. */
-export const CATEGORY_W = 88
+/** The width of the column after the title: a group header's fraction and bar (rows leave it empty). */
+export const GROUP_W = 96
 export const COUNT_W = 40
 /** The width of the SAVES column ("≈ $1,200 / mo" in the row text size). */
 export const SAVES_W = 92
@@ -358,21 +359,30 @@ export function layoutRows(
   const rows = seenMoments(moments)
   let widest = 0
   for (const m of [...rows, ...extra]) widest = Math.max(widest, measure(m.title, 400, ROW_LABEL_SIZE) + tagWidth(m))
+  for (const p of GROUP_ORDER) widest = Math.max(widest, measure(GROUP_NAMES[p], 500, ROW_LABEL_SIZE))
   const title = Math.min(TITLE_MAX, Math.max(TITLE_MIN, Math.ceil(widest + 8)))
-  const category = ROW_GLYPH_W + title
-  const countRight = category + CATEGORY_W + COUNT_W
+  const titleEnd = ROW_GLYPH_W + title
+  const countRight = titleEnd + GROUP_W + COUNT_W
   const savesRight = countRight + SAVES_W
-  return { from, to, width, left: savesRight + 12, right: width, cols: { category, countRight, savesRight }, rows }
+  return {
+    from,
+    to,
+    width,
+    left: savesRight + 12,
+    right: width,
+    cols: { title: titleEnd, countRight, savesRight },
+    rows,
+  }
 }
 
 /** What the table can be sorted by. */
-export type SortKey = 'depth' | 'moment' | 'category' | 'count' | 'saves' | 'start' | 'end'
+export type SortKey = 'depth' | 'moment' | 'count' | 'saves' | 'start' | 'end'
 export interface Sort {
   key: SortKey
   dir: 'asc' | 'desc'
 }
 export const DEFAULT_SORT: Sort = { key: 'start', dir: 'asc' }
-const KEYS: SortKey[] = ['depth', 'moment', 'category', 'count', 'saves', 'start', 'end']
+const KEYS: SortKey[] = ['depth', 'moment', 'count', 'saves', 'start', 'end']
 
 /** The direction a column starts with when it is first picked. */
 export function firstDir(key: SortKey): 'asc' | 'desc' {
@@ -425,8 +435,6 @@ export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
         return isWatching(m.technique) ? WATCHING_RANK : DEPTH_RANK[depthOf(m)]
       case 'moment':
         return m.title.toLowerCase()
-      case 'category':
-        return m.category ?? ''
       case 'count':
         return m.hits
       case 'saves':
@@ -444,5 +452,101 @@ export function sortMoments(moments: MomentView[], sort: Sort): MomentView[] {
     const y = by(b)
     const c = x < y ? -1 : x > y ? 1 : 0
     return sign * c || time(a.first) - time(b.first) || a.title.localeCompare(b.title)
+  })
+}
+
+/** The groups of the table, in order, and the names they are shown with (the family of a moment, never a person). */
+export const GROUP_ORDER: MomentPersona[] = ['karpathy', 'boris', 'yegge']
+export const GROUP_NAMES: Record<MomentPersona, string> = {
+  karpathy: 'Steering & context',
+  boris: 'Harness & automation',
+  yegge: 'Frontier',
+}
+
+/** A group starts closed when you practise half of it or more, open otherwise (an empty group is closed). */
+export function groupDefaultOpen(seen: number, total: number): boolean {
+  return !(seen * 2 >= total)
+}
+
+/** The remembered open/closed choices: a JSON object persona -> boolean; anything else is no choice. */
+export function parseGroupChoices(raw: string | null): Partial<Record<MomentPersona, boolean>> {
+  const out: Partial<Record<MomentPersona, boolean>> = {}
+  try {
+    const o = raw ? JSON.parse(raw) : null
+    if (o && typeof o === 'object') for (const p of GROUP_ORDER) if (typeof o[p] === 'boolean') out[p] = o[p]
+  } catch {
+    // unreadable: no choices
+  }
+  return out
+}
+
+/**
+ * Whether a seen row stays visible in a closed group: its SAVES cell is red (a technique gap), its fix is being
+ * watched, or it is tagged "try again" (`again`: the ids of seen moments that are also suggested).
+ */
+export function isActionable(m: MomentView, again: { has(id: string): boolean }): boolean {
+  return saves(m.technique) || isWatching(m.technique) || again.has(m.id)
+}
+
+/** A group of the table. */
+export interface MomentGroup {
+  persona: MomentPersona
+  name: string
+  /** The seen rows, in the order of the sort. */
+  seen: MomentView[]
+  /** All moments of the family, seen or not. */
+  total: number
+  /** Seen rows whose depth is routine. */
+  routine: number
+  /** The sum of the seen rows' counts. */
+  hits: number
+  /** The sum of the green saved amounts, USD a month. */
+  savedUSD: number
+  /** The union of the seen rows' days, hits added per day. */
+  days: MomentDay[]
+  /** Whether the group is shown open, and whether only a pinned row forces it. */
+  open: boolean
+  forced: boolean
+  /** The rows to draw: every seen row when open, else the actionable ones. */
+  rows: MomentView[]
+}
+
+/**
+ * The table's groups: the seen rows of each family (`rows`, already the table's seen moments), sorted inside the
+ * group. `choices` are the remembered clicks; `pin` is the open row, which opens a closed group while it is a
+ * settled row of it.
+ */
+export function groupMoments(
+  all: MomentView[],
+  rows: MomentView[],
+  sort: Sort,
+  again: { has(id: string): boolean },
+  choices: Partial<Record<MomentPersona, boolean>> = {},
+  pin: string | null = null,
+): MomentGroup[] {
+  return GROUP_ORDER.map((persona) => {
+    const seen = sortMoments(
+      rows.filter((m) => m.persona === persona),
+      sort,
+    )
+    const total = all.filter((m) => m.persona === persona).length
+    const base = choices[persona] ?? groupDefaultOpen(seen.length, total)
+    const forced = !base && seen.some((m) => m.id === pin && !isActionable(m, again))
+    const open = base || forced
+    const byDay = new Map<string, number>()
+    for (const m of seen) for (const d of m.days ?? []) byDay.set(d.day, (byDay.get(d.day) ?? 0) + d.hits)
+    return {
+      persona,
+      name: GROUP_NAMES[persona],
+      seen,
+      total,
+      routine: seen.filter((m) => depthOf(m) === 'routine').length,
+      hits: seen.reduce((n, m) => n + m.hits, 0),
+      savedUSD: seen.reduce((n, m) => n + ((m.saved?.monthlyUSD ?? 0) >= 1 ? (m.saved?.monthlyUSD ?? 0) : 0), 0),
+      days: [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([day, hits]) => ({ day, hits })),
+      open,
+      forced,
+      rows: open ? seen : seen.filter((m) => isActionable(m, again)),
+    }
   })
 }

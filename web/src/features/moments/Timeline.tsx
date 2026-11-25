@@ -6,7 +6,7 @@
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import type { MomentDepth, MomentHit, MomentsReport, MomentTechnique, MomentView } from '../../api/types'
+import type { MomentDepth, MomentHit, MomentPersona, MomentsReport, MomentTechnique, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { sessionPath } from '../../lib/paths'
@@ -20,9 +20,13 @@ import {
   DEPTH_RIGHT,
   daysPerBucket,
   depthOf,
+  dollars,
   fitText,
+  GROUP_W,
+  groupMoments,
   isWatching,
   layoutRows,
+  type MomentGroup,
   monthTicks,
   placeSuggestions,
   ROW_GLYPH_W,
@@ -33,7 +37,6 @@ import {
   STRIP_PX,
   saves,
   savesCell,
-  sortMoments,
   type TimelineLayout,
 } from './layout'
 import { useLabelMeasure } from './measure'
@@ -195,6 +198,20 @@ export function MomentsKey() {
         </>,
       )}
       {group(
+        'Groups',
+        <li className="contents">
+          {sample(
+            'Practised',
+            <>
+              <rect x={4} y={6} width={20} height={4} rx={2} style={{ fill: 'var(--line)' }} />
+              <rect x={4} y={6} width={14} height={4} rx={2} style={{ fill: 'var(--accent)', opacity: 0.45 }} />
+              <rect x={4} y={6} width={8} height={4} rx={2} style={{ fill: 'var(--accent)' }} />
+            </>,
+          )}
+          <span>practised</span>
+        </li>,
+      )}
+      {group(
         'Timeline',
         <>
           <li className="contents">
@@ -240,6 +257,8 @@ export function tickPath(t: Pick<Bucket, 'example'>): string | undefined {
   return h ? sessionPath(h.session, h.turn !== undefined ? `t${h.turn}` : undefined) : undefined
 }
 
+type GroupChoices = Partial<Record<MomentPersona, boolean>>
+
 export function Timeline({
   report,
   hover,
@@ -252,10 +271,15 @@ export function Timeline({
   sort,
   onSort,
   onCopy,
+  groupChoices,
+  onGroup,
 }: {
   report: MomentsReport
   sort: Sort
   onSort: (s: Sort) => void
+  /** The remembered open or closed state of each group, and a click on a group's header. */
+  groupChoices: GroupChoices
+  onGroup: (persona: MomentPersona, open: boolean) => void
   /** The person copied a technique's fix. */
   onCopy?: (id: string) => void
   /** The moment under the pointer or the keyboard focus. */
@@ -297,6 +321,8 @@ export function Timeline({
           sort={sort}
           onSort={onSort}
           onCopy={onCopy}
+          groupChoices={groupChoices}
+          onGroup={onGroup}
         />
       )}
     </div>
@@ -354,10 +380,14 @@ function Chart({
   sort,
   onSort,
   onCopy,
+  groupChoices,
+  onGroup,
 }: {
   report: MomentsReport
   sort: Sort
   onSort: (s: Sort) => void
+  groupChoices: GroupChoices
+  onGroup: (persona: MomentPersona, open: boolean) => void
   onCopy?: (id: string) => void
   layout: TimelineLayout
   measure: (text: string, weight?: number, size?: number) => number
@@ -389,6 +419,32 @@ function Chart({
     const all = [...(list.current?.querySelectorAll<HTMLElement>('[data-row]') ?? [])]
     all[Math.max(0, Math.min(all.length - 1, all.indexOf(el) + d))]?.focus()
     return true
+  }
+  const groups = groupMoments(report.moments, l.rows, sort, again, groupChoices, pin)
+  const groupProps = (g: MomentGroup) => ({
+    'data-row': '',
+    role: 'button' as const,
+    tabIndex: 0,
+    'aria-expanded': g.open,
+    'aria-label': `${g.name}, ${g.seen.length} of ${g.total} practised`,
+    className: 'block w-full cursor-pointer outline-none focus-visible:[&_rect:first-of-type]:stroke-accent',
+    onMouseEnter: () => onHover(`group:${g.persona}`),
+    onMouseLeave: () => onHover(null),
+    onFocus: () => onHover(`group:${g.persona}`),
+    onBlur: () => onHover(null),
+    onClick: () => toggleGroup(g),
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      if (step(e, e.currentTarget)) return
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        toggleGroup(g)
+      }
+    },
+  })
+  // a group held open only by its pinned row closes with the pin
+  const toggleGroup = (g: MomentGroup) => {
+    if (g.forced && pin) onPin(pin)
+    onGroup(g.persona, !g.open)
   }
   const rowProps = (id: string, label: string) => ({
     'data-row': '',
@@ -424,16 +480,13 @@ function Chart({
   const label = (m: MomentView, tags: RowTag[], t?: MomentTechnique) => {
     const w = (t: string) => measure(t, 400, ROW_LABEL_SIZE)
     const cell = savesCell(m, t)
-    const text = fitText(m.title, l.cols.category - ROW_GLYPH_W - 8 - tagsWidth(tags, measure), w)
+    const text = fitText(m.title, l.cols.title - ROW_GLYPH_W - 8 - tagsWidth(tags, measure), w)
     let tagX = ROW_GLYPH_W + w(text) + TAG_GAP
     return (
       <>
         <text x={ROW_GLYPH_W} y={ROWS_PITCH / 2 + 4} fontSize={ROW_LABEL_SIZE} style={{ fill: 'var(--text)' }}>
           {text}
           {text !== m.title && <title>{m.title}</title>}
-        </text>
-        <text x={l.cols.category} y={ROWS_PITCH / 2 + 4} fontSize={12} style={{ fill: 'var(--muted)' }}>
-          {m.category ?? ''}
         </text>
         {m.status !== 'unseen' && (
           <text
@@ -524,9 +577,6 @@ function Chart({
           <span className="absolute" style={{ left: ROW_GLYPH_W }}>
             <SortButton label="Practice" k="moment" sort={sort} onSort={onSort} />
           </span>
-          <span className="absolute" style={{ left: l.cols.category }}>
-            <SortButton label="Category" k="category" sort={sort} onSort={onSort} />
-          </span>
           <span className="absolute -translate-x-full" style={{ left: l.cols.countRight }}>
             <SortButton label="Count" k="count" sort={sort} onSort={onSort} arrowFirst />
           </span>
@@ -549,25 +599,38 @@ function Chart({
             <line key={t.label} x1={t.x} x2={t.x} y1={0} y2="100%" style={{ stroke: 'var(--line)', opacity: 0.6 }} />
           ))}
         </svg>
-        {sortMoments(l.rows, sort).map((m) => {
-          const on = pin === m.id
-          const raised = !on && hover === m.id
-          const ticks = bucketTicks(m, l, start)
-          return (
-            <div key={m.id} className="relative">
-              <div {...rowProps(m.id, `${m.title}, ${kindWord(seenMark(m))}, first ${dateOf(m.first, now)}`)}>
-                <svg width={l.width} height={ROWS_PITCH} className="block">
-                  <title>{m.title}</title>
-                  {band(m.id)}
-                  {mark(seenMark(m))}
-                  {label(m, rowTags(again.has(m.id)), m.technique)}
-                  <Track ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} l={l} />
-                </svg>
-              </div>
-              {on && <Panel moment={m} again={again.get(m.id)} usual={report.usualHarness} onCopy={onCopy} />}
-            </div>
-          )
-        })}
+        {groups.map((g) => (
+          <div key={g.persona}>
+            <GroupHeader g={g} l={l} start={start} hover={hover === `group:${g.persona}`} rowProps={groupProps(g)} />
+            {g.rows.map((m) => {
+              const on = pin === m.id
+              const raised = !on && hover === m.id
+              const ticks = bucketTicks(m, l, start)
+              return (
+                <div key={m.id} className="relative">
+                  <div {...rowProps(m.id, `${m.title}, ${kindWord(seenMark(m))}, first ${dateOf(m.first, now)}`)}>
+                    <svg width={l.width} height={ROWS_PITCH} className="block">
+                      <title>{m.title}</title>
+                      {band(m.id)}
+                      {mark(seenMark(m))}
+                      {label(m, rowTags(again.has(m.id)), m.technique)}
+                      <Track ticks={ticks} on={on} raised={raised} tickDay={tickDay} onTick={onTick} now={now} l={l} />
+                    </svg>
+                  </div>
+                  {on && <Panel moment={m} again={again.get(m.id)} usual={report.usualHarness} onCopy={onCopy} />}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+        {suggested.length > 0 && (
+          <div
+            className="flex items-end pb-0.5 text-faint text-meta uppercase tracking-wide"
+            style={{ height: ROWS_PITCH + 4, paddingLeft: ROW_GLYPH_W }}
+          >
+            To try
+          </div>
+        )}
         {suggested.map(({ s, m }) => {
           const sugTicks = bucketTicks({ days: s.technique?.days }, l, start)
           return (
@@ -594,6 +657,108 @@ function Chart({
           )
         })}
       </div>
+    </div>
+  )
+}
+
+/** A group's header row: chevron, name, how much of it is practised (fraction and bar), the sums and a quiet track. */
+function GroupHeader({
+  g,
+  l,
+  start,
+  hover,
+  rowProps,
+}: {
+  g: MomentGroup
+  l: TimelineLayout
+  start: string
+  hover: boolean
+  rowProps: React.HTMLAttributes<HTMLElement>
+}) {
+  const cy = ROWS_PITCH / 2
+  const ticks = bucketTicks({ days: g.days }, l, start)
+  const seen = g.seen.length
+  const BAR_W = 40
+  const chevX = DEPTH_RIGHT - ARROW_SLOT / 2
+  const barX = l.cols.title + GROUP_W - BAR_W - 8
+  const share = (n: number) => (g.total > 0 ? (n / g.total) * BAR_W : 0)
+  return (
+    <div {...rowProps}>
+      <svg width={l.width} height={ROWS_PITCH} className="block">
+        <title>{`${g.name}: ${seen} of ${g.total} practised`}</title>
+        <rect
+          x={0}
+          y={0}
+          width={l.width}
+          height={ROWS_PITCH}
+          rx={4}
+          style={{ fill: hover ? 'var(--surface-2)' : 'transparent' }}
+        />
+        <path
+          d={
+            g.open ? `M${chevX - 3.5},${cy - 1.5} l3.5,3.5 l3.5,-3.5` : `M${chevX - 1.5},${cy - 3.5} l3.5,3.5 l-3.5,3.5`
+          }
+          fill="none"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ stroke: 'var(--muted)' }}
+        />
+        <text x={ROW_GLYPH_W} y={cy + 4} fontSize={ROW_LABEL_SIZE} fontWeight={500} style={{ fill: 'var(--text)' }}>
+          {g.name}
+        </text>
+        <text x={l.cols.title} y={cy + 4} fontSize={12} className="tabular-nums" style={{ fill: 'var(--muted)' }}>
+          {seen} / {g.total}
+        </text>
+        <rect x={barX} y={cy - 2} width={BAR_W} height={4} rx={2} style={{ fill: 'var(--line)' }} />
+        {seen > 0 && (
+          <rect
+            x={barX}
+            y={cy - 2}
+            width={share(seen)}
+            height={4}
+            rx={2}
+            style={{ fill: 'var(--accent)', opacity: 0.45 }}
+          />
+        )}
+        {g.routine > 0 && (
+          <rect x={barX} y={cy - 2} width={share(g.routine)} height={4} rx={2} style={{ fill: 'var(--accent)' }} />
+        )}
+        {g.hits > 0 && (
+          <text
+            x={l.cols.countRight}
+            y={cy + 4}
+            fontSize={12}
+            textAnchor="end"
+            className="tabular-nums"
+            style={{ fill: 'var(--muted)' }}
+          >
+            {g.hits}
+          </text>
+        )}
+        {g.savedUSD >= 1 && (
+          <text
+            x={l.cols.savesRight}
+            y={cy + 4}
+            fontSize={12}
+            textAnchor="end"
+            className="tabular-nums"
+            style={{ fill: 'var(--ok)' }}
+          >
+            {`≈ ${dollars(g.savedUSD)} / mo`}
+          </text>
+        )}
+        {ticks.map((t) => (
+          <rect
+            key={t.day}
+            x={t.x}
+            y={cy - STRIP_PX / 2}
+            width={STRIP_PX}
+            height={STRIP_PX}
+            style={{ fill: 'var(--muted)', opacity: 0.08 + t.h * 0.2 }}
+          />
+        ))}
+      </svg>
     </div>
   )
 }
@@ -763,9 +928,11 @@ function About({ moment: m }: { moment: MomentView }) {
   return (
     <>
       <p>{m.what}</p>
-      {m.detects && (
+      {(m.detects || m.category) && (
         <p className="text-faint">
-          <span>How Merlin spots it:</span> {m.detects}
+          {m.detects && <span>How Merlin spots it: {m.detects}</span>}
+          {m.detects && m.category && ' · '}
+          {m.category}
         </p>
       )}
     </>

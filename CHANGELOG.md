@@ -4,6 +4,8 @@ What changed in each release of Merlin Explorer for the people using it, newest 
 
 ## Unreleased
 
+- Moments groups the practices you already have into Steering & context, Harness & automation and Frontier, each with how much of it you practise; a group you mostly practise starts closed, and still shows the rows that need attention.
+
 ## 0.9.0 — 2026-11-22
 
 - Indexing stays fast while the Moments or Sessions page is open, and its progress counter no longer jumps back.

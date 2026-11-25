@@ -241,13 +241,13 @@ shows a one-row invite with the three reactions that links to `/moments`.
 `/moments` is the guide next to the instruments (Overview, Cost, the session view): your own story,
 and what to try next. Every claim links to the instrument view that shows it. Top to bottom:
 
-- **The table.** A moment is one occurrence (a square on the timeline); a row is a practice. One row per seen practice, headed Practice: its depth mark, title, category and count, then a track of
+- **The table.** A moment is one occurrence (a square on the timeline); a row is a practice. The seen practices are grouped by family (Steering & context, Harness & automation, Frontier; the persona of the moment, never shown as a person), each group a header with how much of it is practised, closed by default from half; a closed group keeps its red, watched and try-again rows. One row per seen practice, headed Practice: its depth mark, title and count (the category stays in the catalog and the API, and shows in the open row), then a track of
   squares, one per stretch of days it came back (linear time from `since` to `now`, never more than the last
   year, under a thin strip of the prompts per day). Every column header sorts; the timeline sorts by start or
   end. Rows open in place, one at a time: what was seen and how Merlin spots it, and for a suggestion the
   reason, the try text and a link to where it shows. The open moment's squares open the session of that day.
-  The key (marks, categories, squares) is in the shell's legend panel.
-- **Next.** Suggested unseen moments are rows at the end, with a dotted circle; a suggested seen moment keeps
+  The key (marks, groups, squares) is in the shell's legend panel.
+- **Next.** Suggested unseen moments are rows at the end, under a "To try" divider, with a dotted circle; a suggested seen moment keeps
   its row, tagged "try again". At most three suggestions in all.
 - **Techniques.** A technique with an estimate of $20 a month or more has a red filled circle instead of
   the dotted one (below that, the dotted circle stays and the SAVES cell still shows). On a seen row the

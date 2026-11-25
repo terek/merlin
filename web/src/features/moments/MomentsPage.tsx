@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { engageMoment } from '../../api/client'
 import { queryKeys, useMoments } from '../../api/queries'
-import type { MomentsReport, MomentView } from '../../api/types'
+import type { MomentPersona, MomentsReport, MomentView } from '../../api/types'
 import { cn } from '../../lib/cn'
 import { plural } from '../../lib/format'
 import { useDocumentTitle } from '../../lib/hooks'
@@ -15,7 +15,7 @@ import { markSeen } from '../../shell/momentsBadge'
 import { PanelTab } from '../../shell/Panel'
 import { useShortcut } from '../../shell/useShortcut'
 import { EmptyState, FRAME_HEAD, FrameSection, QueryBoundary, Skeleton } from '../../ui'
-import { bucketDays, formatSort, parseSort, type Sort } from './layout'
+import { bucketDays, formatSort, parseGroupChoices, parseSort, type Sort } from './layout'
 import { dateOf, MomentsKey, Timeline, tickPath } from './Timeline'
 
 export function MomentsPage() {
@@ -46,10 +46,34 @@ export function MomentsPage() {
   )
 }
 
+const GROUPS_KEY = 'merlin.moments.groups'
+
+function readGroups() {
+  try {
+    return parseGroupChoices(localStorage.getItem(GROUPS_KEY))
+  } catch {
+    return {}
+  }
+}
+
+function writeGroups(c: Partial<Record<MomentPersona, boolean>>) {
+  try {
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(c))
+  } catch {
+    // private window or blocked storage: the choice lasts until the page is closed
+  }
+}
+
 function Report({ report }: { report: MomentsReport }) {
   const [hover, setHover] = useState<string | null>(null)
   // opening the page clears the count on its tab
   useEffect(() => markSeen(report), [report])
+  const [groupChoices, setGroupChoices] = useState(readGroups)
+  const setGroup = (p: MomentPersona, open: boolean) => {
+    const n = { ...groupChoices, [p]: open }
+    setGroupChoices(n)
+    writeGroups(n)
+  }
   const [hoverTick, setHoverTick] = useState<string | null>(null)
   const [selTick, setSelTick] = useState<string | null>(null)
   const navigate = useNavigate()
@@ -141,6 +165,8 @@ function Report({ report }: { report: MomentsReport }) {
           onK={setK}
           sort={sort}
           onSort={setSort}
+          groupChoices={groupChoices}
+          onGroup={setGroup}
           onCopy={(id) => engage(id, 'copy')}
         />
         <PanelTab id="moments" title="Moments">
